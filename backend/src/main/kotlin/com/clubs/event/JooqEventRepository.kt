@@ -117,8 +117,11 @@ class JooqEventRepository(
         // Подтверждение Stage-2 ещё не отдано. Этап 2 открыт всем участникам (PR #92), поэтому
         // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
         // голос Этапа 1 (включая «Не пойду») не финален, у срочной встречи (V69) его нет вовсе.
+        // Встреча с порогом набора (V83) исключена: у неё состав закрывается сам, подтверждать
+        // нечего. Дискриминатор тот же, что у Event.isRosterEvent (лимит есть, не срочная).
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+            .and(EVENTS.PARTICIPANT_LIMIT.isNull.or(EVENTS.IS_URGENT.isTrue))
 
         return dsl.select(EVENTS.ID)
             .from(EVENTS)
@@ -198,8 +201,10 @@ class JooqEventRepository(
             .`when`(
                 // То же правило, что в findActionRequiredEventIds (PO 2026-07-23): Этап 2 открыт
                 // всем — подтверждение ждём от каждого участника без решения на самом Этапе 2.
+                // Встреча с порогом набора (V83) исключена — подтверждений у неё нет.
                 EVENTS.STATUS.eq(EventStatus.stage_2)
-                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull),
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+                    .and(EVENTS.PARTICIPANT_LIMIT.isNull.or(EVENTS.IS_URGENT.isTrue)),
                 1
             )
             .otherwise(0)
@@ -319,9 +324,13 @@ class JooqEventRepository(
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
             )
             .fetchOne(0, Int::class.java) ?: 0
+        // Очередь: нужна и плитке «В очереди», и цене отказа (замена есть → отказ дешевле, V83).
+        val waitlisted = dsl.selectCount().from(EVENT_RESPONSES)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted)))
+            .fetchOne(0, Int::class.java) ?: 0
         return mapOf(
             "going" to going, "maybe" to maybe, "notGoing" to notGoing,
-            "confirmed" to confirmed, "noAnswer" to noAnswer
+            "confirmed" to confirmed, "noAnswer" to noAnswer, "waitlisted" to waitlisted
         )
     }
 
@@ -341,9 +350,37 @@ class JooqEventRepository(
                             DSL.value(now)
                         )
                     )
+                    // Недобор уже зафиксирован → событие ведёт отдельный проход (V83).
+                    .and(EVENTS.ROSTER_SHORTFALL_AT.isNull)
             )
             .fetch()
             .map(mapper::toDomain)
+
+    override fun findEventsInRosterShortfall(): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.eq(EventStatus.upcoming)
+                    .and(EVENTS.ROSTER_SHORTFALL_AT.isNotNull)
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markRosterShortfall(id: UUID, at: OffsetDateTime): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.ROSTER_SHORTFALL_AT, at)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_SHORTFALL_AT.isNull))
+            .execute()
+
+    override fun extendRosterDeadline(id: UUID, leadMinutes: Int): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.STAGE2_LEAD_MINUTES, leadMinutes)
+            .setNull(EVENTS.ROSTER_SHORTFALL_AT)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            // Гард статуса: продлевать можно только пока набор идёт — если состав успел
+            // закрыться (или встречу отменили), кнопка из старого DM не должна ничего менять.
+            .where(EVENTS.ID.eq(id).and(EVENTS.STATUS.eq(EventStatus.upcoming)))
+            .execute()
 
     /**
      * Возвращает ближайшее предстоящее событие среди всех клубов.

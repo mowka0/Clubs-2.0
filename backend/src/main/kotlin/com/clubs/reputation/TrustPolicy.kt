@@ -47,6 +47,10 @@ object TrustPolicy {
         ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid -> TrustClass.KEPT
         ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
         ReputationKind.abandoned_slot,
+        // Поздний отказ (V83) — нарушенное обещание в обоих вариантах: человек занимал место в
+        // объявленном составе и снялся. Замена в очереди снижает ЦЕНУ (−50 против −150), но не
+        // делает обещание сдержанным, иначе надёжность мерилась бы везением с очередью.
+        ReputationKind.late_decline_covered, ReputationKind.late_decline_uncovered,
         // open_no_show ЗАРЕЗЕРВИРОВАН и сейчас не выдаётся (открытые встречи вне репутации,
         // PO 2026-07-21); классификация BROKE — на случай будущего «строгого режима».
         ReputationKind.open_no_show -> TrustClass.BROKE

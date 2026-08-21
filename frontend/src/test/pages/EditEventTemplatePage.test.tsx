@@ -113,11 +113,11 @@ describe('EditEventTemplatePage', () => {
     // Описание, место и интервал Этапа 2 — тоже на месте.
     expect(screen.getByDisplayValue('Говорим по-английски')).toBeInTheDocument();
     expect(screen.getByText('ул. Покровка, 47')).toBeInTheDocument();
-    expect(screen.getByText('Подтверждение мест')).toBeInTheDocument();
+    expect(screen.getByText('Набор состава')).toBeInTheDocument();
     // Интервал шаблона (2160 минут) показан словами и собирается из двух текстовых узлов,
     // поэтому матчим по textContent элемента.
     expect(
-      screen.getByText((_, el) => el?.tagName === 'B' && el.textContent === 'за 36 часов'),
+      screen.getByText((_, el) => el?.tagName === 'B' && el.textContent === 'закрывается за 36 часов'),
     ).toBeInTheDocument();
   });
 

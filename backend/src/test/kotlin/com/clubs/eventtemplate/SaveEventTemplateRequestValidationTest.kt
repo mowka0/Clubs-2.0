@@ -126,8 +126,10 @@ class SaveEventTemplateRequestValidationTest {
     }
 
     @Test
-    fun `интервал Этапа 2 короче 18 часов отклоняется`() {
-        assertEquals(setOf("stage2LeadMinutes"), violatedProperties(request(stage2LeadMinutes = 1079)))
+    fun `интервал набора короче 6 часов отклоняется`() {
+        // V83: нижняя граница пресетов — 6 ч (было 18 ч).
+        assertEquals(setOf("stage2LeadMinutes"), violatedProperties(request(stage2LeadMinutes = 359)))
+        assertEquals(emptySet(), violatedProperties(request(stage2LeadMinutes = 360)))
     }
 
     @Test

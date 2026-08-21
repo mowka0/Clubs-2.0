@@ -37,7 +37,7 @@
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
 | `common/security` (`SecurityConfig`, `RateLimitFilter`) | `auth.md`, `infrastructure.md` |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
-| `event` | `events.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
+| `event` | `events.md`, `event-roster-threshold.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
 | `feedback` | `feedback.md` |
 | `geo` (`SuggestService`, `CityCenterRepository` → подсказки; `GeocoderService` → гео события) | `venue-search.md`, `event-geo.md` |
@@ -61,7 +61,7 @@
 | `ClubPage.tsx` | `club-page-unified.md`, `clubs.md` |
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
-| `EventPage.tsx` | `events.md`, `event-vote-block.md`, `event-stage2-composition.md` |
+| `EventPage.tsx` | `events.md`, `event-roster-threshold.md`, `event-vote-block.md`, `event-stage2-composition.md` |
 | `CreateEventPage.tsx` | `events.md`, `event-templates.md`, `event-geo.md`, `venue-search.md` |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
@@ -118,10 +118,11 @@
 ### Встречи и активности
 | Файл | О чём | Правлен |
 |---|---|---|
-| `events.md` | встречи, двухэтапное подтверждение | 2026-08-16 |
+| `events.md` | встречи, двухэтапное подтверждение | 2026-08-21 |
+| `event-roster-threshold.md` | порог набора формата «🎟 с местами», цена отказа | 2026-08-21 |
 | `events-feed.md` | вкладка «Активности», история | 2026-08-16 |
-| `event-vote-block.md` | блок «Набор» на странице события | 2026-08-16 |
-| `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-16 |
+| `event-vote-block.md` | блок «Набор» на странице события | 2026-08-21 |
+| `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-21 |
 | `event-templates.md` | шаблоны встреч | 2026-08-12 |
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
@@ -191,9 +192,9 @@
 Подпапки `docs/design/<фича>/mockups/` — HTML-мокапы и картинки дизайн-сессий.
 Артефакты обсуждения, **в сверке не участвуют**.
 
-Активная дизайн-сессия: `docs/design/event-roster-threshold/` — порог набора для формата
-«🎟 Встреча с местами» (решения PO 2026-08-21 + мокап экранов). Хэндофф для разработки —
-`docs/backlog/event-roster-threshold-handoff.md`.
+Дизайн-сессия `docs/design/event-roster-threshold/` — порог набора для формата
+«🎟 Встреча с местами» (решения PO 2026-08-21 + мокап экранов). **Реализована**, спека —
+`docs/modules/event-roster-threshold.md`.
 
 ---
 

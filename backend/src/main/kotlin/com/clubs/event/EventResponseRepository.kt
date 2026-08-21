@@ -42,6 +42,15 @@ interface EventResponseRepository {
     fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponse
 
     /**
+     * Убирает участника из состава/очереди, возвращая строку в состояние «в наборе не участвует»
+     * (stage_2_vote и final_status → NULL). Нужен формату 🎟 (V83): смена голоса «Иду» на
+     * «Возможно»/«Не иду» до закрытия состава — это не отказ (declined — терминальный статус,
+     * который закрыл бы дорогу назад и попал бы в счётчики отказов), а выход из набора.
+     * Вызывать под [lockEventSlots]: следом освободившийся слот отдаётся первому из очереди.
+     */
+    fun clearStage2Vote(id: UUID): EventResponse
+
+    /**
      * Feature A авто-истечение: для каждого начавшегося, запустившего Этап 2, неотменённого события
      * переводит going/maybe-ответы, которые так и не были подтверждены (stage_2_vote IS NULL), в
      * [com.clubs.generated.jooq.enums.Stage_2Vote.expired_no_confirm] /
@@ -66,6 +75,13 @@ interface EventResponseRepository {
      * Строится от memberships (LEFT JOIN event_responses), а не от голосов, иначе не ответившие бы выпали.
      */
     fun findStage2InviteTelegramIds(eventId: UUID): List<Long>
+
+    /**
+     * Telegram id участников события с данным статусом Этапа 2 — адресаты DM «состав собран»
+     * (V83): confirmed получают «ждём вас», waitlisted — «вы в очереди». Отдельный метод, потому
+     * что существующие выборки строятся от голосов Этапа 1, а состав живёт в stage_2_vote.
+     */
+    fun findTelegramIdsByStage2Vote(eventId: UUID, vote: Stage_2Vote): List<Long>
 
     /**
      * F5-15(2): telegram ID для данных (eventId, userIds) — участники, которые СТАЛИ absent именно

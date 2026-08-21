@@ -86,7 +86,7 @@ data class SaveEventTemplateRequest(
 
     val isUrgentEvent: Boolean = false,
 
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
 

@@ -63,6 +63,11 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
     abandonedSlotPenaltyPoints: 100,
+    rosterDeadline: null,
+    rosterClosed: true,
+    rosterShortfall: false,
+    waitlistedCount: 0,
+    declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -153,11 +158,12 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     });
     const { container } = renderEventPage();
 
-    expect(await screen.findByText('Подтвердили')).toBeInTheDocument();
+    // V83: у встречи с порогом набора плитка называется «В составе» — подтверждений нет.
+    expect(await screen.findByText('В составе')).toBeInTheDocument();
     const tiles = [...container.querySelectorAll('.rd-stat-tile')];
     // Подписи читаем внутри плиток: «В очереди» дублируется заголовком секции ниже.
     expect(tiles.map((t) => t.querySelector('.rd-vl')?.textContent))
-      .toEqual(['Подтвердили', 'Без ответа', 'В очереди']);
+      .toEqual(['В составе', 'В очереди', 'Возможно']);
     // Плитки не кнопки: на Этапе 2 счётчики никуда не ведут.
     tiles.forEach((tile) => expect(tile.tagName).toBe('DIV'));
     expect(container.querySelector('.rd-kv')).toBeNull();
@@ -200,7 +206,7 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     });
     renderEventPage();
 
-    const goingTab = await screen.findByRole('button', { name: 'Идут (1)' });
+    const goingTab = await screen.findByRole('button', { name: 'Кто идёт (1)' });
     expect(goingTab).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Без ответа (1)' })).toHaveAttribute('aria-pressed', 'false');
     // Пока открыт «Идут» — молчуна в списке нет.
@@ -310,8 +316,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     });
     const { user } = renderEventPage();
 
-    expect(await screen.findByRole('button', { name: 'Идут (0)' })).toBeInTheDocument();
-    expect(screen.getByText('Пока никто не подтвердил участие.')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Кто идёт (0)' })).toBeInTheDocument();
+    expect(screen.getByText('В составе пока никого.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Без ответа (1)' }));
     expect(screen.getByText('Молчун')).toBeInTheDocument();

@@ -58,8 +58,10 @@ CREATE TYPE reputation_axis   AS ENUM ('attendance', 'finance');
 CREATE TYPE reputation_kind   AS ENUM (
   'ironclad', 'no_show', 'spontaneous', 'spectator', 'confirmed_unresolved',
   'skladchina_paid', 'skladchina_declined', 'skladchina_expired',
-  'abandoned_slot',   -- V45 (2026-07-05): отказ от подтверждённого места без замены, −100
-  'open_no_show');    -- V63 (2026-07-21): ЗАРЕЗЕРВИРОВАН, не выдаётся — открытые встречи вне репутации (итерация 2)
+  'abandoned_slot',   -- V45 (2026-07-05): отказ от места без замены, до порога отказа, −100
+  'open_no_show',     -- V63 (2026-07-21): ЗАРЕЗЕРВИРОВАН, не выдаётся — открытые встречи вне репутации (итерация 2)
+  'late_decline_covered',    -- V83 (2026-08-21): поздний отказ (внутри 4ч), замена нашлась, −50
+  'late_decline_uncovered'); -- V83 (2026-08-21): поздний отказ без замены, −150
 CREATE TYPE reputation_source AS ENUM ('event', 'skladchina');
 
 CREATE TABLE reputation_ledger (
@@ -178,11 +180,22 @@ disputed/null attendance.
 > `spontaneous`/`spectator` для остальных) — очки идентичны. Раньше `не-going` подтверждённые падали
 > в `else → confirmed_unresolved (0)` = дыра «подтвердился и не пришёл → без штрафа», теперь закрыта.
 
-**`abandoned_slot` (−100)** — отдельный вид (миграция **V45**): отказ от подтверждённого места на
-Этапе 2 без замены в очереди. Начисляется НЕ на явке, а в момент отказа
-(`ReputationService.penalizeAbandonedSlot`, вызывается из `Stage2Service.declineParticipation`, по
-образцу `penalizeExit`). Половина `no_show`: строго меньше −200, чтобы честный ранний отказ был
-выгоднее молчаливой неявки. Класс Trust = `BROKE`, XP = 0 (штрафной). См. events.md § «Логика decline».
+**Шкала отказа от места (V45 + V83).** Отказ начисляется НЕ на явке, а в момент отказа
+(`ReputationService.penalizeDecline` из `Stage2Service.declineParticipation`, по образцу
+`penalizeExit`). Вид выбирает `RosterPolicy.declineKind` — цена зависит от того, закрыт ли состав,
+близко ли встреча и есть ли замена в очереди:
+
+| Когда | Замена есть | Замены нет |
+|---|---|---|
+| Набор состава ещё идёт (V83) | 0, строки нет | 0, строки нет |
+| Состав закрыт, до старта > 4ч | 0, строки нет | **−100** `abandoned_slot` (V45) |
+| Состав закрыт, до старта ≤ 4ч | **−50** `late_decline_covered` (V83) | **−150** `late_decline_uncovered` (V83) |
+
+Все три строго дешевле `no_show` (−200): честное предупреждение всегда выгоднее молчания — ровно
+поэтому прежний ЗАПРЕТ отказа внутри 4 ч снят (решение PO 2026-08-21). Бесплатный отказ строки в
+леджере не создаёт вовсе: иначе три бесплатных отказа выводили бы человека из «Новичка» через
+`outcome_count`. Класс Trust у всех трёх = `BROKE`, XP = 0. См. events.md § «Логика decline» и
+event-roster-threshold.md § 4.
 
 > **Отметка явки (решение 2026-06-11, рев. 2):** в форме отметки все confirmed по умолчанию
 > «пришёл», организатор снимает галочку с отсутствующих; UI шлёт явное значение для каждого
@@ -486,7 +499,7 @@ kept/broke/neutral по **kind** (магнитудо-независимо, ко�
 
 | kept | broke | neutral (вне знаменателя) |
 |---|---|---|
-| `ironclad`, `spontaneous`, `skladchina_paid` | `no_show`, `spectator`, `skladchina_expired`, `abandoned_slot` (V45), `open_no_show` (V63, зарезервирован) | `confirmed_unresolved`, `skladchina_declined` (историч.) |
+| `ironclad`, `spontaneous`, `skladchina_paid` | `no_show`, `spectator`, `skladchina_expired`, `abandoned_slot` (V45), `late_decline_covered` / `late_decline_uncovered` (V83), `open_no_show` (V63, зарезервирован) | `confirmed_unresolved`, `skladchina_declined` (историч.) |
 
 > **UPDATED 2026-07-21 (bugfix/reputation-consistency):** SQL-списки kept/broke в
 > `JooqReputationRepository.recompute` теперь **выводятся из `TrustPolicy.classOf`** — единый

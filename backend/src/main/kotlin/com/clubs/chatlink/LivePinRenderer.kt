@@ -39,9 +39,31 @@ class LivePinRenderer(
      */
     fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername?startapp=event_$eventId"
 
-    /** Кнопка под статусом: на Этапе 2 зовём подтверждать, до него — голосовать. */
-    fun buttonText(event: Event): String =
-        if (event.stage2Triggered) "Подтвердить участие" else "Проголосовать"
+    /**
+     * Кнопка под статусом: на Этапе 2 зовём подтверждать, до него — голосовать. У встречи с
+     * порогом набора (V83) подтверждать нечего — место даёт голос, поэтому после закрытия состава
+     * кнопка просто открывает встречу.
+     */
+    fun buttonText(event: Event): String = when {
+        event.isRosterEvent && event.stage2Triggered -> "Открыть встречу"
+        event.stage2Triggered -> "Подтвердить участие"
+        else -> "Проголосовать"
+    }
+
+    /**
+     * Идёт набор состава (формат 🎟): «собрались N из M — нужно ещё K» и дедлайн набора.
+     * Для продукта-плагина к чату это главный эффект фичи: недобор виден всему чату, а не
+     * только организатору.
+     */
+    fun rosterText(event: Event, confirmed: Int, deadline: OffsetDateTime): String =
+        "${EventMessageTemplate.head(event, fmt)}\n\n" +
+            "$VOTE_CALL_TO_ACTION\n" +
+            EventMessageTemplate.rosterStats(event, confirmed, deadline, fmt)
+
+    /** Состав собран — призыва голосовать больше нет, набор закрыт. */
+    fun rosterClosedText(event: Event, confirmed: Int, waitlisted: Int): String =
+        "${EventMessageTemplate.head(event, fmt)}\n\n" +
+            EventMessageTemplate.rosterClosedStats(event, confirmed, waitlisted)
 
     /**
      * Этап 1 (идёт голосование) — общий шаблон встречи: формат жирным, что/когда/где, призыв

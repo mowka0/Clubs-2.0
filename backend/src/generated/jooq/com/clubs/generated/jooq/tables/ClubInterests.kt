@@ -96,16 +96,18 @@ open class ClubInterests(
     val INTEREST_ID: TableField<ClubInterestsRecord, UUID?> = createField(DSL.name("interest_id"), SQLDataType.UUID.nullable(false), this, "Тема (FK interests.id, ON DELETE RESTRICT — строку словаря нельзя удалить, пока она кому-то назначена).")
 
     /**
-     * The column <code>public.club_interests.created_at</code>. Когда тема была
-     * назначена клубу.
+     * The column <code>public.club_interests.position</code>. Позиция темы в
+     * наборе клуба (0 = главная). Задаётся порядком, в котором организатор
+     * выбрал темы; карточка каталога показывает первые из них.
      */
-    val CREATED_AT: TableField<ClubInterestsRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда тема была назначена клубу.")
+    val POSITION: TableField<ClubInterestsRecord, Short?> = createField(DSL.name("position"), SQLDataType.SMALLINT.nullable(false), this, "Позиция темы в наборе клуба (0 = главная). Задаётся порядком, в котором организатор выбрал темы; карточка каталога показывает первые из них.")
 
     /**
-     * The column <code>public.club_interests.position</code>. Позиция темы в
-     * наборе клуба (0 = главная).
+     * The column <code>public.club_interests.created_at</code>. Когда связь
+     * была записана. Набор тем сохраняется перезаписью целиком, поэтому у всех
+     * тем клуба это время последней правки разметки, а не первого назначения.
      */
-    val POSITION: TableField<ClubInterestsRecord, Short?> = createField(DSL.name("position"), SQLDataType.SMALLINT.nullable(false), this, "Позиция темы в наборе клуба (0 = главная).")
+    val CREATED_AT: TableField<ClubInterestsRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда связь была записана. Набор тем сохраняется перезаписью целиком, поэтому у всех тем клуба это время последней правки разметки, а не первого назначения.")
 
     private constructor(alias: Name, aliased: Table<ClubInterestsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubInterestsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

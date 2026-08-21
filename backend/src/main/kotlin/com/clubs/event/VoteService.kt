@@ -23,11 +23,13 @@ class VoteService(
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
+    private val rosterService: RosterService,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
 
+    @Transactional
     fun castVote(eventId: UUID, userId: UUID, request: CastVoteRequest): VoteResponseDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
 
@@ -53,6 +55,9 @@ class VoteService(
             ?: throw ValidationException("Invalid vote value: ${request.vote}")
 
         eventResponseRepository.upsertStage1Vote(eventId, userId, voteEnum)
+        // Встреча с порогом набора (V83): голос «Иду» сразу кладёт в состав или в очередь, любой
+        // другой — выводит оттуда. У ⚡ срочной и 🌊 открытой голос по-прежнему только мнение.
+        rosterService.applyVote(event, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
         // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
@@ -143,8 +148,13 @@ class VoteService(
     @Transactional
     fun remind(eventId: UUID, userId: UUID, targetUserId: UUID?): RemindResultDto {
         val event = requireEventManager(eventId, userId)
-        // Окно то же, в котором участник может подтвердить (см. Stage2Service.confirmParticipation).
-        if (event.status != EventStatus.stage_2) throw ValidationException("Confirmation is not open for this event")
+        // Окно то же, в котором участник может подтвердить (см. Stage2Service.confirmParticipation),
+        // плюс недобор состава (V83): там напоминание — кнопка в DM организатору, и событие в этот
+        // момент ещё `upcoming`, потому что набор продолжается, пока организатор решает.
+        val rosterShortfall = event.status == EventStatus.upcoming && event.rosterShortfallAt != null
+        if (event.status != EventStatus.stage_2 && !rosterShortfall) {
+            throw ValidationException("Confirmation is not open for this event")
+        }
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")
 
         // Цели пересекаем с серверным набором: чужой userId не должен попасть в рассылку.

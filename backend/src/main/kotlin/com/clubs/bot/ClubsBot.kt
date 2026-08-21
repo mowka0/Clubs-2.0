@@ -41,6 +41,7 @@ class ClubsBot(
     private val eventResponseRepository: EventResponseRepository,
     private val chatLinkBotService: ChatLinkBotService,
     private val chatDoorService: ChatDoorService,
+    private val rosterBotService: RosterBotService,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -216,10 +217,15 @@ class ClubsBot(
         }
     }
 
-    /** Ответ на inline-кнопку. Формат data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService). */
+    /**
+     * Ответ на inline-кнопку. Форматы data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService)
+     * и «roster:<действие>:<uuid>» — кнопки DM о недоборе состава (см. RosterBotService).
+     */
     private fun handleCallbackQuery(query: CallbackQuery) {
         val data = query.data ?: return
-        val answerText = if (data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX)) {
+        val answerText = if (data.startsWith(RosterBotService.CALLBACK_PREFIX)) {
+            rosterBotService.handleCallback(query.from.id, data)
+        } else if (data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX)) {
             val clubId = try {
                 UUID.fromString(data.removePrefix(ChatLinkBotService.UNLINK_CALLBACK_PREFIX))
             } catch (_: IllegalArgumentException) {

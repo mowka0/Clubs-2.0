@@ -36,6 +36,9 @@ data class Event(
     val attendanceFinalized: Boolean,
     // Опциональная причина от организатора, задаваемая при отмене (F5-14); иначе null.
     val cancellationReason: String? = null,
+    // Момент, когда набор состава закрылся НЕДОБОРОМ и организатору ушёл DM с выбором (V83).
+    // null = недобора не было либо организатор продлил набор.
+    val rosterShortfallAt: OffsetDateTime? = null,
     val photoUrl: String?,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?
@@ -43,4 +46,10 @@ data class Event(
     // Открытая встреча (V62): продуктовый тип поверх того же движка, дискриминатор — отсутствие лимита.
     val isOpenEvent: Boolean
         get() = participantLimit == null
+
+    // Формат «🎟 встреча с местами» (V83): participant_limit читается как ПОРОГ НАБОРА («сколько
+    // человек нужно»), голос «Иду» кладёт в состав сразу. Срочная встреча лимит тоже имеет, но
+    // живёт по правилам гонки за места, поэтому исключена.
+    val isRosterEvent: Boolean
+        get() = participantLimit != null && !isUrgent
 }

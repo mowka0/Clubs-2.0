@@ -65,6 +65,20 @@ data class EventDetailDto(
     // копия порога на клиенте разъезжается с рантаймом). У открытой встречи штрафа нет — фронт
     // предупреждение не показывает, поле игнорирует.
     val abandonedSlotPenaltyPoints: Int,
+    // --- Порог набора, формат 🎟 (V83) ---
+    // Момент закрытия набора (= eventDatetime − эффективный stage2LeadMinutes); null у 🌊 открытой,
+    // у которой набора нет. Считает бэкенд: у фронта нет глобального дефолта интервала.
+    val rosterDeadline: OffsetDateTime?,
+    // Состав закрыт: голоса больше не набирают порог, встреча состоится. У 🌊 всегда false.
+    val rosterClosed: Boolean,
+    // Набор закрылся недобором, ждём решения организатора (продлить / провести / отменить).
+    val rosterShortfall: Boolean,
+    // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди».
+    val waitlistedCount: Int,
+    // Сколько очков спишется, если участник ИЗ СОСТАВА откажется прямо сейчас (0 = бесплатно).
+    // Цену считает сервер по RosterPolicy: клиент не выводит её из четырёх условий (тот же урок,
+    // что confirmedDeclineDeadline). Для waitlisted не применяется — выход из очереди бесплатен.
+    val declineCostPoints: Int,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
     // F5-14: опциональная причина отмены от организатора; null, если отменено без указания причины.
@@ -153,12 +167,13 @@ data class CreateEventRequest(
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
     val votingOpensDaysBefore: Int = 14,
 
-    // За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест) — выбор
-    // организатора (V67/V68, решения PO 2026-07-23). null = глобальный дефолт
-    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 18ч/36ч/3 дня/5 дней.
-    // Встречи «ближе 18 часов» закрывает формат «Срочная встреча» (isUrgentEvent), а не малый
-    // интервал. Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68).
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    // За сколько МИНУТ до старта закрывается НАБОР СОСТАВА — выбор организатора (V67/V68,
+    // с V83 поле несёт смысл «дедлайн набора»). null = глобальный дефолт
+    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 6ч/12ч/18ч/36ч/3 дня.
+    // Встречи, которым на набор времени не остаётся, закрывает формат «Срочная встреча»
+    // (isUrgentEvent). Диапазон ЗДЕСЬ уже, чем CHECK chk_events_stage2_lead_minutes (60..7200,
+    // V83): значения короче 6 часов рождаются только продлением набора из DM организатору.
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
 
@@ -287,8 +302,9 @@ data class UpdateEventRequest(
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    // Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68); null = глобальный дефолт.
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    // Нижняя граница — пресет формы (6 ч); CHECK в БД шире (60..7200, V83), потому что продление
+    // набора из DM организатору умеет опускать интервал ниже пресетов. null = глобальный дефолт.
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
 

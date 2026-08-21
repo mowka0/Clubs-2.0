@@ -1,4 +1,4 @@
-import { FC, useRef, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../../hooks/useHaptic';
 import { BrandStepper } from '../BrandStepper';
@@ -29,17 +29,22 @@ export type EventFormat = 'limited' | 'open' | 'urgent';
 // Дни недели для выбора расписания шаблона: индекс + 1 = ISO-номер (понедельник = 1).
 const WEEKDAYS: string[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-// Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
-// Значения зеркалят CHECK 1080..7200 (V68) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
-// events.stage2-trigger-minutes-before. Короче 18 часов не бывает — этот случай закрывает
-// формат «Срочная встреча». short — подпись насечки на шкале-таймлайне.
+// Пресеты дедлайна НАБОРА СОСТАВА (за сколько до старта набор закрывается), в минутах.
+// Значения зеркалят @Min(360)/@Max(7200) бэкенда; дефолт 1080 = 18 ч зеркалит
+// events.stage2-trigger-minutes-before. Нижняя граница опущена с 18 ч до 6 ч (V83): под смысл
+// «набор» 18 часов велики. CHECK в БД ещё шире (60..7200) — короче 6 ч интервал рождается только
+// продлением набора из DM организатору. short — подпись насечки на шкале-таймлайне.
 const STAGE2_LEAD_PRESETS: { minutes: number; short: string }[] = [
+  { minutes: 360, short: '6 ч' },
+  { minutes: 720, short: '12 ч' },
   { minutes: 1080, short: '18 ч' },
   { minutes: 2160, short: '36 ч' },
   { minutes: 4320, short: '3 дня' },
-  { minutes: 7200, short: '5 дней' },
 ];
 const STAGE2_LEAD_DEFAULT = 1080;
+// Самый короткий набор: если до встречи меньше — состав собрать не успеть, и форма предлагает
+// формат «⚡ срочная» (там места достаются тем, кто первым откликнется).
+const MIN_ROSTER_LEAD = STAGE2_LEAD_PRESETS[0].minutes;
 
 // Выбранное в пикере место: точка на карте + адрес из обратного геокодера.
 interface PickedLocation {
@@ -172,23 +177,40 @@ export const EventForm: FC<EventFormProps> = ({
   const applyLeadIndex = (index: number) => {
     const preset = STAGE2_LEAD_PRESETS[index];
     if (preset === undefined || preset.minutes === effectiveStage2Lead) return;
+    // Насечка дальше оставшегося до встречи времени недоступна (V83): такой набор закрылся бы
+    // ещё до создания встречи, и организатор мгновенно получал бы «состав не набрался».
+    if (isLeadDisabled(preset.minutes)) return;
     haptic.select();
     setStage2LeadMinutes(preset.minutes);
   };
 
   const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
   const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
-  // Оба предупреждения — про КОНКРЕТНУЮ дату, которой у шаблона нет: в режиме правки молчат.
-  // Встреча ближе минимума (18 ч) — такому событию место в формате «срочная» (PO 2026-07-23):
-  // предлагаем переключиться кнопкой, не блокируя создание.
+  // Предупреждение — про КОНКРЕТНУЮ дату, которой у шаблона нет: в режиме правки молчит.
+  // Встреча ближе самого короткого набора (6 ч) — состав собрать не успеть, такому событию место
+  // в формате «срочная» (PO 2026-07-23, порог обновлён V83): предлагаем переключиться кнопкой.
   const suggestUrgent =
     !isTemplateMode && !isOpenEvent && !isUrgentEvent &&
-    msToEvent !== null && msToEvent < STAGE2_LEAD_DEFAULT * 60_000;
-  // Встреча дальше 18 ч, но ближе ВЫБРАННОГО интервала — Этап 2 стартует сразу после
-  // создания; предупреждаем и подсказываем отметку короче.
-  const stage2StartsImmediately =
-    !isTemplateMode && !isOpenEvent && !isUrgentEvent && !suggestUrgent &&
-    msToEvent !== null && msToEvent <= effectiveStage2Lead * 60_000;
+    msToEvent !== null && msToEvent < MIN_ROSTER_LEAD * 60_000;
+
+  /**
+   * Насечка недоступна, если её интервал не помещается в оставшееся до встречи время: набор,
+   * который закрывается в прошлом, — это мгновенный недобор, а не выбор. Заменяет прежнее
+   * предупреждение «Этап 2 начнётся сразу после создания»: случай стал невыбираемым (V83).
+   * У шаблона даты нет — там доступны все насечки.
+   */
+  const isLeadDisabled = (minutes: number): boolean =>
+    !isTemplateMode && msToEvent !== null && msToEvent <= minutes * 60_000;
+
+  // Выбранное значение перестало помещаться (сдвинули дату назад) — опускаем до ближайшего
+  // допустимого, иначе форма молча отправила бы заведомо просроченный набор.
+  useEffect(() => {
+    if (isTemplateMode || isOpenEvent || isUrgentEvent || msToEvent === null) return;
+    if (!isLeadDisabled(effectiveStage2Lead)) return;
+    const fits = [...STAGE2_LEAD_PRESETS].reverse().find((p) => !isLeadDisabled(p.minutes));
+    if (fits !== undefined && fits.minutes !== effectiveStage2Lead) setStage2LeadMinutes(fits.minutes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventDatetime, effectiveStage2Lead, isOpenEvent, isUrgentEvent, isTemplateMode]);
 
   const handleMakeUrgent = () => {
     haptic.impact('medium');
@@ -215,7 +237,7 @@ export const EventForm: FC<EventFormProps> = ({
       return fail(`Уточнение к месту: максимум ${LOCATION_HINT_MAX} символов`);
     }
     if (!isOpenEvent && (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN)) {
-      return fail('Лимит участников: целое число больше нуля');
+      return fail(isUrgentEvent ? 'Лимит участников: целое число больше нуля' : 'Сколько человек нужно: целое число больше нуля');
     }
     if (isTemplateMode) return submitTemplate();
     if (!eventDatetime) return fail('Укажите дату и время');
@@ -548,8 +570,8 @@ export const EventForm: FC<EventFormProps> = ({
             >
               <span className="rd-s2-dot" aria-hidden="true">🎟</span>
               <span className="rd-s2-txt">
-                <span>Подтверждение мест</span>
-                <b>за {formatLeadInterval(effectiveStage2Lead)}</b>
+                <span>Набор состава</span>
+                <b>закрывается за {formatLeadInterval(effectiveStage2Lead)}</b>
               </span>
               <span className="rd-s2-edit">{leadEditorOpen ? 'Скрыть' : 'Изменить'}</span>
             </button>
@@ -596,6 +618,7 @@ export const EventForm: FC<EventFormProps> = ({
                       <button
                         key={p.minutes}
                         type="button"
+                        disabled={isLeadDisabled(p.minutes)}
                         className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
                         // Тап по насечке остаётся отдельным обработчиком ради клавиатуры: указателем
                         // значение уже поставил onPointerDown выше, и повторный вызов гасится
@@ -609,25 +632,20 @@ export const EventForm: FC<EventFormProps> = ({
                   </div>
                 </div>
                 <span className="rd-hint">
-                  До этого момента идёт голосование «Пойду / Возможно», затем участники
-                  подтверждают свои места.
+                  {msToEvent !== null && isLeadDisabled(STAGE2_LEAD_PRESETS[STAGE2_LEAD_PRESETS.length - 1].minutes)
+                    ? `До встречи ${formatLeadInterval(Math.floor(msToEvent / 60_000))} — более длинные интервалы не помещаются.`
+                    : 'До этого момента идёт набор. Наберётся состав — встреча состоится, не наберётся — решите: продлить, провести меньшим составом или отменить.'}
                 </span>
               </div>
             )}
             {suggestUrgent && (
               <span className="rd-hint rd-s2-warn">
-                ⚡️ До встречи меньше 18 часов — такому событию лучше быть срочной встречей:
-                без голосования, сразу подтверждение мест.
+                ⚡️ До встречи меньше {formatLeadInterval(MIN_ROSTER_LEAD)} — состав собрать не успеть.
+                Такой встрече лучше быть срочной: без набора, места достаются тем, кто первым
+                откликнется.
                 <button type="button" className="rd-s2-switch" onClick={handleMakeUrgent}>
                   Сделать срочной
                 </button>
-              </span>
-            )}
-            {stage2StartsImmediately && (
-              <span className="rd-hint rd-s2-warn">
-                ⚡️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
-                после создания. Чтобы сначала прошло голосование, выберите отметку короче
-                времени до встречи.
               </span>
             )}
           </div>
@@ -636,14 +654,24 @@ export const EventForm: FC<EventFormProps> = ({
         {/* Открытая встреча: лимита нет — степпер не рендерится вовсе. */}
         {!isOpenEvent && (
           <div className="rd-field">
-            <span className="rd-label">Лимит участников <span className="rd-req">*</span></span>
+            {/* V83: у встречи с местами это ПОРОГ («сколько человек нужно»), а не потолок —
+                встреча состоится, только если наберётся столько. У срочной смысл прежний: лимит. */}
+            <span className="rd-label">
+              {isUrgentEvent ? 'Лимит участников' : 'Сколько человек нужно'} <span className="rd-req">*</span>
+            </span>
             <BrandStepper
               value={participantLimit}
               onChange={setParticipantLimit}
               min={PARTICIPANT_MIN}
               max={PARTICIPANT_MAX}
-              ariaLabel="Лимит участников"
+              ariaLabel={isUrgentEvent ? 'Лимит участников' : 'Сколько человек нужно'}
             />
+            {!isUrgentEvent && (
+              <span className="rd-hint">
+                Встреча состоится, если наберётся столько. Кто запишется сверх — встанет в очередь
+                на замену.
+              </span>
+            )}
           </div>
         )}
 

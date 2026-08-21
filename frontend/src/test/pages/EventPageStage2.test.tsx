@@ -55,7 +55,10 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'stage_2',
-    isUrgent: false,
+    // ⚡ СРОЧНАЯ: подтверждение мест (гонка за места, кнопки «Подтвердить»/«Отказаться») осталось
+    // только у этого формата. У встречи с порогом набора (V83) состав закрывается голосами, и её
+    // экран проверяет EventPageRoster.test.tsx.
+    isUrgent: true,
     goingCount: 3,
     maybeCount: 1,
     notGoingCount: 0,
@@ -67,6 +70,11 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
     abandonedSlotPenaltyPoints: 100,
+    rosterDeadline: null,
+    rosterClosed: true,
+    rosterShortfall: false,
+    waitlistedCount: 0,
+    declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -159,7 +167,13 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
   });
 
   it('подтверждённый (≥4ч): «Отказаться» → инлайн-подтверждение; без очереди предупреждает про репутацию', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders: [] });
+    // Цену отказа считает СЕРВЕР и отдаёт готовой (declineCostPoints, V83): клиент её не выводит
+    // из даты и размера очереди, поэтому фикстура задаёт именно то, что вернул бы бэкенд.
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, declineCostPoints: 100 }),
+      myVote: 'confirmed',
+      responders: [],
+    });
     const { user } = renderEventPage();
 
     await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
@@ -440,6 +454,10 @@ describe('EventPage — открытая встреча (participantLimit = null
     const eventDatetime = overrides.eventDatetime ?? FUTURE;
     return stage2Event({
       participantLimit: null,
+      // Открытая встреча — не срочная: базовая фикстура помечена isUrgent ради подтверждений,
+      // здесь формат другой, и бейдж хиро должен читаться как «🌊 открытая».
+      isUrgent: false,
+      rosterClosed: false,
       eventDatetime,
       confirmedDeclineDeadline: eventDatetime,
       ...overrides,

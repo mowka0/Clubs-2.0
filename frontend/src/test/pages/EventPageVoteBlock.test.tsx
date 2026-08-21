@@ -60,6 +60,11 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
     abandonedSlotPenaltyPoints: 100,
+    rosterDeadline: null,
+    rosterClosed: false,
+    rosterShortfall: false,
+    waitlistedCount: 0,
+    declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -119,12 +124,15 @@ beforeEach(() => {
 });
 
 describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
-  it('AC-VB1/VB2: кольцо считает занятость мест, «возможно» на него не влияет', async () => {
-    mockEndpoints({ event: stage1Event({ goingCount: 12, maybeCount: 5, notGoingCount: 2 }) });
+  it('AC-VB1/VB2: кольцо считает СОСТАВ, «возможно» на него не влияет', async () => {
+    // V83: у встречи с порогом набора голос «Иду» сразу кладёт в состав, поэтому кольцо считает
+    // confirmedCount на обеих фазах, а подпись — «в составе» вместо «мест занято».
+    mockEndpoints({
+      event: stage1Event({ goingCount: 12, maybeCount: 5, notGoingCount: 2, confirmedCount: 12 }),
+    });
     const { container } = renderEventPage();
 
-    // «12» есть и в счётчике кнопки, и в кольце — проверяем именно кольцо.
-    expect(await screen.findByText('мест занято')).toBeInTheDocument();
+    expect(await screen.findByText('в составе')).toBeInTheDocument();
     expect(container.querySelector('.rd-donut-num')).toHaveTextContent('12 / 20');
 
     // Дуга отмеряется stroke-dasharray = длина_окружности × going/лимит. 12/20 = 60%.

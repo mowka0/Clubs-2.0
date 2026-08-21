@@ -112,8 +112,26 @@ class EventService(
             maybeCount = counts["maybe"] ?: 0,
             notGoingCount = counts["notGoing"] ?: 0,
             confirmedCount = counts["confirmed"] ?: 0,
-            noAnswerCount = counts["noAnswer"] ?: 0
+            noAnswerCount = counts["noAnswer"] ?: 0,
+            waitlistedCount = counts["waitlisted"] ?: 0
         )
+    }
+
+    /**
+     * Системная отмена встречи без участия человека: набор не собрался, а организатор не ответил
+     * на DM в отведённое окно (V83). Тот же каскад, что у ручной отмены (сбор → released, DM
+     * заинтересованным на AFTER_COMMIT), но без гейта capability — инициатор здесь планировщик.
+     * Гонку с ручной отменой снимает SQL-guard внутри cancelEvent: 0 строк → просто выходим.
+     */
+    @Transactional
+    fun cancelBySystem(event: Event, reason: String) {
+        if (eventRepository.cancelEvent(event.id, reason) == 0) {
+            log.info("System cancel skipped — event already inactive: id={}", event.id)
+            return
+        }
+        skladchinaRepository.cancelActiveByEventId(event.id)
+        log.info("Event cancelled by system: id={} reason='{}'", event.id, reason)
+        eventPublisher.publishEvent(EventCancelledEvent(event, reason))
     }
 
     /**

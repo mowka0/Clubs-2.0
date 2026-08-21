@@ -8,6 +8,7 @@ import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
+import com.clubs.event.RosterService
 import com.clubs.event.yandexMapsUrl
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -44,7 +45,8 @@ class LivePinService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val renderer: LivePinRenderer,
-    private val gateway: ChatTelegramGateway
+    private val gateway: ChatTelegramGateway,
+    private val rosterService: RosterService
 ) {
     private val log = LoggerFactory.getLogger(LivePinService::class.java)
 
@@ -300,7 +302,17 @@ class LivePinService(
     }
 
     private fun renderStatus(event: Event): String =
-        if (event.stage2Triggered) {
+        // Встреча с порогом набора (V83) живёт своими двумя состояниями: идёт набор → «собрались
+        // N из M», состав закрыт → «состав собран». Подтверждений у формата нет, поэтому общие
+        // тексты Этапа 1/Этапа 2 ей не подходят.
+        if (event.isRosterEvent) {
+            val confirmed = eventResponseRepository.countConfirmed(event.id)
+            if (event.stage2Triggered) {
+                renderer.rosterClosedText(event, confirmed, eventResponseRepository.countWaitlisted(event.id))
+            } else {
+                renderer.rosterText(event, confirmed, rosterService.rosterDeadline(event))
+            }
+        } else if (event.stage2Triggered) {
             renderer.stage2Text(
                 event,
                 confirmed = eventResponseRepository.countConfirmed(event.id),

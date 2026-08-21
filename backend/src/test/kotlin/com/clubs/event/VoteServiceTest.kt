@@ -36,9 +36,12 @@ class VoteServiceTest {
     private val membershipRepository = mockk<MembershipRepository>()
     private val clubRepository = mockk<ClubRepository>()
     private val eventPublisher = mockk<org.springframework.context.ApplicationEventPublisher>(relaxed = true)
+    // Механика набора состава (V83) проверяется отдельно (RosterServiceTest): здесь важно, что
+    // голос записан и прочитан обратно.
+    private val rosterService = mockk<RosterService>(relaxed = true)
     private val service = VoteService(
         eventRepository, eventResponseRepository, membershipRepository, clubRepository,
-        ClubRoleGuard(clubRepository, membershipRepository), eventPublisher
+        ClubRoleGuard(clubRepository, membershipRepository), rosterService, eventPublisher
     )
 
     private val eventId = UUID.randomUUID()

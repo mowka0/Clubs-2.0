@@ -320,7 +320,9 @@ class ReputationLedgerIntegrationTest {
         )
         // Брошенный слот — тоже BROKE (V45-рассинхрон закрыт: раньше SQL-список его терял,
         // и счётчик «нарушил» занижался при корректном Trust).
-        reputationService.penalizeAbandonedSlot(member, clubId, insertFinalizedEvent(), OffsetDateTime.now())
+        reputationService.penalizeDecline(
+            ReputationKind.abandoned_slot, member, clubId, insertFinalizedEvent(), OffsetDateTime.now()
+        )
 
         val (kept, broke, neutral) = counts(member)
         assertEquals(2, kept, "kept_count (ironclad + skladchina_paid)")

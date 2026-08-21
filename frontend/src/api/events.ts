@@ -18,7 +18,8 @@ export interface CreateEventBody {
   // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
   isOpenEvent?: boolean;
   votingOpensDaysBefore?: number;
-  // За сколько минут до старта откроется подтверждение мест (Этап 2), 1080..7200 (V68).
+  // За сколько минут до старта закрывается набор состава, 360..7200 (V83; CHECK в БД шире —
+  // 60..7200, короче 6 ч рождается только продлением набора организатором).
   // Не задан = дефолт сервера (18 ч). Для открытой и срочной встречи не передаётся (400).
   stage2LeadMinutes?: number;
   // Срочная встреча (PO 2026-07-23): без Этапа 1, событие рождается сразу в подтверждении мест.
@@ -116,7 +117,20 @@ export function getMyAttendance(eventId: string): Promise<MyAttendanceDto> {
   return apiClient.get(`/api/events/${eventId}/my-attendance`);
 }
 
-export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
+/**
+ * Ответ подтверждения/отказа. `penaltyPoints` — сколько очков ФАКТИЧЕСКИ списал отказ (0 —
+ * бесплатно): названная на экране цена могла разойтись с фактической, пока был открыт диалог
+ * (очередь успела опустеть), поэтому итог берётся из ответа, а не пересчитывается клиентом.
+ */
+export interface ParticipationResultDto {
+  eventId: string;
+  status: string;
+  confirmedCount: number;
+  participantLimit: number | null;
+  penaltyPoints: number;
+}
+
+export function confirmParticipation(eventId: string): Promise<ParticipationResultDto> {
   return apiClient.post(`/api/events/${eventId}/confirm`);
 }
 
@@ -134,7 +148,7 @@ export function remindToConfirm(eventId: string, userId?: string): Promise<{ rem
   return apiClient.post(`/api/events/${eventId}/remind`, userId ? { userId } : {});
 }
 
-export function declineParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
+export function declineParticipation(eventId: string): Promise<ParticipationResultDto> {
   return apiClient.post(`/api/events/${eventId}/decline`);
 }
 

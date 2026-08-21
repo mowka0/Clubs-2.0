@@ -6,6 +6,7 @@ import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventResponseRepository
+import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.locationDisplay
 import com.clubs.event.locationDisplayOrDash
@@ -190,6 +191,98 @@ class NotificationService(
 
         telegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "✅ Подтвердить участие")
+        }
+    }
+
+    /**
+     * Состав собран (V83): порог набора взят, встреча состоится. Участникам состава и очереди
+     * уходят РАЗНЫЕ тексты — «ждём вас» человеку в очереди было бы обманом. Просьбы что-либо
+     * подтверждать здесь нет: у формата 🎟 место даёт голос, а не подтверждение.
+     */
+    @Async
+    fun sendRosterClosed(event: Event, confirmedCount: Int) {
+        val limitPart = event.participantLimit?.let { " из $it" } ?: ""
+        val webAppPath = "/events/${event.id}"
+
+        val confirmedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.confirmed)
+        val confirmedText = "✅ Состав собран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Идут $confirmedCount$limitPart. Встреча состоится — ждём вас."
+        confirmedIds.forEach { sendDm(it.toString(), confirmedText, webAppPath = webAppPath, buttonText = "Открыть встречу") }
+
+        val waitlistedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.waitlisted)
+        val waitlistedText = "📋 Состав собран без вас\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Мест не хватило, вы в очереди. Если кто-то откажется, место перейдёт вам — придёт уведомление."
+        waitlistedIds.forEach { sendDm(it.toString(), waitlistedText, webAppPath = webAppPath, buttonText = "Открыть встречу") }
+
+        log.info(
+            "Roster-closed DM: eventId={} confirmed={} waitlisted={}",
+            event.id, confirmedIds.size, waitlistedIds.size
+        )
+    }
+
+    /**
+     * Состав НЕ набрался (V83): решение остаётся за организатором, но с дедлайном. Уходит только
+     * ему — участникам в этот момент ничего не пишем, встреча ещё может состояться. Кнопки —
+     * callback'и с префиксом `roster:`, их разбирает [RosterBotService].
+     */
+    @Async
+    fun sendRosterShortfall(
+        event: Event,
+        organizerTelegramId: Long,
+        confirmedCount: Int,
+        participantLimit: Int,
+        pendingCount: Int,
+        autoCancelAt: java.time.OffsetDateTime
+    ) {
+        val pendingLine = if (pendingCount > 0) {
+            "\nЕщё $pendingCount ${plural(pendingCount, "участник", "участника", "участников")} " +
+                "не ${plural(pendingCount, "ответил", "ответили", "ответили")} — им можно напомнить."
+        } else ""
+        val text = "⏳ Состав не набрался\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "В составе $confirmedCount из $participantLimit.$pendingLine\n\n" +
+            "Если не ответить до ${autoCancelAt.format(fmt)}, встреча отменится автоматически, " +
+            "и все получат уведомление."
+
+        val rows = mutableListOf<InlineKeyboardRow>()
+        if (pendingCount > 0) {
+            rows += InlineKeyboardRow(callbackButton("🔔 Напомнить ($pendingCount)", "remind", event.id))
+        }
+        rows += InlineKeyboardRow(
+            callbackButton("+6 часов", "extend6", event.id),
+            callbackButton("+12 часов", "extend12", event.id)
+        )
+        rows += InlineKeyboardRow(callbackButton("Провести меньшим составом", "proceed", event.id))
+        rows += InlineKeyboardRow(callbackButton("Отменить встречу", "cancel", event.id))
+
+        try {
+            telegramClient.execute(
+                SendMessage.builder()
+                    .chatId(organizerTelegramId.toString())
+                    .text(text)
+                    .replyMarkup(InlineKeyboardMarkup(rows))
+                    .build()
+            )
+            log.info("Roster-shortfall DM sent: eventId={} organizer={}", event.id, organizerTelegramId)
+        } catch (e: Exception) {
+            log.error("Failed to send roster-shortfall DM for event {}: {}", event.id, e.message, e)
+        }
+    }
+
+    private fun callbackButton(text: String, action: String, eventId: UUID): InlineKeyboardButton =
+        InlineKeyboardButton.builder()
+            .text(text)
+            .callbackData("${RosterBotService.CALLBACK_PREFIX}$action:$eventId")
+            .build()
+
+    /** Русская форма числительного для «N участников не ответили». */
+    private fun plural(n: Int, one: String, few: String, many: String): String {
+        val mod100 = n % 100
+        val mod10 = n % 10
+        return when {
+            mod100 in 11..14 -> many
+            mod10 == 1 -> one
+            mod10 in 2..4 -> few
+            else -> many
         }
     }
 

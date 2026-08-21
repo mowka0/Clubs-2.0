@@ -280,7 +280,7 @@ open class EventTemplates(
         Internal.createCheck(this, DSL.name("chk_event_templates_limit"), "(((is_open_event AND (participant_limit IS NULL)) OR ((NOT is_open_event) AND (participant_limit IS NOT NULL) AND (participant_limit > 0))))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_open_stage2"), "(((NOT is_open_event) OR (stage2_lead_minutes IS NULL)))", true),
-        Internal.createCheck(this, DSL.name("chk_event_templates_stage2_bounds"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 1080) AND (stage2_lead_minutes <= 7200))))", true),
+        Internal.createCheck(this, DSL.name("chk_event_templates_stage2_bounds"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 60) AND (stage2_lead_minutes <= 7200))))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_urgent"), "(((NOT is_urgent_event) OR ((NOT is_open_event) AND (stage2_lead_minutes IS NULL))))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_weekday"), "(((default_weekday IS NULL) OR ((default_weekday >= 1) AND (default_weekday <= 7))))", true)
     )

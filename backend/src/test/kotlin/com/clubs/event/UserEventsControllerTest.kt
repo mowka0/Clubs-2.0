@@ -200,9 +200,14 @@ class UserEventsControllerTest {
         insertEvent(eventB, clubAlphaId, "Already Voted", future(2), status = "upcoming", votingOpensDaysBefore = 14)
         insertEventResponse(eventB, memberUserId, stage1Vote = "going")
 
-        // Event C: stage_2, user voted going but hasn't confirmed → actionRequired = true (but later in time)
+        // Event C: срочная встреча в stage_2, пользователь голосовал going, но не подтвердил →
+        // actionRequired = true (позже по времени). Именно СРОЧНАЯ: у встречи с порогом набора
+        // (V83) подтверждений нет, и действие на закрытом составе не требуется.
         val eventC = UUID.randomUUID()
-        insertEvent(eventC, clubBetaId, "Stage 2 Action", future(5), status = "stage_2", votingOpensDaysBefore = 14)
+        insertEvent(
+            eventC, clubBetaId, "Stage 2 Action", future(5),
+            status = "stage_2", votingOpensDaysBefore = 14, isUrgent = true
+        )
         insertEventResponse(eventC, memberUserId, stage1Vote = "going")
 
         mockMvc.perform(
@@ -544,12 +549,15 @@ class UserEventsControllerTest {
         title: String,
         eventDatetime: OffsetDateTime,
         status: String,
-        votingOpensDaysBefore: Int = 14
+        votingOpensDaysBefore: Int = 14,
+        // Срочная встреча: у неё Этап 2 — это подтверждение мест, и «требуется действие» на нём
+        // остаётся. У встречи с порогом набора (V83) состав закрывается сам, действий нет.
+        isUrgent: Boolean = false
     ) {
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status)
-            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', 10, $votingOpensDaysBefore, '$status'::event_status)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, is_urgent)
+            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', 10, $votingOpensDaysBefore, '$status'::event_status, $isUrgent)
             """.trimIndent()
         )
     }

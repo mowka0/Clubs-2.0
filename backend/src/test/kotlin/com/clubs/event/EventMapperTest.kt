@@ -99,8 +99,11 @@ class EventMapperTest {
         assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
     }
 
+    // Встреча с порогом набора (V83): состав закрывается сам, подтверждать нечего — бейдж
+    // «требуется действие» на закрытом составе врал бы. Действие у формата бывает только на
+    // наборе (status=upcoming, голос не отдан).
     @Test
-    fun `stage_2 upcoming with going vote and no final status is actionRequired`() {
+    fun `roster event in stage_2 is never actionRequired`() {
         val item = feedItem(
             event(EventStatus.stage_2, now.plusDays(1)),
             myVote = Stage_1Vote.going,
@@ -108,7 +111,7 @@ class EventMapperTest {
             isHistory = false
         )
 
-        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
+        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isFalse()
     }
 
     // Открытая встреча (V62): порога отказа нет — дедлайн совпадает со стартом события,
@@ -144,9 +147,9 @@ class EventMapperTest {
     }
 
     @Test
-    fun `stage_2 with a not_going stage-1 vote is still actionRequired`() {
+    fun `stage_2 with a not_going stage-1 vote is still actionRequired (urgent event)`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
             myVote = Stage_1Vote.not_going,
             myFinalStatus = null,
             isHistory = false

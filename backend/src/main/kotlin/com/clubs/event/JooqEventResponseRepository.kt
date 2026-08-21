@@ -108,9 +108,10 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
             )
-            // Очередь — по времени вставания в лист ожидания на ЭТАПЕ 2 (stage_2_timestamp
-            // проставляется при updateStage2Vote(waitlisted)), НЕ по голосу Этапа 1. Кто раньше
-            // подтвердил при полном зале — тот выше. Waitlisted всегда имеет stage_2_timestamp.
+            // Очередь — по времени вставания в лист ожидания (stage_2_timestamp проставляется
+            // при updateStage2Vote(waitlisted)). У 🎟 с порогом набора (V83) метка ставится в
+            // момент ГОЛОСА «Иду» — очередь там и есть «кто раньше проголосовал». У ⚡ срочной
+            // метка ставится при подтверждении. Waitlisted всегда имеет stage_2_timestamp.
             .orderBy(EVENT_RESPONSES.STAGE_2_TIMESTAMP.asc())
             .limit(1)
             .fetchOne()
@@ -121,6 +122,18 @@ class JooqEventResponseRepository(
             .set(EVENT_RESPONSES.STAGE_2_VOTE, vote)
             .set(EVENT_RESPONSES.STAGE_2_TIMESTAMP, OffsetDateTime.now())
             .set(EVENT_RESPONSES.FINAL_STATUS, finalStatus)
+            .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
+            .where(EVENT_RESPONSES.ID.eq(id))
+            .returning()
+            .fetchOne()!!
+        return mapper.toDomain(record)
+    }
+
+    override fun clearStage2Vote(id: UUID): EventResponse {
+        val record = dsl.update(EVENT_RESPONSES)
+            .setNull(EVENT_RESPONSES.STAGE_2_VOTE)
+            .setNull(EVENT_RESPONSES.STAGE_2_TIMESTAMP)
+            .setNull(EVENT_RESPONSES.FINAL_STATUS)
             .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
             .where(EVENT_RESPONSES.ID.eq(id))
             .returning()
@@ -199,6 +212,14 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
             )
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+
+    override fun findTelegramIdsByStage2Vote(eventId: UUID, vote: Stage_2Vote): List<Long> =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENT_RESPONSES)
+            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(vote)))
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 

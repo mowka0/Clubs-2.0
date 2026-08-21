@@ -311,4 +311,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>is_urgent IN (values)</code>
      */
     fun fetchByIsUrgent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.IS_URGENT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>roster_shortfall_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfRosterShortfallAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ROSTER_SHORTFALL_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>roster_shortfall_at IN (values)</code>
+     */
+    fun fetchByRosterShortfallAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ROSTER_SHORTFALL_AT, *values)
 }

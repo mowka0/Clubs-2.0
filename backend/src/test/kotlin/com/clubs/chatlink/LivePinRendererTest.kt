@@ -103,8 +103,14 @@ class LivePinRendererTest {
 
     @Test
     fun `кнопка зависит от этапа`() {
+        // Встреча с порогом набора (V83): подтверждать нечего — после закрытия состава кнопка
+        // просто открывает встречу. Подтверждение осталось у ⚡ срочной.
         assertEquals("Проголосовать", renderer.buttonText(event))
-        assertEquals("Подтвердить участие", renderer.buttonText(event.copy(stage2Triggered = true)))
+        assertEquals("Открыть встречу", renderer.buttonText(event.copy(stage2Triggered = true)))
+        assertEquals(
+            "Подтвердить участие",
+            renderer.buttonText(event.copy(stage2Triggered = true, isUrgent = true))
+        )
     }
 
     @Test

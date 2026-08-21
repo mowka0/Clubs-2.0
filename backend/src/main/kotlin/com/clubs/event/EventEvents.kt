@@ -66,3 +66,17 @@ data class EventRosterChangedEvent(val eventId: UUID)
  * уже отобрал `markStage2Reminded`, повторно вычислить их нельзя — отметка проставлена.
  */
 data class Stage2ReminderSentEvent(val event: Event, val telegramIds: List<Long>)
+
+/**
+ * Набор состава закрылся УСПЕШНО: порог взят, встреча состоится (V83). Слушатель
+ * (RosterListener) на AFTER_COMMIT шлёт DM составу и очереди — «состав собран», без просьбы
+ * что-либо подтверждать: у формата 🎟 подтверждений больше нет.
+ */
+data class RosterClosedEvent(val event: Event, val confirmedCount: Int)
+
+/**
+ * Набор закрылся НЕДОБОРОМ: в составе [confirmedCount] из [participantLimit]. Слушатель шлёт DM
+ * организатору с выбором (напомнить · продлить · провести меньшим составом · отменить).
+ * Участникам в этот момент не приходит ничего: встреча ещё может состояться.
+ */
+data class RosterShortfallEvent(val event: Event, val confirmedCount: Int, val participantLimit: Int)

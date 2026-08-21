@@ -3,11 +3,11 @@ package com.clubs.event
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
-import com.clubs.common.util.DurationFormatter
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -23,6 +23,7 @@ class Stage2Service(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
+    private val rosterService: RosterService,
     private val eventPublisher: ApplicationEventPublisher,
     private val reputationService: ReputationService,
     // За сколько минут до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время
@@ -57,6 +58,11 @@ class Stage2Service(
     }
 
     private fun triggerStage2(event: Event) {
+        // Встреча с порогом набора (V83) закрывает набор своим путём: набрали → состав закрыт и
+        // всем уходит «состав собран», не набрали → DM организатору с выбором. Приглашения
+        // «подтвердите участие» у формата больше нет — место даёт голос, а не подтверждение.
+        if (rosterService.handleRosterDeadline(event)) return
+
         eventRepository.transitionToStage2(event.id)
 
         // Этап 1 — только предварительный визуал: он НЕ резервирует места и НЕ задаёт очередь.
@@ -190,44 +196,42 @@ class Stage2Service(
             return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
         }
 
-        // «Держал дефицитный слот» — единое бизнес-условие обоих гейтов ниже: и порога отказа,
-        // и промоута/штрафа. Открытая встреча слотов не имеет (V62): порога нет — замена не нужна,
-        // честный отказ доступен до самого старта (решение PO 2026-07-21).
+        // «Держал дефицитный слот» — единое бизнес-условие цены и промоута. Открытая встреча слотов
+        // не имеет (V62): замена не нужна, отказ бесплатен до самого старта (решение PO 2026-07-21).
         val heldScarceSlot = response.stage2Vote == Stage_2Vote.confirmed && !event.isOpenEvent
-        // Порог отказа: от УЖЕ ПОДТВЕРЖДЁННОГО места нельзя отказаться в последние declineCutoffMinutes
-        // до старта — замене не хватит времени подготовиться. Waitlisted выходит из очереди свободно
-        // (он никого не держит), поэтому гейт только на подтверждённый дефицитный слот.
-        if (heldScarceSlot &&
-            !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))
-        ) {
-            throw ValidationException(
-                "Отказаться от подтверждённого участия можно не позже чем за " +
-                    "${DurationFormatter.formatMinutes(declineCutoffMinutes)} до события"
-            )
-        }
+        val now = OffsetDateTime.now()
+        // Замену ищем ДО мутации: от её наличия зависит и цена отказа, и то, останется ли дыра.
+        val firstWaitlisted = if (heldScarceSlot) eventResponseRepository.findFirstWaitlisted(eventId) else null
+        // Прежний ЗАПРЕТ отказа внутри порога снят (решение PO 2026-08-21): отказ стал платным.
+        // Запрет выталкивал людей в молчаливую неявку (−200), которая дороже любого честного отказа.
+        val declineKind = RosterPolicy.declineKind(
+            isOpenEvent = event.isOpenEvent,
+            heldSlot = heldScarceSlot,
+            // Сюда попадают только события в stage_2, то есть с уже закрытым составом.
+            rosterClosed = true,
+            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(declineCutoffMinutes)),
+            hasReplacement = firstWaitlisted != null
+        )
+
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
-        // Открытая встреча: промоут невозможен (waitlist недостижим), а отказ ничей слот не сжигает —
-        // ни повышения, ни штрафа abandoned_slot (формат целиком вне репутации, PO 2026-07-21).
-        if (heldScarceSlot) {
-            val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
-            if (firstWaitlisted != null) {
-                // Есть замена → первый из очереди сразу занимает освободившийся слот; отказавшийся чист.
-                eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
-                // DM повышенному: место его, с кнопкой на событие. AFTER_COMMIT (WaitlistPromotedListener) —
-                // @Async DM должен читать уже закоммиченное повышение. Зеркалит Stage2StartedEvent.
-                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, firstWaitlisted.userId))
-            } else {
-                // Замены нет → отказавшийся оставил дыру: штраф abandoned_slot (−100) в этой же транзакции.
-                reputationService.penalizeAbandonedSlot(userId, event.clubId, eventId, OffsetDateTime.now())
-            }
+        if (firstWaitlisted != null) {
+            // Первый из очереди сразу занимает освободившийся слот — состав не пустеет.
+            eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+            // DM повышенному: место его, с кнопкой на событие. AFTER_COMMIT (WaitlistPromotedListener) —
+            // @Async DM должен читать уже закоммиченное повышение. Зеркалит Stage2StartedEvent.
+            eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, firstWaitlisted.userId))
+        }
+        if (declineKind != null) {
+            reputationService.penalizeDecline(declineKind, userId, event.clubId, eventId, now)
         }
 
         // Живой закреп: отказ (и возможный промоут выше) поменяли подтверждённых/очередь.
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
-        return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
+        val penalty = declineKind?.let { -ReputationPolicy.pointsFor(it) } ?: 0
+        return ConfirmResponseDto(eventId, "declined", count, event.participantLimit, penalty)
     }
 
     /**

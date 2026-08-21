@@ -223,7 +223,11 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
   ужать (`STAGE2_TRIGGER_MINUTES_BEFORE`), чтобы протестировать полный поток голос → переход →
   подтверждение: форма шлёт `stage2LeadMinutes` только после явного клика по чипу, поэтому событие,
   созданное без выбора интервала, несёт NULL и подчиняется staging-ужимке
-- Для каждого такого события: переводит в Stage 2
+- Для каждого такого события: переводит в Stage 2 — **кроме формата «🎟 встреча с местами»** (V83):
+  у него тик закрывает НАБОР СОСТАВА, а не открывает подтверждение. Развилка —
+  `RosterService.handleRosterDeadline`: набрали порог → состав закрыт + DM всем; не набрали →
+  `roster_shortfall_at` + DM организатору с выбором, статус остаётся `upcoming`.
+  Полная механика — `event-roster-threshold.md`.
 
 ### Логика перехода в Stage 2 (UPDATED 2026-07-05 — гонка за места по Этапу 2)
 1. Установить `event.status = stage_2`, `event.stage_2_triggered = true`
@@ -291,34 +295,42 @@ POST /api/events/{id}/remind          # ручное напоминание от
    > Идемпотентность: повторное подтверждение уже-`waitlisted` НЕ перезаписывает его `stage_2_timestamp`
    > (ранний `return` в confirm), поэтому позиция в очереди стабильна.
 
-### Логика decline (UPDATED 2026-07-05 — порог + штраф за брошенное место)
+### Логика decline (UPDATED 2026-08-21 — отказ стал платным вместо запрещённого, V83)
 1. Проверки события/членства (симметрично confirm), затем тот же advisory-lock
    `lockEventSlots(eventId)` (F5-11 ✅)
 2. Найти response пользователя
-3. **Порог отказа для ПОДТВЕРЖДЁННОГО** (`events.stage2-decline-cutoff-minutes`, дефолт 240 = 4ч):
-   если `wasConfirmed` И до старта < порога → 400 «Отказаться … можно не позже чем за {порог} до
-   события». Длительность форматируется `common/util/DurationFormatter.formatMinutes` («4 ч»,
-   «1 ч 30 мин», «45 мин») — прежний `минуты / 60` терял остаток (1 мин → «0 ч»). Замене не хватит
-   времени подготовиться → «приходи или неявка −200». Waitlisted этот порог НЕ касается (он никого
-   не держит — выходит из очереди свободно, до старта).
+3. **Цена отказа** вместо прежнего запрета (V83). Запрет «отказаться можно не позже чем за 4 ч»
+   СНЯТ (решение PO 2026-08-21): он выталкивал людей в молчаливую неявку, которая стоит дороже
+   (−200). Цену считает `RosterPolicy.declineKind` из четырёх условий — формат, закрыт ли состав,
+   осталось ли до старта ≤ `events.stage2-decline-cutoff-minutes` (240 = 4ч) и есть ли замена:
+
+   | Когда | Замена есть | Замены нет |
+   |---|---|---|
+   | Набор идёт (состав не закрыт) | 0 | 0 |
+   | Состав закрыт, до старта > 4ч | 0 | −100 `abandoned_slot` |
+   | Состав закрыт, до старта ≤ 4ч | −50 `late_decline_covered` | −150 `late_decline_uncovered` |
+
+   Waitlisted не платит никогда (никого не держит и выходит из очереди свободно), открытая
+   встреча — целиком вне репутации.
 4. stage_2_vote = declined, final_status = declined
 5. Если отказавшийся был `confirmed`:
-   - **есть первый waitlisted** (по `stage_2_timestamp`) → promote to confirmed; отказавшийся чист (0).
+   - **есть первый waitlisted** (по `stage_2_timestamp`) → promote to confirmed.
      Повышённому уходит DM «🎉 Освободилось место» с кнопкой на событие (`WaitlistPromotedEvent` →
      AFTER_COMMIT `WaitlistPromotedListener` → `sendWaitlistPromoted`). То же уведомление шлётся при
      авто-повышении из-за выхода подтверждённого из клуба (`MembershipService.promoteFirstWaitlisted`).
-   - **очередь пуста** → отказавшийся оставил дыру → штраф `abandoned_slot` (−100) в ЭТОЙ ЖЕ
-     транзакции (`ReputationService.penalizeAbandonedSlot`, по образцу `penalizeExit`). Половина
-     no_show: предупредил заранее, но место не закрылось. См. reputation.md.
+   - штраф, если политика вернула kind, начисляется в ЭТОЙ ЖЕ транзакции
+     (`ReputationService.penalizeDecline`, по образцу `penalizeExit`). См. reputation-v2.md.
+   - фактически списанное возвращается в `ConfirmResponseDto.penaltyPoints`: названная на экране
+     цена могла разойтись с фактической, пока был открыт диалог (очередь успела опустеть).
 
 ### Corner Cases
 | Ситуация | Поведение |
 |----------|-----------|
 | Событие ещё в upcoming | 400 "Event is not in confirmation stage" |
-| Confirmed отказывается за < порога до старта | 400, ничего не меняется (приходит или неявка) |
+| Confirmed отказывается за < 4ч до старта | Отказ проходит: −50 при живой очереди, −150 при пустой (V83) |
 | Мест нет (confirmedCount >= limit) | Получает waitlisted |
-| Confirmed decline → есть waitlisted | Первый из очереди (по `stage_2_timestamp`) → confirmed + DM «место освободилось»; отказавшийся без штрафа |
-| Confirmed decline → нет waitlisted | Слот открывается; отказавшийся получает `abandoned_slot` −100 |
+| Confirmed decline → есть waitlisted | Первый из очереди (по `stage_2_timestamp`) → confirmed + DM «место освободилось»; отказавшийся платит только внутри 4ч (−50) |
+| Confirmed decline → нет waitlisted | Слот открывается; отказавшийся получает `abandoned_slot` −100 (или −150 внутри 4ч) |
 | Waitlisted decline | Выходит из очереди в любой момент до старта, без штрафа |
 
 ---
@@ -517,7 +529,10 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.dispute-window-minutes` | `ATTENDANCE_DISPUTE_WINDOW_MINUTES` | `2880` (48ч) | Окно оспаривания явки до финализации репутации |
 | `events.finalize-poll-ms` | `ATTENDANCE_FINALIZE_POLL_MS` | `3600000` (1ч) | Период `AttendanceService.finalizeAttendance` |
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
-| `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1080` (18ч, PO 2026-07-23; ранее 24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` — **дефолт** для событий без своего `stage2_lead_minutes` (V67) |
+| `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1080` (18ч, PO 2026-07-23; ранее 24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2`; у формата 🎟 это дедлайн НАБОРА состава (V83) — **дефолт** для событий без своего `stage2_lead_minutes` (V67) |
+| `events.roster-shortfall-response-minutes` | `ROSTER_SHORTFALL_RESPONSE_MINUTES` | `360` (6ч) | Сколько ждём решения организатора при недоборе, прежде чем отменить встречу автоматически (V83) |
+| `events.roster-deadline-min-lead-minutes` | `ROSTER_DEADLINE_MIN_LEAD_MINUTES` | `120` (2ч) | Насколько близко к встрече разрешено двигать дедлайн набора продлением «+6/+12 часов» (V83) |
+| `events.roster-shortfall-poll-ms` | `ROSTER_SHORTFALL_POLL_MS` | `60000` (1 мин) | Период прохода `RosterService.processShortfallEvents`: добор состава и автоотмена при молчании (V83) |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
 | `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |

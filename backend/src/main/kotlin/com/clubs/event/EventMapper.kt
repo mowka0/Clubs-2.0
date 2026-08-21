@@ -40,6 +40,7 @@ class EventMapper(
         attendanceMarked = record.attendanceMarked ?: false,
         attendanceFinalized = record.attendanceFinalized ?: false,
         cancellationReason = record.cancellationReason,
+        rosterShortfallAt = record.rosterShortfallAt,
         photoUrl = record.photoUrl,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt
@@ -51,7 +52,9 @@ class EventMapper(
         maybeCount: Int,
         notGoingCount: Int,
         confirmedCount: Int,
-        noAnswerCount: Int = 0
+        noAnswerCount: Int = 0,
+        waitlistedCount: Int = 0,
+        now: OffsetDateTime = OffsetDateTime.now()
     ) = EventDetailDto(
         id = event.id,
         clubId = event.clubId,
@@ -86,6 +89,23 @@ class EventMapper(
         // Величина штрафа за брошенный слот — из политики репутации, чтобы текст диалога отказа
         // на фронте никогда не разъехался с реальным списанием (фикс PO 2026-07-21).
         abandonedSlotPenaltyPoints = -ReputationPolicy.pointsFor(ReputationKind.abandoned_slot),
+        // Дедлайн набора (V83): у 🎟 это момент, когда состав закрывается, у ⚡ — момент, когда
+        // событие родилось в stage_2 (набора не было). У 🌊 набора нет вовсе.
+        rosterDeadline = if (event.isOpenEvent) null
+            else event.eventDatetime.minusMinutes((event.stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()),
+        rosterClosed = event.stage2Triggered && !event.isOpenEvent,
+        rosterShortfall = event.rosterShortfallAt != null && event.status == EventStatus.upcoming,
+        waitlistedCount = waitlistedCount,
+        // Цена отказа для участника ИЗ СОСТАВА на момент запроса. Одна и та же для всех, кто
+        // держит место: она зависит только от состояния события (закрыт ли состав, близко ли
+        // встреча, есть ли замена), а не от личности отказывающегося.
+        declineCostPoints = RosterPolicy.declineCostPoints(
+            isOpenEvent = event.isOpenEvent,
+            heldSlot = true,
+            rosterClosed = event.stage2Triggered && !event.isOpenEvent,
+            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(declineCutoffMinutes)),
+            hasReplacement = waitlistedCount > 0
+        ),
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
         cancellationReason = event.cancellationReason,
@@ -128,11 +148,15 @@ class EventMapper(
                 !now.isBefore(votingOpensAt) && item.myVote == null
             }
             EventStatus.stage_2 -> {
+                // Встреча с порогом набора (V83): состав закрыт, подтверждать нечего — действий от
+                // участника больше не требуется. Встать в очередь можно, но это возможность,
+                // а не долг, и бейджем «требуется действие» она бы врала.
+                if (event.isRosterEvent) false
                 // Этап 2 открыт всем участникам (PR #92), поэтому и действие требуется от КАЖДОГО,
                 // кто ещё не решил на самом Этапе 2 (решение PO 2026-07-23): голос Этапа 1 — в том
                 // числе «Не пойду» — не финален, планы меняются, а у срочной встречи (V69) голосов
                 // не бывает вовсе. Финальны только confirmed/waitlisted/declined/expired.
-                item.myFinalStatus == null
+                else item.myFinalStatus == null
             }
             else -> false
         }

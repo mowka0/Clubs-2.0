@@ -73,8 +73,14 @@ class CreateEventRequestValidationTest {
     }
 
     @Test
-    fun `stage2 lead below 18 hours is rejected`() {
-        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 1079)))
+    fun `stage2 lead below 6 hours is rejected`() {
+        // Нижняя граница опущена с 18 ч до 6 ч (V83): 6 ч — самый короткий пресет набора состава.
+        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 359)))
+    }
+
+    @Test
+    fun `stage2 lead of 6 hours is accepted`() {
+        assertTrue("stage2LeadMinutes" !in violatedProperties(request(stage2LeadMinutes = 360)))
     }
 
     @Test

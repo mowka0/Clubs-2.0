@@ -4,6 +4,7 @@ import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
+import com.clubs.event.RosterService
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.EventStatus
@@ -45,6 +46,7 @@ private fun livePinEvent(
 
 class LivePinServiceTest {
 
+    private lateinit var rosterService: RosterService
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var pinRepository: EventChatPinRepository
     private lateinit var eventRepository: EventRepository
@@ -63,9 +65,13 @@ class LivePinServiceTest {
         eventRepository = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
+        rosterService = mockk(relaxed = true)
+        // Дедлайн набора рендерится в закрепе строкой «Набор закрывается …» — фиксируем его,
+        // чтобы текст был детерминированным (relaxed-мок вернул бы мусорную дату).
+        every { rosterService.rosterDeadline(any()) } returns OffsetDateTime.parse("2026-08-20T15:00:00Z")
         service = LivePinService(
             chatLinkRepository, pinRepository, eventRepository, eventResponseRepository,
-            LivePinRenderer(botUsername = "clubs_test_bot"), gateway
+            LivePinRenderer(botUsername = "clubs_test_bot"), gateway, rosterService
         )
         every { chatLinkRepository.findByClubId(clubId) } returns link
         every { eventResponseRepository.countByVote(any()) } returns mapOf("going" to 3, "maybe" to 1, "notGoing" to 0)
@@ -82,7 +88,7 @@ class LivePinServiceTest {
         verify {
             gateway.sendGroupMessageWithUrlButton(
                 chatId,
-                match { it.contains("Поход в баню") && it.contains("Идут — 3") },
+                match { it.contains("Поход в баню") && it.contains("Собрались 0 из 15") },
                 "Проголосовать",
                 "https://t.me/clubs_test_bot?startapp=event_${event.id}",
                 any(), any(), any()
@@ -157,7 +163,7 @@ class LivePinServiceTest {
             gateway.sendGroupPhotoWithUrlButton(
                 chatId,
                 "/uploads/cover.jpg",
-                match { it.contains("Поход в баню") && it.contains("Идут — 3") },
+                match { it.contains("Поход в баню") && it.contains("Собрались 0 из 15") },
                 "Проголосовать",
                 "https://t.me/clubs_test_bot?startapp=event_${event.id}",
                 any(), any()
@@ -207,7 +213,7 @@ class LivePinServiceTest {
 
         verify {
             gateway.editGroupMessageCaption(
-                chatId, 777L, match { it.contains("Идут — 3") }, "Проголосовать", any(), any(), any()
+                chatId, 777L, match { it.contains("Собрались 0 из 15") }, "Проголосовать", any(), any(), any()
             )
         }
         verify(exactly = 0) { gateway.editGroupMessage(any(), any(), any(), any(), any(), any(), any()) }
@@ -271,8 +277,11 @@ class LivePinServiceTest {
         verify {
             gateway.editGroupMessage(
                 chatId, 777L,
-                match { it.contains("<b>Обычная встреча</b>") && it.contains("12 из 15") && it.contains("В очереди — 2") },
-                "Подтвердить участие",
+                match {
+                    it.contains("<b>Обычная встреча</b>") && it.contains("Состав собран: 12 из 15") &&
+                        it.contains("В очереди — 2")
+                },
+                "Открыть встречу",
                 any(), any(), any()
             )
         }

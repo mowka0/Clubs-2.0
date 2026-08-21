@@ -44,7 +44,8 @@ data class Events(
     var stage2LeadMinutes: Int? = null,
     @Suppress("INAPPLICABLE_JVM_NAME")
     @set:JvmName("setIsUrgent")
-    var isUrgent: Boolean? = null
+    var isUrgent: Boolean? = null,
+    var rosterShortfallAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -190,6 +191,12 @@ data class Events(
         }
         else if (this.isUrgent != o.isUrgent)
             return false
+        if (this.rosterShortfallAt == null) {
+            if (o.rosterShortfallAt != null)
+                return false
+        }
+        else if (this.rosterShortfallAt != o.rosterShortfallAt)
+            return false
         return true
     }
 
@@ -221,6 +228,7 @@ data class Events(
         result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
         result = prime * result + (if (this.stage2LeadMinutes == null) 0 else this.stage2LeadMinutes.hashCode())
         result = prime * result + (if (this.isUrgent == null) 0 else this.isUrgent.hashCode())
+        result = prime * result + (if (this.rosterShortfallAt == null) 0 else this.rosterShortfallAt.hashCode())
         return result
     }
 
@@ -252,6 +260,7 @@ data class Events(
         sb.append(", ").append(locationHint)
         sb.append(", ").append(stage2LeadMinutes)
         sb.append(", ").append(isUrgent)
+        sb.append(", ").append(rosterShortfallAt)
 
         sb.append(")")
         return sb.toString()

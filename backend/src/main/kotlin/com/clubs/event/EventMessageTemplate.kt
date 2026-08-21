@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
 /**
@@ -67,6 +68,29 @@ object EventMessageTemplate {
         val sb = StringBuilder(seatsLine(event))
         if (event.isUrgent) sb.append("\n⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}")
         return sb.toString()
+    }
+
+    /**
+     * Счётчики НАБОРА СОСТАВА (формат 🎟, V83): голос «Иду» уже кладёт в состав, поэтому в закрепе
+     * стоит не «идут», а «собрались N из M» — и прямой ответ на вопрос «сколько ещё нужно».
+     * Строка дедлайна объясняет, что будет, если не наберём: без неё набор читается как
+     * бессрочный, и голосовать «потом» кажется безопасным.
+     */
+    fun rosterStats(event: Event, confirmed: Int, deadline: OffsetDateTime, fmt: DateTimeFormatter): String {
+        val limit = event.participantLimit ?: return ""
+        val shortage = (limit - confirmed).coerceAtLeast(0)
+        return "👥 Собрались $confirmed из $limit — нужно ещё $shortage.\n" +
+            "⏳ Набор закрывается ${deadline.format(fmt)}. Не наберём — встреча не состоится."
+    }
+
+    /** Состав закрыт: встреча состоится. Очередь упоминаем, только если она есть. */
+    fun rosterClosedStats(event: Event, confirmed: Int, waitlisted: Int): String {
+        val limit = event.participantLimit
+        val head = if (limit != null) "✅ Состав собран: $confirmed из $limit." else "✅ Состав собран: $confirmed."
+        val queue = if (waitlisted > 0) {
+            "\n📋 В очереди — $waitlisted: если кто-то не сможет, место перейдёт им."
+        } else ""
+        return head + queue
     }
 
     /**

@@ -56,6 +56,7 @@ function buildEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     confirmedCount: 0,
     noAnswerCount: 0,
     confirmedDeclineDeadline: PAST, abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+    rosterDeadline: null, rosterClosed: false, rosterShortfall: false, waitlistedCount: 0, declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -148,7 +149,8 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
 
   it('Этап 2 (stage_2): строки-намёка нет (гейт showVoting)', async () => {
     mockEndpoints({
-      event: buildEvent({ status: 'stage_2', eventDatetime: FUTURE }),
+      // Состав закрыт (V83): у встречи с порогом набора это и есть смысл статуса stage_2.
+      event: buildEvent({ status: 'stage_2', eventDatetime: FUTURE, rosterClosed: true }),
       responders: [],
       ownerId: 'someone-else',
     });

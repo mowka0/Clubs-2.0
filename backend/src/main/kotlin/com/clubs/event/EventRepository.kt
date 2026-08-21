@@ -33,8 +33,28 @@ interface EventRepository {
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
-    /** События, готовые к Этапу 2: до старта ≤ их собственного lead (или [defaultLeadMinutes] при NULL). */
+    /**
+     * События, у которых пора закрывать набор: до старта ≤ их собственного lead (или
+     * [defaultLeadMinutes] при NULL). События, уже зафиксировавшие недобор (roster_shortfall_at
+     * задан), исключены — их ведёт [findEventsInRosterShortfall], иначе каждый тик слал бы
+     * организатору повторный DM.
+     */
     fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event>
+
+    /**
+     * Встречи, у которых набор закрылся недобором и организатор ещё не ответил (V83).
+     * Тик набора решает по каждой: состав добрался — закрыть, время вышло — отменить.
+     */
+    fun findEventsInRosterShortfall(): List<Event>
+
+    /** Фиксирует недобор: момент, от которого отсчитывается окно ответа организатора. */
+    fun markRosterShortfall(id: UUID, at: OffsetDateTime): Int
+
+    /**
+     * Продление набора из DM организатору: новый интервал до старта + снятая отметка недобора,
+     * чтобы следующий тик снова проверил порог в новый срок.
+     */
+    fun extendRosterDeadline(id: UUID, leadMinutes: Int): Int
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 

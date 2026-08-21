@@ -1630,6 +1630,23 @@
 }
 .rd-remind-all:disabled { color: var(--text-faint); cursor: default; }
 
+/* ── Полоса статуса набора (V83) ───────────────────────────────────────────────────────
+   Одна строка-ответ на «что сейчас и что дальше»: сколько ещё нужно людей и когда закроется
+   набор, а после закрытия — цена отказа. Стоит между заголовком блока и кольцом, поэтому
+   намеренно низкоконтрастная: главное число — по-прежнему в кольце. */
+.rd-roster-note {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; margin-bottom: 12px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--hairline-2);
+}
+.rd-roster-note.rd-ok { background: var(--live-soft); border-color: transparent; }
+.rd-roster-ico { font-size: 15px; line-height: 1.2; flex-shrink: 0; }
+.rd-roster-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rd-roster-txt b { font-size: 13px; font-weight: 650; color: var(--text); }
+.rd-roster-txt span { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+/* В табе очереди номер стоит внутри общей строки ростера, а не в своей .rd-wl-row. */
+.rd-resp-row .rd-wl-pos { margin-right: 8px; }
+
 /* Лист ожидания — вертикальный нумерованный список в порядке приоритета продвижения. */
 .rd-wl-panel { padding: 4px; margin-bottom: 18px; }
 .rd-wl-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; }

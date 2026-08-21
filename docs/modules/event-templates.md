@@ -136,7 +136,7 @@
 - `chk_event_templates_limit` — открытая встреча без лимита; иначе лимит задан и `> 0`
 - `chk_event_templates_open_stage2` — у открытой нет своего интервала Этапа 2
 - `chk_event_templates_urgent` — срочная не может быть открытой и не имеет своего интервала
-- `chk_event_templates_stage2_bounds` — `NULL` или `1080..7200` (зеркалит V68)
+- `chk_event_templates_stage2_bounds` — `NULL` или `60..7200` (зеркалит V83; валидация DTO уже — `360..7200`, пресеты 6ч/12ч/18ч/36ч/3 дня)
 - `chk_event_templates_weekday` — `NULL` или `1..7`
 
 **Намеренно НЕ зеркалим** инвариант события «место ИЛИ уточнение обязательны»
