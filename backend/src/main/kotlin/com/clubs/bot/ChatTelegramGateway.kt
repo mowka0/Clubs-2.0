@@ -280,12 +280,39 @@ class ChatTelegramGateway(
     /**
      * Сколько человек в чате — размер клуба, рождающегося из этой группы. Считает вместе с
      * ботами и самим ботом, поэтому число приблизительное; человек правит его в мастере.
-     * null — Telegram не ответил, вызывающий подставляет свой запасной лимит.
+     * null — Telegram не ответил, вызывающий подставляет свой запасной лимит. Переезд группы
+     * в супергруппу этот метод НЕ различает (ошибка гасится в catch) — для него отдельный
+     * [resolveMigratedChatId].
      */
     fun getChatMemberCount(chatId: Long): Int? = try {
         telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
     } catch (e: Exception) {
         log.warn("getChatMemberCount failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
+    /**
+     * Переехала ли группа в супергруппу. Возвращает НОВЫЙ chat_id либо null (чат жив или
+     * Telegram не ответил).
+     *
+     * Telegram меняет chat_id, когда обычная группа становится супергруппой, — а происходит это
+     * ровно в момент выдачи боту прав администратора. О переезде он сообщает один раз, сервисным
+     * сообщением, которое легко разминуться: `my_chat_member` по новому chat_id приходит РАНЬШЕ
+     * него (баг прода 2026-08-21). Поэтому переезд нужно уметь спрашивать, а не только ловить.
+     *
+     * Спрашиваем именно getChatMemberCount: getChat и getChatMember по мёртвому chat_id отвечают
+     * `ok` и отдают старую группу как живую (проверено вызовами к Bot API 2026-08-21) — на них
+     * переезд не виден никогда. Этот метод возвращает 400 с `parameters.migrate_to_chat_id`.
+     */
+    fun resolveMigratedChatId(chatId: Long): Long? = try {
+        telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
+        null
+    } catch (e: TelegramApiRequestException) {
+        e.parameters?.migrateToChatId?.also {
+            log.info("Chat migrated to a supergroup: chatId={} → {}", chatId, it)
+        }
+    } catch (e: Exception) {
+        log.warn("resolveMigratedChatId failed: chatId={} error={}", chatId, e.message)
         null
     }
 

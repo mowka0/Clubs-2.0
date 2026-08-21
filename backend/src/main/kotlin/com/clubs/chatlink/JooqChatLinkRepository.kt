@@ -140,9 +140,18 @@ class JooqChatLinkRepository(
             .fetch()
             .map(mapper::recordToDomain)
 
+    override fun findAllOnBasicGroups(): List<ChatLink> =
+        dsl.selectFrom(CLUB_CHAT_LINKS)
+            .where(CLUB_CHAT_LINKS.CHAT_ID.gt(BASIC_GROUP_ID_FLOOR))
+            // Бота в чате нет — Telegram ответит 403, а не «переехало». Такие строки в опрос не берём.
+            .and(CLUB_CHAT_LINKS.BOT_STATUS.`in`(BotChatStatus.ADMINISTRATOR.literal, BotChatStatus.MEMBER.literal))
+            .fetch()
+            .map(mapper::recordToDomain)
+
     override fun delete(clubId: UUID) {
         dsl.deleteFrom(CLUB_CHAT_LINKS)
             .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
             .execute()
     }
+
 }

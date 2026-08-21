@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class ChatLinkServiceTest {
@@ -46,6 +47,9 @@ class ChatLinkServiceTest {
         memberTagService = mockk(relaxed = true)
         service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
+        // По умолчанию группа никуда не переезжала: relaxed-мок сам по себе отдал бы не-null,
+        // и любой тест уходил бы в ветку миграции.
+        every { gateway.resolveMigratedChatId(any()) } returns null
     }
 
     @Test
@@ -353,6 +357,154 @@ class ChatLinkServiceTest {
 
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
         verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }
+    }
+
+    // --- Переезд группы в супергруппу (баг прода 2026-08-21) ---
+    // Выдача боту прав администратора превращает обычную группу в супергруппу, и Telegram
+    // меняет chat_id. Спросить об этом можно только явно: getChat и getChatMember по мёртвому
+    // id отвечают `ok` и показывают бота как `member` — поэтому «Проверить права ещё раз»
+    // честно повторяло «бот без прав», а починить переезд из интерфейса было нечем.
+
+    @Test
+    fun `adoptMigratedChat переносит привязку, когда новый chat_id свободен`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L)
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns null
+
+        assertTrue(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify { chatLinkRepository.updateChatId(-5231168671L, -1004320385859L) }
+    }
+
+    @Test
+    fun `adoptMigratedChat забирает чат и удаляет клуб-двойник`() {
+        // Двойник рождается на переезде: my_chat_member по новому id приходит раньше
+        // сервисного сообщения, и «чат становится клубом» успевает завести пустой клуб.
+        val twinClubId = UUID.randomUUID()
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L, linkedAt = OffsetDateTime.now().minusDays(3))
+        val twin = chatLinkFixture(clubId = twinClubId, chatId = -1004320385859L)
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns twin
+        every { clubRepository.findById(twinClubId) } returns
+            chatLinkTestClub(clubId = twinClubId, name = "Никита, Роман и Иван")
+                .copy(memberCount = 1, createdAt = twin.linkedAt)
+
+        assertTrue(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify { chatLinkRepository.delete(twinClubId) }
+        verify { chatLinkRepository.updateChatId(-5231168671L, -1004320385859L) }
+        verify { clubRepository.softDelete(twinClubId) }
+        // Бот остаётся в чате: это тот же самый чат, который сейчас вернётся законному клубу.
+        verify(exactly = 0) { gateway.leaveChat(any()) }
+    }
+
+    @Test
+    fun `adoptMigratedChat подбирает двойника любой давности — окна нет`() {
+        // Ровно случай прода 2026-08-21: переезд случился, а «Проверить права ещё раз» человек
+        // нажал спустя часы. Временное окно отсекло бы именно тот случай, ради которого фикс.
+        val twinClubId = UUID.randomUUID()
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L, linkedAt = OffsetDateTime.now().minusDays(3))
+        val twinLinkedAt = OffsetDateTime.now().minusHours(6)
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns
+            chatLinkFixture(clubId = twinClubId, chatId = -1004320385859L, linkedAt = twinLinkedAt)
+        every { clubRepository.findById(twinClubId) } returns
+            chatLinkTestClub(clubId = twinClubId).copy(memberCount = 1, createdAt = twinLinkedAt)
+
+        assertTrue(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify { chatLinkRepository.updateChatId(-5231168671L, -1004320385859L) }
+    }
+
+    @Test
+    fun `adoptMigratedChat не трогает пустой клуб, которому чат подключили руками`() {
+        // Клуб существовал задолго до привязки — значит он не рождён этим чатом, а подключён к
+        // нему осознанно. Двойником не считается, и удалять его нельзя.
+        val handLinkedClubId = UUID.randomUUID()
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L, linkedAt = OffsetDateTime.now().minusDays(3))
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns
+            chatLinkFixture(clubId = handLinkedClubId, chatId = -1004320385859L, linkedAt = OffsetDateTime.now().minusHours(2))
+        every { clubRepository.findById(handLinkedClubId) } returns
+            chatLinkTestClub(clubId = handLinkedClubId).copy(memberCount = 1, createdAt = OffsetDateTime.now().minusMonths(2))
+
+        assertFalse(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify(exactly = 0) { chatLinkRepository.updateChatId(any(), any()) }
+        verify(exactly = 0) { clubRepository.softDelete(any()) }
+    }
+
+    @Test
+    fun `adoptMigratedChat не трогает пустой клуб, привязанный РАНЬШЕ нашего`() {
+        // Чата, куда переехали, до переезда не существовало: привязка старше нашей не может
+        // быть двойником, даже если клуб пуст. Это и отличает факт от эвристики «свежий».
+        val elderClubId = UUID.randomUUID()
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L, linkedAt = OffsetDateTime.now())
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns
+            chatLinkFixture(clubId = elderClubId, chatId = -1004320385859L, linkedAt = OffsetDateTime.now().minusDays(1))
+        every { clubRepository.findById(elderClubId) } returns
+            chatLinkTestClub(clubId = elderClubId).copy(memberCount = 1)
+
+        assertFalse(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify(exactly = 0) { chatLinkRepository.updateChatId(any(), any()) }
+    }
+
+    @Test
+    fun `adoptMigratedChat не отбирает чат у чужого живого клуба`() {
+        val liveClubId = UUID.randomUUID()
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L)
+        val occupied = chatLinkFixture(clubId = liveClubId, chatId = -1004320385859L)
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns occupied
+        every { clubRepository.findById(liveClubId) } returns chatLinkTestClub(clubId = liveClubId)
+        // Клуб с людьми — его чат подключили осознанно, пока наша привязка висела на мёртвом id.
+        every { clubRepository.findById(liveClubId) } returns chatLinkTestClub(clubId = liveClubId)
+
+        assertFalse(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify(exactly = 0) { chatLinkRepository.updateChatId(any(), any()) }
+        verify(exactly = 0) { clubRepository.softDelete(any()) }
+    }
+
+    @Test
+    fun `adoptMigratedChat идемпотентен — привязку уже перенесло первое событие`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = -5231168671L)
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns
+            chatLinkFixture(clubId = clubId, chatId = -1004320385859L)
+
+        assertTrue(service.adoptMigratedChat(link, -1004320385859L))
+
+        verify(exactly = 0) { chatLinkRepository.updateChatId(any(), any()) }
+    }
+
+    @Test
+    fun `refresh чинит переезд — переносит привязку и читает права по новому chat_id`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = -5231168671L, botStatus = BotChatStatus.MEMBER, canPinMessages = false, canInviteUsers = false)
+        every { gateway.resolveMigratedChatId(-5231168671L) } returns -1004320385859L
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns null
+        every { gateway.getBotChatState(-1004320385859L) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = false)
+        every { gateway.getChatInfo(any()) } returns null
+        every { gateway.createJoinRequestInviteLink(-1004320385859L, any()) } returns "https://t.me/+fresh"
+
+        service.refresh(clubId, ownerId)
+
+        verify { chatLinkRepository.updateChatId(-5231168671L, -1004320385859L) }
+        // Права читаются у живого чата, а не у мёртвого — иначе бот навсегда остаётся `member`.
+        verify { gateway.getBotChatState(-1004320385859L) }
+        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.ADMINISTRATOR, true, true, true, false) }
+        verify(exactly = 0) { gateway.getBotChatState(-5231168671L) }
+    }
+
+    @Test
+    fun `refresh при переезде в чат чужого живого клуба — 409 с объяснением`() {
+        val liveClubId = UUID.randomUUID()
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = -5231168671L)
+        every { gateway.resolveMigratedChatId(-5231168671L) } returns -1004320385859L
+        every { chatLinkRepository.findByChatId(-1004320385859L) } returns
+            chatLinkFixture(clubId = liveClubId, chatId = -1004320385859L)
+        every { clubRepository.findById(liveClubId) } returns chatLinkTestClub(clubId = liveClubId)
+
+        assertThrows(ConflictException::class.java) { service.refresh(clubId, ownerId) }
+        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

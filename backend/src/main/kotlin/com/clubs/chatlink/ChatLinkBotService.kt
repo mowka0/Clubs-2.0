@@ -57,12 +57,73 @@ class ChatLinkBotService(
      */
     @Transactional
     fun handleBotAddedToChat(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
-        when (val intent = intentStore.consume(fromTelegramId)) {
+        // Намерение гасим в любом случае: одно добавление бота — одно намерение, даже если
+        // событие окажется переездом. Иначе забытый след сработал бы на следующей группе.
+        val intent = intentStore.consume(fromTelegramId)
+        // Проверку переезда каждый путь делает РОВНО ОДИН раз, иначе на каждое обычное
+        // добавление бота уходил бы двойной опрос Telegram: с намерением — здесь, без
+        // намерения — внутри handleGroupStartNewClub (её ClubsBot зовёт и напрямую).
+        if (intent != null && adoptChatMigratedHere(chatId)) {
+            log.info("Chat-link intent dropped, chat turned out to be a migration: chatId={}", chatId)
+            return
+        }
+        when (intent) {
             is ChatLinkIntentStore.Intent.GrantRights -> refreshRightsAfterGrant(chatId, intent.clubId)
             is ChatLinkIntentStore.Intent.LinkExistingClub ->
                 handleGroupStart(chatId, chatTitle, fromTelegramId, intent.clubId)
             else -> handleGroupStartNewClub(chatId, chatTitle, fromTelegramId)
         }
+    }
+
+    /**
+     * Не новый чат, а переезд? Выдача боту прав администратора превращает обычную группу в
+     * супергруппу: Telegram меняет chat_id, и событие приходит как «бота добавили в незнакомый
+     * чат» — на ~400 мс РАНЬШЕ сервисного сообщения о переезде. На этом месте рождался
+     * клуб-двойник: он занимал чат, забирал себе все права бота, а привязка настоящего клуба
+     * навсегда оставалась на мёртвом chat_id (баг прода 2026-08-21).
+     *
+     * Полагаться на порядок апдейтов нельзя, поэтому спрашиваем Telegram сами — по каждой
+     * привязке, сидящей на обычной группе (переехать может только такая, и их единицы).
+     */
+    private fun adoptChatMigratedHere(chatId: Long): Boolean {
+        // Две дешёвые отсечки до единственного дорогого шага — опроса Telegram.
+        // Целью переезда всегда становится супергруппа, поэтому обычная группа переездом быть
+        // не может; знакомый чат — тем более.
+        if (chatId > BASIC_GROUP_ID_FLOOR) return false
+        if (chatLinkRepository.findByChatId(chatId) != null) return false
+        val candidates = chatLinkRepository.findAllOnBasicGroups()
+        if (candidates.isEmpty()) return false
+        // Размер списка в логе: опрос идёт по одному вызову на кандидата, и его рост должен
+        // быть заметен раньше, чем станет проблемой.
+        log.info("Checking {} basic-group link(s) for migration into chatId={}", candidates.size, chatId)
+        val moved = candidates.firstOrNull { gateway.resolveMigratedChatId(it.chatId) == chatId } ?: return false
+        if (!chatLinkService.adoptMigratedChat(moved, chatId)) return false
+
+        // Переезд случается ровно в момент выдачи прав — перечитываем их здесь же, иначе клуб
+        // остался бы с «бот без прав» до ручного «Проверить права ещё раз».
+        val state = gateway.getBotChatState(chatId)
+        val status = state?.let { BotChatStatus.fromTelegramStatus(it.statusLiteral) } ?: moved.botStatus
+        if (state != null) {
+            chatLinkRepository.updateBotState(
+                clubId = moved.clubId,
+                botStatus = status,
+                canPinMessages = state.canPinMessages,
+                canInviteUsers = state.canInviteUsers,
+                canRestrictMembers = state.canRestrictMembers,
+                canManageTags = state.canManageTags
+            )
+        }
+        // Ссылки старой группы Telegram погасил сам — отзывать нечего, поэтому doorInviteLink
+        // обнуляем: иначе ensureInviteLink сходил бы отзывать мёртвую ссылку по новому чату.
+        val migrated = chatLinkRepository.findByClubId(moved.clubId) ?: moved.copy(chatId = chatId)
+        ensureInviteLink(
+            link = migrated.copy(doorInviteLink = null),
+            nowInChat = status.isInChat,
+            nowCanInvite = state?.canInviteUsers ?: moved.canInviteUsers,
+            botWasReAdded = true
+        )
+        log.info("Chat migration adopted on bot add: clubId={} {} → {}", moved.clubId, moved.chatId, chatId)
+        return true
     }
 
     /**
@@ -109,6 +170,9 @@ class ChatLinkBotService(
      */
     @Transactional
     fun handleGroupStartNewClub(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
+        // Гейт стоит здесь, а не только у вызывающего: это и есть место, где рождался
+        // клуб-двойник, а зовут его из двух точек (my_chat_member и `/start new` в группе).
+        if (adoptChatMigratedHere(chatId)) return
         val existingForChat = chatLinkRepository.findByChatId(chatId)
         val liveLinkOfChat = existingForChat?.takeIf { clubRepository.findById(it.clubId) != null }
         if (liveLinkOfChat != null) {
@@ -353,8 +417,9 @@ class ChatLinkBotService(
     @Transactional
     fun handleChatMigration(oldChatId: Long, newChatId: Long) {
         val link = chatLinkRepository.findByChatId(oldChatId) ?: return
-        chatLinkRepository.updateChatId(oldChatId, newChatId)
-        log.info("Chat id migrated (group→supergroup): clubId={} {} → {}", link.clubId, oldChatId, newChatId)
+        // Перенос и разбор конфликта — в ChatLinkService: тот же код нужен «Проверить права
+        // ещё раз», которое обнаруживает переезд вопросом, а не событием.
+        if (!chatLinkService.adoptMigratedChat(link, newChatId)) return
         if (link.doorInviteLink != null) {
             // Отзывать старую бессмысленно — старого чата больше нет.
             val fresh = gateway.createJoinRequestInviteLink(newChatId, DOOR_INVITE_LINK_NAME)
