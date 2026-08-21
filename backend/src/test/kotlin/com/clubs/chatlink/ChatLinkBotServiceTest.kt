@@ -52,6 +52,10 @@ class ChatLinkBotServiceTest {
         every { userRepository.findByTelegramId(ownerTelegramId) } returns owner
         every { chatLinkRepository.findByClubId(clubId) } returns null
         every { chatLinkRepository.findByChatId(chatId) } returns null
+        // По умолчанию переезда нет: ни одной привязки на обычной группе, и Telegram
+        // подтверждает, что чат жив (relaxed-мок сам отдал бы не-null).
+        every { chatLinkRepository.findAllOnBasicGroups() } returns emptyList()
+        every { gateway.resolveMigratedChatId(any()) } returns null
     }
 
     @Test
@@ -422,17 +426,94 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `миграция группы в супергруппу переносит chat_id и пересоздаёт invite-ссылку`() {
+    fun `миграция группы в супергруппу переносит привязку и пересоздаёт invite-ссылку`() {
         // Все ссылки старой группы при миграции умирают (реестр багов №2).
-        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
-            clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+old-group"
-        )
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+old-group")
+        every { chatLinkRepository.findByChatId(chatId) } returns link
+        every { chatLinkService.adoptMigratedChat(link, -1009999L) } returns true
         every { gateway.createJoinRequestInviteLink(-1009999L, any()) } returns "https://t.me/+supergroup"
 
         service.handleChatMigration(chatId, -1009999L)
 
-        verify { chatLinkRepository.updateChatId(chatId, -1009999L) }
+        verify { chatLinkService.adoptMigratedChat(link, -1009999L) }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+supergroup") }
+    }
+
+    @Test
+    fun `миграция в занятый живым клубом чат — ссылку не трогаем`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+old-group")
+        every { chatLinkRepository.findByChatId(chatId) } returns link
+        every { chatLinkService.adoptMigratedChat(link, -1009999L) } returns false
+
+        service.handleChatMigration(chatId, -1009999L)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateInviteLink(any(), any()) }
+    }
+
+    @Test
+    fun `бота добавили в чат, куда переехала наша группа — привязка переносится, клуб не создаётся`() {
+        // Выдача боту прав администратора превращает обычную группу в супергруппу: Telegram
+        // меняет chat_id, и событие неотличимо от добавления в незнакомый чат. Раньше здесь
+        // рождался клуб-двойник, забиравший чат и все права бота (баг прода 2026-08-21).
+        val basicGroupChatId = -5231168671L
+        val supergroupChatId = -1004320385859L
+        val moved = chatLinkFixture(clubId = clubId, chatId = basicGroupChatId, botStatus = BotChatStatus.MEMBER)
+        every { chatLinkRepository.findByChatId(supergroupChatId) } returns null
+        every { chatLinkRepository.findAllOnBasicGroups() } returns listOf(moved)
+        every { gateway.resolveMigratedChatId(basicGroupChatId) } returns supergroupChatId
+        every { chatLinkService.adoptMigratedChat(moved, supergroupChatId) } returns true
+        every { gateway.getBotChatState(supergroupChatId) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = false)
+
+        service.handleBotAddedToChat(supergroupChatId, "Никита, Роман и Иван", ownerTelegramId)
+
+        verify { chatLinkService.adoptMigratedChat(moved, supergroupChatId) }
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        // Права выдали ровно этим действием — перечитываем сразу, не дожидаясь кнопки.
+        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.ADMINISTRATOR, true, true, true, false) }
+        // Ссылка создаётся для НОВОГО чата: в старой группе она мертва (реестр багов №2).
+        verify { gateway.createJoinRequestInviteLink(supergroupChatId, any()) }
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(basicGroupChatId, any()) }
+    }
+
+    @Test
+    fun `переезд перехватывается и когда человек шёл выдавать права из мастера`() {
+        // Самый частый путь: намерение GrantRights, а группа на выдаче прав как раз и переезжает.
+        val basicGroupChatId = -5231168671L
+        val supergroupChatId = -1004320385859L
+        val moved = chatLinkFixture(clubId = clubId, chatId = basicGroupChatId, botStatus = BotChatStatus.MEMBER)
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.GrantRights(clubId)
+        every { chatLinkRepository.findByChatId(supergroupChatId) } returns null
+        every { chatLinkRepository.findAllOnBasicGroups() } returns listOf(moved)
+        every { gateway.resolveMigratedChatId(basicGroupChatId) } returns supergroupChatId
+        every { chatLinkService.adoptMigratedChat(moved, supergroupChatId) } returns true
+        every { gateway.getBotChatState(supergroupChatId) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = false)
+
+        service.handleBotAddedToChat(supergroupChatId, "Никита, Роман и Иван", ownerTelegramId)
+
+        verify { chatLinkService.adoptMigratedChat(moved, supergroupChatId) }
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+    }
+
+    @Test
+    fun `бота добавили в незнакомый чат при живой обычной группе — переезда нет, клуб создаётся`() {
+        // Обратная сторона проверки: чужая обычная группа жива, её chat_id не совпадает с новым
+        // чатом — значит это действительно новое добавление, и чат-модель работает как обычно.
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны")
+        every { chatLinkRepository.findAllOnBasicGroups() } returns listOf(chatLinkFixture(chatId = -777L))
+        every { gateway.resolveMigratedChatId(-777L) } returns null
+        every { intentStore.consume(ownerTelegramId) } returns null
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleBotAddedToChat(chatId, "Бегуны", ownerTelegramId)
+
+        verify { clubService.createClubFromChat("Бегуны", ownerId, any()) }
+        verify(exactly = 0) { chatLinkService.adoptMigratedChat(any(), any()) }
     }
 
     // --- Бота добавили в группу (my_chat_member): вход без команды /start ---

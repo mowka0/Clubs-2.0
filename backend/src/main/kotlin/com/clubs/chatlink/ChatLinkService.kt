@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -52,6 +53,83 @@ class ChatLinkService(
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
+    /**
+     * Перенос привязки на новый chat_id после переезда группы в супергруппу. Возвращает true,
+     * если чат теперь принадлежит клубу этой привязки.
+     *
+     * Живёт здесь, а не в [ChatLinkBotService], потому что зовут его оба: обработчик апдейтов
+     * (переезд поймали событием) и «Проверить права ещё раз» (переезд обнаружили вопросом).
+     *
+     * Новый chat_id может оказаться занят: `my_chat_member` по нему приходит раньше сервисного
+     * сообщения о переезде, и «чат становится клубом» успевало завести клуб-двойник. Тогда
+     * перенос падал на уникальном индексе `club_chat_links_chat_id_key`, а привязка навсегда
+     * оставалась на мёртвом chat_id — клуб показывал «бот без прав», починить было нечем
+     * (баг прода 2026-08-21). Двойника убираем, чужой живой клуб — никогда.
+     */
+    @Transactional
+    fun adoptMigratedChat(link: ChatLink, newChatId: Long): Boolean {
+        val occupant = chatLinkRepository.findByChatId(newChatId)
+        if (occupant != null) {
+            if (occupant.clubId == link.clubId) return true // перенос уже сделан вторым событием
+            if (!isMigrationTwin(occupant, link)) {
+                log.error(
+                    "Chat migration blocked, new chat id belongs to a live club: clubId={} {} → {} occupiedByClubId={}",
+                    link.clubId, link.chatId, newChatId, occupant.clubId
+                )
+                return false
+            }
+            // Бота из чата НЕ выводим: он там работает, и это тот же самый чат, который сейчас
+            // вернётся законному клубу. Сам двойник удаляем (решение PO): это пустой клуб,
+            // заведённый автоматикой из чата, который ему не принадлежит, — оставлять его
+            // в «Моих клубах» значит копить мусор, который человек не заводил.
+            log.warn("Deleting migration twin: twinClubId={} chatId={} forClubId={}", occupant.clubId, newChatId, link.clubId)
+            releaseKeepingBotInChat(occupant)
+            clubRepository.softDelete(occupant.clubId)
+        }
+        chatLinkRepository.updateChatId(link.chatId, newChatId)
+        log.info("Chat id migrated (group→supergroup): clubId={} {} → {}", link.clubId, link.chatId, newChatId)
+        return true
+    }
+
+    /**
+     * Клуб-двойник — тот, что родился из этого же чата на переезде и с тех пор ничем не оброс.
+     * Признаётся по ФАКТУ, а не по часам: чата, куда переехали, до переезда не существовало,
+     * значит двойник заведомо моложе исходной привязки. Времени с переезда могло пройти сколько
+     * угодно — привязка на мёртвом chat_id живёт молча, и человек нажимает «Проверить права
+     * ещё раз» хоть через неделю; окно «пять минут» отсекло бы ровно те случаи, ради которых
+     * всё и написано.
+     *
+     * Остальное — чужой живой клуб, которому этот чат подключили осознанно, пока наша привязка
+     * висела на мёртвом id. Забирать у него чат автоматика права не имеет, это разбирают люди.
+     */
+    private fun isMigrationTwin(occupant: ChatLink, link: ChatLink): Boolean {
+        // Клуба нет или он уже скрыт — строка осиротела, чат за ней не числится.
+        val club = clubRepository.findById(occupant.clubId) ?: return true
+        // Клуб РОДИЛСЯ из этого чата (создан одной операцией с привязкой), а не был привязан к
+        // нему осознанно позже. Проверка нужна именно потому, что двойник удаляется: без неё под
+        // удаление попал бы чужой пустой клуб, которому человек руками подключил этот чат.
+        val bornFromThisChat = Duration.between(club.createdAt, occupant.linkedAt).abs() < CLUB_BIRTH_GAP
+        return occupant.linkedAt.isAfter(link.linkedAt) && bornFromThisChat && club.memberCount <= 1
+    }
+
+    /**
+     * Живой chat_id привязки: если группа переехала — переносит привязку и отдаёт новый id.
+     *
+     * Спрашивать приходится явно: getChat и getChatMember по мёртвому chat_id отвечают `ok` и
+     * показывают бота как `member` — ровно поэтому «Проверить права ещё раз» честно повторяло
+     * «бот без прав» и починить переезд из интерфейса было нечем.
+     */
+    private fun actualChatId(link: ChatLink): Long {
+        val newChatId = gateway.resolveMigratedChatId(link.chatId) ?: return link.chatId
+        if (!adoptMigratedChat(link, newChatId)) {
+            throw ConflictException(
+                "Группа стала супергруппой, и Telegram сменил её идентификатор, а этот чат за это " +
+                    "время подключили к другому клубу. Отвяжите его там — здесь он подключится сам."
+            )
+        }
+        return newChatId
+    }
+
     /** «Проверить права ещё раз»: перечитывает статус бота и название чата из Telegram. */
     @Transactional
     fun refresh(clubId: UUID, callerId: UUID): ChatLinkStatusDto {
@@ -59,7 +137,10 @@ class ChatLinkService(
         val link = chatLinkRepository.findByClubId(clubId)
             ?: throw NotFoundException("Chat is not linked")
 
-        val state = gateway.getBotChatState(link.chatId)
+        // Переезд обнаруживаем ДО чтения прав: иначе права читались бы у мёртвого чата, где бот
+        // навсегда остаётся `member` без единого права.
+        val chatId = actualChatId(link)
+        val state = gateway.getBotChatState(chatId)
             ?: throw ConflictException("Не удалось проверить чат — Telegram не отвечает, попробуйте позже")
         chatLinkRepository.updateBotState(
             clubId = clubId,
@@ -69,7 +150,7 @@ class ChatLinkService(
             canRestrictMembers = state.canRestrictMembers,
             canManageTags = state.canManageTags
         )
-        gateway.getChatInfo(link.chatId)?.let { info ->
+        gateway.getChatInfo(chatId)?.let { info ->
             info.title?.let { if (it != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, it) }
             // Настройку истории организатор меняет в самом Telegram, узнать об этом можно только
             // спросив — поэтому «Проверить права ещё раз» перечитывает и её.
@@ -83,18 +164,18 @@ class ChatLinkService(
         // истёк», а починить это из интерфейса было нечем).
         val nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat
         if (nowInChat && state.canInviteUsers) {
-            val dead = link.doorInviteLink?.let { !gateway.isInviteLinkAlive(link.chatId, it) } ?: true
+            val dead = link.doorInviteLink?.let { !gateway.isInviteLinkAlive(chatId, it) } ?: true
             if (dead) {
                 // Мёртвую отзываем best-effort: если Telegram считает её живой, а мы ошиблись,
                 // дубля в списке ссылок группы всё равно не останется.
-                link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
-                gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
+                link.doorInviteLink?.let { gateway.revokeInviteLink(chatId, it) }
+                gateway.createJoinRequestInviteLink(chatId, DOOR_INVITE_LINK_NAME)?.let {
                     chatLinkRepository.updateInviteLink(clubId, it)
-                    log.info("Invite link (re)created on refresh: clubId={} chatId={}", clubId, link.chatId)
+                    log.info("Invite link (re)created on refresh: clubId={} chatId={}", clubId, chatId)
                 }
             }
         }
-        log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, link.chatId, state.statusLiteral)
+        log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, chatId, state.statusLiteral)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
@@ -421,5 +502,14 @@ class ChatLinkService(
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != callerId) throw ForbiddenException("Only the club owner can manage the chat link")
         return club
+    }
+
+    companion object {
+        /**
+         * Допуск на «клуб и привязка созданы одной операцией»: клуб из чата заводится в той же
+         * транзакции, что и его привязка, — разрыв там в миллисекундах. Это НЕ срок давности:
+         * от того, сколько прошло времени с переезда, признание двойника не зависит.
+         */
+        private val CLUB_BIRTH_GAP: Duration = Duration.ofMinutes(1)
     }
 }

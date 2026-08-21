@@ -51,13 +51,15 @@ fun chatLinkFixture(
     awardTagsEnabled: Boolean = false,
     /** Закреп со ссылкой на клуб — его бот стирает, отпуская чат. */
     clubPinMessageId: Long? = null,
-    linkedByUserId: UUID = UUID.randomUUID()
+    linkedByUserId: UUID = UUID.randomUUID(),
+    /** Когда чат привязан: по возрасту привязок различаются переехавшая и занявшая чат. */
+    linkedAt: OffsetDateTime = OffsetDateTime.now()
 ): ChatLink = ChatLink(
     clubId = clubId,
     chatId = chatId,
     chatTitle = "Партия — чат",
     linkedByUserId = linkedByUserId,
-    linkedAt = OffsetDateTime.now(),
+    linkedAt = linkedAt,
     botStatus = botStatus,
     canPinMessages = canPinMessages,
     canInviteUsers = canInviteUsers,
