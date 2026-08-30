@@ -127,6 +127,14 @@ interface EventRepository {
     /** Telegram id организатора (владельца) клуба события, или null если не задан. */
     fun findOrganizerTelegramId(eventId: UUID): Long?
 
+    /**
+     * Telegram id СОЗДАТЕЛЯ встречи (`events.created_by`) — адресат DM о недоборе состава (V83).
+     * Отличается от [findOrganizerTelegramId] (владелец клуба) в клубах с со-организаторами:
+     * встречу ведёт тот, кто её создал, и решать судьбу набора должен он. Фолбэк на владельца —
+     * на стороне вызывающего, если у создателя нет telegram id.
+     */
+    fun findEventCreatorTelegramId(eventId: UUID): Long?
+
     /** Финализирует посещаемость для прошедших, отмеченных, ещё не финализированных событий. Возвращает id финализированных событий. */
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 

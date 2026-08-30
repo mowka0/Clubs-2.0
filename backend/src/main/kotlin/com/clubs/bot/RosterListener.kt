@@ -31,7 +31,11 @@ class RosterListener(
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onRosterShortfall(event: RosterShortfallEvent) {
-        val organizerTelegramId = eventRepository.findOrganizerTelegramId(event.event.id)
+        // Ведёт встречу тот, кто её создал (в клубе с со-организаторами это не обязательно
+        // владелец), поэтому решать судьбу набора зовём его. Владелец клуба — фолбэк на случай,
+        // когда у создателя нет telegram id.
+        val organizerTelegramId = eventRepository.findEventCreatorTelegramId(event.event.id)
+            ?: eventRepository.findOrganizerTelegramId(event.event.id)
         if (organizerTelegramId == null) {
             log.warn("Roster-shortfall DM SKIPPED — no organizer telegram id for event {}", event.event.id)
             return

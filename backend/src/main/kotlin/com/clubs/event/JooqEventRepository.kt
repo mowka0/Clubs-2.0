@@ -550,6 +550,13 @@ class JooqEventRepository(
             .where(EVENTS.ID.eq(eventId))
             .fetchOne(USERS.TELEGRAM_ID)
 
+    override fun findEventCreatorTelegramId(eventId: UUID): Long? =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENTS)
+            .join(USERS).on(USERS.ID.eq(EVENTS.CREATED_BY))
+            .where(EVENTS.ID.eq(eventId))
+            .fetchOne(USERS.TELEGRAM_ID)
+
     override fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_FINALIZED, true)
