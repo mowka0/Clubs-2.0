@@ -36,9 +36,8 @@ const CLUB_ID = 'club-1';
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const SOON = new Date(Date.now() + 2 * 3_600_000).toISOString(); // через 2ч < порога 4ч
-// Дефолтный порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч). Дедлайн отказа
-// подтверждённого = eventDatetime − 4ч — то, что бэкенд кладёт в confirmedDeclineDeadline.
-const DECLINE_CUTOFF_MS = 4 * 3_600_000;
+// Порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч) с V83 не запрещает отказ,
+// а делает его дороже: кнопка живёт до старта встречи, цену считает бэкенд (declineCostPoints).
 
 function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   const eventDatetime = overrides.eventDatetime ?? FUTURE;
@@ -66,10 +65,8 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     noAnswerCount: 0,
     // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
     // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
-    confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
-    abandonedSlotPenaltyPoints: 100,
     rosterDeadline: null,
     rosterClosed: true,
     rosterShortfall: false,
@@ -195,12 +192,17 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
   });
 
-  it('подтверждённый: за <4ч до старта кнопки «Отказаться» нет', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: SOON }), myVote: 'confirmed' });
+  it('подтверждённый: за <4ч до старта кнопка «Отказаться» ЕСТЬ — отказ стал платным (V83)', async () => {
+    // Прежде кнопка здесь пряталась (запрет отказа внутри порога). Запрет снят: единственным
+    // выходом оставалась молчаливая неявка за −200, что дороже любого честного отказа.
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: SOON, declineCostPoints: 150 }),
+      myVote: 'confirmed',
+    });
     renderEventPage();
 
     expect(await screen.findByText('Подтверждение участия')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
   });
 
   it('waitlisted видит «Отказаться» (выход из очереди) без порога', async () => {
@@ -459,7 +461,6 @@ describe('EventPage — открытая встреча (participantLimit = null
       isUrgent: false,
       rosterClosed: false,
       eventDatetime,
-      confirmedDeclineDeadline: eventDatetime,
       ...overrides,
     });
   }

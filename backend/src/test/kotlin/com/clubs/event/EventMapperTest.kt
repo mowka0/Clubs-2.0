@@ -114,24 +114,6 @@ class EventMapperTest {
         assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isFalse()
     }
 
-    // Открытая встреча (V62): порога отказа нет — дедлайн совпадает со стартом события,
-    // у события с лимитом он по-прежнему старт − cutoff (240 мин в этом мапере).
-    @Test
-    fun `confirmedDeclineDeadline is the event start for an open event and start minus cutoff otherwise`() {
-        val start = now.plusDays(2)
-
-        val open = mapper.toDetailDto(
-            event(EventStatus.stage_2, start, participantLimit = null), 0, 0, 0, 0
-        )
-        assertThat(open.confirmedDeclineDeadline).isEqualTo(start)
-        assertThat(open.participantLimit).isNull()
-
-        val limited = mapper.toDetailDto(
-            event(EventStatus.stage_2, start), 0, 0, 0, 0
-        )
-        assertThat(limited.confirmedDeclineDeadline).isEqualTo(start.minusMinutes(240))
-    }
-
     // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23):
     // голос Этапа 1 не финален (даже «Не пойду» может передумать), у срочной (V69) его нет вовсе.
     @Test
@@ -186,11 +168,34 @@ class EventMapperTest {
         assertThat(open.stage2LeadMinutes).isNull()
     }
 
-    // Величина штрафа за брошенный слот идёт с бэка (из ReputationPolicy), а не хардкодом фронта —
-    // тот же класс фикса, что confirmedDeclineDeadline (PO 2026-07-21).
+    // Цена отказа приходит с бэка готовой (V83, ReputationPolicy + RosterPolicy): фронт не выводит
+    // её из даты, формата и размера очереди — копия этой логики на клиенте разъехалась бы.
     @Test
-    fun `abandoned slot penalty is sourced from ReputationPolicy`() {
-        val dto = mapper.toDetailDto(event(EventStatus.stage_2, now.plusDays(2)), 0, 0, 0, 0)
-        assertThat(dto.abandonedSlotPenaltyPoints).isEqualTo(100)
+    fun `declineCostPoints — 100 на закрытом составе без замены и 0, пока набор идёт`() {
+        val start = now.plusDays(2)
+
+        // now передаём явно: у мапера дефолт — реальное «сейчас», и фиксированная дата фикстуры
+        // без него оказалась бы в прошлом (тогда порог отказа считался бы пройденным).
+        val closed = mapper.toDetailDto(event(EventStatus.stage_2, start), 0, 0, 0, 0, now = now)
+        assertThat(closed.declineCostPoints).isEqualTo(100)
+
+        val collecting = mapper.toDetailDto(event(EventStatus.upcoming, start), 0, 0, 0, 0, now = now)
+        assertThat(collecting.declineCostPoints).isEqualTo(0)
+    }
+
+    @Test
+    fun `declineCostPoints — 0 при живой очереди и 150 внутри порога отказа`() {
+        val start = now.plusDays(2)
+
+        val withQueue = mapper.toDetailDto(
+            event(EventStatus.stage_2, start), 0, 0, 0, 0, waitlistedCount = 2, now = now
+        )
+        assertThat(withQueue.declineCostPoints).isEqualTo(0)
+
+        // Порог отказа мапера — 240 мин: встреча через час уже внутри него, замены нет.
+        val lastHour = mapper.toDetailDto(
+            event(EventStatus.stage_2, now.plusHours(1)), 0, 0, 0, 0, now = now
+        )
+        assertThat(lastHour.declineCostPoints).isEqualTo(150)
     }
 }

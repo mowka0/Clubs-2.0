@@ -643,11 +643,11 @@ export const EventPage: FC = () => {
   const limitSuffix = isOpenEvent ? '' : ` / ${event.participantLimit}`;
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
-  // Подтверждённый может отказаться (освободить место) только пока не прошёл дедлайн отказа. Дедлайн
-  // считает бэкенд из своего env-порога и отдаёт в confirmedDeclineDeadline — фронт не хранит копию
-  // порога. Бэкенд остаётся источником истины: declineParticipation всё равно отклонит поздний отказ.
-  const confirmedCanDecline =
-    myVote === 'confirmed' && new Date(event.confirmedDeclineDeadline).getTime() > Date.now();
+  // Отказ от места доступен до самого старта встречи (V83): прежний ЗАПРЕТ внутри 4 часов снят и
+  // заменён ценой — прятать кнопку теперь нельзя, иначе единственным выходом снова становится
+  // молчаливая неявка (−200), ровно та проблема, из-за которой запрет и убрали. Сколько стоит
+  // отказ прямо сейчас, считает бэкенд и отдаёт в declineCostPoints.
+  const confirmedCanDecline = myVote === 'confirmed' && !eventHappened;
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
@@ -1601,9 +1601,9 @@ export const EventPage: FC = () => {
               )}
             </div>
           )}
-          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопки нет после
-              дедлайна отказа (confirmedDeclineDeadline с бэка; бэк тоже отклонит). Если замены в очереди
-              нет — предупреждаем про штраф репутации; если есть — что место сразу займёт первый из очереди. */}
+          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопка живёт до
+              старта встречи; цену на текущий момент приносит declineCostPoints, и она же названа
+              подписью под кнопкой, чтобы решение принималось до открытия диалога. */}
           {confirmedCanDecline && (
             confirmingDecline ? (
               <div className="rd-reject-confirm">

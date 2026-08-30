@@ -61,10 +61,8 @@ function rosterEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     notGoingCount: 1,
     confirmedCount: 4,
     noAnswerCount: 0,
-    confirmedDeclineDeadline: ROSTER_DEADLINE,
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
-    abandonedSlotPenaltyPoints: 100,
     rosterDeadline: ROSTER_DEADLINE,
     rosterClosed: false,
     rosterShortfall: false,
@@ -209,6 +207,23 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
 
     await user.click(screen.getByRole('button', { name: 'В очереди (2)' }));
     expect(screen.getByText('Паша')).toBeInTheDocument();
+  });
+
+  it('AC-10: внутри порога отказа кнопка НЕ прячется — отказ стал платным, а не запрещённым', async () => {
+    // Регресс на баг V83: раньше фронт скрывал кнопку по дедлайну отказа, и единственным выходом
+    // внутри 4 часов оставалась молчаливая неявка (−200) — ровно то, от чего уходили.
+    const soon = new Date(Date.now() + 30 * 60_000).toISOString();
+    renderEventPageWith({
+      event: rosterEvent({
+        status: 'stage_2', rosterClosed: true, confirmedCount: 6,
+        eventDatetime: soon, declineCostPoints: 150,
+      }),
+      myVote: 'confirmed',
+      responders: [responder({ userId: VIEWER_ID, firstName: 'Я' })],
+    });
+
+    expect(await screen.findByRole('button', { name: 'Не смогу прийти' })).toBeInTheDocument();
+    expect(screen.getByText('Сейчас отказ стоит 150 очков репутации')).toBeInTheDocument();
   });
 
   it('AC-5: недобор — экран говорит, что решает организатор', async () => {

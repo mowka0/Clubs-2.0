@@ -600,7 +600,7 @@ export interface EventDetailDto {
   participantLimit: number | null;
   votingOpensDaysBefore: number;
   // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт бэка —
-  // фронт порог не хардкодит (тот же урок, что confirmedDeclineDeadline). null = открытая встреча.
+  // фронт порог не хардкодит: все пороги считает бэкенд. null = открытая встреча.
   stage2LeadMinutes: number | null;
   // Собственный интервал события; null = «используется глобальный дефолт». Для ПОКАЗА берём
   // stage2LeadMinutes выше, а в PUT возвращаем это поле: отправка эффективного значения
@@ -617,13 +617,6 @@ export interface EventDetailDto {
   confirmedCount: number;
   /** Сколько участников клуба ещё не ответили на Этапе 2 (кроме сказавших «не пойду»). */
   noAnswerCount: number;
-  // Крайний момент (ISO), до которого подтверждённый участник может отказаться от места. Считается
-  // бэкендом из events.stage2-decline-cutoff-minutes — фронт не хранит копию порога, а прячет кнопку
-  // «Отказаться» у confirmed, когда текущее время ≥ этого значения. Источник истины — бэкенд.
-  confirmedDeclineDeadline: string;
-  // Сколько очков спишется за отказ от подтверждённого места без замены (abandoned_slot).
-  // Величина приходит с бэка (ReputationPolicy) — фронт число не хардкодит.
-  abandonedSlotPenaltyPoints: number;
   // --- Порог набора, формат 🎟 (V83) ---
   // Когда закрывается набор состава (ISO). null = открытая встреча, у неё набора нет.
   rosterDeadline: string | null;

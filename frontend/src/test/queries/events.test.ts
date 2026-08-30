@@ -56,7 +56,7 @@ const mockEvent: EventDetailDto = {
   notGoingCount: 0,
   confirmedCount: 0,
   noAnswerCount: 0,
-  confirmedDeclineDeadline: '2026-05-01T14:00:00Z', abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+  stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
   rosterDeadline: null, rosterClosed: false, rosterShortfall: false, waitlistedCount: 0, declineCostPoints: 0,
   attendanceMarked: false,
   attendanceFinalized: false,

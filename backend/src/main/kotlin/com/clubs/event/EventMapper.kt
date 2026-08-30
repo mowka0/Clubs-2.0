@@ -82,18 +82,13 @@ class EventMapper(
         notGoingCount = notGoingCount,
         confirmedCount = confirmedCount,
         noAnswerCount = noAnswerCount,
-        // Открытая встреча: порога отказа нет — дедлайн совпадает со стартом события (окно
-        // confirm/decline всё равно закрывается стартом, Bug B). Фронт различие не хардкодит.
-        confirmedDeclineDeadline = if (event.isOpenEvent) event.eventDatetime
-            else event.eventDatetime.minusMinutes(declineCutoffMinutes),
-        // Величина штрафа за брошенный слот — из политики репутации, чтобы текст диалога отказа
-        // на фронте никогда не разъехался с реальным списанием (фикс PO 2026-07-21).
-        abandonedSlotPenaltyPoints = -ReputationPolicy.pointsFor(ReputationKind.abandoned_slot),
         // Дедлайн набора (V83): у 🎟 это момент, когда состав закрывается, у ⚡ — момент, когда
         // событие родилось в stage_2 (набора не было). У 🌊 набора нет вовсе.
         rosterDeadline = if (event.isOpenEvent) null
             else event.eventDatetime.minusMinutes((event.stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()),
-        rosterClosed = event.stage2Triggered && !event.isOpenEvent,
+        // «Состав закрыт» — это ФАЗА события (stage_2 и дальше), а не флаг stage2Triggered:
+        // флаг ставится тем же переходом, но статус honest-ее — он же управляет всем экраном.
+        rosterClosed = isRosterClosed(event),
         rosterShortfall = event.rosterShortfallAt != null && event.status == EventStatus.upcoming,
         waitlistedCount = waitlistedCount,
         // Цена отказа для участника ИЗ СОСТАВА на момент запроса. Одна и та же для всех, кто
@@ -102,7 +97,9 @@ class EventMapper(
         declineCostPoints = RosterPolicy.declineCostPoints(
             isOpenEvent = event.isOpenEvent,
             heldSlot = true,
-            rosterClosed = event.stage2Triggered && !event.isOpenEvent,
+            // «Состав закрыт» — это ФАЗА события (stage_2 и дальше), а не флаг stage2Triggered:
+        // флаг ставится тем же переходом, но статус honest-ее — он же управляет всем экраном.
+        rosterClosed = isRosterClosed(event),
             withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(declineCutoffMinutes)),
             hasReplacement = waitlistedCount > 0
         ),
@@ -112,6 +109,10 @@ class EventMapper(
         photoUrl = event.photoUrl,
         createdAt = event.createdAt
     )
+
+    /** Состав закрыт: встреча дошла до фазы подтверждённого состава. У 🌊 открытой её не бывает. */
+    private fun isRosterClosed(event: Event): Boolean =
+        !event.isOpenEvent && (event.status == EventStatus.stage_2 || event.status == EventStatus.completed)
 
     fun toMyFeedItemDto(item: MyFeedItem, now: OffsetDateTime = OffsetDateTime.now()): MyEventListItemDto {
         val event = item.event

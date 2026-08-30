@@ -102,19 +102,27 @@ nullable, прежний fail-closed отменён — поиск умеет т
   "maybeCount": 0,
   "notGoingCount": 0,
   "confirmedCount": 0,
-  "confirmedDeclineDeadline": "ISO datetime",
+  "waitlistedCount": 0,
+  "rosterDeadline": "ISO datetime|null",
+  "rosterClosed": false,
+  "rosterShortfall": false,
+  "declineCostPoints": 0,
   "attendanceMarked": false,
   "attendanceFinalized": false,
   "createdAt": "ISO datetime",
   "photoUrl": "string|null"
 }
 ```
-> `confirmedDeclineDeadline` = `eventDatetime − events.stage2-decline-cutoff-minutes` (дефолт 240 = 4ч),
-> считается в `EventMapper`. Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник может отказаться от
-> места. Фронт прячет кнопку «Отказаться» у `confirmed`, когда `now ≥ confirmedDeclineDeadline`; бэкенд
-> остаётся источником истины (`declineParticipation` отклонит поздний отказ). Waitlisted порогом не
-> гейтится. Не пер-юзер — одинаков для всех, поэтому в общем DTO. Заменил прежнюю фронт-константу-копию
-> порога (`CONFIRMED_DECLINE_CUTOFF_HOURS=4`), которая не была связана с рантайм-env бэка.
+> `declineCostPoints` (V83) = сколько очков спишется, если участник ИЗ СОСТАВА откажется прямо
+> сейчас; 0 = бесплатно. Считает `EventMapper` через `RosterPolicy` — ту же чистую политику, что
+> применяет `declineParticipation`, поэтому названная цена и фактическое списание не расходятся по
+> построению. Не пер-юзер: зависит только от состояния события (закрыт ли состав, близко ли встреча,
+> есть ли замена), поэтому живёт в общем DTO. Waitlisted поле не касается — выход из очереди
+> бесплатен всегда.
+>
+> **Удалены в V83:** `confirmedDeclineDeadline` (означал «после этого момента отказаться нельзя» —
+> запрета больше нет, отказ доступен до старта встречи) и `abandonedSlotPenaltyPoints`
+> (фиксированные −100 покрывал только один из четырёх случаев, его заменил `declineCostPoints`).
 
 ### EventListItemDto
 ```json
