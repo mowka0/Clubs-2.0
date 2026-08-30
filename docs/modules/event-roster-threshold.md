@@ -111,7 +111,7 @@ DM приходит создателю события (`events.created_by`); е�
 | Состав закрыт, до встречи ≤ 4 ч | −50 `late_decline_covered` | −150 `late_decline_uncovered` |
 | Молча не пришёл | −200 `no_show` | −200 `no_show` |
 
-Порог 4 ч — существующий `events.stage2-decline-cutoff-minutes`. Прежний **запрет** отказа внутри
+Порог 4 ч — существующий `events.late-decline-threshold-minutes`. Прежний **запрет** отказа внутри
 порога снимается: `declineParticipation` больше не бросает ошибку, а списывает по таблице.
 
 Правила:

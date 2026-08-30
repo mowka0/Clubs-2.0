@@ -38,11 +38,11 @@ class Stage2ServiceTest {
     private val rosterService = mockk<RosterService>(relaxed = true).also {
         every { it.handleRosterDeadline(any()) } returns false
     }
-    // declineCutoffMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
+    // lateDeclineThresholdMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
     // строит свой инстанс с реальным значением.
     private val service = Stage2Service(
         eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-        reputationService, declineCutoffMinutes = 0, stage2TriggerMinutesBefore = 1440
+        reputationService, lateDeclineThresholdMinutes = 0, stage2TriggerMinutesBefore = 1440
     )
 
     private val eventId = UUID.randomUUID()
@@ -98,7 +98,7 @@ class Stage2ServiceTest {
         // Реальный порог 4 ч; событие через 2 ч; очередь пуста → late_decline_uncovered (−150).
         val strict = Stage2Service(
             eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
@@ -121,7 +121,7 @@ class Stage2ServiceTest {
         val promotedUserId = UUID.randomUUID()
         val strict = Stage2Service(
             eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
@@ -185,7 +185,7 @@ class Stage2ServiceTest {
         // у открытой встречи порога нет, штраф и промоут не существуют.
         val strict = Stage2Service(
             eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns
             event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)

@@ -150,19 +150,18 @@ events:
   # из DM организатору. Дефолт 120 = 2ч: состав, объявленный за час до выхода, никому не помогает.
   # Env: ROSTER_DEADLINE_MIN_LEAD_MINUTES
   roster-deadline-min-lead-minutes: ${ROSTER_DEADLINE_MIN_LEAD_MINUTES:120}
-  # Период опроса RosterService.processShortfallEvents (мс) — встречи, ждущие решения организатора
-  # при недоборе. Дефолт 60000 = 1 мин, как основной тик набора. Env: ROSTER_SHORTFALL_POLL_MS
-  roster-shortfall-poll-ms: ${ROSTER_SHORTFALL_POLL_MS:60000}
   # Период опроса Stage2Service.triggerStage2ForReadyEvents (мс). Окно подтверждения =
   # stage2-trigger-minutes-before МИНУС фаза шедулера, поэтому тик должен быть сильно мельче
   # lead-времени триггера — старый захардкоженный тик 5мин съедал короткий lead целиком
   # (при lead 3мин переключение часто попадало ПОСЛЕ старта события → нулевое окно
   # подтверждения, тупиковый DM). Дефолт 60000 = 1мин. Env: STAGE2_POLL_MS
   stage2-poll-ms: ${STAGE2_POLL_MS:60000}
-  # За сколько минут до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места на Этапе 2 (замене
-  # нужно время подготовиться; позже — «приходи или неявка −200»). Дефолт 240 = 4ч. В минутах,
-  # чтобы staging мог ужать для теста. Waitlisted выходит из очереди без этого порога. Env: STAGE2_DECLINE_CUTOFF_MINUTES
-  stage2-decline-cutoff-minutes: ${STAGE2_DECLINE_CUTOFF_MINUTES:240}
+  # За сколько минут до старта отказ от места становится ПОЗДНИМ и дорожает (−50 с заменой в
+  # очереди, −150 без неё вместо −100). До V83 этот же порог ЗАПРЕЩАЛ отказ — запрет снят решением
+  # PO 2026-08-21, осталась цена, поэтому ключ и переименован из stage2-decline-cutoff-minutes.
+  # Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для теста. Очереди порог не касается —
+  # выход из неё бесплатен всегда. Env: LATE_DECLINE_THRESHOLD_MINUTES
+  late-decline-threshold-minutes: ${LATE_DECLINE_THRESHOLD_MINUTES:240}
   # Период опроса EventReminderScheduler (мс). Дефолт 300000 = 5мин.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
   # DM-напоминание организатору отметить посещаемость: через сколько минут после события.

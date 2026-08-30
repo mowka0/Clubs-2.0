@@ -11,10 +11,10 @@ import java.time.OffsetDateTime
 
 @Component
 class EventMapper(
-    // Порог отказа подтверждённого (минут до старта) — тот же yaml-ключ, что читает
-    // Stage2Service.declineCutoffMinutes (единый источник значения на бэке). Нужен, чтобы отдать
-    // фронту готовый дедлайн отказа в EventDetailDto вместо дублирования порога хардкодом на клиенте.
-    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
+    // Порог позднего отказа (минут до старта) — тот же yaml-ключ, что читает
+    // Stage2Service.lateDeclineThresholdMinutes (единый источник значения на бэке). Нужен, чтобы
+    // отдать фронту готовую цену отказа вместо дублирования правил на клиенте.
+    @Value("\${events.late-decline-threshold-minutes:240}") private val lateDeclineThresholdMinutes: Long,
     // Глобальный дефолт интервала Этапа 2 — тот же yaml-ключ, что читает Stage2Service.
     // Нужен для эффективного stage2LeadMinutes в EventDetailDto (у события без своего значения).
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
@@ -100,7 +100,7 @@ class EventMapper(
             // «Состав закрыт» — это ФАЗА события (stage_2 и дальше), а не флаг stage2Triggered:
         // флаг ставится тем же переходом, но статус honest-ее — он же управляет всем экраном.
         rosterClosed = isRosterClosed(event),
-            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(declineCutoffMinutes)),
+            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(lateDeclineThresholdMinutes)),
             hasReplacement = waitlistedCount > 0
         ),
         attendanceMarked = event.attendanceMarked,

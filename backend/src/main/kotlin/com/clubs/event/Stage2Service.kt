@@ -26,9 +26,10 @@ class Stage2Service(
     private val rosterService: RosterService,
     private val eventPublisher: ApplicationEventPublisher,
     private val reputationService: ReputationService,
-    // За сколько минут до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время
-    // подготовиться). Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для теста. Env: STAGE2_DECLINE_CUTOFF_MINUTES
-    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
+    // За сколько минут до старта отказ от места становится ПОЗДНИМ и дорожает (V83; до этого тот же
+    // порог отказ запрещал). Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для сквозного
+    // теста. Env: LATE_DECLINE_THRESHOLD_MINUTES
+    @Value("\${events.late-decline-threshold-minutes:240}") private val lateDeclineThresholdMinutes: Long,
     // Упреждение (минут до старта события), при котором предстоящее событие переходит в Stage 2.
     // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
     // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
@@ -55,6 +56,10 @@ class Stage2Service(
                 log.error("Failed to trigger Stage 2 for event ${event.id}", e)
             }
         }
+        // Тем же тиком ведём встречи, зависшие в недоборе (V83): добрался состав — закрываем,
+        // вышло время организатора — отменяем. Отдельный таймер по той же таблице событий был бы
+        // лишней сущностью; свою транзакцию проход открывает сам.
+        rosterService.processShortfallEvents()
     }
 
     private fun triggerStage2(event: Event) {
@@ -209,7 +214,7 @@ class Stage2Service(
             heldSlot = heldScarceSlot,
             // Сюда попадают только события в stage_2, то есть с уже закрытым составом.
             rosterClosed = true,
-            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(declineCutoffMinutes)),
+            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(lateDeclineThresholdMinutes)),
             hasReplacement = firstWaitlisted != null
         )
 

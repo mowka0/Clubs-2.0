@@ -36,7 +36,7 @@ const CLUB_ID = 'club-1';
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const SOON = new Date(Date.now() + 2 * 3_600_000).toISOString(); // через 2ч < порога 4ч
-// Порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч) с V83 не запрещает отказ,
+// Порог отказа бэкенда (events.late-decline-threshold-minutes=240 = 4ч) с V83 не запрещает отказ,
 // а делает его дороже: кнопка живёт до старта встречи, цену считает бэкенд (declineCostPoints).
 
 function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {

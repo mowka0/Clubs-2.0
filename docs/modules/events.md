@@ -310,7 +310,7 @@ POST /api/events/{id}/remind          # ручное напоминание от
 3. **Цена отказа** вместо прежнего запрета (V83). Запрет «отказаться можно не позже чем за 4 ч»
    СНЯТ (решение PO 2026-08-21): он выталкивал людей в молчаливую неявку, которая стоит дороже
    (−200). Цену считает `RosterPolicy.declineKind` из четырёх условий — формат, закрыт ли состав,
-   осталось ли до старта ≤ `events.stage2-decline-cutoff-minutes` (240 = 4ч) и есть ли замена:
+   осталось ли до старта ≤ `events.late-decline-threshold-minutes` (240 = 4ч) и есть ли замена:
 
    | Когда | Замена есть | Замены нет |
    |---|---|---|
@@ -540,9 +540,8 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1080` (18ч, PO 2026-07-23; ранее 24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2`; у формата 🎟 это дедлайн НАБОРА состава (V83) — **дефолт** для событий без своего `stage2_lead_minutes` (V67) |
 | `events.roster-shortfall-response-minutes` | `ROSTER_SHORTFALL_RESPONSE_MINUTES` | `360` (6ч) | Сколько ждём решения организатора при недоборе, прежде чем отменить встречу автоматически (V83) |
 | `events.roster-deadline-min-lead-minutes` | `ROSTER_DEADLINE_MIN_LEAD_MINUTES` | `120` (2ч) | Насколько близко к встрече разрешено двигать дедлайн набора продлением «+6/+12 часов» (V83) |
-| `events.roster-shortfall-poll-ms` | `ROSTER_SHORTFALL_POLL_MS` | `60000` (1 мин) | Период прохода `RosterService.processShortfallEvents`: добор состава и автоотмена при молчании (V83) |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
-| `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
+| `events.late-decline-threshold-minutes` | `LATE_DECLINE_THRESHOLD_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |
 
@@ -1309,7 +1308,7 @@ GET /api/clubs/{id}/events/teaser    (JWT; членство НЕ требует�
 | Этап 1 (голосование) | без изменений | без изменений |
 | Этап 2: подтверждение | гонка за места: `confirmedCount < limit` → confirmed, иначе waitlisted | **каждый подтвердивший — confirmed**; waitlist недостижим |
 | Лист ожидания / промоут / DM «освободилось место» | работает | мёртвая ветка (очередь всегда пуста) |
-| Отказ confirmed: порог | нельзя позже `T − stage2-decline-cutoff-minutes` | **порога нет** — отказ до самого старта (окно всё равно закрывается стартом события) |
+| Отказ confirmed: порог | нельзя позже `T − late-decline-threshold-minutes` | **порога нет** — отказ до самого старта (окно всё равно закрывается стартом события) |
 | Отказ confirmed: штраф `abandoned_slot` (−100) | если waitlist пуст | **не начисляется никогда** |
 | `confirmedDeclineDeadline` в `EventDetailDto` | `eventDatetime − cutoff` | **= `eventDatetime`** (фронт не хардкодит различие) |
 | Отметка явки организатором | без изменений | **без изменений** — питает «Историю» посещённых и факты клуба |

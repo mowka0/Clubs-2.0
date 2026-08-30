@@ -20,7 +20,7 @@ object RosterPolicy {
      * @param isOpenEvent открытая встреча (🌊) целиком вне репутации — цены нет никогда
      * @param heldSlot участник держал место в составе (waitlisted никого не держит → бесплатно)
      * @param rosterClosed состав закрыт (у 🎟 — после закрытия набора; у ⚡ — всегда)
-     * @param withinDeclineCutoff до встречи осталось ≤ events.stage2-decline-cutoff-minutes (4 ч)
+     * @param withinDeclineCutoff до встречи осталось ≤ events.late-decline-threshold-minutes (4 ч)
      * @param hasReplacement в очереди есть кто-то, кто немедленно займёт освободившееся место
      */
     fun declineKind(

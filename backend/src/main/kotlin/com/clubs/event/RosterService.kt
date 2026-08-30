@@ -8,8 +8,8 @@ import com.clubs.generated.jooq.enums.Stage_2Vote
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -109,11 +109,14 @@ class RosterService(
     /**
      * Проход по встречам, которые закрылись недобором и ждут решения организатора: состав добрался
      * (кто-то проголосовал, пока организатор думал) — закрываем; окно ответа вышло — отменяем за
-     * него. Отдельный проход, а не ветка основного тика: событие остаётся `upcoming`, и основная
-     * выборка его намеренно не видит (иначе DM о недоборе уходил бы каждую минуту).
+     * него. Своего шедулера у прохода нет: его дёргает тот же тик, что закрывает наборы
+     * ([Stage2Service.triggerStage2ForReadyEvents]) — два таймера по одной и той же таблице
+     * событий были бы лишней сущностью.
+     *
+     * REQUIRES_NEW: сбой на одной зависшей встрече не должен откатывать переходы, которые тик
+     * уже сделал в своей транзакции.
      */
-    @Scheduled(fixedDelayString = "\${events.roster-shortfall-poll-ms:60000}")
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun processShortfallEvents() {
         val now = OffsetDateTime.now()
         eventRepository.findEventsInRosterShortfall().forEach { event ->

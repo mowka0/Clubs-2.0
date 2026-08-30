@@ -14,8 +14,8 @@ import java.util.UUID
  */
 class EventMapperTest {
 
-    // 240 мин — дефолт events.stage2-decline-cutoff-minutes; в этих тестах поле не проверяется.
-    private val mapper = EventMapper(declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1080)
+    // 240 мин — дефолт events.late-decline-threshold-minutes; в этих тестах поле не проверяется.
+    private val mapper = EventMapper(lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1080)
     private val now = OffsetDateTime.parse("2026-07-20T12:00:00Z")
 
     private fun event(
