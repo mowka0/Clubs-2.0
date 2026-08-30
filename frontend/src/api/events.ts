@@ -100,7 +100,12 @@ export function castVote(eventId: string, vote: string): Promise<{ eventId: stri
   return apiClient.post(`/api/events/${eventId}/vote`, { vote });
 }
 
-export function getMyVote(eventId: string): Promise<{ vote: string | null }> {
+/**
+ * `vote` — голос (going/maybe/not_going) или финальный статус Этапа 2; `seat` — место в составе
+ * встречи с порогом набора, пока набор идёт («confirmed» / «waitlisted» / null). Разделены
+ * намеренно: на наборе голос «Иду» при полном составе кладёт в очередь, и одно поле это скрыло бы.
+ */
+export function getMyVote(eventId: string): Promise<{ vote: string | null; seat: string | null }> {
   return apiClient.get(`/api/events/${eventId}/my-vote`);
 }
 

@@ -341,4 +341,59 @@ class VoteServiceTest {
             updatedAt = null
         )
     }
+
+    @Test
+    fun `roster event in collecting phase reports the stage-1 vote, not the seat status (V83)`() {
+        // Голос «Иду» у встречи с порогом сразу пишет final_status=confirmed. Если отдать его
+        // наружу, участник выпадет из вкладки «Идут», а его кнопка перестанет подсвечиваться:
+        // состав в этой фазе показывает кольцо, а список и кнопки живут голосами.
+        every { eventRepository.findById(eventId) } returns rosterEvent(EventStatus.upcoming)
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+
+        assertEquals("going", service.getMyVote(eventId, userId).vote)
+    }
+
+    @Test
+    fun `roster event with a closed roster reports the seat status`() {
+        every { eventRepository.findById(eventId) } returns rosterEvent(EventStatus.stage_2)
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+
+        assertEquals("confirmed", service.getMyVote(eventId, userId).vote)
+    }
+
+    private fun rosterEvent(status: EventStatus) = Event(
+        id = eventId,
+        clubId = UUID.randomUUID(),
+        createdBy = UUID.randomUUID(),
+        title = "T",
+        description = null,
+        locationText = "Place",
+        eventDatetime = OffsetDateTime.now().plusDays(1),
+        participantLimit = 4,
+        votingOpensDaysBefore = 14,
+        status = status,
+        stage2Triggered = status != EventStatus.upcoming,
+        attendanceMarked = false,
+        attendanceFinalized = false,
+        photoUrl = null,
+        createdAt = null,
+        updatedAt = null
+    )
+
+    private fun responseWith(stage1: Stage_1Vote?, finalStatus: FinalStatus?) = EventResponse(
+        id = UUID.randomUUID(),
+        eventId = eventId,
+        userId = userId,
+        stage1Vote = stage1,
+        stage1Timestamp = OffsetDateTime.now(),
+        stage2Vote = null,
+        stage2Timestamp = null,
+        finalStatus = finalStatus,
+        attendance = null,
+        attendanceFinalized = false,
+        createdAt = null,
+        updatedAt = null
+    )
 }

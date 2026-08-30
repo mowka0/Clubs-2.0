@@ -298,6 +298,9 @@ export const EventPage: FC = () => {
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
+  // Место в составе, пока идёт набор (V83): голос «Иду» при полном составе кладёт в очередь,
+  // и человек должен это видеть — сам голос об этом не говорит.
+  const mySeat = myVoteQuery.data?.seat ?? null;
   const loading = eventQuery.isPending || myVoteQuery.isPending;
   const voting =
     castVoteMutation.isPending || confirmMutation.isPending || declineMutation.isPending;
@@ -764,17 +767,23 @@ export const EventPage: FC = () => {
     if (!rosterClosed) {
       return (
         <div className="rd-roster-note">
-          <span className="rd-roster-ico" aria-hidden="true">⏳</span>
+          <span className="rd-roster-ico" aria-hidden="true">{mySeat === 'waitlisted' ? '🎫' : '⏳'}</span>
           <span className="rd-roster-txt">
             <b>
-              {rosterShortage > 0
-                ? `Нужно ещё ${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`
-                : 'Состав набран — ждём закрытия набора'}
+              {mySeat === 'waitlisted'
+                // Мест уже нет: голос принят, но человек за чертой — сказать об этом важнее,
+                // чем повторить общий счётчик, который он и так видит в кольце.
+                ? 'Мест уже нет — вы в очереди'
+                : rosterShortage > 0
+                  ? `Нужно ещё ${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`
+                  : 'Состав набран — ждём закрытия набора'}
             </b>
             <span>
-              {event.rosterDeadline
-                ? `Набор закрывается ${formatDeadlineShort(event.rosterDeadline)} — если не наберём, встреча не состоится`
-                : 'Если не наберём состав, встреча не состоится'}
+              {mySeat === 'waitlisted'
+                ? 'Если кто-то передумает до закрытия набора, место перейдёт вам'
+                : event.rosterDeadline
+                  ? `Набор закрывается ${formatDeadlineShort(event.rosterDeadline)} — если не наберём, встреча не состоится`
+                  : 'Если не наберём состав, встреча не состоится'}
             </span>
           </span>
         </div>

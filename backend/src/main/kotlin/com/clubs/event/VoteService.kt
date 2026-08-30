@@ -73,15 +73,32 @@ class VoteService(
     }
 
     fun getMyVote(eventId: UUID, userId: UUID): MyVoteDto {
-        eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
         // После Этапа 2 действующий статус пользователя — final_status (confirmed / waitlisted /
         // declined); до Этапа 2 — голос этапа 1. EventPage завязывает на это единственное поле
         // И кнопки подтверждения/отказа, И бейдж статуса, поэтому подтверждённый пользователь
         // должен прочитать назад "confirmed", а не неизменившийся "going" с этапа 1 — иначе UI
         // никогда не отразит подтверждение/отказ. Тот же приоритет, что в getEventResponders ниже.
-        return MyVoteDto(vote = response?.finalStatus?.literal ?: response?.stage1Vote?.literal)
+        return MyVoteDto(
+            vote = effectiveStatus(event, response?.stage1Vote?.literal, response?.finalStatus?.literal),
+            // Место показываем только пока идёт набор: после закрытия состава его несёт сам vote.
+            seat = if (event.isRosterEvent && event.status == EventStatus.upcoming) {
+                response?.stage2Vote?.literal
+            } else null
+        )
     }
+
+    /**
+     * Действующий статус участника для UI. Обычно это final_status с откатом на голос Этапа 1,
+     * но у встречи с ПОРОГОМ НАБОРА (V83), пока набор идёт, приоритет обратный: голос «Иду» сразу
+     * пишет final_status = confirmed, и если отдать его наружу, человек выпадет из вкладки «Идут»,
+     * а кнопка его голоса перестанет подсвечиваться — состав в этой фазе показывает кольцо, а
+     * список и кнопки живут голосами.
+     */
+    private fun effectiveStatus(event: Event, stage1: String?, finalStatus: String?): String? =
+        if (event.isRosterEvent && event.status == EventStatus.upcoming) stage1 ?: finalStatus
+        else finalStatus ?: stage1
 
     /**
      * Возвращает список откликнувшихся на событие (с данными пользователя + текущим намерением).
@@ -111,7 +128,7 @@ class VoteService(
                 firstName = r.firstName,
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
-                status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
+                status = effectiveStatus(event, r.stage1Vote?.literal, r.finalStatus?.literal) ?: "going",
                 attendance = r.attendance?.literal,
                 disputeNote = if (isManager) r.disputeNote else null,
                 telegramUsername = if (isManager) r.telegramUsername else null

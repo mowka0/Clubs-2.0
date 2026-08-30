@@ -91,11 +91,15 @@ function responder(over: Partial<EventResponderDto> & { userId: string }): Event
 function mockEndpoints(opts: {
   event: EventDetailDto;
   myVote: string | null;
+  seat?: string | null;
   responders?: EventResponderDto[];
 }) {
   server.use(
     http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(opts.event)),
-    http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: opts.myVote })),
+    http.get(
+      `*/api/events/${EVENT_ID}/my-vote`,
+      () => HttpResponse.json({ vote: opts.myVote, seat: opts.seat ?? null }),
+    ),
     http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(opts.responders ?? [])),
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
       id: CLUB_ID,
@@ -142,6 +146,19 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(container.querySelector('.rd-donut-num')).toHaveTextContent('4 / 6');
     expect(screen.getByText('Нужно ещё 2 человека')).toBeInTheDocument();
     expect(screen.getByText(/если не наберём, встреча не состоится/)).toBeInTheDocument();
+  });
+
+  it('на наборе голос при полном составе показывает очередь (V83)', async () => {
+    // Голос «Иду» остаётся голосом — кнопка подсвечена и человек во вкладке «Идут», — но место
+    // ушло в очередь, и полоса статуса обязана сказать об этом прямо.
+    renderEventPageWith({
+      event: rosterEvent({ confirmedCount: 6, goingCount: 7 }),
+      myVote: 'going',
+      seat: 'waitlisted',
+    });
+
+    expect(await screen.findByText('Мест уже нет — вы в очереди')).toBeInTheDocument();
+    expect(screen.getByText(/место перейдёт вам/)).toBeInTheDocument();
   });
 
   it('AC-4: состав собран — заголовок «Состав», кнопки подтверждения нет', async () => {
@@ -251,6 +268,7 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
 function renderEventPageWith(opts: {
   event: EventDetailDto;
   myVote: string | null;
+  seat?: string | null;
   responders?: EventResponderDto[];
 }) {
   mockEndpoints(opts);
