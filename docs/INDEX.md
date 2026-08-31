@@ -193,8 +193,10 @@
 Артефакты обсуждения, **в сверке не участвуют**.
 
 Состояние работ по порогу набора (ветка на staging, env, репутация участников) —
-`docs/backlog/roster-threshold-session-handoff.md`; актуальные тест-кейсы —
-`docs/backlog/roster-threshold-test-cases.md`.
+`docs/backlog/roster-threshold-session-handoff.md`. Тест-кейсы форматов «минимум» / «максимум» —
+`docs/backlog/event-formats-test-cases.md` (там же поведение обоих форматов с точки зрения
+проверяющего). Старый `docs/backlog/roster-threshold-test-cases.md` описывает механику V83 с
+продлением набора и под форматы НЕ переписан.
 
 Дизайн-сессия `docs/design/event-roster-threshold/` — набор состава и цена отказа (решения PO
 2026-08-21, упрощение недобора 2026-08-31 + мокапы). **Реализована** и поглощена перестройкой
