@@ -83,6 +83,7 @@ function responder(over: Partial<EventResponderDto> & { userId: string }): Event
     lastName: null,
     avatarUrl: null,
     status: 'confirmed',
+    seat: null,
     attendance: null,
     ...over,
   } as EventResponderDto;
@@ -171,9 +172,40 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(await screen.findByText(/Состав · 6 \/ 6/)).toBeInTheDocument();
     expect(screen.getByText('состав собран')).toBeInTheDocument();
     expect(screen.getByText('Состав собран — встреча состоится')).toBeInTheDocument();
-    // Подтверждать нечего: место дал голос.
+    // Подтверждать нечего: место дал голос. Отдельной секции «Ваше участие» тоже нет —
+    // статус несут полоса над составом и точка на своём табе (решение PO 2026-08-31).
     expect(screen.queryByRole('button', { name: /Подтвердить участие/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Ваше участие')).toBeInTheDocument();
+    expect(screen.queryByText('Ваше участие')).not.toBeInTheDocument();
+    expect(screen.queryByText('Подтверждение участия')).not.toBeInTheDocument();
+  });
+
+  it('на наборе очередь отделена чертой внутри вкладки «Идут» (PO 2026-08-31)', async () => {
+    renderEventPageWith({
+      event: rosterEvent({ participantLimit: 2, confirmedCount: 2, goingCount: 3, waitlistedCount: 1 }),
+      myVote: 'going',
+      seat: 'confirmed',
+      responders: [
+        responder({ userId: 'c1', firstName: 'Аня', status: 'going', seat: 'confirmed' }),
+        responder({ userId: 'q1', firstName: 'Паша', status: 'going', seat: 'waitlisted' }),
+      ],
+    });
+
+    expect(await screen.findByText('Аня')).toBeInTheDocument();
+    expect(screen.getByText('В очереди на замену')).toBeInTheDocument();
+  });
+
+  it('состав закрыт, но неполный — обещания «встреча состоится» нет', async () => {
+    renderEventPageWith({
+      event: rosterEvent({
+        status: 'stage_2', rosterClosed: true, participantLimit: 2, confirmedCount: 1,
+      }),
+      myVote: 'confirmed',
+      responders: [responder({ userId: VIEWER_ID, firstName: 'Я' })],
+    });
+
+    expect(await screen.findByText('Состав закрыт, но неполный — 1 из 2')).toBeInTheDocument();
+    expect(screen.getByText(/Организатор решит, состоится ли встреча/)).toBeInTheDocument();
+    expect(screen.queryByText(/встреча состоится$/)).not.toBeInTheDocument();
   });
 
   it('AC-9: цена отказа названа ДО открытия диалога и приходит с сервера', async () => {

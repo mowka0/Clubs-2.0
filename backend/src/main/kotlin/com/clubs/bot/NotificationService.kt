@@ -268,6 +268,43 @@ class NotificationService(
         }
     }
 
+    /**
+     * Состав распался после закрытия (V83): кто-то отказался, заменить некем. Продлевать набор
+     * уже поздно — состав объявлен, поэтому кнопок две: позвать молчунов и отменить встречу.
+     * «Провести меньшим составом» здесь не нужна: встреча и так идёт, бездействие = провести.
+     */
+    @Async
+    fun sendRosterBroken(
+        event: Event,
+        organizerTelegramId: Long,
+        confirmedCount: Int,
+        participantLimit: Int,
+        pendingCount: Int
+    ) {
+        val text = "⚠️ Состав стал неполным\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Кто-то отказался, заменить некем: в составе $confirmedCount из $participantLimit. " +
+            "Встреча состоится, если ничего не делать — или отмените её, пока участники не вышли."
+
+        val rows = mutableListOf<InlineKeyboardRow>()
+        if (pendingCount > 0) {
+            rows += InlineKeyboardRow(callbackButton("🔔 Позвать ($pendingCount)", "remind", event.id))
+        }
+        rows += InlineKeyboardRow(callbackButton("Отменить встречу", "cancel", event.id))
+
+        try {
+            telegramClient.execute(
+                SendMessage.builder()
+                    .chatId(organizerTelegramId.toString())
+                    .text(text)
+                    .replyMarkup(InlineKeyboardMarkup(rows))
+                    .build()
+            )
+            log.info("Roster-broken DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
+        } catch (e: Exception) {
+            log.error("Failed to send roster-broken DM for event {}: {}", event.id, e.message, e)
+        }
+    }
+
     private fun callbackButton(text: String, action: String, eventId: UUID): InlineKeyboardButton =
         InlineKeyboardButton.builder()
             .text(text)

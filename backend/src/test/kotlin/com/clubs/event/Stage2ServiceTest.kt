@@ -409,6 +409,41 @@ class Stage2ServiceTest {
     }
 
     @Test
+    fun `decline that drops a closed roster below the threshold calls the organizer (V83)`() {
+        // Порог 2, в составе было двое, замены нет → состав стал неполным. Организатор должен
+        // узнать об этом сам, а не открыв случайно экран встречи.
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 2)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent && it.confirmedCount == 1 })
+        }
+    }
+
+    @Test
+    fun `decline with a replacement keeps the roster full and stays silent`() {
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 2)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.waitlisted).copy(userId = UUID.randomUUID())
+        every { eventResponseRepository.countConfirmed(eventId) } returns 2
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 0) { eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent }) }
+    }
+
+    @Test
     fun `expireUnconfirmedParticipants delegates the sweep to the repository`() {
         every { eventResponseRepository.expireUnconfirmedForStartedEvents(any()) } returns 2
 

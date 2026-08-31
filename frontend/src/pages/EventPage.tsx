@@ -1,4 +1,4 @@
-import { FC, ReactElement, useEffect, useState } from 'react';
+import { FC, Fragment, ReactElement, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/apiClient';
@@ -800,11 +800,28 @@ export const EventPage: FC = () => {
         </div>
       );
     }
+    // Состав закрыт, но после отказов людей стало меньше порога. Обещать «встреча состоится»
+    // здесь нельзя — это решает организатор (правка PO 2026-08-31).
+    if (!rosterFull) {
+      return (
+        <div className="rd-roster-note">
+          <span className="rd-roster-ico" aria-hidden="true">⚠️</span>
+          <span className="rd-roster-txt">
+            <b>Состав закрыт, но неполный — {event.confirmedCount} из {event.participantLimit}</b>
+            <span>
+              {myVote === 'declined'
+                ? 'Вы отказались от места. Организатор решит, состоится ли встреча'
+                : 'Организатор решит, состоится ли встреча меньшим составом'}
+            </span>
+          </span>
+        </div>
+      );
+    }
     return (
       <div className="rd-roster-note rd-ok">
         <span className="rd-roster-ico" aria-hidden="true">✅</span>
         <span className="rd-roster-txt">
-          <b>{rosterFull ? 'Состав собран — встреча состоится' : 'Состав закрыт — встреча состоится'}</b>
+          <b>{myVote === 'declined' ? 'Вы отказались от места' : 'Состав собран — встреча состоится'}</b>
           {/* Полоса объясняет ПРАВИЛО, а точную цену на момент действия называет подпись под
               кнопкой отказа ниже — иначе одна и та же фраза повторялась бы дважды. */}
           {myVote === 'confirmed' && (
@@ -846,7 +863,11 @@ export const EventPage: FC = () => {
 
   // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
   // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
-  const respondersInTab = responders.filter((r) => r.status === responderTab);
+  // Внутри вкладки «Идут» состав идёт выше очереди: черта между ними — единственный способ
+  // показать, кто реально проходит, не заводя отдельную панель (решение PO 2026-08-31).
+  const respondersInTab = responders
+    .filter((r) => r.status === responderTab)
+    .sort((a, b) => Number(a.seat === 'waitlisted') - Number(b.seat === 'waitlisted'));
   const visibleResponders = rosterExpanded
     ? respondersInTab
     : respondersInTab.slice(0, ROSTER_PREVIEW_SIZE);
@@ -1110,6 +1131,9 @@ export const EventPage: FC = () => {
                 onClick={() => { haptic.impact('light'); setResponderTab(tab.key); setRosterExpanded(false); }}
               >
                 {tab.label} ({tabCounts[tab.key]})
+                {/* Точка на своём табе заменяет отдельный бейдж «ваш голос»: искать себя
+                    в списке не нужно, а лишней строки на экране не появляется. */}
+                {myVote === tab.key && <span className="rd-seg-you" aria-hidden="true">•</span>}
               </button>
             ))}
           </div>
@@ -1118,18 +1142,30 @@ export const EventPage: FC = () => {
               <div className="rd-resp-empty">Здесь пока пусто.</div>
             ) : (
               <>
-                {visibleResponders.map((r) => {
+                {visibleResponders.map((r, i) => {
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                  // Голос «Иду» при полном составе кладёт в очередь. Отдельной панели для неё на
+                  // наборе нет (лишний экран), поэтому черта проходит внутри списка: выше — те,
+                  // кто проходит, ниже — очередь на замену.
+                  const queueStartsHere =
+                    isRosterEvent && r.seat === 'waitlisted' && visibleResponders[i - 1]?.seat !== 'waitlisted';
                   return (
-                    <div className="rd-resp-row" key={r.userId}>
-                      <div className="rd-voter">
-                        <span className="rd-av">
-                          {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
-                        </span>
-                        <span className="rd-vn">{name}</span>
-                        <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                    <Fragment key={r.userId}>
+                      {queueStartsHere && (
+                        <div className="rd-resp-split">
+                          В очереди на замену<span>·&nbsp;{event.waitlistedCount}</span>
+                        </div>
+                      )}
+                      <div className={`rd-resp-row${r.seat === 'waitlisted' ? ' rd-queued' : ''}`}>
+                        <div className="rd-voter">
+                          <span className="rd-av">
+                            {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                          </span>
+                          <span className="rd-vn">{name}</span>
+                          <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                        </div>
                       </div>
-                    </div>
+                    </Fragment>
                   );
                 })}
                 {respondersInTab.length > visibleResponders.length && (
@@ -1164,6 +1200,7 @@ export const EventPage: FC = () => {
                 onClick={() => { haptic.impact('light'); setStage2Tab('confirmed'); setRosterExpanded(false); }}
               >
                 Кто идёт ({comingList.length})
+                {myVote === 'confirmed' && <span className="rd-seg-you" aria-hidden="true">•</span>}
               </button>
               {showWaitlistTab && (
                 <button
@@ -1173,6 +1210,7 @@ export const EventPage: FC = () => {
                   onClick={() => { haptic.impact('light'); setStage2Tab('waitlist'); setRosterExpanded(false); }}
                 >
                   В очереди ({waitlist.length})
+                  {myVote === 'waitlisted' && <span className="rd-seg-you" aria-hidden="true">•</span>}
                 </button>
               )}
               {showStage2Tabs && (
@@ -1576,18 +1614,22 @@ export const EventPage: FC = () => {
       {/* Этап 2 — подтверждение участия */}
       {showStage2 && (
         <>
-          {/* У встречи с порогом набора подтверждать нечего: состав уже закрыт голосами (V83). */}
-          <div className="rd-section-sub-h">{isRosterEvent ? 'Ваше участие' : 'Подтверждение участия'}</div>
-          <div style={{ marginBottom: 10 }}>
-            {myVote === 'confirmed' && (
-              <span className="rd-badge rd-going">{isRosterEvent ? 'Вы в составе' : 'Подтверждён'}</span>
-            )}
-            {myVote === 'waitlisted' && <span className="rd-badge rd-warn">В очереди</span>}
-            {myVote === 'declined' && <span className="rd-badge rd-decline">Отказался</span>}
-            {myVote && !['confirmed', 'waitlisted', 'declined'].includes(myVote) && (
-              <span className="rd-badge rd-warn">Ваш статус: {VOTE_LABELS[myVote] ?? myVote}</span>
-            )}
-          </div>
+          {/* У встречи с порогом набора своего заголовка и бейджа статуса нет (решение PO
+              2026-08-31): подтверждать нечего, а «где я» уже сказано полосой над составом и
+              точкой на своём табе — третья копия той же мысли только занимала экран. */}
+          {!isRosterEvent && (
+            <>
+              <div className="rd-section-sub-h">Подтверждение участия</div>
+              <div style={{ marginBottom: 10 }}>
+                {myVote === 'confirmed' && <span className="rd-badge rd-going">Подтверждён</span>}
+                {myVote === 'waitlisted' && <span className="rd-badge rd-warn">В очереди</span>}
+                {myVote === 'declined' && <span className="rd-badge rd-decline">Отказался</span>}
+                {myVote && !['confirmed', 'waitlisted', 'declined'].includes(myVote) && (
+                  <span className="rd-badge rd-warn">Ваш статус: {VOTE_LABELS[myVote] ?? myVote}</span>
+                )}
+              </div>
+            </>
+          )}
           {actionError && <div className="rd-error">{actionError}</div>}
           {/* Этап 2 открыт всем участникам клуба: «Подтвердить» показываем всем, кроме тех, кто уже
               в терминальном статусе Этапа 2 (подтверждён / лист ожидания / отказался). «Отказаться» —

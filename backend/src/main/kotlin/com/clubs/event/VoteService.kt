@@ -83,9 +83,7 @@ class VoteService(
         return MyVoteDto(
             vote = effectiveStatus(event, response?.stage1Vote?.literal, response?.finalStatus?.literal),
             // Место показываем только пока идёт набор: после закрытия состава его несёт сам vote.
-            seat = if (event.isRosterEvent && event.status == EventStatus.upcoming) {
-                response?.stage2Vote?.literal
-            } else null
+            seat = if (isCollectingRoster(event)) response?.stage2Vote?.literal else null
         )
     }
 
@@ -97,8 +95,12 @@ class VoteService(
      * список и кнопки живут голосами.
      */
     private fun effectiveStatus(event: Event, stage1: String?, finalStatus: String?): String? =
-        if (event.isRosterEvent && event.status == EventStatus.upcoming) stage1 ?: finalStatus
+        if (isCollectingRoster(event)) stage1 ?: finalStatus
         else finalStatus ?: stage1
+
+    /** Встреча с порогом, у которой набор ещё идёт: голос и место значат разное. */
+    private fun isCollectingRoster(event: Event): Boolean =
+        event.isRosterEvent && event.status == EventStatus.upcoming
 
     /**
      * Возвращает список откликнувшихся на событие (с данными пользователя + текущим намерением).
@@ -129,6 +131,7 @@ class VoteService(
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
                 status = effectiveStatus(event, r.stage1Vote?.literal, r.finalStatus?.literal) ?: "going",
+                seat = if (isCollectingRoster(event)) r.finalStatus?.literal else null,
                 attendance = r.attendance?.literal,
                 disputeNote = if (isManager) r.disputeNote else null,
                 telegramUsername = if (isManager) r.telegramUsername else null

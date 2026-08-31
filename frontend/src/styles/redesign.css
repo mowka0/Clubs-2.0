@@ -1646,6 +1646,21 @@
 .rd-roster-txt span { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
 /* В табе очереди номер стоит внутри общей строки ростера, а не в своей .rd-wl-row. */
 .rd-resp-row .rd-wl-pos { margin-right: 8px; }
+/* Черта внутри вкладки «Идут» на наборе: выше — кто проходит, ниже — очередь на замену.
+   Отдельной панели для очереди на этой фазе нет, поэтому граница живёт в самом списке. */
+.rd-resp-split {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 8px 2px; padding-top: 8px;
+  border-top: 1px dashed var(--hairline-2);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.rd-resp-split span { letter-spacing: 0; font-weight: 600; }
+/* Строки очереди приглушены — место у них ещё не своё. */
+.rd-resp-row.rd-queued .rd-vn { color: var(--text-dim); }
+/* Точка «вы здесь» на своём табе: маркер вместо отдельной строки статуса. */
+.rd-seg-you { margin-left: 5px; color: var(--accent); font-size: 15px; line-height: 1; }
+.rd-seg-btn.rd-active .rd-seg-you { color: inherit; }
 
 /* Лист ожидания — вертикальный нумерованный список в порядке приоритета продвижения. */
 .rd-wl-panel { padding: 4px; margin-bottom: 18px; }

@@ -235,6 +235,13 @@ class Stage2Service(
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
+        // Состав закрыт, но этот отказ увёл его ниже порога и заменить некем: зовём организатора
+        // решать. Строгое равенство — сигнал ровно на пересечении черты: следующие отказы на этой
+        // же встрече повторных DM не порождают.
+        val limit = event.participantLimit
+        if (event.isRosterEvent && firstWaitlisted == null && limit != null && count == limit - 1) {
+            eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
+        }
         val penalty = declineKind?.let { -ReputationPolicy.pointsFor(it) } ?: 0
         return ConfirmResponseDto(eventId, "declined", count, event.participantLimit, penalty)
     }

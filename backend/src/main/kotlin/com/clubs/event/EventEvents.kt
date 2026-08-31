@@ -80,3 +80,13 @@ data class RosterClosedEvent(val event: Event, val confirmedCount: Int)
  * Участникам в этот момент не приходит ничего: встреча ещё может состояться.
  */
 data class RosterShortfallEvent(val event: Event, val confirmedCount: Int, val participantLimit: Int)
+
+/**
+ * Состав уже был закрыт, но чей-то отказ уронил его НИЖЕ порога и замены в очереди не нашлось
+ * (V83). Организатору уходит DM: решать, проводить ли встречу меньшим составом или отменить —
+ * его дело, а без уведомления он узнал бы об этом только случайно, открыв экран.
+ *
+ * Публикуется РОВНО на пересечении порога вниз (был полный состав → стал неполный), поэтому
+ * каждый следующий отказ на той же встрече DM не плодит.
+ */
+data class RosterBrokenEvent(val event: Event, val confirmedCount: Int, val participantLimit: Int)

@@ -680,6 +680,12 @@ export interface EventResponderDto {
   avatarUrl: string | null;
   /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
+  /**
+   * Место в составе, пока идёт набор (V83): «confirmed» — проходит, «waitlisted» — за чертой,
+   * null — вне набора или формат без порога. На наборе `status` несёт голос, поэтому «кто
+   * проходит» — только здесь; после закрытия состава место несёт сам `status`.
+   */
+  seat?: string | null;
   /** Отметка посещения после события, как только организатор её проставил; null до отметки. */
   attendance: 'attended' | 'absent' | 'disputed' | null;
   /** Необязательная заметка участника при оспаривании (видна организатору). */
