@@ -269,9 +269,10 @@ class NotificationService(
     }
 
     /**
-     * Состав распался после закрытия (V83): кто-то отказался, заменить некем. Продлевать набор
-     * уже поздно — состав объявлен, поэтому кнопок две: позвать молчунов и отменить встречу.
-     * «Провести меньшим составом» здесь не нужна: встреча и так идёт, бездействие = провести.
+     * Состав распался после закрытия (V83): кто-то отказался, заменить некем. Это УВЕДОМЛЕНИЕ, а не
+     * развилка: встреча идёт своим чередом, бездействие = провести меньшим составом. Поэтому
+     * необратимых кнопок здесь нет — отмена живёт на странице встречи, где её нельзя нажать
+     * случайно (правка PO 2026-08-31). Остаются переход к встрече и безопасное «позвать».
      */
     @Async
     fun sendRosterBroken(
@@ -283,13 +284,12 @@ class NotificationService(
     ) {
         val text = "⚠️ Состав стал неполным\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
             "Кто-то отказался, заменить некем: в составе $confirmedCount из $participantLimit. " +
-            "Встреча состоится, если ничего не делать — или отмените её, пока участники не вышли."
+            "Встреча состоится, если ничего не делать. Решить иначе можно на странице встречи."
 
-        val rows = mutableListOf<InlineKeyboardRow>()
+        val rows = mutableListOf(InlineKeyboardRow(webAppButton("Открыть встречу", "/events/${event.id}")))
         if (pendingCount > 0) {
             rows += InlineKeyboardRow(callbackButton("🔔 Позвать ($pendingCount)", "remind", event.id))
         }
-        rows += InlineKeyboardRow(callbackButton("Отменить встречу", "cancel", event.id))
 
         try {
             telegramClient.execute(
@@ -304,6 +304,13 @@ class NotificationService(
             log.error("Failed to send roster-broken DM for event {}: {}", event.id, e.message, e)
         }
     }
+
+    /** Кнопка-переход в Mini App на конкретный экран — безопасная альтернатива необратимым действиям. */
+    private fun webAppButton(text: String, webAppPath: String): InlineKeyboardButton =
+        InlineKeyboardButton.builder()
+            .text(text)
+            .webApp(WebAppInfo("$webAppBaseUrl$webAppPath"))
+            .build()
 
     private fun callbackButton(text: String, action: String, eventId: UUID): InlineKeyboardButton =
         InlineKeyboardButton.builder()
