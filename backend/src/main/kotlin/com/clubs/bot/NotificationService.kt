@@ -221,9 +221,11 @@ class NotificationService(
     }
 
     /**
-     * Состав НЕ набрался (V83): решение остаётся за организатором, но с дедлайном. Уходит только
-     * ему — участникам в этот момент ничего не пишем, встреча ещё может состояться. Кнопки —
-     * callback'и с префиксом `roster:`, их разбирает [RosterBotService].
+     * Состав НЕ набрался к дедлайну (V83, упрощение PO 2026-08-31). Набор при этом продолжается —
+     * это уведомление, а не развилка с таймером: встреча состоится в том составе, который
+     * соберётся, а решение отменить её живёт на странице встречи, где его нельзя нажать случайно.
+     * Уходит только организатору и ровно один раз (гард в `markRosterShortfall`) — участникам в
+     * этот момент писать не о чем.
      */
     @Async
     fun sendRosterShortfall(
@@ -231,92 +233,47 @@ class NotificationService(
         organizerTelegramId: Long,
         confirmedCount: Int,
         participantLimit: Int,
-        pendingCount: Int,
-        autoCancelAt: java.time.OffsetDateTime
+        pendingCount: Int
     ) {
         val pendingLine = if (pendingCount > 0) {
             "\nЕщё $pendingCount ${plural(pendingCount, "участник", "участника", "участников")} " +
                 "не ${plural(pendingCount, "ответил", "ответили", "ответили")} — им можно напомнить."
         } else ""
-        val text = "⏳ Состав не набрался\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+        val text = "⏳ Состав пока не набрался\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
             "В составе $confirmedCount из $participantLimit.$pendingLine\n\n" +
-            "Если не ответить до ${autoCancelAt.format(fmt)}, встреча отменится автоматически, " +
-            "и все получат уведомление."
+            "Набор продолжается: места можно занять до начала встречи. Если состав так и не " +
+            "соберётся, встреча состоится в неполном составе — или отмените её на странице."
 
-        val rows = mutableListOf<InlineKeyboardRow>()
-        if (pendingCount > 0) {
-            rows += InlineKeyboardRow(callbackButton("🔔 Напомнить ($pendingCount)", "remind", event.id))
-        }
-        rows += InlineKeyboardRow(
-            callbackButton("+6 часов", "extend6", event.id),
-            callbackButton("+12 часов", "extend12", event.id)
+        sendDm(
+            organizerTelegramId.toString(), text,
+            webAppPath = "/events/${event.id}", buttonText = "Открыть встречу"
         )
-        rows += InlineKeyboardRow(callbackButton("Провести меньшим составом", "proceed", event.id))
-        rows += InlineKeyboardRow(callbackButton("Отменить встречу", "cancel", event.id))
-
-        try {
-            telegramClient.execute(
-                SendMessage.builder()
-                    .chatId(organizerTelegramId.toString())
-                    .text(text)
-                    .replyMarkup(InlineKeyboardMarkup(rows))
-                    .build()
-            )
-            log.info("Roster-shortfall DM sent: eventId={} organizer={}", event.id, organizerTelegramId)
-        } catch (e: Exception) {
-            log.error("Failed to send roster-shortfall DM for event {}: {}", event.id, e.message, e)
-        }
+        log.info("Roster-shortfall DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
     }
 
     /**
      * Состав распался после закрытия (V83): кто-то отказался, заменить некем. Это УВЕДОМЛЕНИЕ, а не
      * развилка: встреча идёт своим чередом, бездействие = провести меньшим составом. Поэтому
      * необратимых кнопок здесь нет — отмена живёт на странице встречи, где её нельзя нажать
-     * случайно (правка PO 2026-08-31). Остаются переход к встрече и безопасное «позвать».
+     * случайно (правка PO 2026-08-31). Кнопка одна — переход к встрече.
      */
     @Async
     fun sendRosterBroken(
         event: Event,
         organizerTelegramId: Long,
         confirmedCount: Int,
-        participantLimit: Int,
-        pendingCount: Int
+        participantLimit: Int
     ) {
         val text = "⚠️ Состав стал неполным\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
             "Кто-то отказался, заменить некем: в составе $confirmedCount из $participantLimit. " +
             "Встреча состоится, если ничего не делать. Решить иначе можно на странице встречи."
 
-        val rows = mutableListOf(InlineKeyboardRow(webAppButton("Открыть встречу", "/events/${event.id}")))
-        if (pendingCount > 0) {
-            rows += InlineKeyboardRow(callbackButton("🔔 Позвать ($pendingCount)", "remind", event.id))
-        }
-
-        try {
-            telegramClient.execute(
-                SendMessage.builder()
-                    .chatId(organizerTelegramId.toString())
-                    .text(text)
-                    .replyMarkup(InlineKeyboardMarkup(rows))
-                    .build()
-            )
-            log.info("Roster-broken DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
-        } catch (e: Exception) {
-            log.error("Failed to send roster-broken DM for event {}: {}", event.id, e.message, e)
-        }
+        sendDm(
+            organizerTelegramId.toString(), text,
+            webAppPath = "/events/${event.id}", buttonText = "Открыть встречу"
+        )
+        log.info("Roster-broken DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
     }
-
-    /** Кнопка-переход в Mini App на конкретный экран — безопасная альтернатива необратимым действиям. */
-    private fun webAppButton(text: String, webAppPath: String): InlineKeyboardButton =
-        InlineKeyboardButton.builder()
-            .text(text)
-            .webApp(WebAppInfo("$webAppBaseUrl$webAppPath"))
-            .build()
-
-    private fun callbackButton(text: String, action: String, eventId: UUID): InlineKeyboardButton =
-        InlineKeyboardButton.builder()
-            .text(text)
-            .callbackData("${RosterBotService.CALLBACK_PREFIX}$action:$eventId")
-            .build()
 
     /** Русская форма числительного для «N участников не ответили». */
     private fun plural(n: Int, one: String, few: String, many: String): String {

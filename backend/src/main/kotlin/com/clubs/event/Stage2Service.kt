@@ -56,10 +56,6 @@ class Stage2Service(
                 log.error("Failed to trigger Stage 2 for event ${event.id}", e)
             }
         }
-        // Тем же тиком ведём встречи, зависшие в недоборе (V83): добрался состав — закрываем,
-        // вышло время организатора — отменяем. Отдельный таймер по той же таблице событий был бы
-        // лишней сущностью; свою транзакцию проход открывает сам.
-        rosterService.processShortfallEvents()
     }
 
     private fun triggerStage2(event: Event) {

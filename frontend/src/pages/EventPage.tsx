@@ -753,13 +753,15 @@ export const EventPage: FC = () => {
    */
   const rosterStatusNote = (() => {
     if (!isRosterEvent || isCancelled || eventHappened) return null;
+    // Срок набора прошёл, а порога нет. Набор при этом НЕ закрывается (решение PO 2026-08-31):
+    // места остаются открытыми до самой встречи, и состав закроется сам, как только наберём.
     if (event.rosterShortfall) {
       return (
         <div className="rd-roster-note">
           <span className="rd-roster-ico" aria-hidden="true">⏳</span>
           <span className="rd-roster-txt">
-            <b>Состав не набрался</b>
-            <span>Организатор решает: продлить набор, провести меньшим составом или отменить встречу</span>
+            <b>Пока {event.confirmedCount} из {event.participantLimit} — набор продолжается</b>
+            <span>Срок набора прошёл, но место ещё можно занять: состав закроется, как только наберём</span>
           </span>
         </div>
       );

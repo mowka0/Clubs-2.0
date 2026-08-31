@@ -1,36 +1,31 @@
 package com.clubs.event
 
-import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
  * Набор состава формата «🎟 Встреча с местами» (docs/modules/event-roster-threshold.md):
- * голос кладёт в состав или очередь, дедлайн закрывает состав либо фиксирует недобор,
- * а решения организатора двигают тот же интервал `stage2_lead_minutes`.
+ * голос кладёт в состав или очередь; дедлайн закрывает состав, если порог взят, и всего лишь
+ * сообщает организатору о недоборе, если нет — набор при этом продолжается.
  */
 class RosterServiceTest {
 
     private val eventRepository = mockk<EventRepository>(relaxed = true)
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
-    private val eventService = mockk<EventService>(relaxed = true)
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     private val service = RosterService(
-        eventRepository, eventResponseRepository, eventService, eventPublisher,
-        defaultLeadMinutes = 1080, shortfallResponseMinutes = 360, minLeadMinutes = 120
+        eventRepository, eventResponseRepository, eventPublisher, defaultLeadMinutes = 1080
     )
 
     private val eventId = UUID.randomUUID()
@@ -158,110 +153,65 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `не набрали — недобор зафиксирован, статус остаётся upcoming`() {
+    fun `не набрали — состав НЕ закрывается, организатору уходит DM`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 4
+        every { eventRepository.markRosterShortfall(eventId, any()) } returns 1
         val target = event(participantLimit = 6)
 
         assertTrue(service.handleRosterDeadline(target))
 
         verify(exactly = 1) { eventRepository.markRosterShortfall(eventId, any()) }
         verify(exactly = 1) { eventPublisher.publishEvent(RosterShortfallEvent(target, 4, 6)) }
-        // Набор продолжается, пока организатор решает: перевода в stage_2 быть не должно.
+        // Набор продолжается до самой встречи: перевода в stage_2 быть не должно.
         verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+    }
+
+    @Test
+    fun `повторный тик по той же встрече второго DM не шлёт`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 4
+        // Гард `roster_shortfall_at IS NULL`: отметка уже стоит, апдейт трогает ноль строк.
+        every { eventRepository.markRosterShortfall(eventId, any()) } returns 0
+        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now().minusMinutes(30))
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterShortfallEvent>()) }
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+    }
+
+    @Test
+    fun `добрали позже дедлайна — состав закрывается тем же тиком`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 6
+        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now().minusHours(2))
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
+        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 6)) }
+    }
+
+    @Test
+    fun `встреча началась неполной — состав замораживается молча`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 4
+        val target = event(
+            participantLimit = 6,
+            eventDatetime = OffsetDateTime.now().minusMinutes(1),
+            rosterShortfallAt = OffsetDateTime.now().minusHours(3)
+        )
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        // Состав зафиксирован (иначе отметка явки читала бы пустой список), но «состав собран»
+        // посреди встречи никому не уходит.
+        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterClosedEvent>()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterShortfallEvent>()) }
     }
 
     @Test
     fun `срочная встреча идёт мимо набора`() {
         assertEquals(false, service.handleRosterDeadline(event(isUrgent = true)))
         assertEquals(false, service.handleRosterDeadline(event(participantLimit = null)))
-    }
-
-    // ---- недобор: добор, автоотмена, решения организатора ----
-
-    @Test
-    fun `добрали, пока организатор думал — состав закрывается без отмены`() {
-        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now().minusMinutes(10))
-        every { eventRepository.findEventsInRosterShortfall() } returns listOf(target)
-        every { eventResponseRepository.countConfirmed(eventId) } returns 6
-
-        service.processShortfallEvents()
-
-        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
-    }
-
-    @Test
-    fun `организатор промолчал дольше окна — встреча отменяется системой`() {
-        val target = event(
-            participantLimit = 6,
-            rosterShortfallAt = OffsetDateTime.now().minusMinutes(361)
-        )
-        every { eventRepository.findEventsInRosterShortfall() } returns listOf(target)
-        every { eventResponseRepository.countConfirmed(eventId) } returns 4
-
-        service.processShortfallEvents()
-
-        verify(exactly = 1) { eventService.cancelBySystem(target, "Не набрался состав") }
-    }
-
-    @Test
-    fun `окно ответа не длиннее чем «за 2 часа до встречи»`() {
-        // Недобор зафиксирован только что, но до встречи всего 3 часа: ждать полные 6 часов
-        // нельзя — участники должны узнать об отмене, пока не вышли из дома.
-        val shortfallAt = OffsetDateTime.now()
-        val target = event(eventDatetime = shortfallAt.plusHours(3), rosterShortfallAt = shortfallAt)
-
-        val deadline = service.autoCancelAt(target)
-
-        assertEquals(target.eventDatetime.minusMinutes(120), deadline)
-    }
-
-    @Test
-    fun `продление сдвигает интервал набора и снимает отметку недобора`() {
-        val target = event(
-            eventDatetime = OffsetDateTime.now().plusHours(24),
-            rosterShortfallAt = OffsetDateTime.now()
-        )
-        every { eventRepository.extendRosterDeadline(any(), any()) } returns 1
-        val lead = slot<Int>()
-
-        service.extendRoster(target, 6)
-
-        verify(exactly = 1) { eventRepository.extendRosterDeadline(eventId, capture(lead)) }
-        // Новый дедлайн = сейчас + 6ч, то есть за ~18ч до встречи.
-        assertTrue(lead.captured in 1075..1085, "lead=${lead.captured}")
-    }
-
-    @Test
-    fun `продлить ближе двух часов до встречи нельзя`() {
-        val target = event(
-            eventDatetime = OffsetDateTime.now().plusHours(4),
-            rosterShortfallAt = OffsetDateTime.now()
-        )
-
-        val ex = assertFailsWith<ValidationException> { service.extendRoster(target, 6) }
-
-        assertTrue(ex.message!!.contains("мало времени"))
-        verify(exactly = 0) { eventRepository.extendRosterDeadline(any(), any()) }
-    }
-
-    @Test
-    fun `решения организатора недоступны, когда набор уже закрыт`() {
-        val closed = event(status = EventStatus.stage_2)
-
-        assertFailsWith<ValidationException> { service.extendRoster(closed, 6) }
-        assertFailsWith<ValidationException> { service.proceedWithPartialRoster(closed) }
-    }
-
-    @Test
-    fun `«провести меньшим составом» закрывает набор при недоборе`() {
-        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now())
-        every { eventResponseRepository.countConfirmed(eventId) } returns 4
-
-        service.proceedWithPartialRoster(target)
-
-        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 4)) }
     }
 
     @Test

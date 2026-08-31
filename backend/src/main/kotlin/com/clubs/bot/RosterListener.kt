@@ -3,7 +3,6 @@ package com.clubs.bot
 import com.clubs.event.EventRepository
 import com.clubs.event.RosterBrokenEvent
 import com.clubs.event.RosterClosedEvent
-import com.clubs.event.RosterService
 import com.clubs.event.RosterShortfallEvent
 import java.util.UUID
 import org.slf4j.LoggerFactory
@@ -19,8 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener
 @Component
 class RosterListener(
     private val notificationService: NotificationService,
-    private val eventRepository: EventRepository,
-    private val rosterService: RosterService
+    private val eventRepository: EventRepository
 ) {
 
     private val log = LoggerFactory.getLogger(RosterListener::class.java)
@@ -42,31 +40,29 @@ class RosterListener(
             event = event.event,
             organizerTelegramId = organizerTelegramId,
             confirmedCount = event.confirmedCount,
-            participantLimit = event.participantLimit,
-            pendingCount = eventRepository.getVoteCounts(event.event.id)["noAnswer"] ?: 0
+            participantLimit = event.participantLimit
         )
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onRosterShortfall(event: RosterShortfallEvent) {
         // Ведёт встречу тот, кто её создал (в клубе с со-организаторами это не обязательно
-        // владелец), поэтому решать судьбу набора зовём его. Владелец клуба — фолбэк на случай,
+        // владелец), поэтому о недоборе сообщаем ему. Владелец клуба — фолбэк на случай,
         // когда у создателя нет telegram id.
         val organizerTelegramId = organizerOf(event.event.id)
         if (organizerTelegramId == null) {
             log.warn("Roster-shortfall DM SKIPPED — no organizer telegram id for event {}", event.event.id)
             return
         }
-        // Счёт «кому можно напомнить» берём из того же источника, что и сама рассылка напоминаний,
-        // — иначе число на кнопке разойдётся с числом реально отправленных DM.
+        // Счёт «кому можно напомнить» берём из того же источника, что и сама рассылка
+        // напоминаний, — иначе число в тексте разойдётся с тем, что организатор увидит в приложении.
         val pendingCount = eventRepository.getVoteCounts(event.event.id)["noAnswer"] ?: 0
         notificationService.sendRosterShortfall(
             event = event.event,
             organizerTelegramId = organizerTelegramId,
             confirmedCount = event.confirmedCount,
             participantLimit = event.participantLimit,
-            pendingCount = pendingCount,
-            autoCancelAt = rosterService.autoCancelAt(event.event)
+            pendingCount = pendingCount
         )
     }
 

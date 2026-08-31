@@ -538,8 +538,6 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.finalize-poll-ms` | `ATTENDANCE_FINALIZE_POLL_MS` | `3600000` (1ч) | Период `AttendanceService.finalizeAttendance` |
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
 | `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1080` (18ч, PO 2026-07-23; ранее 24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2`; у формата 🎟 это дедлайн НАБОРА состава (V83) — **дефолт** для событий без своего `stage2_lead_minutes` (V67) |
-| `events.roster-shortfall-response-minutes` | `ROSTER_SHORTFALL_RESPONSE_MINUTES` | `360` (6ч) | Сколько ждём решения организатора при недоборе, прежде чем отменить встречу автоматически (V83) |
-| `events.roster-deadline-min-lead-minutes` | `ROSTER_DEADLINE_MIN_LEAD_MINUTES` | `120` (2ч) | Насколько близко к встрече разрешено двигать дедлайн набора продлением «+6/+12 часов» (V83) |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
 | `events.late-decline-threshold-minutes` | `LATE_DECLINE_THRESHOLD_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |

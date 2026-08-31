@@ -275,14 +275,16 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(screen.getByText('Сейчас отказ стоит 150 очков репутации')).toBeInTheDocument();
   });
 
-  it('AC-5: недобор — экран говорит, что решает организатор', async () => {
+  it('AC-5: недобор — набор продолжается, места ещё открыты', async () => {
     renderEventPageWith({
       event: rosterEvent({ rosterShortfall: true, confirmedCount: 4 }),
       myVote: 'going',
     });
 
-    expect(await screen.findByText('Состав не набрался')).toBeInTheDocument();
-    expect(screen.getByText(/Организатор решает/)).toBeInTheDocument();
+    expect(await screen.findByText('Пока 4 из 6 — набор продолжается')).toBeInTheDocument();
+    expect(screen.getByText(/место ещё можно занять/)).toBeInTheDocument();
+    // Блок голосования никуда не делся: состав добирается ровно им.
+    expect(screen.getByText(/Набор · 4 \/ 6/)).toBeInTheDocument();
   });
 
   it('AC-12: у срочной встречи механика подтверждения не тронута', async () => {

@@ -142,14 +142,6 @@ events:
   # и сохранить короткое окно голосования Этапа 1 перед переключением — так двухэтапный
   # флоу тестируется сквозняком. Env: STAGE2_TRIGGER_MINUTES_BEFORE
   stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1080}
-  # Сколько ждём решения организатора, когда набор состава закрылся НЕДОБОРОМ (V83), прежде чем
-  # отменить встречу за него. Дефолт 360 = 6ч; фактический дедлайн не позже чем
-  # roster-deadline-min-lead-minutes до встречи. Env: ROSTER_SHORTFALL_RESPONSE_MINUTES
-  roster-shortfall-response-minutes: ${ROSTER_SHORTFALL_RESPONSE_MINUTES:360}
-  # Насколько близко к встрече разрешено двигать дедлайн набора продлением «+6/+12 часов»
-  # из DM организатору. Дефолт 120 = 2ч: состав, объявленный за час до выхода, никому не помогает.
-  # Env: ROSTER_DEADLINE_MIN_LEAD_MINUTES
-  roster-deadline-min-lead-minutes: ${ROSTER_DEADLINE_MIN_LEAD_MINUTES:120}
   # Период опроса Stage2Service.triggerStage2ForReadyEvents (мс). Окно подтверждения =
   # stage2-trigger-minutes-before МИНУС фаза шедулера, поэтому тик должен быть сильно мельче
   # lead-времени триггера — старый захардкоженный тик 5мин съедал короткий lead целиком

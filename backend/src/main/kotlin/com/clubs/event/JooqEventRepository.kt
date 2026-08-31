@@ -350,17 +350,6 @@ class JooqEventRepository(
                             DSL.value(now)
                         )
                     )
-                    // Недобор уже зафиксирован → событие ведёт отдельный проход (V83).
-                    .and(EVENTS.ROSTER_SHORTFALL_AT.isNull)
-            )
-            .fetch()
-            .map(mapper::toDomain)
-
-    override fun findEventsInRosterShortfall(): List<Event> =
-        dsl.selectFrom(EVENTS)
-            .where(
-                EVENTS.STATUS.eq(EventStatus.upcoming)
-                    .and(EVENTS.ROSTER_SHORTFALL_AT.isNotNull)
             )
             .fetch()
             .map(mapper::toDomain)
@@ -370,16 +359,6 @@ class JooqEventRepository(
             .set(EVENTS.ROSTER_SHORTFALL_AT, at)
             .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
             .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_SHORTFALL_AT.isNull))
-            .execute()
-
-    override fun extendRosterDeadline(id: UUID, leadMinutes: Int): Int =
-        dsl.update(EVENTS)
-            .set(EVENTS.STAGE2_LEAD_MINUTES, leadMinutes)
-            .setNull(EVENTS.ROSTER_SHORTFALL_AT)
-            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
-            // Гард статуса: продлевать можно только пока набор идёт — если состав успел
-            // закрыться (или встречу отменили), кнопка из старого DM не должна ничего менять.
-            .where(EVENTS.ID.eq(id).and(EVENTS.STATUS.eq(EventStatus.upcoming)))
             .execute()
 
     /**
