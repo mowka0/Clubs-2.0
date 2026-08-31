@@ -536,8 +536,8 @@ class ClubIntegrationTest {
     private fun insertRecentEvent(clubId: UUID) {
         dsl.execute(
             "INSERT INTO events (club_id, created_by, title, location_text, event_datetime, " +
-                "participant_limit, status) VALUES ('$clubId', '$testUserId', 'Event', 'Somewhere', " +
-                "NOW() - INTERVAL '1 day', 10, 'completed')"
+                "participant_limit, limit_kind, status) VALUES ('$clubId', '$testUserId', 'Event', 'Somewhere', " +
+                "NOW() - INTERVAL '1 day', 10, 'max', 'completed')"
         )
     }
 

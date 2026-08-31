@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.tables
 
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.indexes.IDX_EVENTS_CLUB_ID_DATETIME
 import com.clubs.generated.jooq.indexes.IDX_EVENTS_REPUTATION_PENDING
 import com.clubs.generated.jooq.indexes.IDX_EVENTS_STATUS
@@ -137,15 +138,14 @@ open class Events(
     val EVENT_DATETIME: TableField<EventsRecord, OffsetDateTime?> = createField(DSL.name("event_datetime"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Дата и время начала события.")
 
     /**
-     * The column <code>public.events.participant_limit</code>. Максимум
-     * подтверждённых участников (Этап 2). NULL = открытая встреча: гонка за
-     * места и лист ожидания не действуют — каждый подтвердивший сразу
-     * confirmed; штраф abandoned_slot и порог отказа не применяются; формат
-     * ЦЕЛИКОМ вне репутации (ни начислений, ни списаний — конвейер пропускает
-     * событие), отметка явки питает только историю посещений и статистику
-     * клуба.
+     * The column <code>public.events.participant_limit</code>. Число
+     * участников, смысл которого задаёт limit_kind (V85): при min — сколько
+     * человек НУЖНО (наберём — встреча состоится, нет — отменяется в момент
+     * дедлайна набора; состав может вырасти выше этого числа), при max —
+     * сколько ВСЕГО МЕСТ (сверх лимита — очередь на замену). NULL = формат
+     * «сколько придёт»: без лимита, очереди и репутации.
      */
-    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Максимум подтверждённых участников (Этап 2). NULL = открытая встреча: гонка за места и лист ожидания не действуют — каждый подтвердивший сразу confirmed; штраф abandoned_slot и порог отказа не применяются; формат ЦЕЛИКОМ вне репутации (ни начислений, ни списаний — конвейер пропускает событие), отметка явки питает только историю посещений и статистику клуба.")
+    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Число участников, смысл которого задаёт limit_kind (V85): при min — сколько человек НУЖНО (наберём — встреча состоится, нет — отменяется в момент дедлайна набора; состав может вырасти выше этого числа), при max — сколько ВСЕГО МЕСТ (сверх лимита — очередь на замену). NULL = формат «сколько придёт»: без лимита, очереди и репутации.")
 
     /**
      * The column <code>public.events.voting_opens_days_before</code>. За
@@ -256,29 +256,29 @@ open class Events(
      * The column <code>public.events.stage2_lead_minutes</code>. За сколько
      * МИНУТ до старта закрывается НАБОР СОСТАВА (V83; до этого — «переход в
      * Этап 2»); задаёт организатор при создании. NULL = глобальный дефолт
-     * (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон
-     * 60–7200: пресеты формы 360–7200 (6 часов – 3 дня), значения ниже 360
-     * рождаются только продлением набора из DM организатору при недоборе. Для
+     * (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон CHECK
+     * 60–7200 шире валидации DTO (360–7200 = пресеты формы 6 часов – 3 дня):
+     * нижняя граница осталась от удалённого продления набора (V84). Для
      * открытых встреч (participant_limit IS NULL) не применяется.
      */
-    val STAGE2_LEAD_MINUTES: TableField<EventsRecord, Int?> = createField(DSL.name("stage2_lead_minutes"), SQLDataType.INTEGER, this, "За сколько МИНУТ до старта закрывается НАБОР СОСТАВА (V83; до этого — «переход в Этап 2»); задаёт организатор при создании. NULL = глобальный дефолт (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон 60–7200: пресеты формы 360–7200 (6 часов – 3 дня), значения ниже 360 рождаются только продлением набора из DM организатору при недоборе. Для открытых встреч (participant_limit IS NULL) не применяется.")
+    val STAGE2_LEAD_MINUTES: TableField<EventsRecord, Int?> = createField(DSL.name("stage2_lead_minutes"), SQLDataType.INTEGER, this, "За сколько МИНУТ до старта закрывается НАБОР СОСТАВА (V83; до этого — «переход в Этап 2»); задаёт организатор при создании. NULL = глобальный дефолт (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон CHECK 60–7200 шире валидации DTO (360–7200 = пресеты формы 6 часов – 3 дня): нижняя граница осталась от удалённого продления набора (V84). Для открытых встреч (participant_limit IS NULL) не применяется.")
 
     /**
-     * The column <code>public.events.is_urgent</code>. Срочная встреча (формат
-     * PO 2026-07-23): создана без Этапа 1, сразу в stage_2. Только подача
-     * (бейдж «⚡ срочная» на карточках); механика и репутация как у обычного
-     * события с местами. У открытых встреч всегда FALSE.
+     * The column <code>public.events.is_urgent</code>. ЛЕГАСИ (V85): формат «⚡
+     * срочная» удалён из продукта, колонка не читается ни рендером, ни
+     * созданием и всегда FALSE у новых встреч. Хранится как исторический факт:
+     * до 2026-08-31 такие встречи рождались сразу в stage_2, минуя голосование.
+     * Формат встречи определяет limit_kind.
      */
-    val IS_URGENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("is_urgent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Срочная встреча (формат PO 2026-07-23): создана без Этапа 1, сразу в stage_2. Только подача (бейдж «⚡ срочная» на карточках); механика и репутация как у обычного события с местами. У открытых встреч всегда FALSE.")
+    val IS_URGENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("is_urgent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "ЛЕГАСИ (V85): формат «⚡ срочная» удалён из продукта, колонка не читается ни рендером, ни созданием и всегда FALSE у новых встреч. Хранится как исторический факт: до 2026-08-31 такие встречи рождались сразу в stage_2, минуя голосование. Формат встречи определяет limit_kind.")
 
     /**
-     * The column <code>public.events.roster_shortfall_at</code>. Когда набор
-     * закрылся НЕДОБОРОМ и организатору ушёл DM с выбором (V83). NULL =
-     * недобора нет или организатор продлил набор. Молчание дольше
-     * events.roster-shortfall-response-minutes от этого момента → автоотмена
-     * встречи.
+     * The column <code>public.events.limit_kind</code>. Как читать
+     * participant_limit (V85): min — порог набора, max — потолок мест. NULL
+     * строго при participant_limit IS NULL — формат «сколько придёт», без
+     * ограничений и вне репутации.
      */
-    val ROSTER_SHORTFALL_AT: TableField<EventsRecord, OffsetDateTime?> = createField(DSL.name("roster_shortfall_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда набор закрылся НЕДОБОРОМ и организатору ушёл DM с выбором (V83). NULL = недобора нет или организатор продлил набор. Молчание дольше events.roster-shortfall-response-minutes от этого момента → автоотмена встречи.")
+    val LIMIT_KIND: TableField<EventsRecord, LimitKind?> = createField(DSL.name("limit_kind"), SQLDataType.VARCHAR.asEnumDataType(LimitKind::class.java), this, "Как читать participant_limit (V85): min — порог набора, max — потолок мест. NULL строго при participant_limit IS NULL — формат «сколько придёт», без ограничений и вне репутации.")
 
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -394,6 +394,7 @@ open class Events(
     val skladchinas: SkladchinasPath
         get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<EventsRecord>> = listOf(
+        Internal.createCheck(this, DSL.name("chk_events_limit_kind"), "(((participant_limit IS NULL) = (limit_kind IS NULL)))", true),
         Internal.createCheck(this, DSL.name("chk_events_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
         Internal.createCheck(this, DSL.name("chk_events_stage2_lead_minutes"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 60) AND (stage2_lead_minutes <= 7200))))", true),
         Internal.createCheck(this, DSL.name("events_participant_limit_check"), "((participant_limit > 0))", true),

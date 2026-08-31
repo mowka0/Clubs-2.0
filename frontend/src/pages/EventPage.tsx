@@ -16,6 +16,7 @@ import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
+import { formatBadge } from '../utils/eventFormat';
 import { EventPlaceCard } from '../components/event/EventPlaceCard';
 import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import {
@@ -628,10 +629,12 @@ export const EventPage: FC = () => {
   // заполненность мест: два разных смысла в одном элементе читались как один (event-vote-block.md).
   // Открытая встреча: «занято/свободно» не существует — кольцо целиком закрашено при первом
   // отклике и пустое, пока откликов нет.
-  // Встреча с порогом набора (V83): participantLimit — «сколько человек нужно», а голос «Иду»
-  // сразу кладёт в состав. Поэтому кольцо считает СОСТАВ уже на наборе, а не голоса: «4 из 6»
-  // на обеих фазах значит одно и то же. Гонка за места осталась только у ⚡ срочной.
-  const isRosterEvent = !isOpenEvent && !event.isUrgent;
+  // Встречи с лимитом (V85): голос «Иду» сразу кладёт в состав, поэтому кольцо считает СОСТАВ
+  // уже на наборе, а не голоса — «4 из 6» на обеих фазах значит одно и то же. Что означает
+  // знаменатель, задаёт формат: у «минимума» это порог (состав может его перерасти), у
+  // «максимума» — число мест.
+  const isRosterEvent = event.format !== 'any';
+  const isMinFormat = event.format === 'min';
   const rosterClosed = event.rosterClosed;
   const rosterFull = isRosterEvent && event.confirmedCount >= (event.participantLimit ?? 0);
   const rosterShortage = isRosterEvent
@@ -753,20 +756,10 @@ export const EventPage: FC = () => {
    */
   const rosterStatusNote = (() => {
     if (!isRosterEvent || isCancelled || eventHappened) return null;
-    // Срок набора прошёл, а порога нет. Набор при этом НЕ закрывается (решение PO 2026-08-31):
-    // места остаются открытыми до самой встречи, и состав закроется сам, как только наберём.
-    if (event.rosterShortfall) {
-      return (
-        <div className="rd-roster-note">
-          <span className="rd-roster-ico" aria-hidden="true">⏳</span>
-          <span className="rd-roster-txt">
-            <b>Пока {event.confirmedCount} из {event.participantLimit} — набор продолжается</b>
-            <span>Срок набора прошёл, но место ещё можно занять: состав закроется, как только наберём</span>
-          </span>
-        </div>
-      );
-    }
     if (!rosterClosed) {
+      const deadlinePart = event.rosterDeadline
+        ? `Набор закрывается ${formatDeadlineShort(event.rosterDeadline)}`
+        : 'Когда набор закроется';
       return (
         <div className="rd-roster-note">
           <span className="rd-roster-ico" aria-hidden="true">{mySeat === 'waitlisted' ? '🎫' : '⏳'}</span>
@@ -776,16 +769,22 @@ export const EventPage: FC = () => {
                 // Мест уже нет: голос принят, но человек за чертой — сказать об этом важнее,
                 // чем повторить общий счётчик, который он и так видит в кольце.
                 ? 'Мест уже нет — вы в очереди'
-                : rosterShortage > 0
-                  ? `Нужно ещё ${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`
-                  : 'Состав набран — ждём закрытия набора'}
+                : isMinFormat
+                  ? (rosterShortage > 0
+                      ? `Нужно ещё ${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`
+                      : 'Минимум набран — встреча состоится')
+                  : (rosterShortage > 0
+                      ? `Свободно ${rosterShortage} ${pluralRu(rosterShortage, ['место', 'места', 'мест'])}`
+                      : 'Мест нет — дальше очередь на замену')}
             </b>
             <span>
               {mySeat === 'waitlisted'
                 ? 'Если кто-то передумает до закрытия набора, место перейдёт вам'
-                : event.rosterDeadline
-                  ? `Набор закрывается ${formatDeadlineShort(event.rosterDeadline)} — если не наберём, встреча не состоится`
-                  : 'Если не наберём состав, встреча не состоится'}
+                : isMinFormat
+                  // Отмена по недобору — не «робот решил», а правило формата, названное при
+                  // создании. Промолчать о нём здесь значило бы сделать её неожиданной.
+                  ? `${deadlinePart} — если не наберём, встреча отменится`
+                  : `${deadlinePart} — состав закроется тем, кто успел`}
             </span>
           </span>
         </div>
@@ -802,9 +801,10 @@ export const EventPage: FC = () => {
         </div>
       );
     }
-    // Состав закрыт, но после отказов людей стало меньше порога. Обещать «встреча состоится»
-    // здесь нельзя — это решает организатор (правка PO 2026-08-31).
-    if (!rosterFull) {
+    // Состав закрыт, но после отказов людей стало меньше ПОРОГА. Обещать «встреча состоится»
+    // здесь нельзя — это решает организатор (правка PO 2026-08-31). У «максимума» неполный
+    // состав ничего не значит: место просто пустует, встреча состоится в любом случае.
+    if (isMinFormat && !rosterFull) {
       return (
         <div className="rd-roster-note">
           <span className="rd-roster-ico" aria-hidden="true">⚠️</span>
@@ -881,13 +881,9 @@ export const EventPage: FC = () => {
     not_going: responders.filter((r) => r.status === 'not_going').length,
   };
 
-  // Формат встречи в бейдже хиро (PO 2026-08-01): вместо родового «СОБЫТИЕ» — конкретный тип,
-  // ярлыки и эмодзи те же, что на карточках лент (feed/EventCard, ярлыки PO 2026-07-23).
-  const formatBadge = event.isUrgent
-    ? '⚡ СРОЧНАЯ ВСТРЕЧА'
-    : isOpenEvent
-      ? '🌊 ОТКРЫТАЯ ВСТРЕЧА'
-      : '🎟 ВСТРЕЧА С МЕСТАМИ';
+  // Формат встречи в бейдже хиро (PO 2026-08-01): вместо родового «СОБЫТИЕ» — конкретный
+  // формат, тем же словарём, что на карточках лент.
+  const heroFormatBadge = formatBadge(event.format, event.participantLimit).toUpperCase();
 
   // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
   // фолбэк — аватар клуба, как раньше.
@@ -904,7 +900,7 @@ export const EventPage: FC = () => {
           style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
         />
         <div className="rd-hero-meta">
-          <div className="rd-hero-type-badge">{formatBadge}</div>
+          <div className="rd-hero-type-badge">{heroFormatBadge}</div>
           <div className="rd-hero-ttl">{event.title}</div>
           <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
             {formatEventDate(event.eventDatetime)}
@@ -1357,9 +1353,9 @@ export const EventPage: FC = () => {
         </div>
       )}
 
-      {/* Лист ожидания (Этап 2+) отдельным блоком — у ⚡ срочной, где очередь появляется в гонке
-          за места. У встречи с порогом набора (V83) она живёт табом рядом с составом, и второй
-          копией списка внизу страницы быть не должна. */}
+      {/* Лист ожидания (Этап 2+) отдельным блоком — только у формата «сколько придёт», где он
+          недостижим, и у легаси-встреч, доживающих в гонке за места. У форматов с лимитом (V85)
+          очередь живёт табом рядом с составом и второй копией списка внизу быть не должна. */}
       {!isCancelled && finalComposition && !isRosterEvent && waitlist.length > 0 && (
         <>
           <div className="rd-section-sub-h">В очереди <span className="rd-count">· {waitlist.length}</span></div>

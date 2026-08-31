@@ -1,5 +1,6 @@
 package com.clubs.chatlink
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.generated.jooq.enums.EventStatus
@@ -25,6 +26,7 @@ class LivePinRendererTest {
         locationText = "Сандуны",
         eventDatetime = OffsetDateTime.of(2026, 7, 12, 16, 0, 0, 0, ZoneOffset.UTC),
         participantLimit = 15,
+        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = EventStatus.upcoming,
         stage2Triggered = false,
@@ -39,7 +41,7 @@ class LivePinRendererTest {
     fun `stage1 — голоса, места, время в МСК`() {
         val text = renderer.stage1Text(event, going = 9, maybe = 3)
         // Общий шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где.
-        assertTrue(text.contains("<b>Обычная встреча</b>"))
+        assertTrue(text.contains("<b>Встреча: не больше 15</b>"))
         assertTrue(text.contains("Поход в баню"))
         assertTrue(text.contains("когда: 12.07.2026 19:00 МСК"))
         // Призыв к действию стоит прямо над счётчиками (PO 2026-08-10)
@@ -75,24 +77,24 @@ class LivePinRendererTest {
     @Test
     fun `stage2 — подтверждённые, очередь и дедлайн = старт события`() {
         val text = renderer.stage2Text(event, confirmed = 12, waitlisted = 2)
-        assertTrue(text.contains("<b>Обычная встреча</b>"))
+        assertTrue(text.contains("<b>Встреча: не больше 15</b>"))
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("📋 В очереди — 2"))
         assertTrue(text.contains("⏳ Подтвердить до — 12.07.2026 19:00 МСК"))
     }
 
-    // Открытая встреча (V62): лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
+    // «Сколько придёт»: лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
     @Test
-    fun `открытая встреча — без лимита мест, счёт без знаменателя и без строки очереди`() {
-        val open = event.copy(participantLimit = null)
+    fun `формат «сколько придёт» — без лимита мест, счёт без знаменателя и без строки очереди`() {
+        val open = event.copy(participantLimit = null, limitKind = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.contains("<b>Открытая встреча</b>"))
-        assertTrue(stage1.contains("👥 Без лимита мест — приходят все желающие"))
+        assertTrue(stage1.contains("<b>Встреча: сколько придёт</b>"))
+        assertTrue(stage1.contains("👥 Без ограничений — приходят все желающие, репутация не считается"))
         assertFalse(stage1.contains("Мест —"))
 
         val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)
-        assertTrue(stage2.contains("<b>Открытая встреча</b>"))
+        assertTrue(stage2.contains("<b>Встреча: сколько придёт</b>"))
         assertTrue(stage2.contains("✅ Подтвердили — 12\n"))
         assertFalse(stage2.contains("Подтвердили — 12 из"))
         assertFalse(stage2.contains("В очереди"))
@@ -103,13 +105,13 @@ class LivePinRendererTest {
 
     @Test
     fun `кнопка зависит от этапа`() {
-        // Встреча с порогом набора (V83): подтверждать нечего — после закрытия состава кнопка
-        // просто открывает встречу. Подтверждение осталось у ⚡ срочной.
+        // У форматов с лимитом (V85) подтверждать нечего — после закрытия состава кнопка просто
+        // открывает встречу. Подтверждение осталось у формата «сколько придёт».
         assertEquals("Проголосовать", renderer.buttonText(event))
         assertEquals("Открыть встречу", renderer.buttonText(event.copy(stage2Triggered = true)))
         assertEquals(
             "Подтвердить участие",
-            renderer.buttonText(event.copy(stage2Triggered = true, isUrgent = true))
+            renderer.buttonText(event.copy(stage2Triggered = true, participantLimit = null, limitKind = null))
         )
     }
 
@@ -152,7 +154,7 @@ class LivePinRendererTest {
     @Test
     fun `отмена — причина опциональна`() {
         val withReason = renderer.cancelledText(event, "все заболели")
-        assertTrue(withReason.contains("<b>Обычная встреча отменена</b>"))
+        assertTrue(withReason.contains("<b>Встреча: не больше 15 отменена</b>"))
         assertTrue(withReason.contains("причина: все заболели"))
         assertFalse(renderer.cancelledText(event, null).contains("причина"))
     }
@@ -162,7 +164,7 @@ class LivePinRendererTest {
         val moved = event.copy(locationText = "парк имени Революции 1905 года")
         val text = renderer.editedText(EventEditedEvent(event = moved, oldEvent = event))
 
-        assertTrue(text.contains("<b>Обычная встреча меняет место</b>"))
+        assertTrue(text.contains("<b>Встреча: не больше 15 меняет место</b>"))
         // Именно \n\n: адреса длинные, переносятся на две-три строки и без отступа читаются
         // как один абзац — разница «было/стало» теряется (правка PO 2026-08-10).
         assertTrue(text.contains("где было: Сандуны\n\nгде стало: парк имени Революции 1905 года"))
@@ -173,7 +175,7 @@ class LivePinRendererTest {
     @Test
     fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.contains("<b>Обычная встреча началась</b>"))
+        assertTrue(text.contains("<b>Встреча: не больше 15 началась</b>"))
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
     }

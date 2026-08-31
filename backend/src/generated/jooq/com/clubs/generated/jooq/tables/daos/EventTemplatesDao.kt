@@ -4,6 +4,7 @@
 package com.clubs.generated.jooq.tables.daos
 
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.records.EventTemplatesRecord
 
@@ -149,28 +150,6 @@ open class EventTemplatesDao(configuration: Configuration?) : DAOImpl<EventTempl
     fun fetchByParticipantLimit(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.PARTICIPANT_LIMIT, *values.toTypedArray())
 
     /**
-     * Fetch records that have <code>is_open_event BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfIsOpenEvent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.IS_OPEN_EVENT, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>is_open_event IN (values)</code>
-     */
-    fun fetchByIsOpenEvent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.IS_OPEN_EVENT, *values.toTypedArray())
-
-    /**
-     * Fetch records that have <code>is_urgent_event BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfIsUrgentEvent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.IS_URGENT_EVENT, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>is_urgent_event IN (values)</code>
-     */
-    fun fetchByIsUrgentEvent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.IS_URGENT_EVENT, *values.toTypedArray())
-
-    /**
      * Fetch records that have <code>stage2_lead_minutes BETWEEN lowerInclusive
      * AND upperInclusive</code>
      */
@@ -246,4 +225,15 @@ open class EventTemplatesDao(configuration: Configuration?) : DAOImpl<EventTempl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>limit_kind BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLimitKind(lowerInclusive: LimitKind?, upperInclusive: LimitKind?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.LIMIT_KIND, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>limit_kind IN (values)</code>
+     */
+    fun fetchByLimitKind(vararg values: LimitKind): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.LIMIT_KIND, *values)
 }

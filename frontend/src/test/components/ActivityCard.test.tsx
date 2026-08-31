@@ -36,7 +36,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     eventDatetime: '2026-05-30T11:00:00Z',
     locationText: 'Gorky park',
     participantLimit: 20,
-    isUrgent: false,
+    format: 'max',
     goingCount: 5,
     confirmedCount: 0,
     status: 'upcoming',
@@ -82,15 +82,15 @@ describe('ActivityCard (full)', () => {
   });
 
   // Ярлыки формата PO 2026-07-23: срочная/обычная/открытая с эмодзи пикера.
-  it('shows the format badge: обычная / открытая / срочная', () => {
+  it('shows the format badge: не больше / сколько придёт / не меньше', () => {
     const { rerender } = render(<ActivityCard activity={buildEvent()} onClick={vi.fn()} />);
-    expect(screen.getByText('🎟 Обычная')).toBeInTheDocument();
+    expect(screen.getByText('🎟 Не больше 20')).toBeInTheDocument();
 
-    rerender(<ActivityCard activity={buildEvent({ participantLimit: null })} onClick={vi.fn()} />);
-    expect(screen.getByText('🌊 Открытая')).toBeInTheDocument();
+    rerender(<ActivityCard activity={buildEvent({ format: 'any', participantLimit: null })} onClick={vi.fn()} />);
+    expect(screen.getByText('🌊 Сколько придёт')).toBeInTheDocument();
 
-    rerender(<ActivityCard activity={buildEvent({ isUrgent: true, status: 'stage_2' })} onClick={vi.fn()} />);
-    expect(screen.getByText('⚡ Срочная')).toBeInTheDocument();
+    rerender(<ActivityCard activity={buildEvent({ format: 'min', participantLimit: 6 })} onClick={vi.fn()} />);
+    expect(screen.getByText('🎯 Не меньше 6')).toBeInTheDocument();
   });
 
   it('switches to confirmedCount/"подтв." once voting closes (stage_2)', () => {

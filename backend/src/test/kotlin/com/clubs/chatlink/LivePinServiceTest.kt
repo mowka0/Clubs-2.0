@@ -1,5 +1,6 @@
 package com.clubs.chatlink
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
@@ -34,6 +35,7 @@ private fun livePinEvent(
     locationText = "Сандуны",
     eventDatetime = eventDatetime,
     participantLimit = 15,
+    limitKind = LimitKind.max,
     votingOpensDaysBefore = 14,
     status = status,
     stage2Triggered = stage2Triggered,
@@ -88,7 +90,7 @@ class LivePinServiceTest {
         verify {
             gateway.sendGroupMessageWithUrlButton(
                 chatId,
-                match { it.contains("Поход в баню") && it.contains("Собрались 0 из 15") },
+                match { it.contains("Поход в баню") && it.contains("Заняты 0 из 15 мест") },
                 "Проголосовать",
                 "https://t.me/clubs_test_bot?startapp=event_${event.id}",
                 any(), any(), any()
@@ -163,7 +165,7 @@ class LivePinServiceTest {
             gateway.sendGroupPhotoWithUrlButton(
                 chatId,
                 "/uploads/cover.jpg",
-                match { it.contains("Поход в баню") && it.contains("Собрались 0 из 15") },
+                match { it.contains("Поход в баню") && it.contains("Заняты 0 из 15 мест") },
                 "Проголосовать",
                 "https://t.me/clubs_test_bot?startapp=event_${event.id}",
                 any(), any()
@@ -213,7 +215,7 @@ class LivePinServiceTest {
 
         verify {
             gateway.editGroupMessageCaption(
-                chatId, 777L, match { it.contains("Собрались 0 из 15") }, "Проголосовать", any(), any(), any()
+                chatId, 777L, match { it.contains("Заняты 0 из 15 мест") }, "Проголосовать", any(), any(), any()
             )
         }
         verify(exactly = 0) { gateway.editGroupMessage(any(), any(), any(), any(), any(), any(), any()) }
@@ -278,7 +280,7 @@ class LivePinServiceTest {
             gateway.editGroupMessage(
                 chatId, 777L,
                 match {
-                    it.contains("<b>Обычная встреча</b>") && it.contains("Состав собран: 12 из 15") &&
+                    it.contains("<b>Встреча: не больше 15</b>") && it.contains("Состав собран: 12 из 15") &&
                         it.contains("В очереди — 2")
                 },
                 "Открыть встречу",

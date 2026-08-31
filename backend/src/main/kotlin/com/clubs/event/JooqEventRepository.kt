@@ -39,7 +39,8 @@ class JooqEventRepository(
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
             .set(EVENTS.STAGE2_LEAD_MINUTES, request.stage2LeadMinutes)
-            .set(EVENTS.IS_URGENT, request.isUrgentEvent)
+            // Пара «лимит + его смысл»: у формата без лимита оба поля null (CHECK это и держит).
+            .set(EVENTS.LIMIT_KIND, request.format.limitKind)
             .set(EVENTS.STATUS, EventStatus.upcoming)
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
@@ -116,12 +117,12 @@ class JooqEventRepository(
             )
         // Подтверждение Stage-2 ещё не отдано. Этап 2 открыт всем участникам (PR #92), поэтому
         // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
-        // голос Этапа 1 (включая «Не пойду») не финален, у срочной встречи (V69) его нет вовсе.
-        // Встреча с порогом набора (V83) исключена: у неё состав закрывается сам, подтверждать
-        // нечего. Дискриминатор тот же, что у Event.isRosterEvent (лимит есть, не срочная).
+        // голос Этапа 1 (включая «Не пойду») не финален. Встречи с лимитом (V85) исключены: у них
+        // состав закрывается сам, подтверждать нечего. Дискриминатор тот же, что у
+        // Event.isRosterEvent — наличие лимита.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
-            .and(EVENTS.PARTICIPANT_LIMIT.isNull.or(EVENTS.IS_URGENT.isTrue))
+            .and(EVENTS.PARTICIPANT_LIMIT.isNull)
 
         return dsl.select(EVENTS.ID)
             .from(EVENTS)
@@ -201,10 +202,10 @@ class JooqEventRepository(
             .`when`(
                 // То же правило, что в findActionRequiredEventIds (PO 2026-07-23): Этап 2 открыт
                 // всем — подтверждение ждём от каждого участника без решения на самом Этапе 2.
-                // Встреча с порогом набора (V83) исключена — подтверждений у неё нет.
+                // Встречи с лимитом (V85) исключены — подтверждений у них нет.
                 EVENTS.STATUS.eq(EventStatus.stage_2)
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
-                    .and(EVENTS.PARTICIPANT_LIMIT.isNull.or(EVENTS.IS_URGENT.isTrue)),
+                    .and(EVENTS.PARTICIPANT_LIMIT.isNull),
                 1
             )
             .otherwise(0)
@@ -222,8 +223,8 @@ class JooqEventRepository(
             EVENTS.LOCATION_TEXT,
             EVENTS.EVENT_DATETIME,
             EVENTS.PARTICIPANT_LIMIT,
+            EVENTS.LIMIT_KIND,
             EVENTS.VOTING_OPENS_DAYS_BEFORE,
-            EVENTS.IS_URGENT,
             EVENTS.STATUS,
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
@@ -274,8 +275,8 @@ class JooqEventRepository(
                 locationText = r.get(EVENTS.LOCATION_TEXT),
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT),
+                limitKind = r.get(EVENTS.LIMIT_KIND),
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
-                isUrgent = r.get(EVENTS.IS_URGENT) ?: false,
                 status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
@@ -353,13 +354,6 @@ class JooqEventRepository(
             )
             .fetch()
             .map(mapper::toDomain)
-
-    override fun markRosterShortfall(id: UUID, at: OffsetDateTime): Int =
-        dsl.update(EVENTS)
-            .set(EVENTS.ROSTER_SHORTFALL_AT, at)
-            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
-            .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_SHORTFALL_AT.isNull))
-            .execute()
 
     /**
      * Возвращает ближайшее предстоящее событие среди всех клубов.

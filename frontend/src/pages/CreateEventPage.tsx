@@ -1,9 +1,9 @@
 import { FC } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
-import { EventForm, type EventFormat } from '../components/event/EventForm';
+import { EventForm } from '../components/event/EventForm';
+import type { EventFormat } from '../types/api';
 import { useClubEventTemplatesQuery } from '../queries/eventTemplates';
-import { templateFormat } from '../utils/eventTemplate';
 
 /**
  * Страница создания встречи. Тонкая обёртка: её единственная работа — дождаться шаблона,
@@ -18,13 +18,12 @@ export const CreateEventPage: FC = () => {
   const { id: clubId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
-  // Формат из шага пикера «+»: open (V62) — без лимита, степпер скрыт; urgent (PO 2026-07-23) —
-  // сразу Этап 2, интервал подтверждения не настраивается. При входе по шаблону формат несёт
-  // сам шаблон, и ?format не читается.
+  // Формат из шага пикера «+». Неизвестное значение (старая ссылка, опечатка) схлопывается в
+  // «максимум участников»: это смысл лимита у всех встреч, созданных до V85. При входе по
+  // шаблону формат несёт сам шаблон, и ?format не читается.
+  const formatParam = searchParams.get('format');
   const initialFormat: EventFormat =
-    searchParams.get('format') === 'open' ? 'open'
-      : searchParams.get('format') === 'urgent' ? 'urgent'
-        : 'limited';
+    formatParam === 'min' || formatParam === 'any' ? formatParam : 'max';
 
   const templatesQuery = useClubEventTemplatesQuery(templateId ? clubId : undefined);
 
@@ -58,7 +57,7 @@ export const CreateEventPage: FC = () => {
       mode="event"
       clubId={clubId}
       template={template}
-      initialFormat={template ? templateFormat(template) : initialFormat}
+      initialFormat={template ? template.format : initialFormat}
       // Шаблон могли удалить с другого устройства, пока пользователь шёл по ссылке.
       templateMissing={Boolean(templateId) && template === null}
     />

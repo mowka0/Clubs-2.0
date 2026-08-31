@@ -59,9 +59,9 @@ class Stage2Service(
     }
 
     private fun triggerStage2(event: Event) {
-        // Встреча с порогом набора (V83) закрывает набор своим путём: набрали → состав закрыт и
-        // всем уходит «состав собран», не набрали → DM организатору с выбором. Приглашения
-        // «подтвердите участие» у формата больше нет — место даёт голос, а не подтверждение.
+        // Встречи с лимитом (V85) закрывают набор своим путём: MAX — всегда, MIN — если порог
+        // взят, иначе встреча отменяется. Приглашения «подтвердите участие» у них нет — место
+        // даёт голос, а не подтверждение.
         if (rosterService.handleRosterDeadline(event)) return
 
         eventRepository.transitionToStage2(event.id)
@@ -197,21 +197,28 @@ class Stage2Service(
             return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
         }
 
-        // «Держал дефицитный слот» — единое бизнес-условие цены и промоута. Открытая встреча слотов
-        // не имеет (V62): замена не нужна, отказ бесплатен до самого старта (решение PO 2026-07-21).
+        // «Держал дефицитный слот» — единое бизнес-условие цены и промоута. У формата без лимита
+        // слотов нет: замена не нужна, отказ бесплатен до самого старта (решение PO 2026-07-21).
         val heldScarceSlot = response.stage2Vote == Stage_2Vote.confirmed && !event.isOpenEvent
         val now = OffsetDateTime.now()
-        // Замену ищем ДО мутации: от её наличия зависит и цена отказа, и то, останется ли дыра.
+        // Замену и размер состава читаем ДО мутации: от них зависит и цена отказа, и то,
+        // останется ли в составе дыра.
         val firstWaitlisted = if (heldScarceSlot) eventResponseRepository.findFirstWaitlisted(eventId) else null
+        val confirmedBefore = eventResponseRepository.countConfirmed(eventId)
         // Прежний ЗАПРЕТ отказа внутри порога снят (решение PO 2026-08-21): отказ стал платным.
         // Запрет выталкивал людей в молчаливую неявку (−200), которая дороже любого честного отказа.
         val declineKind = RosterPolicy.declineKind(
-            isOpenEvent = event.isOpenEvent,
-            heldSlot = heldScarceSlot,
-            // Сюда попадают только события в stage_2, то есть с уже закрытым составом.
-            rosterClosed = true,
-            withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(lateDeclineThresholdMinutes)),
-            hasReplacement = firstWaitlisted != null
+            DeclineSituation(
+                format = event.format,
+                heldSlot = heldScarceSlot,
+                // Сюда попадают только события в stage_2, то есть с уже закрытым составом.
+                rosterClosed = true,
+                withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(lateDeclineThresholdMinutes)),
+                hasReplacement = firstWaitlisted != null,
+                // MIN: ущерб не в месте, а в срыве встречи — платит только тот, кто роняет
+                // состав ниже порога.
+                staysAtThreshold = event.participantLimit?.let { confirmedBefore - 1 >= it } ?: true
+            )
         )
 
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
@@ -231,11 +238,11 @@ class Stage2Service(
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
-        // Состав закрыт, но этот отказ увёл его ниже порога и заменить некем: зовём организатора
-        // решать. Строгое равенство — сигнал ровно на пересечении черты: следующие отказы на этой
-        // же встрече повторных DM не порождают.
+        // MIN: этот отказ увёл состав ниже порога — зовём организатора решать. Строгое равенство
+        // сигналит ровно на пересечении черты, следующие отказы повторных DM не порождают.
+        // У MAX распавшегося состава не бывает: место просто пустует, встреча состоится.
         val limit = event.participantLimit
-        if (event.isRosterEvent && firstWaitlisted == null && limit != null && count == limit - 1) {
+        if (event.format == EventFormat.MIN && limit != null && count == limit - 1) {
             eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
         }
         val penalty = declineKind?.let { -ReputationPolicy.pointsFor(it) } ?: 0

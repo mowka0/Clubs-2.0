@@ -1,5 +1,6 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
 import jakarta.validation.Validation
 import jakarta.validation.Validator
 import org.junit.jupiter.api.Test
@@ -27,8 +28,7 @@ class SaveEventTemplateRequestValidationTest {
         locationLon: Double? = 37.646488,
         locationHint: String? = null,
         participantLimit: Int? = 20,
-        isOpenEvent: Boolean = false,
-        isUrgentEvent: Boolean = false,
+        format: EventFormat = EventFormat.MAX,
         stage2LeadMinutes: Int? = null,
         defaultWeekday: Short? = 2,
         defaultTime: LocalTime? = LocalTime.of(19, 0)
@@ -40,8 +40,7 @@ class SaveEventTemplateRequestValidationTest {
         locationLon = locationLon,
         locationHint = locationHint,
         participantLimit = participantLimit,
-        isOpenEvent = isOpenEvent,
-        isUrgentEvent = isUrgentEvent,
+        format = format,
         stage2LeadMinutes = stage2LeadMinutes,
         defaultWeekday = defaultWeekday,
         defaultTime = defaultTime
@@ -85,44 +84,36 @@ class SaveEventTemplateRequestValidationTest {
     }
 
     @Test
-    fun `открытая встреча с лимитом отклоняется`() {
+    fun `формат без лимита вместе с лимитом отклоняется`() {
         assertEquals(
             setOf("participantLimitConsistent"),
-            violatedProperties(request(isOpenEvent = true, participantLimit = 20))
+            violatedProperties(request(format = EventFormat.ANY, participantLimit = 20))
         )
     }
 
     @Test
-    fun `встреча с местами без лимита отклоняется`() {
+    fun `формат с лимитом без лимита отклоняется`() {
         assertEquals(
             setOf("participantLimitConsistent"),
-            violatedProperties(request(isOpenEvent = false, participantLimit = null))
+            violatedProperties(request(format = EventFormat.MAX, participantLimit = null))
+        )
+        assertEquals(
+            setOf("participantLimitConsistent"),
+            violatedProperties(request(format = EventFormat.MIN, participantLimit = null))
         )
     }
 
     @Test
-    fun `открытая встреча со своим интервалом Этапа 2 отклоняется`() {
+    fun `формат без лимита со своим интервалом набора отклоняется`() {
         assertEquals(
             setOf("stage2LeadConsistent"),
-            violatedProperties(request(isOpenEvent = true, participantLimit = null, stage2LeadMinutes = 1080))
+            violatedProperties(request(format = EventFormat.ANY, participantLimit = null, stage2LeadMinutes = 1080))
         )
     }
 
     @Test
-    fun `срочная встреча со своим интервалом Этапа 2 отклоняется`() {
-        assertEquals(
-            setOf("urgentConsistent"),
-            violatedProperties(request(isUrgentEvent = true, stage2LeadMinutes = 2160))
-        )
-    }
-
-    @Test
-    fun `срочная открытая встреча отклоняется как противоречие форматов`() {
-        assertTrue(
-            violatedProperties(
-                request(isUrgentEvent = true, isOpenEvent = true, participantLimit = null)
-            ).contains("urgentConsistent")
-        )
+    fun `шаблон минимума со своим интервалом набора проходит`() {
+        assertEquals(emptySet(), violatedProperties(request(format = EventFormat.MIN, stage2LeadMinutes = 2160)))
     }
 
     @Test

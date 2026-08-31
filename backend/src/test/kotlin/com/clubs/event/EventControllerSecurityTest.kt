@@ -163,6 +163,7 @@ class EventControllerSecurityTest {
               "locationHint": "Вход со двора, домофон 12",
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20,
+              "format": "max",
               "photoUrl": "$photoUrl"
             }
         """.trimIndent()
@@ -273,8 +274,8 @@ class EventControllerSecurityTest {
         val eventId = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'Att Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, limit_kind)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Att Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
             """.trimIndent()
         )
         return eventId
@@ -290,7 +291,8 @@ class EventControllerSecurityTest {
               "locationLat": 55.761216,
               "locationLon": 37.646488,
               "eventDatetime": "$eventDatetime",
-              "participantLimit": 20
+              "participantLimit": 20,
+              "format": "max"
             }
         """.trimIndent()
 
@@ -313,7 +315,8 @@ class EventControllerSecurityTest {
             {
               "title": "No Location Event",
               "eventDatetime": "$eventDatetime",
-              "participantLimit": 20
+              "participantLimit": 20,
+              "format": "max"
             }
         """.trimIndent()
 
@@ -334,7 +337,8 @@ class EventControllerSecurityTest {
               "title": "Online Event",
               "locationHint": "Встречаемся в зуме",
               "eventDatetime": "$eventDatetime",
-              "participantLimit": 20
+              "participantLimit": 20,
+              "format": "max"
             }
         """.trimIndent()
 
@@ -359,7 +363,8 @@ class EventControllerSecurityTest {
               "locationLat": 55.761216,
               "locationHint": "х",
               "eventDatetime": "$eventDatetime",
-              "participantLimit": 20
+              "participantLimit": 20,
+              "format": "max"
             }
         """.trimIndent()
 

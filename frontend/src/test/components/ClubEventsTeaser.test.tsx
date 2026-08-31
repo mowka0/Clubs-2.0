@@ -25,17 +25,17 @@ const teaser: ClubEventsTeaserDto = {
   upcoming: [
     {
       id: 'e1', title: 'Пробежка 7 км', eventDatetime: '2026-08-01T08:00:00Z',
-      status: 'upcoming', isUrgent: false, isOpenEvent: false, goingCount: 9, confirmedCount: 0,
+      status: 'upcoming', format: 'max', participantLimit: 10, goingCount: 9, confirmedCount: 0,
     },
     {
       id: 'e2', title: 'Марафонский бранч', eventDatetime: '2026-08-03T11:00:00Z',
-      status: 'stage_2', isUrgent: false, isOpenEvent: true, goingCount: 4, confirmedCount: 6,
+      status: 'stage_2', format: 'any', participantLimit: null, goingCount: 4, confirmedCount: 6,
     },
   ],
   past: [
     {
       id: 'e3', title: 'Интервалы в Битце', eventDatetime: '2026-07-19T08:00:00Z',
-      status: 'completed', isUrgent: false, isOpenEvent: false, goingCount: 0, confirmedCount: 8,
+      status: 'completed', format: 'max', participantLimit: 10, goingCount: 0, confirmedCount: 8,
     },
   ],
   totalPastCount: 12,

@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
 import { EventForm } from '../components/event/EventForm';
 import { useClubEventTemplatesQuery } from '../queries/eventTemplates';
-import { templateFormat } from '../utils/eventTemplate';
 
 /**
  * Правка шаблона встречи. Тонкая обёртка, как и страница создания: дожидается шаблона и
@@ -55,7 +54,7 @@ export const EditEventTemplatePage: FC = () => {
       mode="template"
       clubId={clubId}
       template={template}
-      initialFormat={templateFormat(template)}
+      initialFormat={template.format}
     />
   );
 };

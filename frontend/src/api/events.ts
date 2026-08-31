@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubEventsTeaserDto, EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { ClubEventsTeaserDto, EventDetailDto, EventFormat, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -12,18 +12,16 @@ export interface CreateEventBody {
   // Уточнение к месту (≤200 символов), отдельное от адреса.
   locationHint?: string;
   eventDatetime: string;
-  // null = открытая встреча (V62): без лимита участников, гонки за места и листа ожидания.
+  // Число участников; смысл задаёт format. null = «сколько придёт».
   participantLimit: number | null;
-  // Явный флаг формата (бэкенд требует согласованности: open ⇔ participantLimit=null),
-  // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
-  isOpenEvent?: boolean;
+  // Формат встречи — единственное поле, отвечающее на вопрос «сколько человек нужно» (V85).
+  // Заявляется НАМЕРЕННО: бэкенд требует согласованности (any ⇔ participantLimit=null), чтобы
+  // случайно пропущенный лимит давал 400, а не молча создавал встречу другого формата.
+  format: EventFormat;
   votingOpensDaysBefore?: number;
-  // За сколько минут до старта закрывается набор состава, 360..7200 (V83; CHECK в БД шире —
-  // 60..7200, короче 6 ч рождается только продлением набора организатором).
-  // Не задан = дефолт сервера (18 ч). Для открытой и срочной встречи не передаётся (400).
+  // За сколько минут до старта закрывается набор состава, 360..7200 (CHECK в БД шире, 60..7200).
+  // Не задан = дефолт сервера (18 ч). Для формата «сколько придёт» не передаётся (400).
   stage2LeadMinutes?: number;
-  // Срочная встреча (PO 2026-07-23): без Этапа 1, событие рождается сразу в подтверждении мест.
-  isUrgentEvent?: boolean;
   photoUrl?: string;
 }
 
@@ -70,7 +68,7 @@ export function cancelEvent(eventId: string, reason?: string): Promise<EventDeta
 
 /**
  * Полный набор редактируемых полей встречи. PUT-семантика: присылаем ВСЁ, что можно менять,
- * null = очистить поле. Формат встречи (обычная/открытая/срочная) неизменяем и сюда не входит.
+ * null = очистить поле. Формат встречи неизменяем и сюда не входит.
  */
 export interface UpdateEventBody {
   title: string;

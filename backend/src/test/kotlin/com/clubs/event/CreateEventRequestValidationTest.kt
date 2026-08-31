@@ -21,8 +21,7 @@ class CreateEventRequestValidationTest {
         locationLon: Double? = 37.646488,
         locationHint: String? = null,
         participantLimit: Int? = 20,
-        isOpenEvent: Boolean = false,
-        isUrgentEvent: Boolean = false,
+        format: EventFormat = EventFormat.MAX,
         stage2LeadMinutes: Int? = null
     ) = CreateEventRequest(
         title = "Test event",
@@ -33,8 +32,7 @@ class CreateEventRequestValidationTest {
         locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = participantLimit,
-        isOpenEvent = isOpenEvent,
-        isUrgentEvent = isUrgentEvent,
+        format = format,
         votingOpensDaysBefore = 14,
         stage2LeadMinutes = stage2LeadMinutes
     )
@@ -89,30 +87,22 @@ class CreateEventRequestValidationTest {
     }
 
     @Test
-    fun `stage2 lead on an open event is rejected`() {
+    fun `stage2 lead on a format without a roster is rejected`() {
         val violated = violatedProperties(
-            request(participantLimit = null, isOpenEvent = true, stage2LeadMinutes = 2160)
+            request(participantLimit = null, format = EventFormat.ANY, stage2LeadMinutes = 2160)
         )
         assertTrue("stage2LeadConsistent" in violated)
     }
 
     @Test
-    fun `urgent event with a limit passes`() {
-        assertTrue(validator.validate(request(isUrgentEvent = true)).isEmpty())
+    fun `min format with a limit and a custom lead passes`() {
+        assertTrue(validator.validate(request(format = EventFormat.MIN, stage2LeadMinutes = 2160)).isEmpty())
     }
 
     @Test
-    fun `urgent event cannot be open`() {
-        val violated = violatedProperties(
-            request(participantLimit = null, isOpenEvent = true, isUrgentEvent = true)
-        )
-        assertTrue("urgentConsistent" in violated)
-    }
-
-    @Test
-    fun `urgent event cannot carry a custom stage2 lead`() {
-        val violated = violatedProperties(request(isUrgentEvent = true, stage2LeadMinutes = 2160))
-        assertTrue("urgentConsistent" in violated)
+    fun `min format without a limit is rejected`() {
+        val violated = violatedProperties(request(participantLimit = null, format = EventFormat.MIN))
+        assertTrue("participantLimitConsistent" in violated)
     }
 
     @Test
@@ -160,23 +150,23 @@ class CreateEventRequestValidationTest {
         assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 
-    // Открытая встреча (V62): формат заявляется ЯВНЫМ флагом + отсутствием лимита.
+    // «Сколько придёт»: формат заявляется ЯВНО + отсутствием лимита.
     @Test
-    fun `open event - explicit flag with null limit passes`() {
-        val violations = validator.validate(request(participantLimit = null, isOpenEvent = true))
+    fun `format any with a null limit passes`() {
+        val violations = validator.validate(request(participantLimit = null, format = EventFormat.ANY))
         assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 
-    // Пропущенный лимит БЕЗ флага — это ошибка ввода (как до V62), а не молчаливая смена формата.
+    // Пропущенный лимит при формате с лимитом — ошибка ввода, а не молчаливая смена формата.
     @Test
-    fun `missing limit without the open flag is rejected`() {
+    fun `missing limit on a limited format is rejected`() {
         assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = null)))
     }
 
-    // Противоречивый ввод: флаг открытой встречи вместе с лимитом.
+    // Противоречивый ввод: формат без лимита вместе с лимитом.
     @Test
-    fun `open flag combined with a limit is rejected`() {
-        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = 20, isOpenEvent = true)))
+    fun `format any combined with a limit is rejected`() {
+        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = 20, format = EventFormat.ANY)))
     }
 
     // @Positive продолжает отсекать бессмысленные ненулевые значения.

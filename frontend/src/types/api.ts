@@ -582,6 +582,15 @@ export interface MembershipDto {
   duesClaimMethod?: string | null;
 }
 
+/**
+ * Формат встречи — ответ на единственный вопрос «сколько человек нужно» (V85). Значения те же,
+ * что на бэке и в колонке `limit_kind`:
+ *  - `min` — минимум участников: не наберём к дедлайну, встреча отменится, верхней границы нет;
+ *  - `max` — максимум участников: встреча состоится при любом составе, сверх лимита — очередь;
+ *  - `any` — сколько придёт: без лимита, очереди и репутации.
+ */
+export type EventFormat = 'min' | 'max' | 'any';
+
 export interface EventDetailDto {
   id: string;
   clubId: string;
@@ -608,23 +617,22 @@ export interface EventDetailDto {
   // в @Min(360), когда дефолт на окружении ужат).
   stage2LeadMinutesOverride: number | null;
   status: string;
-  // Срочная встреча (V69) — вместе с participantLimit определяет формат в бейдже хиро:
-  // «⚡ срочная» / «🌊 открытая» / «🎟 с местами». Те же ярлыки, что на карточках лент.
-  isUrgent: boolean;
+  // Формат встречи (V85) — единственный дискриминатор: бейдж хиро, тексты блока набора и смысл
+  // participantLimit читаются по нему, а не по комбинации лимита с флагами.
+  format: EventFormat;
   goingCount: number;
   maybeCount: number;
   notGoingCount: number;
   confirmedCount: number;
   /** Сколько участников клуба ещё не ответили на Этапе 2 (кроме сказавших «не пойду»). */
   noAnswerCount: number;
-  // --- Порог набора, формат 🎟 (V83) ---
-  // Когда закрывается набор состава (ISO). null = открытая встреча, у неё набора нет.
+  // --- Набор состава (V85) ---
+  // Когда закрывается набор состава (ISO). null = формат «сколько придёт», у него набора нет.
   rosterDeadline: string | null;
   // Состав закрыт: встреча состоится, голоса больше ничего не набирают.
   rosterClosed: boolean;
-  // Набор закрылся недобором — ждём решения организатора (продлить / провести / отменить).
-  rosterShortfall: boolean;
-  // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди».
+  // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди». Очередь бывает
+  // только у «не больше N»: у «не меньше N» верхней границы нет, у «сколько придёт» нет лимита.
   waitlistedCount: number;
   // Сколько очков спишется за отказ ПРЯМО СЕЙЧАС участнику из состава (0 = бесплатно).
   // Считает сервер (RosterPolicy): цена зависит от состояния события, и клиент её не выводит.
@@ -644,7 +652,8 @@ export interface EventListItemDto {
   title: string;
   eventDatetime: string;
   locationText: string | null;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  format: EventFormat;
+  // null = формат «сколько придёт» — счёт показывается без знаменателя.
   participantLimit: number | null;
   goingCount: number;
   status: string;
@@ -659,9 +668,10 @@ export interface TeaserEventDto {
   title: string;
   eventDatetime: string;
   status: string;
-  // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая», как на карточках ленты.
-  isUrgent: boolean;
-  isOpenEvent: boolean;
+  // Формат для бейджа, как на карточках ленты.
+  format: EventFormat;
+  // Число участников: смысл задаёт format, null у «сколько придёт».
+  participantLimit: number | null;
   // До Этапа 2 показываем «идут N» (голоса), после — «подтвердили N».
   goingCount: number;
   confirmedCount: number;
@@ -844,10 +854,10 @@ export interface MyEventListItemDto {
   myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  // null = формат «сколько придёт» — счёт показывается без знаменателя.
   participantLimit: number | null;
-  // Срочная встреча (V69) — бейдж «⚡ СРОЧНАЯ» вместо «🎟 ОБЫЧНАЯ».
-  isUrgent: boolean;
+  // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+  format: EventFormat;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

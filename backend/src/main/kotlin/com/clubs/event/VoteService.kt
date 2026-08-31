@@ -56,7 +56,7 @@ class VoteService(
 
         eventResponseRepository.upsertStage1Vote(eventId, userId, voteEnum)
         // Встреча с порогом набора (V83): голос «Иду» сразу кладёт в состав или в очередь, любой
-        // другой — выводит оттуда. У ⚡ срочной и 🌊 открытой голос по-прежнему только мнение.
+        // другой — выводит оттуда. У формата «сколько придёт» голос по-прежнему только мнение.
         rosterService.applyVote(event, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
         // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
@@ -98,7 +98,7 @@ class VoteService(
         if (isCollectingRoster(event)) stage1 ?: finalStatus
         else finalStatus ?: stage1
 
-    /** Встреча с порогом, у которой набор ещё идёт: голос и место значат разное. */
+    /** Встреча с лимитом, у которой набор ещё идёт: голос и место значат разное. */
     private fun isCollectingRoster(event: Event): Boolean =
         event.isRosterEvent && event.status == EventStatus.upcoming
 
@@ -168,11 +168,11 @@ class VoteService(
     @Transactional
     fun remind(eventId: UUID, userId: UUID, targetUserId: UUID?): RemindResultDto {
         val event = requireEventManager(eventId, userId)
-        // Окно то же, в котором участник может подтвердить (см. Stage2Service.confirmParticipation),
-        // плюс недобор состава (V83): там напоминание — кнопка в DM организатору, и событие в этот
-        // момент ещё `upcoming`, потому что набор продолжается, пока организатор решает.
-        val rosterShortfall = event.status == EventStatus.upcoming && event.rosterShortfallAt != null
-        if (event.status != EventStatus.stage_2 && !rosterShortfall) {
+        // Окно то же, в котором участник может ответить: подтверждение (Этап 2) либо идущий набор
+        // состава. Второе — событие ещё `upcoming` — и есть главный случай напоминания у форматов
+        // с лимитом: после закрытия состава отвечать уже нечего, а до него молчание участников
+        // решает, наберётся ли встреча вообще.
+        if (event.status != EventStatus.stage_2 && !isCollectingRoster(event)) {
             throw ValidationException("Confirmation is not open for this event")
         }
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")

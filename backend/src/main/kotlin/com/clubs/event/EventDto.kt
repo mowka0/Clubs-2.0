@@ -41,10 +41,9 @@ data class EventDetailDto(
     // молча стал бы собственным значением события.
     val stage2LeadMinutesOverride: Int?,
     val status: String,
-    // Срочная встреча (V69): рождается сразу в stage_2, Этапа 1 у неё нет. На механику не влияет —
-    // нужна подаче: страница события показывает формат («⚡ срочная» / «🌊 открытая» / «🎟 с местами»)
-    // теми же ярлыками, что карточки лент, где поле уже отдаётся.
-    val isUrgent: Boolean,
+    // Формат встречи (V85) — единственный дискриминатор для клиента: и бейдж в шапке, и тексты
+    // блока набора, и цена отказа читаются по нему, а не по комбинации лимита с флагами.
+    val format: EventFormat,
     val goingCount: Int,
     val maybeCount: Int,
     val notGoingCount: Int,
@@ -52,15 +51,14 @@ data class EventDetailDto(
     // Сколько участников клуба ещё не ответили на Этапе 2 (все с доступом, кроме сказавших
     // «не пойду» и уже ответивших). Только счётчик — имена отдаёт менеджерский /pending.
     val noAnswerCount: Int,
-    // --- Порог набора, формат 🎟 (V83) ---
-    // Момент закрытия набора (= eventDatetime − эффективный stage2LeadMinutes); null у 🌊 открытой,
-    // у которой набора нет. Считает бэкенд: у фронта нет глобального дефолта интервала.
+    // --- Набор состава (V85) ---
+    // Момент закрытия набора (= eventDatetime − эффективный stage2LeadMinutes); null у формата
+    // «сколько придёт», у которого набора нет. Считает бэкенд: у фронта нет глобального дефолта.
     val rosterDeadline: OffsetDateTime?,
-    // Состав закрыт: голоса больше не набирают порог, встреча состоится. У 🌊 всегда false.
+    // Состав закрыт: голоса больше не меняют его, встреча состоится. У «сколько придёт» всегда false.
     val rosterClosed: Boolean,
-    // Набор закрылся недобором, ждём решения организатора (продлить / провести / отменить).
-    val rosterShortfall: Boolean,
-    // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди».
+    // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди». Очередь бывает
+    // только у MAX: у MIN верхней границы нет, у ANY нет и лимита.
     val waitlistedCount: Int,
     // Сколько очков спишется, если участник ИЗ СОСТАВА откажется прямо сейчас (0 = бесплатно).
     // Цену считает сервер по RosterPolicy: клиент не выводит её из четырёх условий (тот же урок,
@@ -79,7 +77,9 @@ data class EventListItemDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val locationText: String?,
-    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    // Формат для бейджа карточки («🎯 не меньше N» / «🎟 не больше N» / «🌊 сколько придёт»).
+    val format: EventFormat,
+    // null = формат «сколько придёт» — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
     val goingCount: Int,
     val status: String,
@@ -101,10 +101,10 @@ data class MyEventListItemDto(
     val myParticipationStatus: String?,
     val goingCount: Int,
     val confirmedCount: Int,
-    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    // null = формат «сколько придёт» — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
-    // Срочная встреча (V69) — карточка показывает бейдж «⚡ срочная» вместо «🎟 обычная».
-    val isUrgent: Boolean,
+    // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+    val format: EventFormat,
     val actionRequired: Boolean,
     // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
     // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:
@@ -139,16 +139,19 @@ data class CreateEventRequest(
     @field:Future(message = "Event datetime must be in the future")
     val eventDatetime: OffsetDateTime,
 
-    // null = ОТКРЫТАЯ ВСТРЕЧА (V62): событие без лимита участников — отдельный продуктовый
-    // тип поверх того же движка. @Positive пропускает null по контракту Bean Validation,
-    // ненулевое значение валидируется как раньше. Инвариант пары с isOpenEvent — ниже.
+    // Число участников; смысл задаёт format. null = «сколько придёт». @Positive пропускает null
+    // по контракту Bean Validation, ненулевое значение валидируется как раньше. Инвариант пары
+    // с format — ниже.
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    // Явный флаг формата: открытая встреча заявляется НАМЕРЕННО, а не отсутствием participantLimit.
-    // Без флага случайно пропущенное поле лимита молча создавало бы событие другого продуктового
-    // типа (без гонки за места и репутации за посещение) вместо прежнего 400.
-    val isOpenEvent: Boolean = false,
+    // Формат встречи — ЕДИНСТВЕННОЕ поле, отвечающее на вопрос «сколько человек нужно» (V85).
+    // Раньше на него отвечали два независимых булевых флага (isOpenEvent + isUrgentEvent), и
+    // держать их непротиворечивыми приходилось тремя @AssertTrue. Формат заявляется НАМЕРЕННО,
+    // а не выводится из отсутствия лимита: пропущенное поле лимита должно давать 400, а не
+    // молча создавать событие другого продуктового типа.
+    @field:NotNull(message = "Event format is required")
+    val format: EventFormat,
 
     @field:Min(value = 1, message = "Voting opens days before must be at least 1")
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
@@ -157,17 +160,13 @@ data class CreateEventRequest(
     // За сколько МИНУТ до старта закрывается НАБОР СОСТАВА — выбор организатора (V67/V68,
     // с V83 поле несёт смысл «дедлайн набора»). null = глобальный дефолт
     // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 6ч/12ч/18ч/36ч/3 дня.
-    // Встречи, которым на набор времени не остаётся, закрывает формат «Срочная встреча»
-    // (isUrgentEvent). Диапазон ЗДЕСЬ уже, чем CHECK chk_events_stage2_lead_minutes (60..7200,
-    // V83): значения короче 6 часов рождаются только продлением набора из DM организатору.
+    // Встречу, до которой осталось меньше минимального интервала, формат MAX принимает как есть
+    // (дедлайн уже в прошлом → состав закроется ближайшим тиком), а MIN отвергает: иначе тот же
+    // тик отменил бы её, не дав никому проголосовать (EventService.createEvent).
+    // Диапазон ЗДЕСЬ уже, чем CHECK chk_events_stage2_lead_minutes (60..7200, V83).
     @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
-
-    // Срочная встреча (решение PO 2026-07-23): обычное событие с местами, но БЕЗ Этапа 1 —
-    // рождается сразу в stage_2, участники немедленно подтверждают места. Репутация работает
-    // как у обычного события. Явный флаг по тому же принципу, что isOpenEvent.
-    val isUrgentEvent: Boolean = false,
 
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
@@ -184,24 +183,17 @@ data class CreateEventRequest(
     val isSomeLocationProvided: Boolean
         get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
 
-    // Формат и лимит согласованы: открытая встреча — БЕЗ лимита, обычное событие — С лимитом.
-    // Ловит и старый баг-класс «забыли поле» (limit=null без флага → 400, как до V62), и
-    // противоречивый ввод (флаг + лимит одновременно).
-    @get:AssertTrue(message = "Open event must have no participant limit; a regular event requires one")
+    // Формат и лимит — один факт, записанный дважды: «сколько придёт» БЕЗ лимита, остальные С
+    // лимитом. Ловит и старый баг-класс «забыли поле лимита», и противоречивый ввод.
+    @get:AssertTrue(message = "Format 'any' must have no participant limit; other formats require one")
     val isParticipantLimitConsistent: Boolean
-        get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+        get() = (format == EventFormat.ANY) == (participantLimit == null)
 
-    // Открытая встреча целиком вне двухэтапки — свой lead Этапа 2 для неё бессмысленен и
-    // почти наверняка означает ошибку клиента, а не намерение.
-    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    // У «сколько придёт» набора нет — свой интервал для неё бессмысленен и почти наверняка
+    // означает ошибку клиента, а не намерение.
+    @get:AssertTrue(message = "Format 'any' has no roster; stage2LeadMinutes is not applicable")
     val isStage2LeadConsistent: Boolean
-        get() = !isOpenEvent || stage2LeadMinutes == null
-
-    // Срочная встреча = событие с местами (не открытая) и без своего интервала: Этапа 1 нет,
-    // поэтому «за сколько до старта переходить в Этап 2» к ней неприменимо.
-    @get:AssertTrue(message = "Urgent event must be a limited event without a custom stage 2 lead")
-    val isUrgentConsistent: Boolean
-        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
+        get() = format != EventFormat.ANY || stage2LeadMinutes == null
 }
 
 
@@ -233,9 +225,10 @@ data class TeaserEventDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val status: String,
-    // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая» — как на карточках ленты.
-    val isUrgent: Boolean,
-    val isOpenEvent: Boolean,
+    // Формат для бейджа — как на карточках ленты.
+    val format: EventFormat,
+    // Число участников: смысл задаёт format, null у «сколько придёт».
+    val participantLimit: Int?,
     // Раскладка фазы для счётчика: до Этапа 2 — «идут N» (голоса), после — «подтвердили N».
     val goingCount: Int,
     val confirmedCount: Int
@@ -251,12 +244,12 @@ data class TeaserEventDto(
  * избавляет от трёхзначной логики partial-update, где null неотличим от «поле не прислали».
  *
  * НЕ редактируется:
- * - формат встречи (обычная/открытая/срочная) — он определяет механику мест и репутации,
+ * - формат встречи — он определяет механику мест и репутации,
  *   смена формата на лету переписала бы правила уже идущего голосования;
  * - `votingOpensDaysBefore` — окно Этапа 1 уже открыто, менять его задним числом бессмысленно.
  *
  * Инварианты, зависящие от формата (лимит у открытой, свой интервал Этапа 2 у открытой и
- * срочной), проверяются в [EventService.updateEvent]: здесь формат неизвестен, он берётся
+ * без лимита), проверяются в [EventService.updateEvent]: здесь формат неизвестен, он берётся
  * из самого события.
  */
 data class UpdateEventRequest(

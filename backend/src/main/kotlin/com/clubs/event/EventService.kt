@@ -10,6 +10,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,7 +24,10 @@ class EventService(
     private val clubRoleGuard: ClubRoleGuard,
     private val eventMapper: EventMapper,
     private val eventPublisher: ApplicationEventPublisher,
-    private val skladchinaRepository: SkladchinaRepository
+    private val skladchinaRepository: SkladchinaRepository,
+    // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
+    // EventMapper. Нужен, чтобы проверить, помещается ли набор MIN-встречи до её начала.
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
 
     companion object {
@@ -45,17 +49,13 @@ class EventService(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
             locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() }
         )
-        val persisted = eventRepository.create(normalizedRequest, clubId, userId)
-        // Срочная встреча (решение PO 2026-07-23): Этапа 1 нет — событие рождается сразу в
-        // подтверждении мест, тем же transitionToStage2 и в той же транзакции. Уведомление
-        // одно (EventBotNotifier ниже): stage_2-событие зовёт подтверждать, а не голосовать.
-        val event = if (normalizedRequest.isUrgentEvent) {
-            eventRepository.transitionToStage2(persisted.id)
-            persisted.copy(status = EventStatus.stage_2, stage2Triggered = true)
-        } else persisted
+        requireRosterFitsBeforeStart(
+            normalizedRequest.format, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
+        )
+        val event = eventRepository.create(normalizedRequest, clubId, userId)
         log.info(
-            "Event created: id={} clubId={} title='{}' userId={} urgent={}",
-            event.id, clubId, event.title, userId, normalizedRequest.isUrgentEvent
+            "Event created: id={} clubId={} title='{}' userId={} format={}",
+            event.id, clubId, event.title, userId, normalizedRequest.format
         )
         // DM участникам рассылает EventBotNotifier на AFTER_COMMIT. Публикация внутри
         // транзакции позволяет слушателю вовсе не сработать, если внешний
@@ -164,7 +164,7 @@ class EventService(
      * только организатор/со-орг и только на Этапе 1 — с началом подтверждения мест правки
      * запрещены, подтвердившие обещали прийти в конкретное место и время. SQL-guard
      * (status=upcoming AND stage_2_triggered=false AND event_datetime > now) даёт 0 строк
-     * ⇒ 409 для события в Этапе 2 / срочного / начавшегося / завершённого / отменённого.
+     * ⇒ 409 для события в Этапе 2 / начавшегося / завершённого / отменённого.
      *
      * Дата ближе интервала Этапа 2 намеренно НЕ отклоняется — как при создании: событие
      * просто перейдёт в Этап 2 ближайшим тиком шедулера.
@@ -228,16 +228,36 @@ class EventService(
      */
     private fun validateFormatInvariants(event: Event, request: UpdateEventRequest) {
         if (event.isOpenEvent && request.participantLimit != null) {
-            throw ValidationException("Открытая встреча не имеет лимита участников")
+            throw ValidationException("У формата «сколько придёт» нет лимита участников")
         }
         if (!event.isOpenEvent && request.participantLimit == null) {
-            throw ValidationException("Для встречи с местами нужен лимит участников")
+            throw ValidationException("Для встречи с лимитом нужно число участников")
         }
         if (event.isOpenEvent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У открытой встречи нет Этапа 2 — интервал подтверждения неприменим")
+            throw ValidationException("У формата «сколько придёт» нет набора — интервал неприменим")
         }
-        if (event.isUrgent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У срочной встречи нет Этапа 1 — интервал подтверждения неприменим")
+        requireRosterFitsBeforeStart(event.format, request.eventDatetime, request.stage2LeadMinutes)
+    }
+
+    /**
+     * Набор MIN-встречи обязан помещаться до её начала: дедлайн в прошлом означает, что ближайший
+     * тик отменит встречу, не дав никому проголосовать. У MAX дедлайн в прошлом легален и значит
+     * «состав закроется сразу» — так покрывается бывший формат «срочная встреча».
+     *
+     * Проверка живёт здесь, а не в DTO: там неизвестен глобальный дефолт интервала.
+     */
+    private fun requireRosterFitsBeforeStart(
+        format: EventFormat,
+        eventDatetime: OffsetDateTime,
+        stage2LeadMinutes: Int?
+    ) {
+        if (format != EventFormat.MIN) return
+        val leadMinutes = (stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()
+        if (!eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(leadMinutes))) {
+            throw ValidationException(
+                "До встречи меньше, чем длится набор: формат «минимум участников» не успеет " +
+                    "собрать состав. Выберите «максимум участников» или сдвиньте дату."
+            )
         }
     }
 }

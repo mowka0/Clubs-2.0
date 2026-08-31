@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.daos
 
 
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.records.EventsRecord
 
@@ -313,13 +314,13 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
     fun fetchByIsUrgent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.IS_URGENT, *values.toTypedArray())
 
     /**
-     * Fetch records that have <code>roster_shortfall_at BETWEEN lowerInclusive
-     * AND upperInclusive</code>
+     * Fetch records that have <code>limit_kind BETWEEN lowerInclusive AND
+     * upperInclusive</code>
      */
-    fun fetchRangeOfRosterShortfallAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ROSTER_SHORTFALL_AT, lowerInclusive, upperInclusive)
+    fun fetchRangeOfLimitKind(lowerInclusive: LimitKind?, upperInclusive: LimitKind?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LIMIT_KIND, lowerInclusive, upperInclusive)
 
     /**
-     * Fetch records that have <code>roster_shortfall_at IN (values)</code>
+     * Fetch records that have <code>limit_kind IN (values)</code>
      */
-    fun fetchByRosterShortfallAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ROSTER_SHORTFALL_AT, *values)
+    fun fetchByLimitKind(vararg values: LimitKind): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LIMIT_KIND, *values)
 }

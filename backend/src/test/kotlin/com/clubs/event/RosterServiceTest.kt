@@ -2,6 +2,7 @@ package com.clubs.event
 
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import io.mockk.every
@@ -15,17 +16,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Набор состава формата «🎟 Встреча с местами» (docs/modules/event-roster-threshold.md):
- * голос кладёт в состав или очередь; дедлайн закрывает состав, если порог взят, и всего лишь
- * сообщает организатору о недоборе, если нет — набор при этом продолжается.
+ * Набор состава для форматов с лимитом (docs/modules/event-formats.md).
+ *
+ * MAX: голос кладёт в состав или очередь, дедлайн закрывает состав при любом числе участников.
+ * MIN: голос всегда кладёт в состав (верхней границы нет), дедлайн либо закрывает состав, либо
+ * отменяет встречу — это и есть правило, названное организатору при создании.
  */
 class RosterServiceTest {
 
     private val eventRepository = mockk<EventRepository>(relaxed = true)
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
+    private val eventService = mockk<EventService>(relaxed = true)
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     private val service = RosterService(
-        eventRepository, eventResponseRepository, eventPublisher, defaultLeadMinutes = 1080
+        eventRepository, eventResponseRepository, eventService, eventPublisher, defaultLeadMinutes = 1080
     )
 
     private val eventId = UUID.randomUUID()
@@ -33,11 +37,10 @@ class RosterServiceTest {
 
     private fun event(
         participantLimit: Int? = 6,
-        isUrgent: Boolean = false,
+        limitKind: LimitKind? = LimitKind.max,
         status: EventStatus = EventStatus.upcoming,
         eventDatetime: OffsetDateTime = OffsetDateTime.now().plusDays(2),
-        stage2LeadMinutes: Int? = null,
-        rosterShortfallAt: OffsetDateTime? = null
+        stage2LeadMinutes: Int? = null
     ) = Event(
         id = eventId,
         clubId = UUID.randomUUID(),
@@ -47,14 +50,13 @@ class RosterServiceTest {
         locationText = "Кофейня",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        limitKind = limitKind,
         votingOpensDaysBefore = 14,
         stage2LeadMinutes = stage2LeadMinutes,
-        isUrgent = isUrgent,
         status = status,
         stage2Triggered = status != EventStatus.upcoming,
         attendanceMarked = false,
         attendanceFinalized = false,
-        rosterShortfallAt = rosterShortfallAt,
         photoUrl = null,
         createdAt = null,
         updatedAt = null
@@ -90,7 +92,7 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `голос «Иду» при полном составе ставит в очередь`() {
+    fun `MAX, голос «Иду» при полном составе ставит в очередь`() {
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns response()
         every { eventResponseRepository.countConfirmed(eventId) } returns 6
 
@@ -98,6 +100,22 @@ class RosterServiceTest {
 
         verify(exactly = 1) {
             eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.waitlisted, FinalStatus.waitlisted)
+        }
+    }
+
+    @Test
+    fun `AC-1 MIN, голос «Иду» сверх порога всё равно кладёт в состав`() {
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns response()
+        every { eventResponseRepository.countConfirmed(eventId) } returns 6
+
+        service.applyVote(event(participantLimit = 6, limitKind = LimitKind.min), userId, Stage_1Vote.going)
+
+        // Верхней границы у формата нет: порог — это «сколько нужно», а не «сколько влезет».
+        verify(exactly = 1) {
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
+        }
+        verify(exactly = 0) {
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.waitlisted, any())
         }
     }
 
@@ -130,9 +148,8 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `срочная и открытая встречи набор не трогают`() {
-        service.applyVote(event(isUrgent = true), userId, Stage_1Vote.going)
-        service.applyVote(event(participantLimit = null), userId, Stage_1Vote.going)
+    fun `формат «сколько придёт» набор не трогает`() {
+        service.applyVote(event(participantLimit = null, limitKind = null), userId, Stage_1Vote.going)
 
         verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
         verify(exactly = 0) { eventResponseRepository.lockEventSlots(any()) }
@@ -141,77 +158,67 @@ class RosterServiceTest {
     // ---- закрытие набора ----
 
     @Test
-    fun `набрали к дедлайну — состав закрыт, участникам уходит DM`() {
+    fun `AC-4 MIN, порог взят к дедлайну — состав закрыт, участникам уходит DM`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 6
-        val target = event(participantLimit = 6)
+        val target = event(participantLimit = 6, limitKind = LimitKind.min)
 
         assertTrue(service.handleRosterDeadline(target))
 
         verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
         verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 6)) }
-        verify(exactly = 0) { eventRepository.markRosterShortfall(any(), any()) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test
-    fun `не набрали — состав НЕ закрывается, организатору уходит DM`() {
+    fun `AC-5 MIN, порог не взят — встреча отменяется с названной причиной`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 4
-        every { eventRepository.markRosterShortfall(eventId, any()) } returns 1
+        val target = event(participantLimit = 6, limitKind = LimitKind.min)
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        // Отмена идёт обычным каскадом (сбор → released, DM заинтересованным), а причина
+        // называет само правило формата — участник видит её в DM и на странице встречи.
+        verify(exactly = 1) {
+            eventService.cancelBySystem(target, "Не набрали 6 участников к закрытию набора")
+        }
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterClosedEvent>()) }
+    }
+
+    @Test
+    fun `AC-6 MAX закрывает состав при любом числе участников, включая ноль`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
         val target = event(participantLimit = 6)
 
         assertTrue(service.handleRosterDeadline(target))
 
-        verify(exactly = 1) { eventRepository.markRosterShortfall(eventId, any()) }
-        verify(exactly = 1) { eventPublisher.publishEvent(RosterShortfallEvent(target, 4, 6)) }
-        // Набор продолжается до самой встречи: перевода в stage_2 быть не должно.
-        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
-    }
-
-    @Test
-    fun `повторный тик по той же встрече второго DM не шлёт`() {
-        every { eventResponseRepository.countConfirmed(eventId) } returns 4
-        // Гард `roster_shortfall_at IS NULL`: отметка уже стоит, апдейт трогает ноль строк.
-        every { eventRepository.markRosterShortfall(eventId, any()) } returns 0
-        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now().minusMinutes(30))
-
-        assertTrue(service.handleRosterDeadline(target))
-
-        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterShortfallEvent>()) }
-        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
-    }
-
-    @Test
-    fun `добрали позже дедлайна — состав закрывается тем же тиком`() {
-        every { eventResponseRepository.countConfirmed(eventId) } returns 6
-        val target = event(participantLimit = 6, rosterShortfallAt = OffsetDateTime.now().minusHours(2))
-
-        assertTrue(service.handleRosterDeadline(target))
-
+        // Недобора у формата не существует: встреча состоится в любом случае.
         verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 6)) }
+        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 0)) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test
-    fun `встреча началась неполной — состав замораживается молча`() {
+    fun `AC-7 встреча уже началась — состав замораживается молча, MIN не отменяется`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 4
         val target = event(
             participantLimit = 6,
-            eventDatetime = OffsetDateTime.now().minusMinutes(1),
-            rosterShortfallAt = OffsetDateTime.now().minusHours(3)
+            limitKind = LimitKind.min,
+            eventDatetime = OffsetDateTime.now().minusMinutes(1)
         )
 
         assertTrue(service.handleRosterDeadline(target))
 
-        // Состав зафиксирован (иначе отметка явки читала бы пустой список), но «состав собран»
-        // посреди встречи никому не уходит.
+        // Состав зафиксирован (иначе отметка явки читала бы пустой список), но ни «состав
+        // собран» посреди встречи, ни отмена уже начавшейся встречи не происходят.
         verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
         verify(exactly = 0) { eventPublisher.publishEvent(any<RosterClosedEvent>()) }
-        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterShortfallEvent>()) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test
-    fun `срочная встреча идёт мимо набора`() {
-        assertEquals(false, service.handleRosterDeadline(event(isUrgent = true)))
-        assertEquals(false, service.handleRosterDeadline(event(participantLimit = null)))
+    fun `формат «сколько придёт» идёт мимо набора`() {
+        assertEquals(false, service.handleRosterDeadline(event(participantLimit = null, limitKind = null)))
     }
 
     @Test

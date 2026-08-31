@@ -4,6 +4,7 @@ import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
+import { formatBadge } from '../../utils/eventFormat';
 
 interface ActivityCardProps {
   activity: ActivityItemDto;
@@ -50,12 +51,11 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         {event.descriptionPreview !== null && (
           <div className="rd-ft-sub">{event.descriptionPreview}</div>
         )}
-        {/* Бейдж типа встречи — всегда (PO 2026-07-21: карточка на странице клуба была без типа;
-            ярлыки срочная/обычная/открытая с эмодзи пикера — PO 2026-07-23); статусные чипы
-            (Отменено / call-to-action) — рядом, в той же строке. */}
+        {/* Бейдж формата — всегда (PO 2026-07-21: карточка на странице клуба была без типа);
+            статусные чипы (Отменено / call-to-action) — рядом, в той же строке. */}
         <div className="rd-badges-row">
           <span className="rd-badge rd-neutral">
-            {event.isUrgent ? '⚡ Срочная' : event.participantLimit == null ? '🌊 Открытая' : '🎟 Обычная'}
+            {formatBadge(event.format, event.participantLimit)}
           </span>
           {event.status === 'cancelled' ? (
             <span className="rd-badge rd-decline">Отменено</span>

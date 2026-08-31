@@ -1,5 +1,7 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
+import com.clubs.event.toFormat
 import com.clubs.generated.jooq.tables.records.EventTemplatesRecord
 import org.springframework.stereotype.Component
 
@@ -17,8 +19,7 @@ class EventTemplateMapper {
         locationLon = record.locationLon,
         locationHint = record.locationHint,
         participantLimit = record.participantLimit,
-        isOpenEvent = record.isOpenEvent!!,
-        isUrgentEvent = record.isUrgentEvent!!,
+        format = record.limitKind.toFormat(),
         stage2LeadMinutes = record.stage2LeadMinutes,
         photoUrl = record.photoUrl,
         defaultWeekday = record.defaultWeekday,
@@ -42,8 +43,7 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            format = format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,
@@ -61,8 +61,7 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            format = format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,
@@ -83,8 +82,7 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            format = format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,

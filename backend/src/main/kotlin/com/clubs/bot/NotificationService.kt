@@ -1,8 +1,8 @@
 package com.clubs.bot
 
-import com.clubs.common.util.EventFormatTexts
 import com.clubs.common.util.absolutePhotoUrl
 import com.clubs.event.Event
+import com.clubs.event.EventFormat
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventResponseRepository
@@ -83,10 +83,8 @@ class NotificationService(
         // Единый шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где
         // и факты по формату. Счётчиков голосов в DM НЕТ (PO 2026-08-08): личное сообщение
         // не перерисовывается, и «Идут — 0» навсегда оставался нулём — живой счёт живёт в
-        // закрепе чата, который бот редактирует. Срочность внутри dmFacts берётся по флагу V69,
-        // а НЕ по статусу: обычное событие, созданное близко к старту, могло флипнуться в
-        // stage_2 до отправки async-DM и ошибочно назваться срочным.
-        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event, fmt)}"
+        // закрепе чата, который бот редактирует.
+        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event)}"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
@@ -195,18 +193,25 @@ class NotificationService(
     }
 
     /**
-     * Состав собран (V83): порог набора взят, встреча состоится. Участникам состава и очереди
-     * уходят РАЗНЫЕ тексты — «ждём вас» человеку в очереди было бы обманом. Просьбы что-либо
-     * подтверждать здесь нет: у формата 🎟 место даёт голос, а не подтверждение.
+     * Состав собран (V85): набор закрылся, встреча состоится. Участникам состава и очереди уходят
+     * РАЗНЫЕ тексты — «ждём вас» человеку в очереди было бы обманом. Просьбы что-либо подтверждать
+     * здесь нет: место даёт голос, а не подтверждение. Очередь бывает только у MAX, поэтому у
+     * остальных форматов вторая рассылка просто не находит адресатов.
      */
     @Async
     fun sendRosterClosed(event: Event, confirmedCount: Int) {
-        val limitPart = event.participantLimit?.let { " из $it" } ?: ""
         val webAppPath = "/events/${event.id}"
+        // Счёт читается по смыслу лимита: у MIN состав мог перерасти порог, и «7 из 6» выглядело
+        // бы опечаткой; у MAX знаменатель — это и есть число мест.
+        val countPart = when (event.format) {
+            EventFormat.MIN -> "Идут $confirmedCount, нужно было минимум ${event.participantLimit}"
+            EventFormat.MAX -> "Идут $confirmedCount из ${event.participantLimit}"
+            EventFormat.ANY -> "Идут $confirmedCount"
+        }
 
         val confirmedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.confirmed)
         val confirmedText = "✅ Состав собран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "Идут $confirmedCount$limitPart. Встреча состоится — ждём вас."
+            "$countPart. Встреча состоится — ждём вас."
         confirmedIds.forEach { sendDm(it.toString(), confirmedText, webAppPath = webAppPath, buttonText = "Открыть встречу") }
 
         val waitlistedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.waitlisted)
@@ -218,37 +223,6 @@ class NotificationService(
             "Roster-closed DM: eventId={} confirmed={} waitlisted={}",
             event.id, confirmedIds.size, waitlistedIds.size
         )
-    }
-
-    /**
-     * Состав НЕ набрался к дедлайну (V83, упрощение PO 2026-08-31). Набор при этом продолжается —
-     * это уведомление, а не развилка с таймером: встреча состоится в том составе, который
-     * соберётся, а решение отменить её живёт на странице встречи, где его нельзя нажать случайно.
-     * Уходит только организатору и ровно один раз (гард в `markRosterShortfall`) — участникам в
-     * этот момент писать не о чем.
-     */
-    @Async
-    fun sendRosterShortfall(
-        event: Event,
-        organizerTelegramId: Long,
-        confirmedCount: Int,
-        participantLimit: Int,
-        pendingCount: Int
-    ) {
-        val pendingLine = if (pendingCount > 0) {
-            "\nЕщё $pendingCount ${plural(pendingCount, "участник", "участника", "участников")} " +
-                "не ${plural(pendingCount, "ответил", "ответили", "ответили")} — им можно напомнить."
-        } else ""
-        val text = "⏳ Состав пока не набрался\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "В составе $confirmedCount из $participantLimit.$pendingLine\n\n" +
-            "Набор продолжается: места можно занять до начала встречи. Если состав так и не " +
-            "соберётся, встреча состоится в неполном составе — или отмените её на странице."
-
-        sendDm(
-            organizerTelegramId.toString(), text,
-            webAppPath = "/events/${event.id}", buttonText = "Открыть встречу"
-        )
-        log.info("Roster-shortfall DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
     }
 
     /**
@@ -273,18 +247,6 @@ class NotificationService(
             webAppPath = "/events/${event.id}", buttonText = "Открыть встречу"
         )
         log.info("Roster-broken DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, participantLimit)
-    }
-
-    /** Русская форма числительного для «N участников не ответили». */
-    private fun plural(n: Int, one: String, few: String, many: String): String {
-        val mod100 = n % 100
-        val mod10 = n % 10
-        return when {
-            mod100 in 11..14 -> many
-            mod10 == 1 -> one
-            mod10 in 2..4 -> few
-            else -> many
-        }
     }
 
     /**

@@ -200,13 +200,13 @@ class UserEventsControllerTest {
         insertEvent(eventB, clubAlphaId, "Already Voted", future(2), status = "upcoming", votingOpensDaysBefore = 14)
         insertEventResponse(eventB, memberUserId, stage1Vote = "going")
 
-        // Event C: срочная встреча в stage_2, пользователь голосовал going, но не подтвердил →
-        // actionRequired = true (позже по времени). Именно СРОЧНАЯ: у встречи с порогом набора
-        // (V83) подтверждений нет, и действие на закрытом составе не требуется.
+        // Event C: встреча формата «сколько придёт» в stage_2, пользователь голосовал going, но
+        // не подтвердил → actionRequired = true (позже по времени). Именно этот формат: у встреч
+        // с лимитом (V85) подтверждений нет, и действие на закрытом составе не требуется.
         val eventC = UUID.randomUUID()
         insertEvent(
             eventC, clubBetaId, "Stage 2 Action", future(5),
-            status = "stage_2", votingOpensDaysBefore = 14, isUrgent = true
+            status = "stage_2", votingOpensDaysBefore = 14, participantLimit = null
         )
         insertEventResponse(eventC, memberUserId, stage1Vote = "going")
 
@@ -550,14 +550,14 @@ class UserEventsControllerTest {
         eventDatetime: OffsetDateTime,
         status: String,
         votingOpensDaysBefore: Int = 14,
-        // Срочная встреча: у неё Этап 2 — это подтверждение мест, и «требуется действие» на нём
-        // остаётся. У встречи с порогом набора (V83) состав закрывается сам, действий нет.
-        isUrgent: Boolean = false
+        // null = формат «сколько придёт»: у него Этап 2 — это подтверждение участия, и «требуется
+        // действие» на нём остаётся. У форматов с лимитом (V85) состав закрывается сам.
+        participantLimit: Int? = 10
     ) {
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, is_urgent)
-            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', 10, $votingOpensDaysBefore, '$status'::event_status, $isUrgent)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, limit_kind)
+            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', ${participantLimit ?: "NULL"}, $votingOpensDaysBefore, '$status'::event_status, ${participantLimit?.let { "'max'" } ?: "NULL"}::limit_kind)
             """.trimIndent()
         )
     }

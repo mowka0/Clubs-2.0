@@ -12,23 +12,25 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Набор состава формата «🎟 Встреча с местами» (V83, решения PO 2026-08-21 и 2026-08-31).
+ * Набор состава для форматов с лимитом (V85, решение PO 2026-08-31).
  *
- * `participant_limit` здесь читается как ПОРОГ («сколько человек нужно»), а не как потолок:
- * голос «Иду» кладёт человека в состав немедленно, отдельного «подтвердите участие» у формата
- * больше нет. Дедлайн набора — момент, когда состав МОЖЕТ закрыться: порог взят — закрывается и
- * встреча состоится; не взят — набор просто продолжается до самой встречи, а организатор
- * получает одно сообщение о недоборе. Ни автоотмены, ни продления: единственное решение при
- * недоборе — отменить встречу, и оно живёт на её странице, как у любой другой встречи.
+ * `participant_limit` читается через `limit_kind`, и от него зависит всё поведение набора:
+ *  - **MIN** — лимит это ПОРОГ. Голос «Иду» всегда кладёт в состав, верхней границы нет;
+ *    в дедлайн порог либо взят (встреча состоится), либо встреча отменяется.
+ *  - **MAX** — лимит это ПОТОЛОК. Голос «Иду» занимает место или встаёт в очередь; в дедлайн
+ *    состав закрывается при любом числе участников, недобора у формата не существует.
  *
- * Гонка за места осталась только у ⚡ срочной (Stage2Service).
+ * Отмена по недобору — не «робот решил», а исполнение правила, названного организатору при
+ * создании и привязанного к дедлайну, который он сам и выбрал. Продления набора, окна ответа
+ * организатора и автоотмены по молчанию не существует: бездействие встречу не отменяет.
  *
- * Спека: docs/modules/event-roster-threshold.md.
+ * Спека: docs/modules/event-formats.md.
  */
 @Service
 class RosterService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
+    private val eventService: EventService,
     private val eventPublisher: ApplicationEventPublisher,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service.
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val defaultLeadMinutes: Long
@@ -37,17 +39,15 @@ class RosterService(
     private val log = LoggerFactory.getLogger(RosterService::class.java)
 
     /**
-     * Голос Этапа 1 на встрече с порогом: «Иду» занимает место или встаёт в очередь, любой другой
-     * голос из состава выводит. Вызывается из [VoteService.castVote] в той же транзакции, сразу
-     * после записи самого голоса.
+     * Голос Этапа 1 на встрече с лимитом: «Иду» занимает место, любой другой голос из состава
+     * выводит. Вызывается из [VoteService.castVote] в той же транзакции, сразу после записи голоса.
      *
-     * Слот-лок — тот же, что у подтверждения/отказа: два «Иду» на последнее место не должны оба
-     * пройти проверку `confirmedCount < limit`.
+     * Слот-лок — тот же, что у подтверждения/отказа: два «Иду» на последнее место MAX-встречи не
+     * должны оба пройти проверку `confirmedCount < limit`.
      */
     @Transactional
     fun applyVote(event: Event, userId: UUID, vote: Stage_1Vote) {
         val limit = event.participantLimit ?: return
-        if (!event.isRosterEvent) return
 
         eventResponseRepository.lockEventSlots(event.id)
         val response = eventResponseRepository.findByEventAndUser(event.id, userId) ?: return
@@ -56,8 +56,11 @@ class RosterService(
             // Уже в составе или в очереди — повторный «Иду» ничего не меняет (идемпотентность).
             if (response.stage2Vote == Stage_2Vote.confirmed || response.stage2Vote == Stage_2Vote.waitlisted) return
             val taken = eventResponseRepository.countConfirmed(event.id)
-            val place = if (taken < limit) Stage_2Vote.confirmed else Stage_2Vote.waitlisted
-            val finalStatus = if (taken < limit) FinalStatus.confirmed else FinalStatus.waitlisted
+            // У MIN верхней границы нет: лимит — порог, «нужно минимум столько», и состав сверх
+            // него растёт свободно. Очередь у формата недостижима по построению.
+            val fits = event.format == EventFormat.MIN || taken < limit
+            val place = if (fits) Stage_2Vote.confirmed else Stage_2Vote.waitlisted
+            val finalStatus = if (fits) FinalStatus.confirmed else FinalStatus.waitlisted
             eventResponseRepository.updateStage2Vote(response.id, place, finalStatus)
             log.info("Roster vote: eventId={} userId={} place={} taken={}/{}", event.id, userId, place, taken, limit)
             return
@@ -73,18 +76,12 @@ class RosterService(
     }
 
     /**
-     * Дедлайн набора наступил. Порог взят — состав закрывается, встреча состоится. Не взят —
-     * НИЧЕГО не закрывается: набор продолжается до самой встречи, и ближайший тик закроет состав,
-     * как только людей станет достаточно (решение PO 2026-08-31, упрощение V83). Организатору при
-     * этом уходит ровно одно сообщение — «ждали шестерых, пока четверо».
-     *
-     * Прежняя развилка «продлить / провести меньшим составом / отменить» с автоотменой по молчанию
-     * убрана целиком: три таймера вместо одного никто не мог удержать в голове, а бездействие,
-     * отменяющее встречу, противоречило соседнему случаю — распавшемуся составу, где бездействие
-     * означает «проводим». Теперь правило одно на оба: **бездействие встречу не отменяет**.
+     * Дедлайн набора наступил. Что случится — свойство формата, и организатор знал об этом,
+     * когда его выбирал: MAX закрывает состав при любом числе участников, MIN закрывает только
+     * при взятом пороге, а иначе отменяет встречу.
      *
      * Вызывается из [Stage2Service] вместо обычного перехода в Этап 2. Возвращает true, если
-     * событие обработано как встреча с порогом.
+     * событие обработано как встреча с набором.
      */
     @Transactional
     fun handleRosterDeadline(event: Event): Boolean {
@@ -93,20 +90,20 @@ class RosterService(
 
         val confirmed = eventResponseRepository.countConfirmed(event.id)
         when {
-            confirmed >= limit -> closeRoster(event, confirmed)
-            // Встреча уже началась, а порог так и не взят: состав замораживаем молча — объявлять
-            // «состав собран» посреди встречи не о чем, но зафиксировать его надо. Иначе событие
-            // висело бы в наборе до часового прохода завершения, принимая голоса, а список
-            // участников для отметки явки остался бы пустым (он читает состав, а не голоса).
+            // Встреча успела начаться, а тик дошёл только сейчас: объявлять что-либо посреди
+            // встречи не о чем, но состав зафиксировать надо — иначе событие висело бы в наборе,
+            // принимая голоса, а список для отметки явки остался бы пустым (он читает состав, а
+            // не голоса Этапа 1). Отменять начавшуюся встречу тоже поздно, и SQL-guard внутри
+            // cancelEvent этого не даст — поэтому ветка общая для обоих форматов.
             !event.eventDatetime.isAfter(OffsetDateTime.now()) -> {
                 eventRepository.transitionToStage2(event.id)
                 log.info("Roster frozen at start: eventId={} confirmed={}/{}", event.id, confirmed, limit)
             }
-            // Гард `roster_shortfall_at IS NULL` внутри markRosterShortfall и есть «ровно один раз»:
-            // тик возвращается к этому событию каждую минуту, пока набор не закроется.
-            eventRepository.markRosterShortfall(event.id, OffsetDateTime.now()) > 0 -> {
-                eventPublisher.publishEvent(RosterShortfallEvent(event, confirmed, limit))
-                log.info("Roster shortfall: eventId={} confirmed={}/{}", event.id, confirmed, limit)
+            event.format == EventFormat.MAX || confirmed >= limit -> closeRoster(event, confirmed)
+            // MIN, порог не взят: система выполняет обещание, названное правилом формата.
+            else -> {
+                eventService.cancelBySystem(event, shortfallReason(limit))
+                log.info("Roster shortfall cancel: eventId={} confirmed={}/{}", event.id, confirmed, limit)
             }
         }
         return true
@@ -115,6 +112,9 @@ class RosterService(
     /** Момент закрытия набора: дедлайн = старт минус интервал (свой у события или дефолтный). */
     fun rosterDeadline(event: Event): OffsetDateTime =
         event.eventDatetime.minusMinutes((event.stage2LeadMinutes ?: defaultLeadMinutes.toInt()).toLong())
+
+    /** Причина отмены, которую увидят участники в DM и на странице встречи. */
+    private fun shortfallReason(limit: Int) = "Не набрали $limit участников к закрытию набора"
 
     /** Состав закрыт: голоса больше не набирают порог, встреча состоится. */
     private fun closeRoster(event: Event, confirmed: Int) {

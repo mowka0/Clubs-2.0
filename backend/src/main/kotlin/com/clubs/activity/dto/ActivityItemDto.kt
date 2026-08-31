@@ -1,5 +1,6 @@
 package com.clubs.activity.dto
 
+import com.clubs.event.EventFormat
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -36,10 +37,10 @@ sealed class ActivityItemDto {
         val eventDatetime: OffsetDateTime,
         // null = место не указано (опционально с V58).
         val locationText: String?,
-        // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+        // null = формат «сколько придёт» — карточка показывает счёт без знаменателя.
         val participantLimit: Int?,
-        // Срочная встреча (V69) — карточка показывает бейдж «⚡ Срочная» вместо «🎟 Обычная».
-        val isUrgent: Boolean,
+        // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+        val format: EventFormat,
         val goingCount: Int,
         // Размер подтверждённого ростера stage-2. Лента показывает `goingCount` во время stage 1
         // и переключается на `confirmedCount`, как только голосование закрывается (stage_2/completed),

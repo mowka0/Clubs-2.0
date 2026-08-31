@@ -254,11 +254,8 @@ class EventReminderRepositoryTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                participant_limit, voting_opens_days_before, status, stage_2_triggered,
-                attendance_marked, attendance_reminder_sent, attendance_finalized)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', 10, 14,
-                '$status'::event_status, true, $attendanceMarked, $attendanceReminderSent, $attendanceFinalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, stage_2_triggered, attendance_marked, attendance_reminder_sent, attendance_finalized, limit_kind)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status, true, $attendanceMarked, $attendanceReminderSent, $attendanceFinalized, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
             """.trimIndent()
         )
         return id

@@ -52,7 +52,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'completed',
-    isUrgent: false,
+    format: 'max',
     goingCount: 2,
     maybeCount: 0,
     notGoingCount: 1,
@@ -60,7 +60,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     noAnswerCount: 0,
     // Событие прошло — дедлайн отказа неактуален; задаём валидную дату (окно закрыто по eventHappened).
     stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
-    rosterDeadline: null, rosterClosed: true, rosterShortfall: false, waitlistedCount: 0, declineCostPoints: 0,
+    rosterDeadline: null, rosterClosed: true, waitlistedCount: 0, declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,

@@ -40,12 +40,6 @@ interface EventRepository {
      */
     fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event>
 
-    /**
-     * Отмечает, что организатору сообщили о недоборе. Гард `roster_shortfall_at IS NULL` делает
-     * отметку одноразовой: тик возвращается к встрече каждую минуту, а DM уходит ровно один раз.
-     */
-    fun markRosterShortfall(id: UUID, at: OffsetDateTime): Int
-
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 
     /**

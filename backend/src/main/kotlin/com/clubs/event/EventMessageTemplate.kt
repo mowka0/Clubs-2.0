@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter
  *
  * Форма:
  * ```
- * <b>Срочная встреча</b>
+ * <b>Встреча: не больше 20</b>
  *
  * Название
  * Описание
@@ -29,10 +29,10 @@ import java.time.format.DateTimeFormatter
 object EventMessageTemplate {
 
     /** Формат встречи словами — он же заголовок сообщения. Словарь общий с бейджами карточек. */
-    fun formatName(event: Event): String = when {
-        event.isUrgent -> "Срочная встреча"
-        event.isOpenEvent -> "Открытая встреча"
-        else -> "Обычная встреча"
+    fun formatName(event: Event): String = when (event.format) {
+        EventFormat.MIN -> "Встреча: не меньше ${event.participantLimit}"
+        EventFormat.MAX -> "Встреча: не больше ${event.participantLimit}"
+        EventFormat.ANY -> "Встреча: сколько придёт"
     }
 
     /**
@@ -59,16 +59,12 @@ object EventMessageTemplate {
     }
 
     /**
-     * Хвост ЛИЧНОГО сообщения: только неизменные факты — сколько мест и (у срочной, живущей
-     * сразу в Этапе 2) до когда подтверждать. Живых счётчиков тут намеренно нет (PO 2026-08-08):
-     * DM отправляется один раз и не перерисовывается, поэтому «✅ Идут — 0» навсегда оставался
-     * нулём и спорил с закрепом в чате, который как раз обновляется по ходу голосования.
+     * Хвост ЛИЧНОГО сообщения: только неизменный факт — что означает число участников. Живых
+     * счётчиков тут намеренно нет (PO 2026-08-08): DM отправляется один раз и не перерисовывается,
+     * поэтому «✅ Идут — 0» навсегда оставался нулём и спорил с закрепом в чате, который как раз
+     * обновляется по ходу голосования.
      */
-    fun dmFacts(event: Event, fmt: DateTimeFormatter): String {
-        val sb = StringBuilder(seatsLine(event))
-        if (event.isUrgent) sb.append("\n⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}")
-        return sb.toString()
-    }
+    fun dmFacts(event: Event): String = seatsLine(event)
 
     /**
      * Счётчики НАБОРА СОСТАВА (формат 🎟, V83): голос «Иду» уже кладёт в состав, поэтому в закрепе
@@ -78,15 +74,30 @@ object EventMessageTemplate {
      */
     fun rosterStats(event: Event, confirmed: Int, deadline: OffsetDateTime, fmt: DateTimeFormatter): String {
         val limit = event.participantLimit ?: return ""
-        val shortage = (limit - confirmed).coerceAtLeast(0)
-        return "👥 Собрались $confirmed из $limit — нужно ещё $shortage.\n" +
-            "⏳ Набор закрывается ${deadline.format(fmt)}. Не наберём — встреча не состоится."
+        val left = (limit - confirmed).coerceAtLeast(0)
+        val counts = when (event.format) {
+            // Порог мог быть уже взят и даже перерасти себя — «нужно ещё 0» читалось бы как сбой.
+            EventFormat.MIN -> if (left > 0) "👥 Собрались $confirmed из $limit — нужно ещё $left."
+                else "👥 Собрались $confirmed — минимум набран."
+            EventFormat.MAX -> if (left > 0) "👥 Заняты $confirmed из $limit мест — свободно $left."
+                else "👥 Мест нет: $confirmed из $limit. Дальше — очередь на замену."
+            EventFormat.ANY -> return ""
+        }
+        // Что случится в дедлайн — свойство формата, и молчать об этом нельзя: без этой строки
+        // набор читается как бессрочный, и голосовать «потом» кажется безопасным.
+        val outcome = if (event.format == EventFormat.MIN) " Не наберём — встреча отменится."
+            else " Состав закроется тем, кто успел."
+        return "$counts\n⏳ Набор закрывается ${deadline.format(fmt)}.$outcome"
     }
 
     /** Состав закрыт: встреча состоится. Очередь упоминаем, только если она есть. */
     fun rosterClosedStats(event: Event, confirmed: Int, waitlisted: Int): String {
-        val limit = event.participantLimit
-        val head = if (limit != null) "✅ Состав собран: $confirmed из $limit." else "✅ Состав собран: $confirmed."
+        // У MIN состав мог перерасти порог, и знаменатель «7 из 6» читался бы как опечатка.
+        val head = when (event.format) {
+            EventFormat.MIN -> "✅ Состав собран: $confirmed (нужно было ${event.participantLimit})."
+            EventFormat.MAX -> "✅ Состав собран: $confirmed из ${event.participantLimit}."
+            EventFormat.ANY -> "✅ Состав собран: $confirmed."
+        }
         val queue = if (waitlisted > 0) {
             "\n📋 В очереди — $waitlisted: если кто-то не сможет, место перейдёт им."
         } else ""
@@ -109,16 +120,19 @@ object EventMessageTemplate {
         return sb.toString()
     }
 
-    /** Строка о местах: у открытой встречи лимита нет — говорим суть формата, а не «Мест — null». */
-    private fun seatsLine(event: Event): String =
-        event.participantLimit?.let { "👥 Мест — $it" } ?: OPEN_EVENT_LIMIT_LINE
+    /**
+     * Что означает число участников — одна строка на все бот-поверхности (DM, /status, закреп).
+     * Формат без лимита сообщает свою суть, а не «Мест — null».
+     */
+    fun seatsLine(event: Event): String = when (event.format) {
+        EventFormat.MIN -> "👥 Нужно минимум ${event.participantLimit} — иначе встреча отменится"
+        EventFormat.MAX -> "👥 Мест — ${event.participantLimit}"
+        EventFormat.ANY -> "👥 Без ограничений — приходят все желающие, репутация не считается"
+    }
 
     /** HTML parse_mode: `&`, `<`, `>` в пользовательском вводе ломали бы разметку/давали инъекцию тегов. */
     fun escapeHtml(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-    // Открытая встреча вместо числа мест сообщает свою суть: приходят все желающие.
-    private const val OPEN_EVENT_LIMIT_LINE = "👥 Без лимита мест — приходят все желающие"
 
     /**
      * Призыв проголосовать. Живёт здесь, а не в отдельных рендерах: одну и ту же строку

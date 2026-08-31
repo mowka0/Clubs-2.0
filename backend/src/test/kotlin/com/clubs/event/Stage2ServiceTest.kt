@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
@@ -409,11 +410,15 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `decline that drops a closed roster below the threshold calls the organizer (V83)`() {
+    fun `AC-10 decline that drops a MIN roster below the threshold calls the organizer`() {
         // Порог 2, в составе было двое, замены нет → состав стал неполным. Организатор должен
-        // узнать об этом сам, а не открыв случайно экран встречи.
+        // узнать об этом сам, а не открыв случайно экран встречи. У MAX распавшегося состава не
+        // бывает — там место просто пустует.
         every { eventRepository.findById(eventId) } returns
-            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 2)
+            event(
+                eventDatetime = OffsetDateTime.now().plusHours(2),
+                participantLimit = 2, limitKind = LimitKind.min
+            )
         every { membershipRepository.isMember(userId, clubId) } returns true
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
             response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
@@ -455,8 +460,9 @@ class Stage2ServiceTest {
     private fun event(
         eventDatetime: OffsetDateTime,
         status: EventStatus = EventStatus.stage_2,
-        // null = открытая встреча (V62) — кейсы AC-OPEN1/2 передают null явно.
-        participantLimit: Int? = 10
+        // null = формат «сколько придёт» — кейсы AC-OPEN1/2 передают null явно.
+        participantLimit: Int? = 10,
+        limitKind: LimitKind? = participantLimit?.let { LimitKind.max }
     ) = Event(
         id = eventId,
         clubId = clubId,
@@ -466,6 +472,7 @@ class Stage2ServiceTest {
         locationText = "Place",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        limitKind = limitKind,
         votingOpensDaysBefore = 14,
         status = status,
         stage2Triggered = true,

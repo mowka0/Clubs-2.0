@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
@@ -35,6 +36,7 @@ class EventMapperTest {
         locationText = "Place",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        limitKind = participantLimit?.let { LimitKind.max },
         votingOpensDaysBefore = votingOpensDaysBefore,
         stage2LeadMinutes = stage2LeadMinutes,
         status = status,
@@ -114,12 +116,13 @@ class EventMapperTest {
         assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isFalse()
     }
 
-    // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23):
-    // голос Этапа 1 не финален (даже «Не пойду» может передумать), у срочной (V69) его нет вовсе.
+    // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23): голос
+    // Этапа 1 не финален, даже «Не пойду» может передумать. Верно для формата «сколько придёт» —
+    // у форматов с лимитом состав закрывается сам, и подтверждать нечего.
     @Test
-    fun `stage_2 with no vote (urgent case) and no final status is actionRequired`() {
+    fun `stage_2 with no vote and no final status is actionRequired`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null, limitKind = null),
             myVote = null,
             myFinalStatus = null,
             isHistory = false
@@ -129,9 +132,9 @@ class EventMapperTest {
     }
 
     @Test
-    fun `stage_2 with a not_going stage-1 vote is still actionRequired (urgent event)`() {
+    fun `stage_2 with a not_going stage-1 vote is still actionRequired`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null, limitKind = null),
             myVote = Stage_1Vote.not_going,
             myFinalStatus = null,
             isHistory = false
@@ -143,7 +146,7 @@ class EventMapperTest {
     @Test
     fun `stage_2 stops being actionRequired once the user decided on stage 2`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null, limitKind = null),
             myVote = null,
             myFinalStatus = FinalStatus.confirmed,
             isHistory = false

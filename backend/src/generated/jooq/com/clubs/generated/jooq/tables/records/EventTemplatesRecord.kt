@@ -4,6 +4,7 @@
 package com.clubs.generated.jooq.tables.records
 
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.EventTemplates
 
 import java.time.LocalTime
@@ -63,45 +64,37 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
         set(value): Unit = set(9, value)
         get(): Int? = get(9) as Int?
 
-    @Suppress("INAPPLICABLE_JVM_NAME")
-    @set:JvmName("setIsOpenEvent")
-    open var isOpenEvent: Boolean?
-        set(value): Unit = set(10, value)
-        get(): Boolean? = get(10) as Boolean?
-
-    @Suppress("INAPPLICABLE_JVM_NAME")
-    @set:JvmName("setIsUrgentEvent")
-    open var isUrgentEvent: Boolean?
-        set(value): Unit = set(11, value)
-        get(): Boolean? = get(11) as Boolean?
-
     open var stage2LeadMinutes: Int?
-        set(value): Unit = set(12, value)
-        get(): Int? = get(12) as Int?
+        set(value): Unit = set(10, value)
+        get(): Int? = get(10) as Int?
 
     open var photoUrl: String?
-        set(value): Unit = set(13, value)
-        get(): String? = get(13) as String?
+        set(value): Unit = set(11, value)
+        get(): String? = get(11) as String?
 
     open var defaultWeekday: Short?
-        set(value): Unit = set(14, value)
-        get(): Short? = get(14) as Short?
+        set(value): Unit = set(12, value)
+        get(): Short? = get(12) as Short?
 
     open var defaultTime: LocalTime?
-        set(value): Unit = set(15, value)
-        get(): LocalTime? = get(15) as LocalTime?
+        set(value): Unit = set(13, value)
+        get(): LocalTime? = get(13) as LocalTime?
 
     open var createdBy: UUID
-        set(value): Unit = set(16, value)
-        get(): UUID = get(16) as UUID
+        set(value): Unit = set(14, value)
+        get(): UUID = get(14) as UUID
 
     open var createdAt: OffsetDateTime?
-        set(value): Unit = set(17, value)
-        get(): OffsetDateTime? = get(17) as OffsetDateTime?
+        set(value): Unit = set(15, value)
+        get(): OffsetDateTime? = get(15) as OffsetDateTime?
 
     open var updatedAt: OffsetDateTime?
-        set(value): Unit = set(18, value)
-        get(): OffsetDateTime? = get(18) as OffsetDateTime?
+        set(value): Unit = set(16, value)
+        get(): OffsetDateTime? = get(16) as OffsetDateTime?
+
+    open var limitKind: LimitKind?
+        set(value): Unit = set(17, value)
+        get(): LimitKind? = get(17) as LimitKind?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -112,7 +105,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
     /**
      * Create a detached, initialised EventTemplatesRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, name: String, title: String, description: String? = null, locationText: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, participantLimit: Int? = null, isOpenEvent: Boolean? = null, isUrgentEvent: Boolean? = null, stage2LeadMinutes: Int? = null, photoUrl: String? = null, defaultWeekday: Short? = null, defaultTime: LocalTime? = null, createdBy: UUID, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, name: String, title: String, description: String? = null, locationText: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, participantLimit: Int? = null, stage2LeadMinutes: Int? = null, photoUrl: String? = null, defaultWeekday: Short? = null, defaultTime: LocalTime? = null, createdBy: UUID, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, limitKind: LimitKind? = null): this() {
         this.id = id
         this.clubId = clubId
         this.name = name
@@ -123,8 +116,6 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
         this.locationLon = locationLon
         this.locationHint = locationHint
         this.participantLimit = participantLimit
-        this.isOpenEvent = isOpenEvent
-        this.isUrgentEvent = isUrgentEvent
         this.stage2LeadMinutes = stage2LeadMinutes
         this.photoUrl = photoUrl
         this.defaultWeekday = defaultWeekday
@@ -132,6 +123,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
         this.createdBy = createdBy
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.limitKind = limitKind
         resetChangedOnNotNull()
     }
 
@@ -150,8 +142,6 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
             this.locationLon = value.locationLon
             this.locationHint = value.locationHint
             this.participantLimit = value.participantLimit
-            this.isOpenEvent = value.isOpenEvent
-            this.isUrgentEvent = value.isUrgentEvent
             this.stage2LeadMinutes = value.stage2LeadMinutes
             this.photoUrl = value.photoUrl
             this.defaultWeekday = value.defaultWeekday
@@ -159,6 +149,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
             this.createdBy = value.createdBy
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.limitKind = value.limitKind
             resetChangedOnNotNull()
         }
     }

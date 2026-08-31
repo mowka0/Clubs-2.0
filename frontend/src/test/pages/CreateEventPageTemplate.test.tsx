@@ -42,8 +42,7 @@ const TEMPLATE: EventTemplateDto = {
   locationLon: 37.64,
   locationHint: 'Вход со двора',
   participantLimit: 12,
-  isOpenEvent: false,
-  isUrgentEvent: false,
+  format: 'max',
   stage2LeadMinutes: 2160,
   photoUrl: null,
   defaultWeekday: 2,
@@ -109,22 +108,23 @@ describe('CreateEventPage — открытие по шаблону', () => {
     expect(picked.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('AC-7 шаблон открытой встречи прячет степпер лимита', async () => {
-    mockTemplates([{ ...TEMPLATE, isOpenEvent: true, participantLimit: null, stage2LeadMinutes: null }]);
+  it('AC-7 шаблон «сколько придёт» прячет степпер лимита и блок набора', async () => {
+    mockTemplates([{ ...TEMPLATE, format: 'any', participantLimit: null, stage2LeadMinutes: null }]);
     renderPage('?template=tpl-1');
 
     await screen.findByDisplayValue('Разговорный клуб');
-    expect(screen.getByRole('heading', { name: 'Открытая встреча' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Лимит участников')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Сколько придёт' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Сколько всего мест')).toBeNull();
+    expect(screen.queryByText('Набор состава')).toBeNull();
   });
 
-  it('AC-7 шаблон срочной встречи прячет блок интервала Этапа 2', async () => {
-    mockTemplates([{ ...TEMPLATE, isUrgentEvent: true, stage2LeadMinutes: null }]);
+  it('AC-7 шаблон «минимума» подписывает лимит и правило по-своему', async () => {
+    mockTemplates([{ ...TEMPLATE, format: 'min', participantLimit: 6 }]);
     renderPage('?template=tpl-1');
 
     await screen.findByDisplayValue('Разговорный клуб');
-    expect(screen.getByRole('heading', { name: 'Срочная встреча' })).toBeInTheDocument();
-    expect(screen.queryByText('Подтверждение мест')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Минимум участников' })).toBeInTheDocument();
+    expect(screen.getByText(/Собираемся, если будет минимум 6 человек/)).toBeInTheDocument();
   });
 
   it('удалённый шаблон не роняет форму, а честно об этом сообщает', async () => {
@@ -132,7 +132,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     renderPage('?template=tpl-1');
 
     expect(await screen.findByText(/Шаблон не найден/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Новое событие' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Максимум участников' })).toBeInTheDocument();
   });
 
   it('без ?template форма открывается пустой и запрос шаблонов не уходит', async () => {
@@ -145,7 +145,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     );
     renderPage('');
 
-    expect(await screen.findByRole('heading', { name: 'Новое событие' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Максимум участников' })).toBeInTheDocument();
     expect(screen.queryByText(/Заполнено по шаблону/)).toBeNull();
     await waitFor(() => expect(requested).not.toHaveBeenCalled());
   });
@@ -163,7 +163,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     mockTemplates([]);
     const { user } = renderPage('');
 
-    await screen.findByRole('heading', { name: 'Новое событие' });
+    await screen.findByRole('heading', { name: 'Максимум участников' });
     expect(screen.getByText('Сохранить как шаблон')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Разговорный клуб \(вторники\)/)).toBeNull();
 

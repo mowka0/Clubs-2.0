@@ -11,6 +11,7 @@ import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.LimitKind
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -50,7 +51,7 @@ class EventServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         eventService = EventService(
             eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, eventPublisher, skladchinaRepository
+            eventMapper, eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L
         )
     }
 
@@ -68,23 +69,50 @@ class EventServiceTest {
     }
 
     @Test
-    fun `createEvent for an urgent event flips it to stage 2 before publishing`() {
-        // Срочная встреча (PO 2026-07-23): Этапа 1 нет — событие рождается сразу в подтверждении
-        // мест, и уведомление (EventCreatedEvent) несёт уже stage_2-состояние.
+    fun `AC-13 createEvent rejects a min format event that starts sooner than its roster`() {
+        // Дедлайн набора оказался бы в прошлом, и ближайший тик отменил бы встречу, не дав
+        // никому проголосовать. Правило живёт в сервисе: дефолт интервала известен только ему.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.createEvent(
+                clubId,
+                request().copy(
+                    format = EventFormat.MIN,
+                    eventDatetime = OffsetDateTime.now().plusHours(2),
+                    stage2LeadMinutes = 360
+                ),
+                ownerId
+            )
+        }
+
+        verify(exactly = 0) { eventRepository.create(any(), any(), any()) }
+    }
+
+    @Test
+    fun `AC-14 createEvent accepts a max format event that starts sooner than its roster`() {
+        // Тот же случай у «максимума» законен и означает «состав закроется сразу» — так покрыт
+        // бывший формат «срочная встреча».
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
         every { eventRepository.create(any(), clubId, ownerId) } returns event
 
-        eventService.createEvent(clubId, request().copy(isUrgentEvent = true), ownerId)
+        eventService.createEvent(
+            clubId,
+            request().copy(
+                format = EventFormat.MAX,
+                eventDatetime = OffsetDateTime.now().plusHours(2),
+                stage2LeadMinutes = 360
+            ),
+            ownerId
+        )
 
-        verify(exactly = 1) { eventRepository.transitionToStage2(event.id) }
-        verify(exactly = 1) {
-            eventPublisher.publishEvent(
-                EventCreatedEvent(event.copy(status = EventStatus.stage_2, stage2Triggered = true))
-            )
-        }
+        verify(exactly = 1) { eventRepository.create(any(), clubId, ownerId) }
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
     }
 
     @Test
@@ -348,7 +376,7 @@ class EventServiceTest {
         // Формат неизменяем: лимит у открытой встречи означал бы смену продуктового типа.
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val openEvent = sampleEvent(clubId, ownerId).copy(participantLimit = null)
+        val openEvent = sampleEvent(clubId, ownerId).copy(participantLimit = null, limitKind = null)
         every { eventRepository.findById(openEvent.id) } returns openEvent
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
 
@@ -375,16 +403,21 @@ class EventServiceTest {
     }
 
     @Test
-    fun `updateEvent rejects a stage 2 lead on an urgent event`() {
-        // У срочной нет Этапа 1, поэтому «за сколько до старта открыть подтверждение» бессмысленно.
+    fun `updateEvent rejects a date that leaves no room for a min format roster`() {
+        // AC-13: дедлайн набора в прошлом означает мгновенную отмену встречи — переносить дату
+        // так близко нельзя. У MAX тот же перенос легален (состав закроется сразу).
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val urgent = sampleEvent(clubId, ownerId).copy(isUrgent = true)
-        every { eventRepository.findById(urgent.id) } returns urgent
+        val minEvent = sampleEvent(clubId, ownerId).copy(limitKind = LimitKind.min)
+        every { eventRepository.findById(minEvent.id) } returns minEvent
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
 
         assertThrows<ValidationException> {
-            eventService.updateEvent(urgent.id, ownerId, editRequest(urgent, stage2LeadMinutes = 2160))
+            eventService.updateEvent(
+                minEvent.id, ownerId,
+                editRequest(minEvent, stage2LeadMinutes = 2160)
+                    .copy(eventDatetime = OffsetDateTime.now().plusHours(2))
+            )
         }
 
         verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
@@ -420,7 +453,7 @@ class EventServiceTest {
     // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
     private fun teaserService() = EventService(
         eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository
+        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L
     )
 
     @Test
@@ -486,6 +519,7 @@ class EventServiceTest {
         locationHint = null,
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = 20,
+        format = EventFormat.MAX,
         votingOpensDaysBefore = 14
     )
 
@@ -498,6 +532,7 @@ class EventServiceTest {
         locationText = "Bar 1",
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = 20,
+        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = EventStatus.upcoming,
         stage2Triggered = false,

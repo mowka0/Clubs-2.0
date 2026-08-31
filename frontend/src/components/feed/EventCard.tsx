@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import type { MyEventListItemDto } from '../../types/api';
+import { formatBadge } from '../../utils/eventFormat';
 
 interface EventCardProps {
   event: MyEventListItemDto;
@@ -80,10 +81,10 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         className={coverImage ? 'rd-act-cover rd-act-photo' : 'rd-act-cover'}
         style={coverImage ? { backgroundImage: `url(${coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
-        {/* Тип встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21, ярлыки PO 2026-07-23):
-            формат виден прямо с карточки — срочная/обычная/открытая, эмодзи как в пикере. */}
+        {/* Формат встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21): видно прямо с карточки,
+            сколько человек нужно и что будет, если не наберутся. Словарь общий со всеми лентами. */}
         <span className="rd-type-badge">
-          {event.isUrgent ? '⚡ СРОЧНАЯ' : event.participantLimit == null ? '🌊 ОТКРЫТАЯ' : '🎟 ОБЫЧНАЯ'}
+          {formatBadge(event.format, event.participantLimit).toUpperCase()}
         </span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>

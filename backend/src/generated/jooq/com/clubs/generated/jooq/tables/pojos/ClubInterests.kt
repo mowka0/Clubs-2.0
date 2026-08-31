@@ -18,8 +18,8 @@ import java.util.UUID
 data class ClubInterests(
     var clubId: UUID,
     var interestId: UUID,
-    var position: Short,
-    var createdAt: OffsetDateTime? = null
+    var createdAt: OffsetDateTime? = null,
+    var position: Short
 ): Serializable {
 
 
@@ -35,13 +35,13 @@ data class ClubInterests(
             return false
         if (this.interestId != o.interestId)
             return false
-        if (this.position != o.position)
-            return false
         if (this.createdAt == null) {
             if (o.createdAt != null)
                 return false
         }
         else if (this.createdAt != o.createdAt)
+            return false
+        if (this.position != o.position)
             return false
         return true
     }
@@ -51,8 +51,8 @@ data class ClubInterests(
         var result = 1
         result = prime * result + this.clubId.hashCode()
         result = prime * result + this.interestId.hashCode()
-        result = prime * result + this.position.hashCode()
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
+        result = prime * result + this.position.hashCode()
         return result
     }
 
@@ -61,8 +61,8 @@ data class ClubInterests(
 
         sb.append(clubId)
         sb.append(", ").append(interestId)
-        sb.append(", ").append(position)
         sb.append(", ").append(createdAt)
+        sb.append(", ").append(position)
 
         sb.append(")")
         return sb.toString()

@@ -7,7 +7,6 @@ import {
   EventFormatOptions,
   EventTemplateOptions,
   SkladchinaTemplateOptions,
-  type EventFormatKey,
   type SkladchinaTemplateKey,
 } from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
@@ -17,6 +16,7 @@ import {
 } from '../../queries/eventTemplates';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
+import type { EventFormat } from '../../types/api';
 
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
@@ -44,13 +44,12 @@ function createRoute(
   clubId: string,
   type: ActivityType,
   template: SkladchinaTemplateKey | null,
-  eventFormat: EventFormatKey | null,
+  eventFormat: EventFormat | null,
 ): string {
-  // Открытая (V62) и срочная (PO 2026-07-23) встречи — та же форма создания события: она читает
-  // ?format и адаптирует поля (open — без лимита; urgent — без интервала Этапа 2, сразу stage_2).
+  // Все три формата (V85) — одна форма создания: она читает ?format и адаптирует поля
+  // (подпись лимита, правило под степпером, ограничение даты у «минимума»).
   if (type === 'event') {
-    const suffix = eventFormat === 'open' ? '?format=open' : eventFormat === 'urgent' ? '?format=urgent' : '';
-    return `/clubs/${clubId}/events/new${suffix}`;
+    return `/clubs/${clubId}/events/new${eventFormat ? `?format=${eventFormat}` : ''}`;
   }
   // У split_bill своя страница, не зависящая от точки входа (выбирает событие, делит счёт).
   if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
@@ -84,7 +83,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
-  const [pendingEventFormat, setPendingEventFormat] = useState<EventFormatKey | null>(null);
+  const [pendingEventFormat, setPendingEventFormat] = useState<EventFormat | null>(null);
   // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
   // запрос уходил бы у каждого участника при каждом монтировании дока.
   const templatesQuery = useMyEventTemplatesQuery(open && canCreate);
@@ -112,7 +111,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     clubId: string,
     type: ActivityType,
     template: SkladchinaTemplateKey | null,
-    eventFormat: EventFormatKey | null,
+    eventFormat: EventFormat | null,
   ) => {
     resetFlow();
     navigate(createRoute(clubId, type, template, eventFormat));
@@ -122,7 +121,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const resolveClub = (
     type: ActivityType,
     template: SkladchinaTemplateKey | null,
-    eventFormat: EventFormatKey | null,
+    eventFormat: EventFormat | null,
   ) => {
     if (presetClubId) {
       goToCreate(presetClubId, type, template, eventFormat);
@@ -164,7 +163,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     resolveClub('skladchina', template, null);
   };
 
-  const handlePickEventFormat = (format: EventFormatKey) => {
+  const handlePickEventFormat = (format: EventFormat) => {
     haptic.impact('medium');
     resolveClub('event', null, format);
   };

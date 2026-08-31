@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.pojos
 
 
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.LimitKind
 
 import java.io.Serializable
 import java.time.OffsetDateTime
@@ -45,7 +46,7 @@ data class Events(
     @Suppress("INAPPLICABLE_JVM_NAME")
     @set:JvmName("setIsUrgent")
     var isUrgent: Boolean? = null,
-    var rosterShortfallAt: OffsetDateTime? = null
+    var limitKind: LimitKind? = null
 ): Serializable {
 
 
@@ -191,11 +192,11 @@ data class Events(
         }
         else if (this.isUrgent != o.isUrgent)
             return false
-        if (this.rosterShortfallAt == null) {
-            if (o.rosterShortfallAt != null)
+        if (this.limitKind == null) {
+            if (o.limitKind != null)
                 return false
         }
-        else if (this.rosterShortfallAt != o.rosterShortfallAt)
+        else if (this.limitKind != o.limitKind)
             return false
         return true
     }
@@ -228,7 +229,7 @@ data class Events(
         result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
         result = prime * result + (if (this.stage2LeadMinutes == null) 0 else this.stage2LeadMinutes.hashCode())
         result = prime * result + (if (this.isUrgent == null) 0 else this.isUrgent.hashCode())
-        result = prime * result + (if (this.rosterShortfallAt == null) 0 else this.rosterShortfallAt.hashCode())
+        result = prime * result + (if (this.limitKind == null) 0 else this.limitKind.hashCode())
         return result
     }
 
@@ -260,7 +261,7 @@ data class Events(
         sb.append(", ").append(locationHint)
         sb.append(", ").append(stage2LeadMinutes)
         sb.append(", ").append(isUrgent)
-        sb.append(", ").append(rosterShortfallAt)
+        sb.append(", ").append(limitKind)
 
         sb.append(")")
         return sb.toString()

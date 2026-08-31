@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.EventStatus
@@ -247,6 +248,7 @@ class NotificationServiceTest {
         locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(3),
         participantLimit = 20,
+        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = EventStatus.stage_2,
         stage2Triggered = true,

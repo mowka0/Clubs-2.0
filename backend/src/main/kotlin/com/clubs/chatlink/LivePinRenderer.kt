@@ -1,6 +1,5 @@
 package com.clubs.chatlink
 
-import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
 import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventEditedEvent

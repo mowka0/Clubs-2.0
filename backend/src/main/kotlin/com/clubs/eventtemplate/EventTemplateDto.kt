@@ -1,11 +1,13 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
 import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.DecimalMax
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.LocalTime
@@ -28,8 +30,7 @@ data class EventTemplateDto(
     val locationLon: Double?,
     val locationHint: String?,
     val participantLimit: Int?,
-    val isOpenEvent: Boolean,
-    val isUrgentEvent: Boolean,
+    val format: EventFormat,
     val stage2LeadMinutes: Int?,
     val photoUrl: String?,
     // 1 = понедельник … 7 = воскресенье, в локальной зоне организатора; null = дата не угадывается.
@@ -78,13 +79,13 @@ data class SaveEventTemplateRequest(
     @field:Size(max = 200, message = "Location hint must be at most 200 characters")
     val locationHint: String? = null,
 
-    // null = шаблон открытой встречи; согласованность с флагом проверяет isParticipantLimitConsistent.
+    // null = шаблон формата «сколько придёт»; согласованность проверяет isParticipantLimitConsistent.
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    val isOpenEvent: Boolean = false,
-
-    val isUrgentEvent: Boolean = false,
+    // Формат встречи — одно поле вместо прежней пары флагов (V85), см. CreateEventRequest.format.
+    @field:NotNull(message = "Event format is required")
+    val format: EventFormat,
 
     @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
@@ -103,17 +104,13 @@ data class SaveEventTemplateRequest(
     val isLocationPairConsistent: Boolean
         get() = (locationLat == null) == (locationLon == null)
 
-    @get:AssertTrue(message = "Open event template must have no participant limit; a regular one requires it")
+    @get:AssertTrue(message = "Format 'any' must have no participant limit; other formats require one")
     val isParticipantLimitConsistent: Boolean
-        get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+        get() = (format == EventFormat.ANY) == (participantLimit == null)
 
-    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    @get:AssertTrue(message = "Format 'any' has no roster; stage2LeadMinutes is not applicable")
     val isStage2LeadConsistent: Boolean
-        get() = !isOpenEvent || stage2LeadMinutes == null
-
-    @get:AssertTrue(message = "Urgent event template must be a limited event without a custom stage 2 lead")
-    val isUrgentConsistent: Boolean
-        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
+        get() = format != EventFormat.ANY || stage2LeadMinutes == null
 
     /**
      * Схлопывает пробелы: обрезанные строки, пустые → null. Сервис нормализует запрос ОДИН раз

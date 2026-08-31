@@ -11,6 +11,7 @@ import { isoWeekdayOf, localTimeOf, nextOccurrenceLocal } from '../../utils/even
 import type { CreateEventBody } from '../../api/events';
 import type { EventTemplateDto, SaveEventTemplateBody } from '../../api/eventTemplates';
 import type { GeoPoint } from '../../utils/yandexMaps';
+import type { EventFormat } from '../../types/api';
 
 const TITLE_MAX = 255;
 // Лимит адреса (location_text в БД); адрес приходит из геокодера, но подрезаем защитно.
@@ -22,9 +23,6 @@ const PARTICIPANT_MAX = 1000;
 // Лимит имени шаблона — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
 const TEMPLATE_NAME_MAX = 60;
 
-// Формат встречи: с местами / открытая (V62) / срочная (PO 2026-07-23). Тот же набор ключей,
-// что у шага пикера «+» и у шаблона встречи.
-export type EventFormat = 'limited' | 'open' | 'urgent';
 
 // Дни недели для выбора расписания шаблона: индекс + 1 = ISO-номер (понедельник = 1).
 const WEEKDAYS: string[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -42,9 +40,46 @@ const STAGE2_LEAD_PRESETS: { minutes: number; short: string }[] = [
   { minutes: 4320, short: '3 дня' },
 ];
 const STAGE2_LEAD_DEFAULT = 1080;
-// Самый короткий набор: если до встречи меньше — состав собрать не успеть, и форма предлагает
-// формат «⚡ срочная» (там места достаются тем, кто первым откликнется).
+// Самый короткий набор. Если до встречи осталось меньше, состав собрать не успеть: формату
+// «минимум участников» это запрещено (набор закрылся бы в прошлом и тут же отменил встречу),
+// а «максимум участников» такой случай принимает — места достаются тем, кто откликнется первым.
 const MIN_ROSTER_LEAD = STAGE2_LEAD_PRESETS[0].minutes;
+
+// Подписи формата в форме: заголовок экрана, поле лимита и правило под степпером. В отличие от
+// пикера здесь число уже выбрано, поэтому правило называет его вслух — это ровно то обещание,
+// которое система исполнит в дедлайн набора.
+const FORMAT_TEXTS: Record<EventFormat, {
+  pageTitle: string;
+  limitLabel: string;
+  rule: (limit: number) => string;
+}> = {
+  min: {
+    pageTitle: 'Минимум участников',
+    limitLabel: 'Минимум участников',
+    rule: (n) => `Собираемся, если будет минимум ${n} ${plural(n, 'человек', 'человека', 'человек')}. `
+      + 'Не наберём к закрытию набора — встреча отменится.',
+  },
+  max: {
+    pageTitle: 'Максимум участников',
+    limitLabel: 'Сколько всего мест',
+    rule: (n) => `Мест ${n}. Встреча состоится в любом случае, кто не успел — встанет в очередь на замену.`,
+  },
+  any: {
+    pageTitle: 'Сколько придёт',
+    limitLabel: '',
+    rule: () => '',
+  },
+};
+
+/** Русская форма числительного для «минимум 5 человек». */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
 
 // Выбранное в пикере место: точка на карте + адрес из обратного геокодера.
 interface PickedLocation {
@@ -71,8 +106,8 @@ const CalendarIcon: FC = () => (
  *  - имя шаблона обязательно и правится тут же, отдельного шага переименования нет;
  *  - формат встречи не меняется: он определяет механику мест и репутации, и менять его
  *    у заготовки значило бы менять её смысл — для другого формата заводится другой шаблон;
- *  - предупреждения «Сделать срочной» / «Этап 2 начнётся сразу» не показываются: они про
- *    конкретную дату, которой у шаблона нет.
+ *  - правила «до встречи меньше 6 часов» не показываются: они про конкретную дату, которой
+ *    у шаблона нет.
  * Спека: docs/modules/event-templates.md § 7.3.
  */
 
@@ -101,11 +136,11 @@ export const EventForm: FC<EventFormProps> = ({
   const createMut = useCreateEventMutation();
   const saveTemplateMut = useSaveEventTemplateMutation();
 
-  // Формат живёт в состоянии, а не в query-параметре: кнопка «Сделать срочной» иначе
+  // Формат живёт в состоянии, а не в query-параметре: кнопка «Выбрать максимум» иначе
   // переписывала бы строку запроса и роняла бы ?template, вместе с ним — предзаполнение.
   const [format, setFormat] = useState<EventFormat>(initialFormat);
-  const isOpenEvent = format === 'open';
-  const isUrgentEvent = format === 'urgent';
+  const hasLimit = format !== 'any';
+  const texts = FORMAT_TEXTS[format];
 
   const [title, setTitle] = useState(template?.title ?? '');
   const [description, setDescription] = useState(template?.description ?? '');
@@ -186,12 +221,12 @@ export const EventForm: FC<EventFormProps> = ({
 
   const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
   const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
-  // Предупреждение — про КОНКРЕТНУЮ дату, которой у шаблона нет: в режиме правки молчит.
-  // Встреча ближе самого короткого набора (6 ч) — состав собрать не успеть, такому событию место
-  // в формате «срочная» (PO 2026-07-23, порог обновлён V83): предлагаем переключиться кнопкой.
-  const suggestUrgent =
-    !isTemplateMode && !isOpenEvent && !isUrgentEvent &&
-    msToEvent !== null && msToEvent < MIN_ROSTER_LEAD * 60_000;
+  // До встречи меньше самого короткого набора. Правило про КОНКРЕТНУЮ дату, которой у шаблона
+  // нет, — в режиме правки молчит. Смысл разный по форматам: «минимум» так создать нельзя
+  // (дедлайн в прошлом отменил бы встречу немедленно), «максимум» — можно, и это ровно бывший
+  // формат «срочная»: состав закроется сразу, места займут те, кто откликнется первым.
+  const rosterTooLate =
+    !isTemplateMode && hasLimit && msToEvent !== null && msToEvent < MIN_ROSTER_LEAD * 60_000;
 
   /**
    * Насечка недоступна, если её интервал не помещается в оставшееся до встречи время: набор,
@@ -205,16 +240,16 @@ export const EventForm: FC<EventFormProps> = ({
   // Выбранное значение перестало помещаться (сдвинули дату назад) — опускаем до ближайшего
   // допустимого, иначе форма молча отправила бы заведомо просроченный набор.
   useEffect(() => {
-    if (isTemplateMode || isOpenEvent || isUrgentEvent || msToEvent === null) return;
+    if (isTemplateMode || !hasLimit || msToEvent === null) return;
     if (!isLeadDisabled(effectiveStage2Lead)) return;
     const fits = [...STAGE2_LEAD_PRESETS].reverse().find((p) => !isLeadDisabled(p.minutes));
     if (fits !== undefined && fits.minutes !== effectiveStage2Lead) setStage2LeadMinutes(fits.minutes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventDatetime, effectiveStage2Lead, isOpenEvent, isUrgentEvent, isTemplateMode]);
+  }, [eventDatetime, effectiveStage2Lead, hasLimit, isTemplateMode]);
 
-  const handleMakeUrgent = () => {
+  const handleSwitchToMax = () => {
     haptic.impact('medium');
-    setFormat('urgent');
+    setFormat('max');
   };
 
   const fail = (msg: string) => {
@@ -236,8 +271,8 @@ export const EventForm: FC<EventFormProps> = ({
     if (locationHint.trim().length > LOCATION_HINT_MAX) {
       return fail(`Уточнение к месту: максимум ${LOCATION_HINT_MAX} символов`);
     }
-    if (!isOpenEvent && (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN)) {
-      return fail(isUrgentEvent ? 'Лимит участников: целое число больше нуля' : 'Сколько человек нужно: целое число больше нуля');
+    if (hasLimit && (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN)) {
+      return fail(`${texts.limitLabel}: целое число больше нуля`);
     }
     if (isTemplateMode) return submitTemplate();
     if (!eventDatetime) return fail('Укажите дату и время');
@@ -245,6 +280,11 @@ export const EventForm: FC<EventFormProps> = ({
     if (Number.isNaN(eventDate.getTime())) return fail('Некорректная дата');
     if (eventDate.getTime() <= Date.now()) {
       return fail('Дата события должна быть в будущем');
+    }
+    // Зеркалит серверный гард: у «минимума» набор обязан помещаться до начала встречи, иначе
+    // ближайший тик отменит её, не дав никому проголосовать.
+    if (format === 'min' && rosterTooLate) {
+      return fail('До встречи меньше 6 часов — выберите «Максимум участников» или сдвиньте дату');
     }
     if (saveAsTemplate && !templateName.trim()) return fail('Укажите имя шаблона');
     if (saveAsTemplate && templateName.trim().length > TEMPLATE_NAME_MAX) {
@@ -259,14 +299,12 @@ export const EventForm: FC<EventFormProps> = ({
       locationLon: location?.point.lon,
       locationHint: locationHint.trim() || undefined,
       eventDatetime: eventDate.toISOString(),
-      // Открытая встреча (V62): лимита нет + явный флаг формата — бэкенд валидирует их согласованность.
-      participantLimit: isOpenEvent ? null : participantLimit,
-      isOpenEvent,
-      isUrgentEvent,
-      // Интервал Этапа 2 — только у обычных событий с местами и только при ЯВНОМ выборе
-      // организатора (null = серверный дефолт); open — вне двухэтапки, urgent — сразу в Этапе 2.
-      stage2LeadMinutes:
-        isOpenEvent || isUrgentEvent || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
+      // Пара «лимит + формат»: бэкенд валидирует их согласованность (any ⟺ лимита нет).
+      participantLimit: hasLimit ? participantLimit : null,
+      format,
+      // Интервал набора — только у форматов с лимитом и только при ЯВНОМ выборе организатора
+      // (null = серверный дефолт); у «сколько придёт» набора нет вовсе.
+      stage2LeadMinutes: !hasLimit || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
       photoUrl: photoUrl ?? undefined,
     };
 
@@ -306,10 +344,9 @@ export const EventForm: FC<EventFormProps> = ({
     locationLat: location?.point.lat ?? null,
     locationLon: location?.point.lon ?? null,
     locationHint: locationHint.trim() || null,
-    participantLimit: isOpenEvent ? null : participantLimit,
-    isOpenEvent,
-    isUrgentEvent,
-    stage2LeadMinutes: isOpenEvent || isUrgentEvent ? null : stage2LeadMinutes,
+    participantLimit: hasLimit ? participantLimit : null,
+    format,
+    stage2LeadMinutes: hasLimit ? stage2LeadMinutes : null,
     photoUrl: photoUrl ?? null,
     defaultWeekday: weekday,
     defaultTime: time,
@@ -373,27 +410,19 @@ export const EventForm: FC<EventFormProps> = ({
     <div className="rd-page">
       <div className="rd-ft-eyebrow">{isTemplateMode ? 'Шаблон встречи' : 'Создание'}</div>
       <h1 className="rd-page-h" style={{ marginBottom: 18 }}>
-        {isTemplateMode
-          ? 'Правка шаблона'
-          : isOpenEvent ? 'Открытая встреча' : isUrgentEvent ? 'Срочная встреча' : 'Новое событие'}
+        {isTemplateMode ? 'Правка шаблона' : texts.pageTitle}
       </h1>
       {isTemplateMode && (
         <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
           Правки в шаблоне не трогают уже созданные по нему встречи. Формат встречи
-          ({isOpenEvent ? 'открытая' : isUrgentEvent ? 'срочная' : 'с местами'}) не меняется —
-          для другого формата заведите отдельный шаблон.
+          ({texts.pageTitle.toLowerCase()}) не меняется — для другого формата заведите
+          отдельный шаблон.
         </div>
       )}
-      {!isTemplateMode && isOpenEvent && (
+      {!isTemplateMode && !hasLimit && (
         <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
-          Без лимита участников — приходят все, кто подтвердил. Репутация здесь не считается
-          совсем: ни плюсов за посещение, ни штрафов за отказ или неявку.
-        </div>
-      )}
-      {!isTemplateMode && isUrgentEvent && (
-        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
-          Без этапа голосования — участники сразу подтверждают места, уведомление уйдёт
-          немедленно. Репутация работает как у обычного события с местами.
+          Без ограничений — приходят все желающие. Репутация здесь не считается совсем:
+          ни плюсов за посещение, ни штрафов за отказ или неявку.
         </div>
       )}
       {!isTemplateMode && template && (
@@ -506,7 +535,7 @@ export const EventForm: FC<EventFormProps> = ({
         {/* У шаблона даты нет по построению — вместо неё расписание повторов, из которого
             форма создания подставит ближайшее будущее совпадение. */}
         {isTemplateMode ? (
-          <div className="rd-field" style={!isOpenEvent && !isUrgentEvent ? { marginBottom: 0 } : undefined}>
+          <div className="rd-field" style={hasLimit ? { marginBottom: 0 } : undefined}>
             <span className="rd-label">Когда обычно проходит</span>
             <div className="rd-seg rd-seg-flush" role="group" aria-label="День недели">
               {WEEKDAYS.map((label, i) => {
@@ -544,7 +573,7 @@ export const EventForm: FC<EventFormProps> = ({
             </span>
           </div>
         ) : (
-          <label className="rd-field" style={!isOpenEvent && !isUrgentEvent ? { marginBottom: 0 } : undefined}>
+          <label className="rd-field" style={hasLimit ? { marginBottom: 0 } : undefined}>
             <span className="rd-label">Дата и время <span className="rd-req">*</span></span>
             <div className="rd-datetime">
               <input
@@ -558,17 +587,16 @@ export const EventForm: FC<EventFormProps> = ({
           </label>
         )}
 
-        {/* Интервал Этапа 2 (V67/V68) — визуально привязан к дате; у открытой встречи Этапа 2
-            нет, у срочной он не настраивается (сразу stage_2). Свёрнуто: строка-факт.
-            По «Изменить»: шкала-таймлайн с насечками-пресетами. */}
-        {!isOpenEvent && !isUrgentEvent && (
+        {/* Интервал набора состава — визуально привязан к дате; у формата «сколько придёт»
+            набора нет вовсе. Свёрнуто: строка-факт. По «Изменить»: шкала-таймлайн с насечками. */}
+        {hasLimit && (
           <div className="rd-field">
             <button
               type="button"
               className="rd-s2-note"
               onClick={() => { haptic.impact('light'); setLeadEditorOpen((v) => !v); }}
             >
-              <span className="rd-s2-dot" aria-hidden="true">🎟</span>
+              <span className="rd-s2-dot" aria-hidden="true">{format === 'min' ? '🎯' : '🎟'}</span>
               <span className="rd-s2-txt">
                 <span>Набор состава</span>
                 <b>закрывается за {formatLeadInterval(effectiveStage2Lead)}</b>
@@ -634,44 +662,48 @@ export const EventForm: FC<EventFormProps> = ({
                 <span className="rd-hint">
                   {msToEvent !== null && isLeadDisabled(STAGE2_LEAD_PRESETS[STAGE2_LEAD_PRESETS.length - 1].minutes)
                     ? `До встречи ${formatLeadInterval(Math.floor(msToEvent / 60_000))} — более длинные интервалы не помещаются.`
-                    : 'До этого момента идёт набор. Наберётся состав — встреча состоится, не наберётся — решите: продлить, провести меньшим составом или отменить.'}
+                    : format === 'min'
+                      ? 'До этого момента идёт набор. Наберётся состав — встреча состоится, не наберётся — отменится.'
+                      : 'До этого момента идёт набор. В этот момент состав закроется — тем, кто успел.'}
                 </span>
               </div>
             )}
-            {suggestUrgent && (
+            {rosterTooLate && format === 'min' && (
               <span className="rd-hint rd-s2-warn">
-                ⚡️ До встречи меньше {formatLeadInterval(MIN_ROSTER_LEAD)} — состав собрать не успеть.
-                Такой встрече лучше быть срочной: без набора, места достаются тем, кто первым
-                откликнется.
-                <button type="button" className="rd-s2-switch" onClick={handleMakeUrgent}>
-                  Сделать срочной
+                До встречи меньше {formatLeadInterval(MIN_ROSTER_LEAD)} — набор не успеет закрыться,
+                и встреча отменится сразу после создания. Выберите «Максимум участников» или
+                сдвиньте дату.
+                <button type="button" className="rd-s2-switch" onClick={handleSwitchToMax}>
+                  Выбрать «Максимум участников»
                 </button>
+              </span>
+            )}
+            {rosterTooLate && format === 'max' && (
+              <span className="rd-hint">
+                До встречи меньше {formatLeadInterval(MIN_ROSTER_LEAD)} — набор закроется сразу,
+                места займут те, кто откликнется первым.
               </span>
             )}
           </div>
         )}
 
-        {/* Открытая встреча: лимита нет — степпер не рендерится вовсе. */}
-        {!isOpenEvent && (
+        {/* «Сколько придёт»: лимита нет — степпер не рендерится вовсе. */}
+        {hasLimit && (
           <div className="rd-field">
-            {/* V83: у встречи с местами это ПОРОГ («сколько человек нужно»), а не потолок —
-                встреча состоится, только если наберётся столько. У срочной смысл прежний: лимит. */}
+            {/* Подпись и правило зависят от формата: одно и то же число значит «нужно минимум
+                столько» либо «всего столько мест». Правило под степпером — то самое обещание,
+                которое система исполнит в дедлайн набора. */}
             <span className="rd-label">
-              {isUrgentEvent ? 'Лимит участников' : 'Сколько человек нужно'} <span className="rd-req">*</span>
+              {texts.limitLabel} <span className="rd-req">*</span>
             </span>
             <BrandStepper
               value={participantLimit}
               onChange={setParticipantLimit}
               min={PARTICIPANT_MIN}
               max={PARTICIPANT_MAX}
-              ariaLabel={isUrgentEvent ? 'Лимит участников' : 'Сколько человек нужно'}
+              ariaLabel={texts.limitLabel}
             />
-            {!isUrgentEvent && (
-              <span className="rd-hint">
-                Встреча состоится, если наберётся столько. Кто запишется сверх — встанет в очередь
-                на замену.
-              </span>
-            )}
+            <span className="rd-hint">{texts.rule(participantLimit)}</span>
           </div>
         )}
 

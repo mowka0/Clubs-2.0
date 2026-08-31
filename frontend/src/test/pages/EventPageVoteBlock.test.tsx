@@ -50,7 +50,7 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 20,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
-    isUrgent: false,
+    format: 'max',
     goingCount: 2,
     maybeCount: 1,
     notGoingCount: 1,
@@ -60,7 +60,6 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     stage2LeadMinutesOverride: null,
     rosterDeadline: null,
     rosterClosed: false,
-    rosterShortfall: false,
     waitlistedCount: 0,
     declineCostPoints: 0,
     attendanceMarked: false,
@@ -140,8 +139,8 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
     expect(filled).toBeCloseTo(circumference * 0.6, 1);
   });
 
-  it('AC-VB3: открытая встреча — кольцо закрашено целиком, знаменателя нет', async () => {
-    mockEndpoints({ event: stage1Event({ participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
+  it('AC-VB3: «сколько придёт» — кольцо закрашено целиком, знаменателя нет', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'any', participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
     const { container } = renderEventPage();
 
     expect(await screen.findByText('идут')).toBeInTheDocument();
@@ -206,24 +205,24 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
 });
 
 describe('EventPage — бейдж формата встречи (PO 2026-08-01)', () => {
-  it('событие с местами → «🎟 ВСТРЕЧА С МЕСТАМИ»', async () => {
+  it('«максимум» → «🎟 НЕ БОЛЬШЕ N»', async () => {
     mockEndpoints({ event: stage1Event() });
     renderEventPage();
 
-    expect(await screen.findByText('🎟 ВСТРЕЧА С МЕСТАМИ')).toBeInTheDocument();
+    expect(await screen.findByText('🎟 НЕ БОЛЬШЕ 20')).toBeInTheDocument();
   });
 
-  it('срочная встреча → «⚡ СРОЧНАЯ ВСТРЕЧА»', async () => {
-    mockEndpoints({ event: stage1Event({ isUrgent: true, status: 'stage_2' }) });
+  it('«минимум» → «🎯 НЕ МЕНЬШЕ N»', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'min' }) });
     renderEventPage();
 
-    expect(await screen.findByText('⚡ СРОЧНАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🎯 НЕ МЕНЬШЕ 20')).toBeInTheDocument();
   });
 
-  it('открытая встреча → «🌊 ОТКРЫТАЯ ВСТРЕЧА»', async () => {
-    mockEndpoints({ event: stage1Event({ participantLimit: null, stage2LeadMinutes: null }) });
+  it('«сколько придёт» → «🌊 СКОЛЬКО ПРИДЁТ»', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'any', participantLimit: null, stage2LeadMinutes: null }) });
     renderEventPage();
 
-    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 СКОЛЬКО ПРИДЁТ')).toBeInTheDocument();
   });
 });

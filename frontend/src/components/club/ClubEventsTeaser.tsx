@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import { useClubEventsTeaserQuery } from '../../queries/events';
+import { formatEmoji } from '../../utils/eventFormat';
 import type { TeaserEventDto } from '../../types/api';
 
 function formatTeaserDate(iso: string): string {
@@ -9,11 +10,6 @@ function formatTeaserDate(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-/** Эмодзи формата — словарь бейджей карточек ленты («⚡ срочная / 🎟 обычная / 🌊 открытая»). */
-function formatEmoji(event: TeaserEventDto): string {
-  return event.isUrgent ? '⚡' : event.isOpenEvent ? '🌊' : '🎟';
 }
 
 /** Счётчик по фазе (F5-21): до Этапа 2 — голоса «идут», после — подтверждённый состав. */
@@ -54,7 +50,7 @@ export const ClubEventsTeaser: FC<ClubEventsTeaserProps> = ({ clubId, lockHint }
             key={event.id}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0' }}
           >
-            <span aria-hidden="true">{formatEmoji(event)}</span>
+            <span aria-hidden="true">{formatEmoji(event.format)}</span>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {event.title}
@@ -75,7 +71,7 @@ export const ClubEventsTeaser: FC<ClubEventsTeaserProps> = ({ clubId, lockHint }
                 key={event.id}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', opacity: 0.55 }}
               >
-                <span aria-hidden="true">{formatEmoji(event)}</span>
+                <span aria-hidden="true">{formatEmoji(event.format)}</span>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {event.title}

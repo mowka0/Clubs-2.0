@@ -57,7 +57,7 @@ const teaser: ClubEventsTeaserDto = {
   upcoming: [
     {
       id: 'e1', title: 'Сходка на Патриках', eventDatetime: '2026-08-01T17:00:00Z',
-      status: 'upcoming', isUrgent: false, isOpenEvent: false, goingCount: 4, confirmedCount: 0,
+      status: 'upcoming', format: 'max', participantLimit: 10, goingCount: 4, confirmedCount: 0,
     },
   ],
   past: [],

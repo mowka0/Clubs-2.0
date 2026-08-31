@@ -55,7 +55,7 @@ function rosterEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 6,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
-    isUrgent: false,
+    format: 'max',
     goingCount: 4,
     maybeCount: 3,
     notGoingCount: 1,
@@ -65,7 +65,6 @@ function rosterEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     stage2LeadMinutesOverride: null,
     rosterDeadline: ROSTER_DEADLINE,
     rosterClosed: false,
-    rosterShortfall: false,
     waitlistedCount: 0,
     declineCostPoints: 0,
     attendanceMarked: false,
@@ -140,13 +139,13 @@ beforeEach(() => {
 
 describe('EventPage — порог набора (event-roster-threshold.md)', () => {
   it('AC-1: идёт набор — заголовок «Набор», кольцо считает состав, полоса называет недостачу', async () => {
-    const { container } = renderEventPageWith({ event: rosterEvent(), myVote: 'going' });
+    const { container } = renderEventPageWith({ event: rosterEvent({ format: 'min' }), myVote: 'going' });
 
     expect(await screen.findByText(/Набор · 4 \/ 6/)).toBeInTheDocument();
     expect(screen.getByText('в составе')).toBeInTheDocument();
     expect(container.querySelector('.rd-donut-num')).toHaveTextContent('4 / 6');
     expect(screen.getByText('Нужно ещё 2 человека')).toBeInTheDocument();
-    expect(screen.getByText(/если не наберём, встреча не состоится/)).toBeInTheDocument();
+    expect(screen.getByText(/если не наберём, встреча отменится/)).toBeInTheDocument();
   });
 
   it('на наборе голос при полном составе показывает очередь (V83)', async () => {
@@ -179,6 +178,26 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(screen.queryByText('Подтверждение участия')).not.toBeInTheDocument();
   });
 
+  it('AC-15: на закрытом составе тот, кто вне его, всё ещё может занять место', async () => {
+    // Путь миграции легаси-⚡: до V85 такие встречи жили в подтверждении мест, и после
+    // перечитывания их как «не больше N» участник не должен потерять возможность записаться.
+    // Свободное место занимается сразу, полный состав кладёт в очередь — тем же confirmParticipation.
+    const { unmount } = renderEventPageWith({
+      event: rosterEvent({ status: 'stage_2', rosterClosed: true, confirmedCount: 5 }),
+      myVote: null,
+      responders: [],
+    });
+    expect(await screen.findByRole('button', { name: 'Занять свободное место' })).toBeInTheDocument();
+    unmount();
+
+    renderEventPageWith({
+      event: rosterEvent({ status: 'stage_2', rosterClosed: true, confirmedCount: 6 }),
+      myVote: null,
+      responders: [],
+    });
+    expect(await screen.findByRole('button', { name: 'Встать в очередь' })).toBeInTheDocument();
+  });
+
   it('на наборе очередь отделена чертой внутри вкладки «Идут» (PO 2026-08-31)', async () => {
     renderEventPageWith({
       event: rosterEvent({ participantLimit: 2, confirmedCount: 2, goingCount: 3, waitlistedCount: 1 }),
@@ -197,7 +216,7 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
   it('состав закрыт, но неполный — обещания «встреча состоится» нет', async () => {
     renderEventPageWith({
       event: rosterEvent({
-        status: 'stage_2', rosterClosed: true, participantLimit: 2, confirmedCount: 1,
+        format: 'min', status: 'stage_2', rosterClosed: true, participantLimit: 2, confirmedCount: 1,
       }),
       myVote: 'confirmed',
       responders: [responder({ userId: VIEWER_ID, firstName: 'Я' })],
@@ -275,27 +294,39 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(screen.getByText('Сейчас отказ стоит 150 очков репутации')).toBeInTheDocument();
   });
 
-  it('AC-5: недобор — набор продолжается, места ещё открыты', async () => {
+  it('«минимум»: на наборе полоса называет недостачу и обещает отмену', async () => {
     renderEventPageWith({
-      event: rosterEvent({ rosterShortfall: true, confirmedCount: 4 }),
+      event: rosterEvent({ format: 'min', confirmedCount: 4 }),
       myVote: 'going',
     });
 
-    expect(await screen.findByText('Пока 4 из 6 — набор продолжается')).toBeInTheDocument();
-    expect(screen.getByText(/место ещё можно занять/)).toBeInTheDocument();
-    // Блок голосования никуда не делся: состав добирается ровно им.
+    expect(await screen.findByText('Нужно ещё 2 человека')).toBeInTheDocument();
+    expect(screen.getByText(/если не наберём, встреча отменится/)).toBeInTheDocument();
     expect(screen.getByText(/Набор · 4 \/ 6/)).toBeInTheDocument();
   });
 
-  it('AC-12: у срочной встречи механика подтверждения не тронута', async () => {
+  it('«максимум»: на наборе полоса считает свободные места и отмену не обещает', async () => {
     renderEventPageWith({
-      event: rosterEvent({ status: 'stage_2', rosterClosed: true, isUrgent: true }),
+      event: rosterEvent({ format: 'max', confirmedCount: 4 }),
+      myVote: 'going',
+    });
+
+    expect(await screen.findByText('Свободно 2 места')).toBeInTheDocument();
+    expect(screen.getByText(/состав закроется тем, кто успел/)).toBeInTheDocument();
+    expect(screen.queryByText(/встреча отменится/)).toBeNull();
+  });
+
+  it('AC-12: у формата «сколько придёт» механика подтверждения не тронута', async () => {
+    renderEventPageWith({
+      event: rosterEvent({
+        status: 'stage_2', rosterClosed: false, format: 'any',
+        participantLimit: null, stage2LeadMinutes: null, rosterDeadline: null,
+      }),
       myVote: 'going',
     });
 
     expect(await screen.findByText('Подтверждение участия')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
-    expect(screen.getByText('мест занято')).toBeInTheDocument();
   });
 });
 

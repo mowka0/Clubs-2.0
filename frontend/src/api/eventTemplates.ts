@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import type { EventFormat } from '../types/api';
 
 /**
  * Именованная заготовка формы создания встречи, принадлежащая клубу.
@@ -18,10 +19,9 @@ export interface EventTemplateDto {
   locationLat: number | null;
   locationLon: number | null;
   locationHint: string | null;
-  /** null = шаблон открытой встречи. */
+  /** Число участников; смысл задаёт format. null = шаблон формата «сколько придёт». */
   participantLimit: number | null;
-  isOpenEvent: boolean;
-  isUrgentEvent: boolean;
+  format: EventFormat;
   stage2LeadMinutes: number | null;
   photoUrl: string | null;
   /** 1 = понедельник … 7 = воскресенье (ISO), в локальной зоне организатора. null = дата не угадывается. */
@@ -45,8 +45,7 @@ export interface SaveEventTemplateBody {
   locationLon?: number | null;
   locationHint?: string | null;
   participantLimit?: number | null;
-  isOpenEvent?: boolean;
-  isUrgentEvent?: boolean;
+  format: EventFormat;
   stage2LeadMinutes?: number | null;
   photoUrl?: string | null;
   defaultWeekday?: number | null;

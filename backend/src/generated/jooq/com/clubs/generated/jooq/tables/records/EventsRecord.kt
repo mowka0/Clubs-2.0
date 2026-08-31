@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.records
 
 
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.Events
 
 import java.time.OffsetDateTime
@@ -124,9 +125,9 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(24, value)
         get(): Boolean? = get(24) as Boolean?
 
-    open var rosterShortfallAt: OffsetDateTime?
+    open var limitKind: LimitKind?
         set(value): Unit = set(25, value)
-        get(): OffsetDateTime? = get(25) as OffsetDateTime?
+        get(): LimitKind? = get(25) as LimitKind?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -137,7 +138,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, stage2LeadMinutes: Int? = null, isUrgent: Boolean? = null, rosterShortfallAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, stage2LeadMinutes: Int? = null, isUrgent: Boolean? = null, limitKind: LimitKind? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -163,7 +164,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.locationHint = locationHint
         this.stage2LeadMinutes = stage2LeadMinutes
         this.isUrgent = isUrgent
-        this.rosterShortfallAt = rosterShortfallAt
+        this.limitKind = limitKind
         resetChangedOnNotNull()
     }
 
@@ -197,7 +198,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.locationHint = value.locationHint
             this.stage2LeadMinutes = value.stage2LeadMinutes
             this.isUrgent = value.isUrgent
-            this.rosterShortfallAt = value.rosterShortfallAt
+            this.limitKind = value.limitKind
             resetChangedOnNotNull()
         }
     }

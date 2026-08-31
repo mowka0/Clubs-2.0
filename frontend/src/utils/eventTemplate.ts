@@ -1,5 +1,6 @@
 import { toDatetimeLocalValue } from './formatters';
 import type { EventTemplateDto, SaveEventTemplateBody } from '../api/eventTemplates';
+import type { EventFormat } from '../types/api';
 
 /**
  * Помощники шаблонов встреч: вывод «дня недели + времени» из конкретной встречи и обратная
@@ -64,14 +65,13 @@ export function eventToTemplateBody(
     locationLon: number | null;
     locationHint: string | null;
     participantLimit: number | null;
-    isUrgent: boolean;
+    format: EventFormat;
     stage2LeadMinutesOverride: number | null;
     photoUrl: string | null;
     eventDatetime: string;
   },
   name: string,
 ): SaveEventTemplateBody {
-  const isOpenEvent = event.participantLimit === null;
   const startsAt = new Date(event.eventDatetime);
   return {
     name,
@@ -82,13 +82,12 @@ export function eventToTemplateBody(
     locationLon: event.locationLon,
     locationHint: event.locationHint,
     participantLimit: event.participantLimit,
-    isOpenEvent,
-    isUrgentEvent: event.isUrgent,
+    format: event.format,
     // Берём СОБСТВЕННЫЙ интервал события, а не эффективный: подставленный сервером дефолт,
     // записанный в шаблон, молча стал бы явным выбором организатора и перестал бы следовать
     // за настройкой бэкенда (тот же урок, что у формы редактирования встречи).
-    // У открытой и срочной встречи своего интервала не бывает — бэкенд отклонит.
-    stage2LeadMinutes: isOpenEvent || event.isUrgent ? null : event.stage2LeadMinutesOverride,
+    // У формата «сколько придёт» своего интервала не бывает — бэкенд отклонит.
+    stage2LeadMinutes: event.format === 'any' ? null : event.stage2LeadMinutesOverride,
     photoUrl: event.photoUrl,
     defaultWeekday: isoWeekdayOf(startsAt),
     defaultTime: localTimeOf(startsAt),
@@ -113,8 +112,7 @@ export function templateToSaveBody(
     locationLon: template.locationLon,
     locationHint: template.locationHint,
     participantLimit: template.participantLimit,
-    isOpenEvent: template.isOpenEvent,
-    isUrgentEvent: template.isUrgentEvent,
+    format: template.format,
     stage2LeadMinutes: template.stage2LeadMinutes,
     photoUrl: template.photoUrl,
     defaultWeekday: template.defaultWeekday,
@@ -123,9 +121,3 @@ export function templateToSaveBody(
   };
 }
 
-/** Формат встречи из шаблона — тот же ключ, которым форма создания рулит полями. */
-export function templateFormat(template: EventTemplateDto): 'limited' | 'open' | 'urgent' {
-  if (template.isOpenEvent) return 'open';
-  if (template.isUrgentEvent) return 'urgent';
-  return 'limited';
-}

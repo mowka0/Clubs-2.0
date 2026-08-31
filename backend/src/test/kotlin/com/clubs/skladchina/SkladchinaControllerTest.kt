@@ -912,8 +912,8 @@ class SkladchinaControllerTest {
         )
         val eventId = UUID.randomUUID()
         dsl.execute(
-            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked) " +
-                "VALUES ('$eventId', '$otherClubId', '$organizerId', 'E', 'Court', NOW() - INTERVAL '1 day', 20, 'completed', true)"
+            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, limit_kind, status, attendance_marked) " +
+                "VALUES ('$eventId', '$otherClubId', '$organizerId', 'E', 'Court', NOW() - INTERVAL '1 day', 20, 'max', 'completed', true)"
         )
         dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberAId', 'attended')")
         dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberBId', 'attended')")
@@ -1180,8 +1180,8 @@ class SkladchinaControllerTest {
     ): UUID {
         val eventId = UUID.randomUUID()
         dsl.execute(
-            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked) " +
-                "VALUES ('$eventId', '$clubId', '$organizerId', 'Game', 'Court', NOW() - INTERVAL '$daysAgo days', 20, 'completed', $marked)"
+            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, limit_kind, status, attendance_marked) " +
+                "VALUES ('$eventId', '$clubId', '$organizerId', 'Game', 'Court', NOW() - INTERVAL '$daysAgo days', 20, 'max', 'completed', $marked)"
         )
         attended.forEach {
             dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$it', 'attended')")

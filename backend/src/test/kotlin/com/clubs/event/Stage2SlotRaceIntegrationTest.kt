@@ -182,8 +182,8 @@ class Stage2SlotRaceIntegrationTest {
         val eventDatetime = OffsetDateTime.now().plusHours(5)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, stage_2_triggered)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', $participantLimit, 14, 'stage_2'::event_status, true)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, stage_2_triggered, limit_kind)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', $participantLimit, 14, 'stage_2'::event_status, true, (CASE WHEN $participantLimit IS NULL THEN NULL ELSE 'max' END)::limit_kind)
             """.trimIndent()
         )
         return id

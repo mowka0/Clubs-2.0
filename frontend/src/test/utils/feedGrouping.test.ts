@@ -18,7 +18,7 @@ function buildEvent(overrides: Partial<MyEventListItemDto>): MyEventListItemDto 
     goingCount: 0,
     confirmedCount: 0,
     participantLimit: 10,
-    isUrgent: false,
+    format: 'max',
     actionRequired: overrides.actionRequired ?? false,
     isHistory: overrides.isHistory ?? false,
     ...overrides,
