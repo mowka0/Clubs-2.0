@@ -227,6 +227,26 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
     expect(screen.queryByText(/встреча состоится$/)).not.toBeInTheDocument();
   });
 
+  it('состав закрыт и пуст — «состав собран» не обещаем ни при каком формате', async () => {
+    // Именно это врало у «максимума» до правки PO 2026-09-01: полоса не смотрела на размер
+    // состава и обещала встречу даже при нуле участников.
+    const { unmount } = renderEventPageWith({
+      event: rosterEvent({ status: 'stage_2', rosterClosed: true, confirmedCount: 0 }),
+      myVote: null,
+      responders: [],
+    });
+    expect(await screen.findByText('В составе никого')).toBeInTheDocument();
+    expect(screen.queryByText('Состав собран — встреча состоится')).toBeNull();
+    unmount();
+
+    renderEventPageWith({
+      event: rosterEvent({ format: 'min', status: 'stage_2', rosterClosed: true, confirmedCount: 0 }),
+      myVote: null,
+      responders: [],
+    });
+    expect(await screen.findByText('В составе никого')).toBeInTheDocument();
+  });
+
   it('AC-9: цена отказа названа ДО открытия диалога и приходит с сервера', async () => {
     const { user } = renderEventPageWith({
       event: rosterEvent({
@@ -253,6 +273,44 @@ describe('EventPage — порог набора (event-roster-threshold.md)', ()
 
     expect(await screen.findByText('Сейчас отказ бесплатен — вас заменит первый из очереди'))
       .toBeInTheDocument();
+  });
+
+  it('последний в составе предупреждён, что его отказ отменит встречу', async () => {
+    // Уход последнего отменяет встречу целиком (PO 2026-09-01). Узнавать об этом постфактум
+    // нельзя — диалог обязан назвать последствие и подписать кнопку как отмену.
+    const { user } = renderEventPageWith({
+      event: rosterEvent({
+        status: 'stage_2', rosterClosed: true, confirmedCount: 1,
+        waitlistedCount: 0, declineCostPoints: 100,
+      }),
+      myVote: 'confirmed',
+      responders: [responder({ userId: VIEWER_ID, firstName: 'Я' })],
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Не смогу прийти' }));
+    expect(screen.getByText(/встреча будет отменена/)).toBeInTheDocument();
+    expect(screen.getByText(/спишется 100 очков/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отменить встречу' })).toBeInTheDocument();
+  });
+
+  it('при живой очереди диалог не пугает — место просто переходит дальше', async () => {
+    const { user } = renderEventPageWith({
+      event: rosterEvent({
+        status: 'stage_2', rosterClosed: true, confirmedCount: 6,
+        waitlistedCount: 2, declineCostPoints: 0,
+      }),
+      myVote: 'confirmed',
+      responders: [
+        responder({ userId: VIEWER_ID, firstName: 'Я' }),
+        responder({ userId: 'q1', firstName: 'Паша', status: 'waitlisted' }),
+      ],
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Не смогу прийти' }));
+    expect(screen.getByText(/Его сразу займёт первый из очереди/)).toBeInTheDocument();
+    expect(screen.queryByText(/будет отменена/)).toBeNull();
+    expect(screen.queryByText(/спишется/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Освободить' })).toBeInTheDocument();
   });
 
   it('AC-2/AC-11: очередь — свой таб с номерами, выход из неё бесплатен', async () => {

@@ -39,11 +39,12 @@ class Stage2ServiceTest {
     private val rosterService = mockk<RosterService>(relaxed = true).also {
         every { it.handleRosterDeadline(any()) } returns false
     }
+    private val eventService = mockk<EventService>(relaxed = true)
     // lateDeclineThresholdMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
     // строит свой инстанс с реальным значением.
     private val service = Stage2Service(
-        eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-        reputationService, lateDeclineThresholdMinutes = 0, stage2TriggerMinutesBefore = 1440
+        eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+        eventPublisher, reputationService, lateDeclineThresholdMinutes = 0, stage2TriggerMinutesBefore = 1440
     )
 
     private val eventId = UUID.randomUUID()
@@ -98,8 +99,8 @@ class Stage2ServiceTest {
         // 2026-08-21): запрет выталкивал людей в молчаливую неявку, которая стоит дороже (−200).
         // Реальный порог 4 ч; событие через 2 ч; очередь пуста → late_decline_uncovered (−150).
         val strict = Stage2Service(
-            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
@@ -121,8 +122,8 @@ class Stage2ServiceTest {
     fun `confirmed decline within the cutoff window costs 50 when a replacement is queued (V83)`() {
         val promotedUserId = UUID.randomUUID()
         val strict = Stage2Service(
-            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
@@ -185,8 +186,8 @@ class Stage2ServiceTest {
         // Реальный порог 4ч; событие через 2ч. У события с лимитом это был бы отказ «не позже чем…»,
         // у открытой встречи порога нет, штраф и промоут не существуют.
         val strict = Stage2Service(
-            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventPublisher,
-            reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns
             event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)
@@ -430,6 +431,27 @@ class Stage2ServiceTest {
         verify(exactly = 1) {
             eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent && it.confirmedCount == 1 })
         }
+    }
+
+    @Test
+    fun `decline that empties a closed roster cancels the event`() {
+        // Ушёл последний, кто держал место. Встречи без людей не бывает — отменяем тем же
+        // каскадом, что и вручную: пост в чат, DM непокрытым, сбор в released.
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 1)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) {
+            eventService.cancelBySystem(any(), Stage2Service.ROSTER_DISBANDED_REASON)
+        }
+        // Отдельного «состав стал неполным» при этом не шлём — встреча уже отменена.
+        verify(exactly = 0) { eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent }) }
     }
 
     @Test

@@ -24,6 +24,7 @@ class Stage2Service(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val rosterService: RosterService,
+    private val eventService: EventService,
     private val eventPublisher: ApplicationEventPublisher,
     private val reputationService: ReputationService,
     // За сколько минут до старта отказ от места становится ПОЗДНИМ и дорожает (V83; до этого тот же
@@ -37,6 +38,11 @@ class Stage2Service(
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
+
+    companion object {
+        /** Причина автоотмены, когда из закрытого состава ушёл последний участник. */
+        const val ROSTER_DISBANDED_REASON = "Состав распался: не осталось участников"
+    }
 
     // Окно подтверждения — [flip .. старт события], а сам flip случается где угодно внутри одного
     // периода опроса после границы триггера — поэтому тик должен быть сильно мельче упреждения
@@ -238,12 +244,23 @@ class Stage2Service(
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
-        // MIN: этот отказ увёл состав ниже порога — зовём организатора решать. Строгое равенство
-        // сигналит ровно на пересечении черты, следующие отказы повторных DM не порождают.
-        // У MAX распавшегося состава не бывает: место просто пустует, встреча состоится.
         val limit = event.participantLimit
-        if (event.format == EventFormat.MIN && limit != null && count == limit - 1) {
-            eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
+        when {
+            // Состав опустел: ушёл последний, кто держал место. Встречи без людей не существует,
+            // и держать её висящей нечестно — отменяем сразу, тем же каскадом, что и вручную
+            // (пост в чат + DM тем, кого пост не покрыл, + сбор в released). Решение PO
+            // 2026-09-01: до этого экран у формата MAX обещал «состав собран» даже при нуле.
+            //
+            // Отличается от закрытия набора с нулём, где отмены НЕ происходит: там состав
+            // никогда и не собирался, дедлайн просто прошёл, и место ещё может кто-то занять.
+            // Здесь же человек, взявший на себя обещание, его снял — это событие, а не тишина.
+            count == 0 && !event.isOpenEvent ->
+                eventService.cancelBySystem(event, ROSTER_DISBANDED_REASON)
+            // MIN: этот отказ увёл состав ниже порога — зовём организатора решать. Строгое
+            // равенство сигналит ровно на пересечении черты, следующие отказы повторных DM не
+            // порождают. У MAX неполный состав ничего не значит: место просто пустует.
+            event.format == EventFormat.MIN && limit != null && count == limit - 1 ->
+                eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
         }
         val penalty = declineKind?.let { -ReputationPolicy.pointsFor(it) } ?: 0
         return ConfirmResponseDto(eventId, "declined", count, event.participantLimit, penalty)
