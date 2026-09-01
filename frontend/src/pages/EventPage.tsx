@@ -1102,14 +1102,6 @@ export const EventPage: FC = () => {
           <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
         </div>
       )}
-      {/* Интервал Этапа 2 (V67): когда откроется подтверждение мест — свой у события или дефолт. */}
-      {showVoting && !isOpenEvent && event.stage2LeadMinutes != null && (
-        <div className="rd-hint" style={{ marginBottom: 14 }}>
-          {isRosterEvent
-            ? `Набор состава закрывается за ${formatLeadInterval(event.stage2LeadMinutes)} до начала`
-            : `Подтверждение мест откроется за ${formatLeadInterval(event.stage2LeadMinutes)} до начала`}
-        </div>
-      )}
       {showVoting && pathBackNudge}
       </>
       )}
@@ -1342,14 +1334,14 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* W3-09: Этап 1, ни одного отклика — role-aware строка-намёк в слоте ростера, под
-          голосованием. Без кнопок и без заголовка секции. Гейты: !isCancelled + showVoting +
+      {/* W3-09: Этап 1, ни одного отклика — строка-намёк в слоте ростера, под голосованием.
+          Только участнику: организатору её вариант («поделись в чате клуба») убран как
+          бесполезный — при привязанном чате событие туда уже опубликовано живым закрепом, а
+          без чата совет всё равно некуда применить. Гейты: !isCancelled + showVoting +
           responders.isSuccess (см. showVoteRosterHint). */}
-      {showVoteRosterHint && (
+      {showVoteRosterHint && !isManager && (
         <div className="rd-cta-hint" style={{ textAlign: 'left', marginBottom: 14 }}>
-          {isManager
-            ? 'Голосов пока нет. Поделись событием в чате клуба — первые отклики появятся здесь.'
-            : 'Пока никто не откликнулся. Проголосуй первым — остальным будет проще решиться.'}
+          Пока никто не откликнулся. Проголосуй первым — остальным будет проще решиться.
         </div>
       )}
 

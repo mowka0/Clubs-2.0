@@ -128,11 +128,14 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     expect(screen.queryByText(/Поделись событием в чате клуба/)).not.toBeInTheDocument();
   });
 
-  it('организатор: то же событие → вариант про чат клуба', async () => {
+  it('организатор: строки-намёка нет вовсе', async () => {
+    // Совет «поделись в чате клуба» убран (PO 2026-09-01): при привязанном чате событие туда уже
+    // опубликовано живым закрепом, а без чата совет применить некуда.
     mockEndpoints({ event: buildEvent(), responders: [], ownerId: VIEWER_ID });
     renderEventPage();
 
-    expect(await screen.findByText(/Голосов пока нет\. Поделись событием в чате клуба/)).toBeInTheDocument();
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.queryByText(/Поделись событием в чате клуба/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });
 
