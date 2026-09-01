@@ -25,7 +25,8 @@ class TrustPolicyPathBackTest {
     fun `weightsOf sums fresh outcomes at full weight and ignores neutral`() {
         val w = TrustPolicy.weightsOf(listOf(out(KEPT), out(KEPT), out(BROKE), out(NEUTRAL)), now)
         assertEquals(2.0, w.kept, 1e-9)
-        assertEquals(1.0, w.broke, 1e-9)
+        // Нарушенное обещание весит |очки|/100 (V85): у неявки (−200) это 2.0, а не 1.0.
+        assertEquals(2.0, w.broke, 1e-9)
     }
 
     @Test
@@ -39,15 +40,16 @@ class TrustPolicyPathBackTest {
     }
 
     @Test
-    fun `projection climbs step by step - fresh 1 kept + 1 broke = 59, then 66, 72 (reliable on 2nd)`() {
-        // kept=1, broke=1 (свежие): сейчас (1+2.55)/(1+2+3) = 59. Проекция моделирует время
-        // (встреча = +14 дней, d = 0.5^(14/90) ≈ 0.898): старые веса затухают, новое посещение
-        // добавляется с весом 1.0 → 66 после первой встречи, 72 после второй (≥ 70 — надёжная зона).
+    fun `projection climbs step by step - fresh 1 kept + 1 no-show = 44, reliable on 5th`() {
+        // kept=1, broke=2.0 (неявка весит |−200|/100): (1+2.55)/(1+4+3) = 44. Проекция моделирует
+        // время (встреча = +14 дней, d = 0.5^(14/90) ≈ 0.898): старые веса затухают, новое
+        // посещение добавляется с весом 1.0. До надёжной зоны (≥70) теперь пять встреч, а не две —
+        // прямое следствие того, что молчаливая неявка стала самым дорогим промахом.
         val w = TrustPolicy.weightsOf(listOf(out(KEPT), out(BROKE)), now)
-        assertEquals(59, TrustPolicy.trustFromWeights(w.kept, w.broke))
-        assertEquals(66, TrustPolicy.projectedTrust(w, 1))
-        assertEquals(72, TrustPolicy.projectedTrust(w, 2))
-        assertEquals(2, TrustPolicy.meetingsToReliable(w))
+        assertEquals(44, TrustPolicy.trustFromWeights(w.kept, w.broke))
+        assertEquals(52, TrustPolicy.projectedTrust(w, 1))
+        assertEquals(59, TrustPolicy.projectedTrust(w, 2))
+        assertEquals(5, TrustPolicy.meetingsToReliable(w))
     }
 
     @Test

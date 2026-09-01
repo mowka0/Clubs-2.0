@@ -2,6 +2,7 @@ package com.clubs.reputation
 
 import com.clubs.generated.jooq.enums.ReputationKind
 import java.time.OffsetDateTime
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -75,13 +76,31 @@ object TrustPolicy {
     /** Суммарные decay-веса сдержанных/нарушенных обещаний — общая база [perClubTrust] и проекции «пути назад». */
     data class TrustWeights(val kept: Double, val broke: Double)
 
-    /** Веса kept/broke из сырых исходов (decay от occurred_at к [now]). */
+    /**
+     * Тяжесть нарушенного обещания = |очки| / 100 (решение PO 2026-08-31). До этого любой промах
+     * весил единицу, и надёжность не отличала «снялся за три дня» от «не пришёл и не предупредил» —
+     * градация цены существовала только как число в диалоге отказа и никуда не влияла.
+     *
+     * Точка отсчёта — `abandoned_slot` (−100, вес ровно 1.0): прежнее поведение сохраняется, а
+     * остальные виды двигаются относительно него. Лестница получается из самих очков, поэтому
+     * новый вид репутации не требует правки формулы — достаточно назначить ему цену.
+     */
+    private fun severityOf(kind: ReputationKind): Double =
+        abs(ReputationPolicy.pointsFor(kind)) / 100.0
+
+    /**
+     * Веса kept/broke из сырых исходов (decay от occurred_at к [now]).
+     *
+     * Тяжесть применяется ТОЛЬКО к нарушенным обещаниям: шкала очков градуирует ущерб, а не
+     * заслугу. Сдержанное обещание весит единицу независимо от вида — иначе оплата складчины
+     * (+10) давала бы 0.1 и почти не считалась бы за обещание, хотя человек его сдержал.
+     */
     fun weightsOf(outcomes: List<Outcome>, now: OffsetDateTime): TrustWeights {
         var keptW = 0.0
         var brokeW = 0.0
         for (o in outcomes) when (classOf(o.kind)) {
             TrustClass.KEPT -> keptW += decay(o.occurredAt, now, HALF_LIFE_DAYS)
-            TrustClass.BROKE -> brokeW += decay(o.occurredAt, now, HALF_LIFE_DAYS)
+            TrustClass.BROKE -> brokeW += severityOf(o.kind) * decay(o.occurredAt, now, HALF_LIFE_DAYS)
             TrustClass.NEUTRAL -> Unit
         }
         return TrustWeights(keptW, brokeW)
