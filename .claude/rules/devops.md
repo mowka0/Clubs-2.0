@@ -160,7 +160,7 @@ Staging и prod используют один и тот же Docker image. Ра�
 
 ### Staging environment
 - Отдельное приложение в том же Coolify
-- Same codebase, отдельные env vars (`TRAEFIK_SERVICE_NAME=clubs-frontend-staging`)
+- Same codebase, отдельные env vars (домены, секреты, ужатые тайминги). `TRAEFIK_SERVICE_NAME` **не задавать** — легаси, Traefik создаёт сервис сам (см. CLAUDE.md § «Настройка staging в Coolify»)
 - Domain: `staging.77-42-23-177.sslip.io`
 
 ---
