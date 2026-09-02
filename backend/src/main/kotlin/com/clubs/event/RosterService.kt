@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
@@ -131,5 +132,36 @@ class RosterService(
         val first = eventResponseRepository.findFirstWaitlisted(eventId) ?: return
         eventResponseRepository.updateStage2Vote(first.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
         eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, first.userId))
+    }
+
+    /**
+     * Место освободилось не отказом, а киком или выходом из клуба: строку ответа вызывающий уже
+     * удалил и держит `lockEventSlots`. Дальше — тот же путь, что у отказа
+     * ([Stage2Service.declineParticipation]): повысить первого из очереди, а в закрытом составе
+     * заметить, что состав опустел (встреча отменяется) или у MIN пробит порог (DM организатору).
+     * До этого кик и выход двигали очередь напрямую и обе проверки обходили: последний
+     * участник мог уйти из клуба, и встреча висела с нулём в составе.
+     *
+     * На наборе (`upcoming`) — только повышение: состав ещё не объявлен, отменять нечего.
+     * Возвращает id повышенного из очереди, если он был.
+     */
+    @Transactional
+    fun releaseSeat(eventId: UUID): UUID? {
+        val event = eventRepository.findById(eventId) ?: return null
+        val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
+        // Живой закреп: место освободилось (и, возможно, перезанято из очереди).
+        eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
+        if (promotedUserId != null) eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
+
+        if (event.status != EventStatus.stage_2 || event.isOpenEvent) return promotedUserId
+        val count = eventResponseRepository.countConfirmed(eventId)
+        val limit = event.participantLimit
+        when {
+            count == 0 -> eventService.cancelBySystem(event, Stage2Service.ROSTER_DISBANDED_REASON)
+            event.format == EventFormat.MIN && limit != null && count == limit - 1 ->
+                eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
+        }
+        log.info("Seat released: eventId={} promoted={} confirmed={}/{}", eventId, promotedUserId, count, limit)
+        return promotedUserId
     }
 }

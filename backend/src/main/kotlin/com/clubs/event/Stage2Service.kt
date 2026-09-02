@@ -151,10 +151,13 @@ class Stage2Service(
 
         // Открытая встреча (participantLimit = null): дефицита мест нет — каждый подтвердивший
         // сразу confirmed, ветка waitlisted недостижима. См. events.md § «Открытая встреча».
+        // У формата MIN лимит — порог, а не потолок (V85): после закрытия состава место занимает
+        // любой, очередь у него недостижима — тот же гард, что в RosterService.applyVote. Без него
+        // пятый на «минимум 4» попадал в очередь, которая никогда не сдвинется.
         val limit = event.participantLimit
         val newStatus: Stage_2Vote
         val finalStatus: FinalStatus
-        if (limit == null || confirmedCount < limit) {
+        if (limit == null || event.format == EventFormat.MIN || confirmedCount < limit) {
             newStatus = Stage_2Vote.confirmed
             finalStatus = FinalStatus.confirmed
         } else {

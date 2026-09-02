@@ -8,8 +8,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
-import com.clubs.event.EventRosterChangedEvent
-import com.clubs.event.WaitlistPromotedEvent
+import com.clubs.event.RosterService
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.skladchina.SkladchinaProgressChangedEvent
 import com.clubs.skladchina.SkladchinaRepository
@@ -50,6 +49,7 @@ class AccessGateService(
     private val clubRepository: ClubRepository,
     private val applicationRepository: ApplicationRepository,
     private val eventResponseRepository: EventResponseRepository,
+    private val rosterService: RosterService,
     private val skladchinaRepository: SkladchinaRepository,
     private val notificationService: NotificationService,
     private val eventPublisher: ApplicationEventPublisher,
@@ -288,14 +288,9 @@ class AccessGateService(
         skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId)
             .forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
-        freedEventIds.forEach { eventId ->
-            val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
-            // Живой закреп: бронь освободилась (и, возможно, перезанята из очереди) — перерисовать статус.
-            eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
-            if (promotedUserId != null) {
-                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
-            }
-        }
+        // Освобождение места — общий путь с отказом и выходом (RosterService.releaseSeat): повышение
+        // из очереди, а в закрытом составе — отмена при нуле и DM организатору при пробитом пороге.
+        freedEventIds.forEach { rosterService.releaseSeat(it) }
         log.info(
             "Member removed (kick): clubId={} targetUserId={} by={} cascadedApplications={} cascadedResponses={} freedSlots={}",
             clubId, targetUserId, callerId, cascaded, cascadedResponses, freedEventIds.size

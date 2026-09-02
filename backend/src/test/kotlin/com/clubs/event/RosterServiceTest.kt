@@ -230,4 +230,60 @@ class RosterServiceTest {
             service.rosterDeadline(event(eventDatetime = start, stage2LeadMinutes = 360))
         )
     }
+
+    // ---- освобождение места киком / выходом из клуба ----
+
+    @Test
+    fun `releaseSeat on roster collection only promotes the queue`() {
+        every { eventRepository.findById(eventId) } returns event(status = EventStatus.upcoming)
+        val promoted = UUID.randomUUID()
+        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns promoted
+
+        assertEquals(promoted, service.releaseSeat(eventId))
+
+        verify(exactly = 1) { eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promoted)) }
+        verify(exactly = 1) { eventPublisher.publishEvent(EventRosterChangedEvent(eventId)) }
+        // Состав ещё не объявлен — отменять и звать организатора нечего.
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterBrokenEvent::class)) }
+    }
+
+    @Test
+    fun `releaseSeat after close with nobody left cancels the event`() {
+        val target = event(status = EventStatus.stage_2)
+        every { eventRepository.findById(eventId) } returns target
+        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.releaseSeat(eventId)
+
+        verify(exactly = 1) { eventService.cancelBySystem(target, Stage2Service.ROSTER_DISBANDED_REASON) }
+    }
+
+    @Test
+    fun `releaseSeat after close crossing MIN threshold notifies the organizer`() {
+        val target = event(participantLimit = 4, limitKind = LimitKind.min, status = EventStatus.stage_2)
+        every { eventRepository.findById(eventId) } returns target
+        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+
+        service.releaseSeat(eventId)
+
+        verify(exactly = 1) { eventPublisher.publishEvent(RosterBrokenEvent(target, 3, 4)) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
+    }
+
+    @Test
+    fun `releaseSeat after close on MAX below limit stays silent`() {
+        every { eventRepository.findById(eventId) } returns event(participantLimit = 6, status = EventStatus.stage_2)
+        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+
+        service.releaseSeat(eventId)
+
+        // У MAX неполный состав ничего не значит: место просто пустует.
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterBrokenEvent::class)) }
+        verify(exactly = 1) { eventPublisher.publishEvent(EventRosterChangedEvent(eventId)) }
+    }
 }

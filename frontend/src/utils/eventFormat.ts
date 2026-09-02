@@ -15,6 +15,9 @@ export function formatEmoji(format: EventFormat): string {
     case 'min': return '🎯';
     case 'max': return '🎟';
     case 'any': return '🌊';
+    // Неизвестный литерал (например, `normal` от бэкенда следующей версии, пока у клиента
+    // закэширован старый бандл): не ронять страницу, показать нейтральный бейдж.
+    default: return '👥';
   }
 }
 
@@ -30,5 +33,6 @@ export function formatBadge(format: EventFormat, participantLimit: number | null
     case 'min': return participantLimit === null ? `${emoji} Минимум` : `${emoji} Не меньше ${participantLimit}`;
     case 'max': return participantLimit === null ? `${emoji} Максимум` : `${emoji} Не больше ${participantLimit}`;
     case 'any': return `${emoji} Сколько придёт`;
+    default: return participantLimit === null ? `${emoji} Встреча` : `${emoji} До ${participantLimit}`;
   }
 }
