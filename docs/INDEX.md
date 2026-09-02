@@ -193,7 +193,7 @@
 Подпапки `docs/design/<фича>/mockups/` — HTML-мокапы и картинки дизайн-сессий.
 Артефакты обсуждения, **в сверке не участвуют**.
 
-**Состояние работ по форматам встреч — `docs/backlog/event-formats-session-handoff.md`**
+**Состояние работ по форматам встреч — `docs/backlog/event-formats-v2-session-handoff.md`** (старый `event-formats-session-handoff.md` — только env и инструменты staging)
 (ветка, что пройдено в прогоне, открытые решения, факты окружения). Читать первым.
 Старый `docs/backlog/roster-threshold-session-handoff.md` устарел: в нём неверные значения env. Тест-кейсы форматов «минимум» / «максимум» —
 `docs/backlog/event-formats-test-cases.md` (там же поведение обоих форматов с точки зрения
