@@ -5,7 +5,6 @@ package com.clubs.generated.jooq.tables
 
 
 import com.clubs.generated.jooq.Public
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.keys.EVENT_TEMPLATES_PKEY
 import com.clubs.generated.jooq.keys.EVENT_TEMPLATES__EVENT_TEMPLATES_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENT_TEMPLATES__EVENT_TEMPLATES_CREATED_BY_FKEY
@@ -142,11 +141,11 @@ open class EventTemplates(
     val LOCATION_HINT: TableField<EventTemplatesRecord, String?> = createField(DSL.name("location_hint"), SQLDataType.VARCHAR(200), this, "Уточнение к месту («вход со двора, домофон 12»); NULL = нет.")
 
     /**
-     * The column <code>public.event_templates.participant_limit</code>. Лимит
-     * участников будущей встречи; NULL = открытая встреча (согласовано с
-     * is_open_event).
+     * The column <code>public.event_templates.participant_limit</code>.
+     * Максимум участников — потолок мест (V86). NULL = шаблон открытой встречи
+     * (тогда и min_participants, и stage2_lead_minutes NULL).
      */
-    val PARTICIPANT_LIMIT: TableField<EventTemplatesRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Лимит участников будущей встречи; NULL = открытая встреча (согласовано с is_open_event).")
+    val PARTICIPANT_LIMIT: TableField<EventTemplatesRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Максимум участников — потолок мест (V86). NULL = шаблон открытой встречи (тогда и min_participants, и stage2_lead_minutes NULL).")
 
     /**
      * The column <code>public.event_templates.stage2_lead_minutes</code>. За
@@ -200,12 +199,12 @@ open class EventTemplates(
     val UPDATED_AT: TableField<EventTemplatesRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда шаблон последний раз перезаписан (в том числе через «Обновить шаблон» из формы создания).")
 
     /**
-     * The column <code>public.event_templates.limit_kind</code>. Как читать
-     * participant_limit (V85): min — порог набора, max — потолок мест. NULL
-     * строго при participant_limit IS NULL — формат «сколько придёт». Зеркалит
-     * events.limit_kind.
+     * The column <code>public.event_templates.min_participants</code>. Минимум
+     * участников, запомненный шаблоном (V86): форма подставляет его и включает
+     * переключатель. NULL = минимум выключен. 1 ≤ min ≤ participant_limit —
+     * CHECK chk_event_templates_min_participants.
      */
-    val LIMIT_KIND: TableField<EventTemplatesRecord, LimitKind?> = createField(DSL.name("limit_kind"), SQLDataType.VARCHAR.asEnumDataType(LimitKind::class.java), this, "Как читать participant_limit (V85): min — порог набора, max — потолок мест. NULL строго при participant_limit IS NULL — формат «сколько придёт». Зеркалит events.limit_kind.")
+    val MIN_PARTICIPANTS: TableField<EventTemplatesRecord, Int?> = createField(DSL.name("min_participants"), SQLDataType.INTEGER, this, "Минимум участников, запомненный шаблоном (V86): форма подставляет его и включает переключатель. NULL = минимум выключен. 1 ≤ min ≤ participant_limit — CHECK chk_event_templates_min_participants.")
 
     private constructor(alias: Name, aliased: Table<EventTemplatesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventTemplatesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -272,9 +271,9 @@ open class EventTemplates(
     val users: UsersPath
         get(): UsersPath = users()
     override fun getChecks(): List<Check<EventTemplatesRecord>> = listOf(
-        Internal.createCheck(this, DSL.name("chk_event_templates_limit_kind"), "(((participant_limit IS NULL) = (limit_kind IS NULL)))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_limit_positive"), "(((participant_limit IS NULL) OR (participant_limit > 0)))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
+        Internal.createCheck(this, DSL.name("chk_event_templates_min_participants"), "(((min_participants IS NULL) OR ((participant_limit IS NOT NULL) AND ((min_participants >= 1) AND (min_participants <= participant_limit)))))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_open_stage2"), "(((participant_limit IS NOT NULL) OR (stage2_lead_minutes IS NULL)))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_stage2_bounds"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 60) AND (stage2_lead_minutes <= 7200))))", true),
         Internal.createCheck(this, DSL.name("chk_event_templates_weekday"), "(((default_weekday IS NULL) OR ((default_weekday >= 1) AND (default_weekday <= 7))))", true)

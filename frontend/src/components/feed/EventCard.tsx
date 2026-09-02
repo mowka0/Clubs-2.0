@@ -84,7 +84,7 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         {/* Формат встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21): видно прямо с карточки,
             сколько человек нужно и что будет, если не наберутся. Словарь общий со всеми лентами. */}
         <span className="rd-type-badge">
-          {formatBadge(event.format, event.participantLimit).toUpperCase()}
+          {formatBadge(event.format, event.participantLimit, event.minParticipants).toUpperCase()}
         </span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>

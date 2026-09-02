@@ -156,6 +156,11 @@ events:
   # Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для теста. Очереди порог не касается —
   # выход из неё бесплатен всегда. Env: LATE_DECLINE_THRESHOLD_MINUTES
   late-decline-threshold-minutes: ${LATE_DECLINE_THRESHOLD_MINUTES:240}
+  # Правило ② форматов встреч (V86): за сколько МИНУТ до дедлайна набора организатору уходит DM
+  # «минимум не набран» с кнопкой «Напомнить». Ничего не решает и не отменяет — единственная
+  # автоотмена остаётся за дедлайном (правило ①). Дефолт 180 = 3ч. В минутах, чтобы staging мог
+  # ужать до 2–3 и проверить ② в том же прогоне. Env: ROSTER_WARNING_MINUTES_BEFORE_DEADLINE
+  roster-warning-minutes-before-deadline: ${ROSTER_WARNING_MINUTES_BEFORE_DEADLINE:180}
   # Период опроса EventReminderScheduler (мс). Дефолт 300000 = 5мин.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
   # DM-напоминание организатору отметить посещаемость: через сколько минут после события.

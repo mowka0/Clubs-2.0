@@ -556,8 +556,8 @@ class UserEventsControllerTest {
     ) {
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, limit_kind)
-            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', ${participantLimit ?: "NULL"}, $votingOpensDaysBefore, '$status'::event_status, ${participantLimit?.let { "'max'" } ?: "NULL"}::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status)
+            VALUES ('$id', '$clubId', '$memberUserId', '$title', 'Place', '$eventDatetime', ${participantLimit ?: "NULL"}, $votingOpensDaysBefore, '$status'::event_status)
             """.trimIndent()
         )
     }

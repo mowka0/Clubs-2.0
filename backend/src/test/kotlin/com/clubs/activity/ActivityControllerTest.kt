@@ -141,8 +141,8 @@ class ActivityControllerTest {
 
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, description, location_text, event_datetime, participant_limit, status, photo_url, created_at, updated_at, limit_kind)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'Event +3d', 'Some description text', 'Park', '$eventDatetime', 20, 'upcoming', 'https://cdn.example.com/event.jpg', '$createdAt', '$createdAt', (CASE WHEN 20 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, description, location_text, event_datetime, participant_limit, status, photo_url, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Event +3d', 'Some description text', 'Park', '$eventDatetime', 20, 'upcoming', 'https://cdn.example.com/event.jpg', '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(
@@ -187,8 +187,8 @@ class ActivityControllerTest {
 
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at, limit_kind)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'No photo', 'Park', '$eventDatetime', 20, 'upcoming', '$createdAt', '$createdAt', (CASE WHEN 20 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'No photo', 'Park', '$eventDatetime', 20, 'upcoming', '$createdAt', '$createdAt')
             """.trimIndent()
         )
 
@@ -213,8 +213,8 @@ class ActivityControllerTest {
 
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at, limit_kind)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'Completed Event -2d', 'Park', '$eventDatetime', 20, 'completed', '$createdAt', '$createdAt', (CASE WHEN 20 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Completed Event -2d', 'Park', '$eventDatetime', 20, 'completed', '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(
@@ -260,8 +260,8 @@ class ActivityControllerTest {
 
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at, limit_kind)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'E', 'Park', '$futureDate', 20, 'upcoming', '$createdAt', '$createdAt', (CASE WHEN 20 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'E', 'Park', '$futureDate', 20, 'upcoming', '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(

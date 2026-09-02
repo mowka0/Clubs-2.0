@@ -37,7 +37,7 @@
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
 | `common/security` (`SecurityConfig`, `RateLimitFilter`) | `auth.md`, `infrastructure.md` |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
-| `event` | `events.md`, `event-formats.md`, `event-formats-v2.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
+| `event` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
 | `feedback` | `feedback.md` |
 | `geo` (`SuggestService`, `CityCenterRepository` → подсказки; `GeocoderService` → гео события) | `venue-search.md`, `event-geo.md` |
@@ -119,8 +119,7 @@
 | Файл | О чём | Правлен |
 |---|---|---|
 | `events.md` | встречи, двухэтапное подтверждение | 2026-08-21 |
-| `event-formats.md` | форматы встреч (минимум / максимум / сколько придёт), набор состава, цена отказа | 2026-08-31 |
-| `event-formats-v2.md` | **целевая модель** (решение PO 2026-09-02): обычная встреча «минимум..максимум» + открытая, три правила, «Проводим», задел под платный формат; реализация V86 отдельной веткой | 2026-09-02 |
+| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат. Модель V85 (min/max/any) — `docs/backlog/event-formats-v85.md` | 2026-09-02 |
 | `events-feed.md` | вкладка «Активности», история | 2026-08-16 |
 | `event-vote-block.md` | блок «Набор» на странице события | 2026-08-21 |
 | `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-21 |
@@ -195,9 +194,8 @@
 
 **Состояние работ по форматам встреч — `docs/backlog/event-formats-v2-session-handoff.md`** (старый `event-formats-session-handoff.md` — только env и инструменты staging)
 (ветка, что пройдено в прогоне, открытые решения, факты окружения). Читать первым.
-Старый `docs/backlog/roster-threshold-session-handoff.md` устарел: в нём неверные значения env. Тест-кейсы форматов «минимум» / «максимум» —
-`docs/backlog/event-formats-test-cases.md` (там же поведение обоих форматов с точки зрения
-проверяющего). Старый `docs/backlog/roster-threshold-test-cases.md` описывает механику V83 с
+**План прогона v2 (V86) на staging — `docs/backlog/event-formats-v2-staging-testplan.md`** (перед ним в Coolify нужен `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE=3`). Архив V85: `event-formats-test-cases.md`, `party-club-staging-testplan.md`, спека `event-formats-v85.md`.
+Старый `docs/backlog/roster-threshold-session-handoff.md` устарел: в нём неверные значения env. Старый `docs/backlog/roster-threshold-test-cases.md` описывает механику V83 с
 продлением набора и под форматы НЕ переписан.
 
 Дизайн-сессия `docs/design/event-roster-threshold/` — набор состава и цена отказа (решения PO

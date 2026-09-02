@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter
  *
  * Форма:
  * ```
- * <b>Встреча: не больше 20</b>
+ * <b>Встреча: до 20 человек</b>
  *
  * Название
  * Описание
@@ -28,11 +28,18 @@ import java.time.format.DateTimeFormatter
  */
 object EventMessageTemplate {
 
-    /** Формат встречи словами — он же заголовок сообщения. Словарь общий с бейджами карточек. */
+    /**
+     * Формат встречи словами — он же заголовок сообщения. Словарь общий с бейджами карточек:
+     * «4–10» при минимуме, «до 10» без него, «открытая» без мест.
+     */
     fun formatName(event: Event): String = when (event.format) {
-        EventFormat.MIN -> "Встреча: не меньше ${event.participantLimit}"
-        EventFormat.MAX -> "Встреча: не больше ${event.participantLimit}"
-        EventFormat.ANY -> "Встреча: сколько придёт"
+        EventFormat.NORMAL -> when (val min = event.minParticipants) {
+            null -> "Встреча: до ${event.participantLimit} человек"
+            // «Ровно N» (четыре места в машине): «6–6» читалось бы как опечатка.
+            event.participantLimit -> "Встреча: ровно $min человек"
+            else -> "Встреча: $min–${event.participantLimit} человек"
+        }
+        EventFormat.OPEN -> "Встреча: открытая"
     }
 
     /**
@@ -67,41 +74,50 @@ object EventMessageTemplate {
     fun dmFacts(event: Event): String = seatsLine(event)
 
     /**
-     * Счётчики НАБОРА СОСТАВА (формат 🎟, V83): голос «Иду» уже кладёт в состав, поэтому в закрепе
-     * стоит не «идут», а «собрались N из M» — и прямой ответ на вопрос «сколько ещё нужно».
-     * Строка дедлайна объясняет, что будет, если не наберём: без неё набор читается как
-     * бессрочный, и голосовать «потом» кажется безопасным.
+     * Счётчики НАБОРА СОСТАВА: голос «Иду» уже кладёт в состав, поэтому в закрепе стоит не «идут»,
+     * а «собрались N из M» — и прямой ответ на вопрос «сколько ещё нужно». Строка дедлайна
+     * объясняет, что будет в дедлайн: без неё набор читается как бессрочный, и голосовать
+     * «потом» кажется безопасным.
      */
     fun rosterStats(event: Event, confirmed: Int, deadline: OffsetDateTime, fmt: DateTimeFormatter): String {
         val limit = event.participantLimit ?: return ""
-        val left = (limit - confirmed).coerceAtLeast(0)
-        val counts = when (event.format) {
-            // Порог мог быть уже взят и даже перерасти себя — «нужно ещё 0» читалось бы как сбой.
-            EventFormat.MIN -> if (left > 0) "👥 Собрались $confirmed из $limit — нужно ещё $left."
-                else "👥 Собрались $confirmed — минимум набран."
-            EventFormat.MAX -> if (left > 0) "👥 Заняты $confirmed из $limit мест — свободно $left."
-                else "👥 Мест нет: $confirmed из $limit. Дальше — очередь на замену."
-            EventFormat.ANY -> return ""
+        val min = event.minParticipants
+        val free = (limit - confirmed).coerceAtLeast(0)
+        val left = min?.let { (it - confirmed).coerceAtLeast(0) } ?: 0
+        val counts = when {
+            min != null && left > 0 -> "👥 Собрались $confirmed из $min–$limit — нужно ещё $left."
+            min != null && free > 0 -> "👥 Собрались $confirmed из $min–$limit — минимум набран, свободно $free."
+            free > 0 -> "👥 Заняты $confirmed из $limit мест — свободно $free."
+            else -> "👥 Мест нет: $confirmed из $limit. Дальше — очередь на замену."
         }
-        // Что случится в дедлайн — свойство формата, и молчать об этом нельзя: без этой строки
-        // набор читается как бессрочный, и голосовать «потом» кажется безопасным.
-        val outcome = if (event.format == EventFormat.MIN) " Не наберём — встреча отменится."
-            else " Состав закроется тем, кто успел."
+        // Что случится в дедлайн — правило ①, и молчать о нём нельзя: пока минимум не набран,
+        // встреча под угрозой отмены; когда набран или его нет, состав просто закроется.
+        val outcome = if (left > 0) " Не наберём — встреча отменится." else " Состав закроется тем, кто успел."
         return "$counts\n⏳ Набор закрывается ${deadline.format(fmt)}.$outcome"
     }
 
-    /** Состав закрыт: встреча состоится. Очередь упоминаем, только если она есть. */
+    /**
+     * Состав закрыт. Ниже минимума без «Проводим» обещать «состав собран» нельзя — честная
+     * строка про решение организатора; с отметкой — его подтверждение (§ 3.1 спеки).
+     * Очередь упоминаем, только если она есть.
+     */
     fun rosterClosedStats(event: Event, confirmed: Int, waitlisted: Int): String {
-        // У MIN состав мог перерасти порог, и знаменатель «7 из 6» читался бы как опечатка.
-        val head = when (event.format) {
-            EventFormat.MIN -> "✅ Состав собран: $confirmed (нужно было ${event.participantLimit})."
-            EventFormat.MAX -> "✅ Состав собран: $confirmed из ${event.participantLimit}."
-            EventFormat.ANY -> "✅ Состав собран: $confirmed."
+        val limit = event.participantLimit
+        val min = event.minParticipants
+        val head = when {
+            limit == null -> "✅ Состав собран: $confirmed."
+            min != null && confirmed < min && !event.isRosterDecided ->
+                "⚠️ Состав $confirmed из $min — встреча состоится, если организатор не решит иначе."
+            min != null && confirmed < min -> "👥 Состав $confirmed из $limit."
+            else -> "✅ Состав собран: $confirmed из $limit."
         }
+        val decided = if (event.isRosterDecided) {
+            "\nОрганизатор подтвердил: встреча состоится составом $confirmed."
+        } else ""
         val queue = if (waitlisted > 0) {
             "\n📋 В очереди — $waitlisted: если кто-то не сможет, место перейдёт им."
         } else ""
-        return head + queue
+        return head + decided + queue
     }
 
     /**
@@ -125,9 +141,10 @@ object EventMessageTemplate {
      * Формат без лимита сообщает свою суть, а не «Мест — null».
      */
     fun seatsLine(event: Event): String = when (event.format) {
-        EventFormat.MIN -> "👥 Нужно минимум ${event.participantLimit} — иначе встреча отменится"
-        EventFormat.MAX -> "👥 Мест — ${event.participantLimit}"
-        EventFormat.ANY -> "👥 Без ограничений — приходят все желающие, репутация не считается"
+        EventFormat.NORMAL -> event.minParticipants
+            ?.let { "👥 Мест — ${event.participantLimit}, нужно минимум $it — иначе встреча отменится" }
+            ?: "👥 Мест — ${event.participantLimit}"
+        EventFormat.OPEN -> "👥 Без ограничений — приходят все желающие, репутация не считается"
     }
 
     /** HTML parse_mode: `&`, `<`, `>` в пользовательском вводе ломали бы разметку/давали инъекцию тегов. */

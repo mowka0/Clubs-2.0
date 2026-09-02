@@ -46,8 +46,8 @@ function createRoute(
   template: SkladchinaTemplateKey | null,
   eventFormat: EventFormat | null,
 ): string {
-  // Все три формата (V85) — одна форма создания: она читает ?format и адаптирует поля
-  // (подпись лимита, правило под степпером, ограничение даты у «минимума»).
+  // Оба формата (V86) — одна форма создания: она читает ?format и адаптирует поля
+  // (степперы максимума и минимума у обычной встречи, ничего — у открытой).
   if (type === 'event') {
     return `/clubs/${clubId}/events/new${eventFormat ? `?format=${eventFormat}` : ''}`;
   }

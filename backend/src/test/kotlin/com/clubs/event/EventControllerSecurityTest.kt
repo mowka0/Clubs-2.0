@@ -60,6 +60,7 @@ class EventControllerSecurityTest {
 
     private lateinit var clubId: UUID
     private lateinit var organizerId: UUID
+    private lateinit var memberId: UUID
     private lateinit var nonMemberToken: String
     private lateinit var memberToken: String
     private lateinit var organizerToken: String
@@ -77,7 +78,7 @@ class EventControllerSecurityTest {
         dsl.execute("DELETE FROM users")
 
         val nonMemberId = UUID.randomUUID()
-        val memberId = UUID.randomUUID()
+        memberId = UUID.randomUUID()
         organizerId = UUID.randomUUID()
         clubId = UUID.randomUUID()
 
@@ -274,8 +275,8 @@ class EventControllerSecurityTest {
         val eventId = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, limit_kind)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'Att Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Att Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status)
             """.trimIndent()
         )
         return eventId
@@ -365,6 +366,120 @@ class EventControllerSecurityTest {
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20,
               "format": "max"
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    // ---- «Проводим» (V86, § 4 спеки форматов): новый вход с правами менеджера ----
+
+    private fun insertRosterEvent(minParticipants: Int, status: String = "stage_2"): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, min_participants, voting_opens_days_before, status, stage_2_triggered)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Roster Event', 'Place', '${OffsetDateTime.now().plusDays(1)}', 10, $minParticipants, 14, '$status'::event_status, ${status == "stage_2"})
+            """.trimIndent()
+        )
+        return eventId
+    }
+
+    private fun insertConfirmed(eventId: UUID, userId: UUID) {
+        dsl.execute(
+            "INSERT INTO event_responses (event_id, user_id, stage_1_vote, stage_2_vote, final_status) " +
+                "VALUES ('$eventId', '$userId', 'going', 'confirmed', 'confirmed')"
+        )
+    }
+
+    @Test
+    fun `POST proceed as non-manager should return 403`() {
+        val eventId = insertRosterEvent(minParticipants = 4)
+        insertConfirmed(eventId, organizerId)
+
+        mockMvc.perform(post("/api/events/$eventId/proceed").header("Authorization", "Bearer $memberToken"))
+            .andExpect(status().isForbidden)
+        mockMvc.perform(post("/api/events/$eventId/proceed").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isForbidden)
+        mockMvc.perform(post("/api/events/$eventId/proceed"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `POST proceed as organizer below the minimum marks the roster decided and is idempotent`() {
+        val eventId = insertRosterEvent(minParticipants = 4)
+        // Двое в составе: с одним участником последствие отказа было бы «встреча отменится»
+        // (roster_empty идёт раньше seat_empty), а проверить нужно именно «место пустует».
+        insertConfirmed(eventId, organizerId)
+        insertConfirmed(eventId, memberId)
+
+        mockMvc.perform(post("/api/events/$eventId/proceed").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.rosterDecided").value(true))
+            .andExpect(jsonPath("$.minParticipants").value(4))
+            .andExpect(jsonPath("$.format").value("normal"))
+            // После «Проводим» место просто пустует — организатор уже решил.
+            .andExpect(jsonPath("$.declineConsequence").value("seat_empty"))
+
+        mockMvc.perform(post("/api/events/$eventId/proceed").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.rosterDecided").value(true))
+    }
+
+    @Test
+    fun `POST proceed with the roster at the minimum or before close should return 400`() {
+        val atMinimum = insertRosterEvent(minParticipants = 1)
+        insertConfirmed(atMinimum, organizerId)
+        mockMvc.perform(post("/api/events/$atMinimum/proceed").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isBadRequest)
+
+        val collecting = insertRosterEvent(minParticipants = 4, status = "upcoming")
+        mockMvc.perform(post("/api/events/$collecting/proceed").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isBadRequest)
+    }
+
+    // AC-17: старые литералы V85 принимаются на входе; наружу — только normal/open.
+    @Test
+    fun `POST event with legacy format literal min is accepted as normal with a minimum equal to the limit`() {
+        val body = """
+            {
+              "title": "Legacy min",
+              "locationHint": "Парк",
+              "eventDatetime": "${OffsetDateTime.now().plusDays(10)}",
+              "participantLimit": 6,
+              "format": "min"
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.format").value("normal"))
+            .andExpect(jsonPath("$.participantLimit").value(6))
+            .andExpect(jsonPath("$.minParticipants").value(6))
+            .andExpect(jsonPath("$.rosterDecided").value(false))
+    }
+
+    @Test
+    fun `POST event with a minimum above the limit should return 400`() {
+        val body = """
+            {
+              "title": "Bad minimum",
+              "locationHint": "Парк",
+              "eventDatetime": "${OffsetDateTime.now().plusDays(10)}",
+              "participantLimit": 6,
+              "minParticipants": 7,
+              "format": "normal"
             }
         """.trimIndent()
 

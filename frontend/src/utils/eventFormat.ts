@@ -2,37 +2,67 @@ import type { EventFormat } from '../types/api';
 
 /**
  * Словарь бейджей формата встречи — ОДИН на все поверхности: карточка ленты событий, карточка
- * «Активностей», тизер-афиша клуба и шапка страницы встречи. Раньше та же тройка была
- * продублирована в четырёх файлах и разъезжалась (в одном «Обычная», в другом «с местами»).
+ * «Активностей», тизер-афиша клуба, шапка страницы встречи и строка шаблона в «+». Раньше та же
+ * тройка была продублирована в четырёх файлах и разъезжалась.
  *
- * Счётчик «4 / 6» сам по себе не отличает порог от потолка, поэтому бейдж свою строку
- * отрабатывает. Спека: docs/modules/event-formats.md § 7.
+ * Счётчик «4 / 10» сам по себе не говорит, есть ли порог, поэтому его несёт бейдж: «👥 4–10»
+ * при включённом минимуме, «👥 До 10» без него. Спека: docs/modules/event-formats.md § 9.1.
  */
 
 /** Эмодзи формата — для мест, где на бейдж нет ширины (строка метаданных афиши). */
 export function formatEmoji(format: EventFormat): string {
   switch (format) {
-    case 'min': return '🎯';
-    case 'max': return '🎟';
-    case 'any': return '🌊';
-    // Неизвестный литерал (например, `normal` от бэкенда следующей версии, пока у клиента
-    // закэширован старый бандл): не ронять страницу, показать нейтральный бейдж.
+    case 'normal': return '👥';
+    case 'open': return '🌊';
+    // Неизвестный литерал (бэкенд следующей версии при закэшированном старом бандле — известный
+    // хвост immutable-кэша): не ронять страницу, показать нейтральный бейдж.
     default: return '👥';
   }
 }
 
 /**
- * Бейдж целиком: «🎯 Не меньше 6». Число берётся из лимита — оно и есть содержание формата,
- * поэтому бейдж без него (легаси-строка без `participantLimit`) вырождается в одно правило.
- * Регистр — забота вызывающего: в шапке встречи и в ленте событий бейдж капсом, в
- * «Активностях» обычный.
+ * «4–10» (en-dash) при включённом минимуме, «До 10» без него; минимум, равный максимуму, — это
+ * «ровно N» (четыре места в машине), а не «6–6», которое читается как опечатка.
  */
-export function formatBadge(format: EventFormat, participantLimit: number | null): string {
+function limitRange(participantLimit: number, minParticipants: number | null): string {
+  if (minParticipants === null) return `До ${participantLimit}`;
+  if (minParticipants === participantLimit) return `Ровно ${participantLimit}`;
+  return `${minParticipants}–${participantLimit}`;
+}
+
+/**
+ * Бейдж целиком: «👥 4–10» / «👥 До 10» / «🌊 Открытая». Регистр — забота вызывающего: в шапке
+ * встречи и в ленте событий бейдж капсом, в «Активностях» обычный.
+ */
+export function formatBadge(
+  format: EventFormat,
+  participantLimit: number | null,
+  minParticipants: number | null,
+): string {
   const emoji = formatEmoji(format);
   switch (format) {
-    case 'min': return participantLimit === null ? `${emoji} Минимум` : `${emoji} Не меньше ${participantLimit}`;
-    case 'max': return participantLimit === null ? `${emoji} Максимум` : `${emoji} Не больше ${participantLimit}`;
-    case 'any': return `${emoji} Сколько придёт`;
+    case 'open': return `${emoji} Открытая`;
+    case 'normal': return participantLimit === null
+      ? `${emoji} Встреча`
+      : `${emoji} ${limitRange(participantLimit, minParticipants)}`;
+    // Ветка default ОБЯЗАТЕЛЬНА (§ 8 «Совместимость»): страница встречи делает .toUpperCase()
+    // над результатом, и undefined от switch без default ронял бы её белым экраном.
     default: return participantLimit === null ? `${emoji} Встреча` : `${emoji} До ${participantLimit}`;
   }
+}
+
+/**
+ * Формат словами, без эмодзи — для приглушённой строки метаданных шаблона в «+»: цветной эмодзи
+ * там рисовался платформенным шрифтом и выбивался из строки (правка PO 2026-08-11).
+ */
+export function formatWords(
+  format: EventFormat,
+  participantLimit: number | null,
+  minParticipants: number | null,
+): string {
+  if (format === 'open') return 'открытая';
+  if (participantLimit === null) return 'встреча';
+  if (minParticipants === null) return `до ${participantLimit} человек`;
+  if (minParticipants === participantLimit) return `ровно ${participantLimit} человек`;
+  return `${minParticipants}–${participantLimit} человек`;
 }

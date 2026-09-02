@@ -157,8 +157,8 @@ class EventCancelCascadeIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_finalized, limit_kind)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$datetime', 10, 14, '$status'::event_status, $finalized, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$datetime', 10, 14, '$status'::event_status, $finalized)
             """.trimIndent()
         )
         return id

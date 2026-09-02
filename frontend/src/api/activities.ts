@@ -25,8 +25,10 @@ export interface EventActivityDto extends ActivityBase {
   eventDatetime: string;
   // null = место не указано (опционально с V58).
   locationText: string | null;
-  // null = формат «сколько придёт» — счёт показывается без знаменателя.
+  // null = открытая встреча — счёт показывается без знаменателя.
   participantLimit: number | null;
+  // Минимум участников для бейджа «👥 4–10»; null = выключен.
+  minParticipants: number | null;
   // Формат для бейджа карточки — тот же словарь, что на всех лентах.
   format: EventFormat;
   goingCount: number;

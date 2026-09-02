@@ -1,6 +1,5 @@
 package com.clubs.bot
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.EventStatus
@@ -29,7 +28,7 @@ class NotificationServiceTest {
     private val telegramClient = mockk<TelegramClient>(relaxed = true)
     private val gateway = mockk<ChatTelegramGateway>(relaxed = true)
     private val service = NotificationService(
-        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway), "bot", "https://app"
+        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway), gateway, "bot", "https://app"
     )
 
     @Test
@@ -248,7 +247,6 @@ class NotificationServiceTest {
         locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(3),
         participantLimit = 20,
-        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = EventStatus.stage_2,
         stage2Triggered = true,

@@ -140,8 +140,8 @@ class VoteService(
     }
 
     /**
-     * Таб «Без ответа»: участники клуба, от которых ещё ждут ответа на Этапе 2. Только менеджеру —
-     * рядовому участнику знать, кто молчит, незачем.
+     * Таб «Без ответа»: участники клуба, от которых ещё ждут ответа — на наборе и после закрытия
+     * (V86). Только менеджеру — рядовому участнику знать, кто молчит, незачем.
      */
     fun getPendingMembers(eventId: UUID, userId: UUID): List<EventResponderDto> {
         requireEventManager(eventId, userId)
@@ -183,7 +183,11 @@ class VoteService(
         val telegramIds = eventResponseRepository.markStage2Reminded(eventId, targets)
 
         // DM — на AFTER_COMMIT: уведомление без закоммиченной отметки означало бы повторную отправку.
-        if (telegramIds.isNotEmpty()) eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds))
+        // Текст зависит от этапа: на наборе зовём проголосовать до дедлайна, после — подтвердить.
+        if (telegramIds.isNotEmpty()) {
+            val rosterDeadline = if (isCollectingRoster(event)) rosterService.rosterDeadline(event) else null
+            eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds, rosterDeadline))
+        }
         log.info("Stage 2 reminder: eventId={} userId={} reminded={}", eventId, userId, telegramIds.size)
         return RemindResultDto(remindedCount = telegramIds.size)
     }

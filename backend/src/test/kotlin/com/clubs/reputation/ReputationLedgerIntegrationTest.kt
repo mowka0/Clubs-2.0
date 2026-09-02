@@ -715,8 +715,8 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized, limit_kind)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', ${participantLimit ?: "NULL"}, 14, 'completed', true, true, (CASE WHEN ${participantLimit ?: "NULL"} IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', ${participantLimit ?: "NULL"}, 14, 'completed', true, true)
             """.trimIndent()
         )
         return id
@@ -728,8 +728,8 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized, limit_kind)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', false, true, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', false, true)
             """.trimIndent()
         )
         return id
@@ -747,8 +747,8 @@ class ReputationLedgerIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized, limit_kind)
-            VALUES ('$id', '$club', '$ownerId', 'Active', 'Place', '$datetime', $limit, 14, 'stage_2', false, false, (CASE WHEN $limit IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
+            VALUES ('$id', '$club', '$ownerId', 'Active', 'Place', '$datetime', $limit, 14, 'stage_2', false, false)
             """.trimIndent()
         )
         return id
@@ -760,8 +760,8 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusHours(2)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized, limit_kind)
-            VALUES ('$id', '$clubId', '$ownerId', 'Finalized', 'Place', '$past', 10, 14, 'stage_2', true, true, (CASE WHEN 10 IS NULL THEN NULL ELSE 'max' END)::limit_kind)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Finalized', 'Place', '$past', 10, 14, 'stage_2', true, true)
             """.trimIndent()
         )
         return id

@@ -5,7 +5,6 @@ package com.clubs.generated.jooq.tables.daos
 
 
 import com.clubs.generated.jooq.enums.EventStatus
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.records.EventsRecord
 
@@ -314,13 +313,35 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
     fun fetchByIsUrgent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.IS_URGENT, *values.toTypedArray())
 
     /**
-     * Fetch records that have <code>limit_kind BETWEEN lowerInclusive AND
+     * Fetch records that have <code>min_participants BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfLimitKind(lowerInclusive: LimitKind?, upperInclusive: LimitKind?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LIMIT_KIND, lowerInclusive, upperInclusive)
+    fun fetchRangeOfMinParticipants(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.MIN_PARTICIPANTS, lowerInclusive, upperInclusive)
 
     /**
-     * Fetch records that have <code>limit_kind IN (values)</code>
+     * Fetch records that have <code>min_participants IN (values)</code>
      */
-    fun fetchByLimitKind(vararg values: LimitKind): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LIMIT_KIND, *values)
+    fun fetchByMinParticipants(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.MIN_PARTICIPANTS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>roster_decided_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfRosterDecidedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ROSTER_DECIDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>roster_decided_at IN (values)</code>
+     */
+    fun fetchByRosterDecidedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ROSTER_DECIDED_AT, *values)
+
+    /**
+     * Fetch records that have <code>roster_warning_sent_at BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfRosterWarningSentAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ROSTER_WARNING_SENT_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>roster_warning_sent_at IN (values)</code>
+     */
+    fun fetchByRosterWarningSentAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ROSTER_WARNING_SENT_AT, *values)
 }

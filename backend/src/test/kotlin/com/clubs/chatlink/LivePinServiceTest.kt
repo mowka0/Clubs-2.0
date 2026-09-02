@@ -1,6 +1,5 @@
 package com.clubs.chatlink
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
@@ -35,7 +34,6 @@ private fun livePinEvent(
     locationText = "Сандуны",
     eventDatetime = eventDatetime,
     participantLimit = 15,
-    limitKind = LimitKind.max,
     votingOpensDaysBefore = 14,
     status = status,
     stage2Triggered = stage2Triggered,
@@ -280,7 +278,7 @@ class LivePinServiceTest {
             gateway.editGroupMessage(
                 chatId, 777L,
                 match {
-                    it.contains("<b>Встреча: не больше 15</b>") && it.contains("Состав собран: 12 из 15") &&
+                    it.contains("<b>Встреча: до 15 человек</b>") && it.contains("Состав собран: 12 из 15") &&
                         it.contains("В очереди — 2")
                 },
                 "Открыть встречу",

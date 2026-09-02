@@ -1,6 +1,5 @@
 package com.clubs.event
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
@@ -411,14 +410,13 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `AC-10 decline that drops a MIN roster below the threshold calls the organizer`() {
-        // Порог 2, в составе было двое, замены нет → состав стал неполным. Организатор должен
-        // узнать об этом сам, а не открыв случайно экран встречи. У MAX распавшегося состава не
-        // бывает — там место просто пустует.
+    fun `decline hands the closed roster to RosterService with the count after the decline`() {
+        // Опустел ли состав и пробит ли минимум — решает общий путь RosterService.settleClosedRoster
+        // (тот же, что у кика и выхода из клуба); отказ лишь сообщает ему новый размер состава.
         every { eventRepository.findById(eventId) } returns
             event(
                 eventDatetime = OffsetDateTime.now().plusHours(2),
-                participantLimit = 2, limitKind = LimitKind.min
+                participantLimit = 2, minParticipants = 2
             )
         every { membershipRepository.isMember(userId, clubId) } returns true
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
@@ -428,9 +426,7 @@ class Stage2ServiceTest {
 
         service.declineParticipation(eventId, userId)
 
-        verify(exactly = 1) {
-            eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent && it.confirmedCount == 1 })
-        }
+        verify(exactly = 1) { rosterService.settleClosedRoster(match { it.minParticipants == 2 }, 1) }
     }
 
     @Test
@@ -447,11 +443,7 @@ class Stage2ServiceTest {
 
         service.declineParticipation(eventId, userId)
 
-        verify(exactly = 1) {
-            eventService.cancelBySystem(any(), Stage2Service.ROSTER_DISBANDED_REASON)
-        }
-        // Отдельного «состав стал неполным» при этом не шлём — встреча уже отменена.
-        verify(exactly = 0) { eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent }) }
+        verify(exactly = 1) { rosterService.settleClosedRoster(any(), 0) }
     }
 
     @Test
@@ -467,7 +459,7 @@ class Stage2ServiceTest {
 
         service.declineParticipation(eventId, userId)
 
-        verify(exactly = 0) { eventPublisher.publishEvent(match<Any> { it is RosterBrokenEvent }) }
+        verify(exactly = 1) { rosterService.settleClosedRoster(any(), 2) }
     }
 
     @Test
@@ -484,7 +476,7 @@ class Stage2ServiceTest {
         status: EventStatus = EventStatus.stage_2,
         // null = формат «сколько придёт» — кейсы AC-OPEN1/2 передают null явно.
         participantLimit: Int? = 10,
-        limitKind: LimitKind? = participantLimit?.let { LimitKind.max }
+        minParticipants: Int? = null
     ) = Event(
         id = eventId,
         clubId = clubId,
@@ -494,7 +486,7 @@ class Stage2ServiceTest {
         locationText = "Place",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
-        limitKind = limitKind,
+        minParticipants = minParticipants,
         votingOpensDaysBefore = 14,
         status = status,
         stage2Triggered = true,

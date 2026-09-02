@@ -3,6 +3,7 @@ package com.clubs.bot
 import com.clubs.event.EventRepository
 import com.clubs.event.RosterBrokenEvent
 import com.clubs.event.RosterClosedEvent
+import com.clubs.event.RosterWarningEvent
 import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -10,12 +11,12 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * Уведомления по итогам набора состава (V85). AFTER_COMMIT — по той же причине, что у
- * [Stage2StartedListener]: @Async-рассылка читает состав на отдельном соединении и должна
- * видеть уже закоммиченные строки.
+ * Уведомления набора состава: закрытие (всем), правила ② и ③ (организатору). AFTER_COMMIT —
+ * по той же причине, что у [Stage2StartedListener]: @Async-рассылка читает состав на отдельном
+ * соединении и должна видеть уже закоммиченные строки.
  *
- * Недобор своего уведомления не имеет: у MIN он означает отмену встречи и уходит обычным
- * каскадом отмены с названной причиной, у MAX недобора не существует.
+ * Недобор к дедлайну своего уведомления не имеет: это отмена встречи, и она уходит обычным
+ * каскадом отмены с названной причиной (правило ①).
  */
 @Component
 class RosterListener(
@@ -42,7 +43,23 @@ class RosterListener(
             event = event.event,
             organizerTelegramId = organizerTelegramId,
             confirmedCount = event.confirmedCount,
-            participantLimit = event.participantLimit
+            minParticipants = event.minParticipants
+        )
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun onRosterWarning(event: RosterWarningEvent) {
+        val organizerTelegramId = organizerOf(event.event.id)
+        if (organizerTelegramId == null) {
+            log.warn("Roster-warning DM SKIPPED — no organizer telegram id for event {}", event.event.id)
+            return
+        }
+        notificationService.sendRosterWarning(
+            event = event.event,
+            organizerTelegramId = organizerTelegramId,
+            confirmedCount = event.confirmedCount,
+            minParticipants = event.minParticipants,
+            rosterDeadline = event.rosterDeadline
         )
     }
 

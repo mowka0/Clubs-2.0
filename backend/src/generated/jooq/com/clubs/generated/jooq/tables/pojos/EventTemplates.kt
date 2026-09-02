@@ -4,8 +4,6 @@
 package com.clubs.generated.jooq.tables.pojos
 
 
-import com.clubs.generated.jooq.enums.LimitKind
-
 import java.io.Serializable
 import java.time.LocalTime
 import java.time.OffsetDateTime
@@ -37,7 +35,7 @@ data class EventTemplates(
     var createdBy: UUID,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
-    var limitKind: LimitKind? = null
+    var minParticipants: Int? = null
 ): Serializable {
 
 
@@ -135,11 +133,11 @@ data class EventTemplates(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
-        if (this.limitKind == null) {
-            if (o.limitKind != null)
+        if (this.minParticipants == null) {
+            if (o.minParticipants != null)
                 return false
         }
-        else if (this.limitKind != o.limitKind)
+        else if (this.minParticipants != o.minParticipants)
             return false
         return true
     }
@@ -164,7 +162,7 @@ data class EventTemplates(
         result = prime * result + this.createdBy.hashCode()
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
-        result = prime * result + (if (this.limitKind == null) 0 else this.limitKind.hashCode())
+        result = prime * result + (if (this.minParticipants == null) 0 else this.minParticipants.hashCode())
         return result
     }
 
@@ -188,7 +186,7 @@ data class EventTemplates(
         sb.append(", ").append(createdBy)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
-        sb.append(", ").append(limitKind)
+        sb.append(", ").append(minParticipants)
 
         sb.append(")")
         return sb.toString()

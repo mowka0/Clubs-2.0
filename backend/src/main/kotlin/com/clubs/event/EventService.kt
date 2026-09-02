@@ -26,8 +26,11 @@ class EventService(
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
-    // EventMapper. Нужен, чтобы проверить, помещается ли набор MIN-встречи до её начала.
-    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
+    // EventMapper. Нужен, чтобы проверить, помещается ли набор с минимумом до начала встречи.
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long,
+    // Окно предупреждения о недоборе (правило ②) — тот же ключ, что у RosterService. Нужен, чтобы
+    // при создании и правке поставить отметку «израсходовано», если момент ② уже позади (§ 3.2).
+    @Value("\${events.roster-warning-minutes-before-deadline:180}") private val rosterWarningMinutes: Long
 ) {
 
     companion object {
@@ -49,10 +52,14 @@ class EventService(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
             locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() }
         )
-        requireRosterFitsBeforeStart(
-            normalizedRequest.format, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
+        val minParticipants = normalizedRequest.effectiveMinParticipants
+        requireRosterFitsBeforeStart(minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes)
+        val event = eventRepository.create(
+            normalizedRequest, clubId, userId,
+            rosterWarningSentAt = initialRosterWarningMark(
+                minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
+            )
         )
-        val event = eventRepository.create(normalizedRequest, clubId, userId)
         log.info(
             "Event created: id={} clubId={} title='{}' userId={} format={}",
             event.id, clubId, event.title, userId, normalizedRequest.format
@@ -191,8 +198,14 @@ class EventService(
             locationHint = request.locationHint,
             eventDatetime = request.eventDatetime,
             participantLimit = request.participantLimit,
+            minParticipants = request.minParticipants,
             stage2LeadMinutes = request.stage2LeadMinutes,
-            photoUrl = request.photoUrl
+            photoUrl = request.photoUrl,
+            // Отметка ② пересчитывается под новые дату/интервал/минимум (§ 3.2): перенос дальше
+            // возвращает право на одно предупреждение, перенос ближе момента — «израсходовано».
+            rosterWarningSentAt = initialRosterWarningMark(
+                request.minParticipants, request.eventDatetime, request.stage2LeadMinutes
+            )
         )
         if (eventRepository.updateEvent(eventId, edit) == 0) {
             throw ConflictException("Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено")
@@ -207,8 +220,10 @@ class EventService(
             locationHint = edit.locationHint,
             eventDatetime = edit.eventDatetime,
             participantLimit = edit.participantLimit,
+            minParticipants = edit.minParticipants,
             stage2LeadMinutes = edit.stage2LeadMinutes,
-            photoUrl = edit.photoUrl
+            photoUrl = edit.photoUrl,
+            rosterWarningSentAt = edit.rosterWarningSentAt
         )
         val edited = EventEditedEvent(updated, oldEvent = event)
         log.info(
@@ -228,36 +243,62 @@ class EventService(
      */
     private fun validateFormatInvariants(event: Event, request: UpdateEventRequest) {
         if (event.isOpenEvent && request.participantLimit != null) {
-            throw ValidationException("У формата «сколько придёт» нет лимита участников")
+            throw ValidationException("У открытой встречи нет мест — лимит неприменим")
         }
         if (!event.isOpenEvent && request.participantLimit == null) {
-            throw ValidationException("Для встречи с лимитом нужно число участников")
+            throw ValidationException("Для встречи с местами нужен максимум участников")
+        }
+        if (event.isOpenEvent && request.minParticipants != null) {
+            throw ValidationException("У открытой встречи нет набора — минимум неприменим")
         }
         if (event.isOpenEvent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У формата «сколько придёт» нет набора — интервал неприменим")
+            throw ValidationException("У открытой встречи нет набора — интервал неприменим")
         }
-        requireRosterFitsBeforeStart(event.format, request.eventDatetime, request.stage2LeadMinutes)
+        requireRosterFitsBeforeStart(request.minParticipants, request.eventDatetime, request.stage2LeadMinutes)
     }
 
     /**
-     * Набор MIN-встречи обязан помещаться до её начала: дедлайн в прошлом означает, что ближайший
-     * тик отменит встречу, не дав никому проголосовать. У MAX дедлайн в прошлом легален и значит
-     * «состав закроется сразу» — так покрывается бывший формат «срочная встреча».
+     * Набор с минимумом обязан помещаться до начала встречи: дедлайн в прошлом означает, что
+     * ближайший тик отменит встречу, не дав никому проголосовать. Без минимума дедлайн в прошлом
+     * легален и значит «состав закроется сразу» — так покрывается бывшая «срочная встреча».
      *
      * Проверка живёт здесь, а не в DTO: там неизвестен глобальный дефолт интервала.
      */
     private fun requireRosterFitsBeforeStart(
-        format: EventFormat,
+        minParticipants: Int?,
         eventDatetime: OffsetDateTime,
         stage2LeadMinutes: Int?
     ) {
-        if (format != EventFormat.MIN) return
+        if (minParticipants == null) return
         val leadMinutes = (stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()
         if (!eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(leadMinutes))) {
             throw ValidationException(
-                "До встречи меньше, чем длится набор: формат «минимум участников» не успеет " +
-                    "собрать состав. Выберите «максимум участников» или сдвиньте дату."
+                "До встречи меньше ${formatLead(leadMinutes)} — набор не успеет закрыться. " +
+                    "Выключите минимум или сдвиньте дату."
             )
+        }
+    }
+
+    /** Отметка ② на момент создания/правки — см. RosterSchedule.initialWarningMark. */
+    private fun initialRosterWarningMark(
+        minParticipants: Int?,
+        eventDatetime: OffsetDateTime,
+        stage2LeadMinutes: Int?
+    ): OffsetDateTime? = RosterSchedule.initialWarningMark(
+        minParticipants,
+        RosterSchedule.deadline(eventDatetime, stage2LeadMinutes, stage2TriggerMinutesBefore),
+        rosterWarningMinutes,
+        OffsetDateTime.now()
+    )
+
+    /** «18 ч» / «6 ч 30 мин» / «3 мин» — интервал набора для текста ошибки. */
+    private fun formatLead(minutes: Long): String {
+        val hours = minutes / 60
+        val rest = minutes % 60
+        return when {
+            hours == 0L -> "$rest мин"
+            rest == 0L -> "$hours ч"
+            else -> "$hours ч $rest мин"
         }
     }
 }

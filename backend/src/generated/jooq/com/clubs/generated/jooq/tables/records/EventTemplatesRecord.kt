@@ -4,7 +4,6 @@
 package com.clubs.generated.jooq.tables.records
 
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.EventTemplates
 
 import java.time.LocalTime
@@ -92,9 +91,9 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
         set(value): Unit = set(16, value)
         get(): OffsetDateTime? = get(16) as OffsetDateTime?
 
-    open var limitKind: LimitKind?
+    open var minParticipants: Int?
         set(value): Unit = set(17, value)
-        get(): LimitKind? = get(17) as LimitKind?
+        get(): Int? = get(17) as Int?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -105,7 +104,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
     /**
      * Create a detached, initialised EventTemplatesRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, name: String, title: String, description: String? = null, locationText: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, participantLimit: Int? = null, stage2LeadMinutes: Int? = null, photoUrl: String? = null, defaultWeekday: Short? = null, defaultTime: LocalTime? = null, createdBy: UUID, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, limitKind: LimitKind? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, name: String, title: String, description: String? = null, locationText: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, participantLimit: Int? = null, stage2LeadMinutes: Int? = null, photoUrl: String? = null, defaultWeekday: Short? = null, defaultTime: LocalTime? = null, createdBy: UUID, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, minParticipants: Int? = null): this() {
         this.id = id
         this.clubId = clubId
         this.name = name
@@ -123,7 +122,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
         this.createdBy = createdBy
         this.createdAt = createdAt
         this.updatedAt = updatedAt
-        this.limitKind = limitKind
+        this.minParticipants = minParticipants
         resetChangedOnNotNull()
     }
 
@@ -149,7 +148,7 @@ open class EventTemplatesRecord private constructor() : UpdatableRecordImpl<Even
             this.createdBy = value.createdBy
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
-            this.limitKind = value.limitKind
+            this.minParticipants = value.minParticipants
             resetChangedOnNotNull()
         }
     }

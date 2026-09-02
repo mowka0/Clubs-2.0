@@ -4,7 +4,6 @@
 package com.clubs.generated.jooq.tables.daos
 
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.records.EventTemplatesRecord
 
@@ -227,13 +226,13 @@ open class EventTemplatesDao(configuration: Configuration?) : DAOImpl<EventTempl
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.UPDATED_AT, *values)
 
     /**
-     * Fetch records that have <code>limit_kind BETWEEN lowerInclusive AND
+     * Fetch records that have <code>min_participants BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfLimitKind(lowerInclusive: LimitKind?, upperInclusive: LimitKind?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.LIMIT_KIND, lowerInclusive, upperInclusive)
+    fun fetchRangeOfMinParticipants(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.MIN_PARTICIPANTS, lowerInclusive, upperInclusive)
 
     /**
-     * Fetch records that have <code>limit_kind IN (values)</code>
+     * Fetch records that have <code>min_participants IN (values)</code>
      */
-    fun fetchByLimitKind(vararg values: LimitKind): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.LIMIT_KIND, *values)
+    fun fetchByMinParticipants(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.MIN_PARTICIPANTS, *values.toTypedArray())
 }

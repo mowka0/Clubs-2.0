@@ -11,7 +11,6 @@ import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
-import com.clubs.generated.jooq.enums.LimitKind
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -51,7 +50,8 @@ class EventServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         eventService = EventService(
             eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L
+            eventMapper, eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
+            rosterWarningMinutes = 180L
         )
     }
 
@@ -61,7 +61,7 @@ class EventServiceTest {
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
-        every { eventRepository.create(any(), clubId, ownerId) } returns event
+        every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(clubId, request(), ownerId)
 
@@ -69,7 +69,7 @@ class EventServiceTest {
     }
 
     @Test
-    fun `AC-13 createEvent rejects a min format event that starts sooner than its roster`() {
+    fun `AC-11 createEvent rejects a minimum when the roster deadline is already in the past`() {
         // Дедлайн набора оказался бы в прошлом, и ближайший тик отменил бы встречу, не дав
         // никому проголосовать. Правило живёт в сервисе: дефолт интервала известен только ему.
         val clubId = UUID.randomUUID()
@@ -80,7 +80,7 @@ class EventServiceTest {
             eventService.createEvent(
                 clubId,
                 request().copy(
-                    format = EventFormat.MIN,
+                    minParticipants = 4,
                     eventDatetime = OffsetDateTime.now().plusHours(2),
                     stage2LeadMinutes = 360
                 ),
@@ -88,30 +88,29 @@ class EventServiceTest {
             )
         }
 
-        verify(exactly = 0) { eventRepository.create(any(), any(), any()) }
+        verify(exactly = 0) { eventRepository.create(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `AC-14 createEvent accepts a max format event that starts sooner than its roster`() {
-        // Тот же случай у «максимума» законен и означает «состав закроется сразу» — так покрыт
+    fun `AC-11 createEvent without a minimum accepts a date inside the roster interval`() {
+        // Без минимума тот же случай законен и означает «состав закроется сразу» — так покрыт
         // бывший формат «срочная встреча».
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
-        every { eventRepository.create(any(), clubId, ownerId) } returns event
+        every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(
             clubId,
             request().copy(
-                format = EventFormat.MAX,
                 eventDatetime = OffsetDateTime.now().plusHours(2),
                 stage2LeadMinutes = 360
             ),
             ownerId
         )
 
-        verify(exactly = 1) { eventRepository.create(any(), clubId, ownerId) }
+        verify(exactly = 1) { eventRepository.create(any(), clubId, ownerId, any()) }
         verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
     }
 
@@ -121,7 +120,7 @@ class EventServiceTest {
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
-        every { eventRepository.create(any(), clubId, ownerId) } returns event
+        every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(clubId, request(), ownerId)
 
@@ -135,7 +134,7 @@ class EventServiceTest {
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
         val requestSlot = slot<CreateEventRequest>()
-        every { eventRepository.create(capture(requestSlot), clubId, ownerId) } returns event
+        every { eventRepository.create(capture(requestSlot), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(clubId, request().copy(locationHint = "   "), ownerId)
 
@@ -149,7 +148,7 @@ class EventServiceTest {
         val event = sampleEvent(clubId, ownerId)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
         val requestSlot = slot<CreateEventRequest>()
-        every { eventRepository.create(capture(requestSlot), clubId, ownerId) } returns event
+        every { eventRepository.create(capture(requestSlot), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(clubId, request().copy(locationHint = "  Вход со двора  "), ownerId)
 
@@ -167,7 +166,7 @@ class EventServiceTest {
             eventService.createEvent(clubId, request(), intruderId)
         }
         verify(exactly = 0) { eventPublisher.publishEvent(any()) }
-        verify(exactly = 0) { eventRepository.create(any(), any(), any()) }
+        verify(exactly = 0) { eventRepository.create(any(), any(), any(), any()) }
     }
 
     @Test
@@ -376,7 +375,7 @@ class EventServiceTest {
         // Формат неизменяем: лимит у открытой встречи означал бы смену продуктового типа.
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val openEvent = sampleEvent(clubId, ownerId).copy(participantLimit = null, limitKind = null)
+        val openEvent = sampleEvent(clubId, ownerId).copy(participantLimit = null)
         every { eventRepository.findById(openEvent.id) } returns openEvent
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
 
@@ -403,12 +402,12 @@ class EventServiceTest {
     }
 
     @Test
-    fun `updateEvent rejects a date that leaves no room for a min format roster`() {
-        // AC-13: дедлайн набора в прошлом означает мгновенную отмену встречи — переносить дату
-        // так близко нельзя. У MAX тот же перенос легален (состав закроется сразу).
+    fun `updateEvent rejects a date that leaves no room for a roster with a minimum`() {
+        // AC-11: дедлайн набора в прошлом означает мгновенную отмену встречи — переносить дату
+        // так близко нельзя. Без минимума тот же перенос легален (состав закроется сразу).
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val minEvent = sampleEvent(clubId, ownerId).copy(limitKind = LimitKind.min)
+        val minEvent = sampleEvent(clubId, ownerId).copy(minParticipants = 4)
         every { eventRepository.findById(minEvent.id) } returns minEvent
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
 
@@ -435,6 +434,7 @@ class EventServiceTest {
         locationHint: String? = event.locationHint,
         eventDatetime: OffsetDateTime = event.eventDatetime,
         participantLimit: Int? = event.participantLimit,
+        minParticipants: Int? = event.minParticipants,
         stage2LeadMinutes: Int? = event.stage2LeadMinutes
     ) = UpdateEventRequest(
         title = title,
@@ -445,6 +445,7 @@ class EventServiceTest {
         locationHint = locationHint,
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        minParticipants = minParticipants,
         stage2LeadMinutes = stage2LeadMinutes,
         photoUrl = event.photoUrl
     )
@@ -453,7 +454,8 @@ class EventServiceTest {
     // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
     private fun teaserService() = EventService(
         eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L
+        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
+        rosterWarningMinutes = 180L
     )
 
     @Test
@@ -519,7 +521,7 @@ class EventServiceTest {
         locationHint = null,
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = 20,
-        format = EventFormat.MAX,
+        format = EventFormatInput.NORMAL,
         votingOpensDaysBefore = 14
     )
 
@@ -532,7 +534,6 @@ class EventServiceTest {
         locationText = "Bar 1",
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = 20,
-        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = EventStatus.upcoming,
         stage2Triggered = false,

@@ -227,8 +227,9 @@
 
   goingCount: number,
   confirmedCount: number,
-  format: 'min' | 'max' | 'any',     // формат встречи (V85) — бейдж карточки
-  participantLimit: number | null,   // null = формат «сколько придёт»
+  format: 'normal' | 'open',         // формат встречи (V86) — бейдж карточки
+  participantLimit: number | null,   // потолок мест; null = открытая встреча
+  minParticipants: number | null,    // минимум (V86); null = выключен; бейдж «👥 4–10»
 
   actionRequired: boolean,      // computed на бэке, см. § «Action-required logic»
 

@@ -51,7 +51,8 @@ const TEMPLATE: EventTemplateDto = {
   locationLon: 37.64,
   locationHint: null,
   participantLimit: 12,
-  format: 'max',
+  minParticipants: null,
+  format: 'normal',
   stage2LeadMinutes: null,
   photoUrl: null,
   defaultWeekday: 2,
@@ -116,35 +117,44 @@ describe('CreateActivityFlow', () => {
 
     await user.click(screen.getByText('Событие'));
 
-    // «Событие» разветвляется на шаг формата (с местами / открытая встреча, PO 2026-07-21).
+    // «Событие» разветвляется на шаг формата (обычная / открытая встреча, V86).
     // Заголовков у шагов больше нет (PO 2026-08-11) — шаг опознаём по его пунктам.
-    expect(screen.getByText('Сколько придёт')).toBeInTheDocument();
-    await user.click(screen.getByText('Максимум участников'));
+    expect(screen.getByText('Открытая встреча')).toBeInTheDocument();
+    await user.click(screen.getByText('Обычная встреча'));
 
     // No club-selection step — straight to the per-club create route.
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
   });
 
-  it('Событие → «Сколько придёт» ведёт на форму с ?format=any', async () => {
+  it('Событие → «Открытая встреча» ведёт на форму с ?format=open', async () => {
     const { user } = renderFlow(ONE_CLUB);
 
     await user.click(screen.getByText('Событие'));
-    await user.click(screen.getByText('Сколько придёт'));
+    await user.click(screen.getByText('Открытая встреча'));
 
-    // Маршрут тот же, формат передаётся query-параметром — CreateEventPage прячет степпер лимита.
+    // Маршрут тот же, формат передаётся query-параметром — CreateEventPage прячет степперы мест.
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
-    expect(screen.getByTestId('location-search').textContent).toBe('?format=any');
+    expect(screen.getByTestId('location-search').textContent).toBe('?format=open');
   });
 
-  it('Событие → «Минимум участников» ведёт на форму с ?format=min', async () => {
+  it('Событие → «Обычная встреча» ведёт на форму с ?format=normal', async () => {
     const { user } = renderFlow(ONE_CLUB);
 
     await user.click(screen.getByText('Событие'));
-    await user.click(screen.getByText('Минимум участников'));
+    await user.click(screen.getByText('Обычная встреча'));
 
-    // Тот же маршрут: форма читает ?format и подписывает лимит по формату.
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
-    expect(screen.getByTestId('location-search').textContent).toBe('?format=min');
+    expect(screen.getByTestId('location-search').textContent).toBe('?format=normal');
+  });
+
+  it('форматов ровно два — третьего («с бронью») до денег нет', async () => {
+    const { user } = renderFlow(ONE_CLUB);
+
+    await user.click(screen.getByText('Событие'));
+
+    expect(screen.queryByText('Минимум участников')).toBeNull();
+    expect(screen.queryByText('Максимум участников')).toBeNull();
+    expect(screen.queryByText('Сколько придёт')).toBeNull();
   });
 
   it('Сбор → template step → club picker → custom create route', async () => {
@@ -187,7 +197,7 @@ describe('CreateActivityFlow', () => {
 
       await user.click(screen.getByText('Событие'));
 
-      expect(screen.getByText('Максимум участников')).toBeInTheDocument();
+      expect(screen.getByText('Обычная встреча')).toBeInTheDocument();
       expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
     });
 
@@ -213,21 +223,21 @@ describe('CreateActivityFlow', () => {
 
       // Цветной 🎟 в приглушённой строке метаданных рисовался платформенным шрифтом и выбивался
       // из строки — формат подписывается словом (правка PO 2026-08-11).
-      expect(screen.getByText('Beta Club · не больше 12 · вт 19:00')).toBeInTheDocument();
+      expect(screen.getByText('Beta Club · до 12 человек · вт 19:00')).toBeInTheDocument();
     });
 
     it('остальные форматы тоже подписаны словами', async () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([
-        { ...TEMPLATE, id: 'tpl-open', name: 'Пробежка', format: 'any', participantLimit: null },
-        { ...TEMPLATE, id: 'tpl-min', name: 'Забег', format: 'min', participantLimit: 6 },
+        { ...TEMPLATE, id: 'tpl-open', name: 'Пробежка', format: 'open', participantLimit: null },
+        { ...TEMPLATE, id: 'tpl-min', name: 'Забег', participantLimit: 6, minParticipants: 4 },
       ]);
       const { user } = renderFlow(TWO_CLUBS);
 
       await user.click(screen.getByText('Событие'));
       await user.click(await screen.findByText('Готовые шаблоны · 2'));
 
-      expect(screen.getByText('Beta Club · без лимита · вт 19:00')).toBeInTheDocument();
-      expect(screen.getByText('Beta Club · не меньше 6 · вт 19:00')).toBeInTheDocument();
+      expect(screen.getByText('Beta Club · открытая · вт 19:00')).toBeInTheDocument();
+      expect(screen.getByText('Beta Club · 4–6 человек · вт 19:00')).toBeInTheDocument();
     });
 
     it('на странице клуба показываются шаблоны только этого клуба', async () => {
@@ -314,7 +324,7 @@ describe('CreateActivityFlow', () => {
       const { user } = renderFlow(TWO_CLUBS);
 
       await user.click(screen.getByText('Событие'));
-      expect(screen.getByText('Максимум участников')).toBeInTheDocument();
+      expect(screen.getByText('Обычная встреча')).toBeInTheDocument();
 
       await user.click(screen.getByText('Назад'));
 
@@ -333,7 +343,7 @@ describe('CreateActivityFlow', () => {
 
       await user.click(screen.getByText('Назад'));
 
-      expect(screen.getByText('Максимум участников')).toBeInTheDocument();
+      expect(screen.getByText('Обычная встреча')).toBeInTheDocument();
       // Никуда не ушли — форма создания не открывалась.
       expect(screen.getByTestId('location').textContent).toBe('/');
     });

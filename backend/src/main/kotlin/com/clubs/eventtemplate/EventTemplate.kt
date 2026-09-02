@@ -28,8 +28,11 @@ data class EventTemplate(
     val locationLat: Double?,
     val locationLon: Double?,
     val locationHint: String?,
-    // Число участников; смысл задаёт format. null = шаблон формата «сколько придёт».
+    // Потолок мест; null = шаблон открытой встречи.
     val participantLimit: Int?,
+    // Минимум участников (V86); шаблон ЗАПОМИНАЕТ включённый минимум и подставляет его в форму —
+    // так клуб, который живёт с кворумами, получает его по умолчанию. null = выключен.
+    val minParticipants: Int?,
     val format: EventFormat,
     // Свой интервал Этапа 2 в минутах; null = глобальный дефолт бэкенда.
     val stage2LeadMinutes: Int?,
@@ -67,6 +70,7 @@ data class EventTemplateContent(
     val locationLon: Double?,
     val locationHint: String?,
     val participantLimit: Int?,
+    val minParticipants: Int?,
     val format: EventFormat,
     val stage2LeadMinutes: Int?,
     val photoUrl: String?,

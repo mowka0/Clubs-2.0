@@ -7,7 +7,12 @@ import java.util.UUID
 
 interface EventRepository {
 
-    fun create(request: CreateEventRequest, clubId: UUID, createdBy: UUID): Event
+    /**
+     * [rosterWarningSentAt] — отметка предупреждения о недоборе на момент создания (§ 3.2 спеки
+     * форматов): now, если момент ② уже в прошлом («израсходовано»), иначе null. Считает сервис —
+     * у репозитория нет дефолта интервала.
+     */
+    fun create(request: CreateEventRequest, clubId: UUID, createdBy: UUID, rosterWarningSentAt: OffsetDateTime?): Event
 
     fun findById(id: UUID): Event?
 
@@ -39,6 +44,26 @@ interface EventRepository {
      * продолжается, и тик обязан закрыть состав в ту же минуту, когда порог наконец возьмут.
      */
     fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event>
+
+    /**
+     * Правило ② (V86): встречи на наборе с минимумом, у которых момент предупреждения
+     * (дедлайн − [warningMinutes]) уже наступил, дедлайн ещё нет, а отметка пуста. Отдельный
+     * запрос, а не переиспользование [findEventsToTriggerStage2]: тот выбирает только события
+     * ПОСЛЕ дедлайна.
+     */
+    fun findEventsForRosterWarning(now: OffsetDateTime, defaultLeadMinutes: Long, warningMinutes: Long): List<Event>
+
+    /**
+     * Ставит отметку предупреждения ② ровно один раз (guard `IS NULL`). Возвращает число строк:
+     * 0 = отметка уже стояла, DM слать нельзя.
+     */
+    fun markRosterWarningSent(id: UUID, at: OffsetDateTime): Int
+
+    /**
+     * «Проводим» (V86): организатор подтвердил встречу составом ниже минимума. Guard `IS NULL`
+     * делает повторный вызов no-op — отметка не переставляется и не сбрасывается никогда.
+     */
+    fun markRosterDecided(id: UUID): Int
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 

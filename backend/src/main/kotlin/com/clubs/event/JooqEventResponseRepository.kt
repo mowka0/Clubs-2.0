@@ -268,7 +268,13 @@ class JooqEventResponseRepository(
             .leftJoin(EVENT_RESPONSES).on(
                 EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
             )
-            .where(EVENTS.ID.eq(eventId).and(pendingAnswerCondition()))
+            .where(
+                EVENTS.ID.eq(eventId)
+                    // Создатель встречи — не адресат напоминания (V86); счётчик noAnswer в
+                    // JooqEventRepository.getVoteCounts исключает его тем же условием.
+                    .and(MEMBERSHIPS.USER_ID.ne(EVENTS.CREATED_BY))
+                    .and(pendingAnswerCondition())
+            )
             // Сначала те, кто уже проявил интерес: с них организатору логично начинать обзвон.
             .orderBy(
                 DSL.case_()
@@ -321,6 +327,12 @@ class JooqEventResponseRepository(
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
     }
+
+    override fun clearStage2Reminders(eventId: UUID): Int =
+        dsl.update(EVENT_RESPONSES)
+            .setNull(EVENT_RESPONSES.STAGE2_REMINDED_AT)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE2_REMINDED_AT.isNotNull))
+            .execute()
 
     override fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

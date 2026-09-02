@@ -1,8 +1,7 @@
-# Хэндофф: форматы встреч v2 — реализация V86
+# Хэндофф: форматы встреч v2 — V86 реализована, ждёт прогона на staging
 
-> Составлено 2026-09-02 в конце дизайн-сессии. **Читать первым** при продолжении работы над
-> форматами встреч. Заменяет `event-formats-session-handoff.md` (там состояние прогона V85,
-> которое больше не актуально — прогон отменён).
+> Обновлено 2026-09-02 в конце сессии реализации. **Читать первым** при продолжении работы над
+> форматами встреч. Предыдущая версия этого файла описывала план реализации; он выполнен.
 >
 > Команда для старта новой сессии: «продолжи с docs/backlog/event-formats-v2-session-handoff.md».
 
@@ -11,100 +10,83 @@
 | Что | Где | Состояние |
 |---|---|---|
 | Вес промаха в надёжности | master, PR #155 `fba3c63` | ✅ в проде (2026-09-02) |
-| Форматы V85 (`min` / `max` / `any`) | `feature/roster-threshold`, staging | 🟡 **в прод не идёт**, заменяется V86 |
-| Спека целевой модели | `docs/modules/event-formats-v2.md` | ✅ написана, три ревью, 23 правки внесены |
-| Код V86 | — | ❌ **не начат** |
+| Форматы v2 (V86): миграция, бэкенд, бот, фронт, доки | `feature/roster-threshold` | ✅ реализовано, тесты зелёные, **запушено на staging** |
+| Прогон на staging | `docs/backlog/event-formats-v2-staging-testplan.md` | ⏳ не начат — ждёт PO |
+| Мерж в master | — | ⏳ после «готово, запушь» |
 
-Ветка `feature/roster-threshold`: master влит (`a5db042`), последний коммит `009cab5`, рабочее
-дерево чистое, staging на ней (деплой прошёл). Тесты: бэкенд 1093, фронт 651, `tsc` чистый.
+Ветка несёт V83–V86 разом: ни одна из них в проде не применялась, бэкфил V86 по спеке § 10.
 
-Решение PO 2026-09-02 — вариант «Б»: **V86 делается в этой же ветке**, прод получит V83–V86 одним
-мержем, прогон на staging — один, финальной модели. Прогон ТК-A…E по V85 **не нужен**.
+## 2. Что сделано в этой сессии (трек L)
 
-## 2. Что решено (не обсуждать заново)
+**Бэкенд.** `V86__event_formats_v2.sql` (min_participants, roster_decided_at,
+roster_warning_sent_at, бэкфил из limit_kind, DROP limit_kind + тип); `EventFormat` →
+`NORMAL/OPEN` по `participantLimit == null`; `EventFormatInput` принимает и литералы V85
+(`min` → минимум = лимит); `RosterPolicy` — одна формула цены + `DeclineConsequence` +
+`RosterSchedule`; `RosterService` — правило ① по минимуму, ② (`sendDueRosterWarnings` в тике
+Stage2Service после дедлайнов), `proceed` с `MANAGE_EVENTS`, `settleClosedRoster` (общий путь
+отказа/кика/выхода), сброс напоминаний в `closeRoster`; `EventService` — гард даты при минимуме,
+отметка ② при create/PUT; `POST /api/events/{id}/proceed`; «Без ответа» без создателя и на
+обоих этапах; бот — `RosterCallbackService` (`roster:proceed:` / `roster:remind:`), DM ② и ③ с
+кнопками, текст напоминания по этапу, закреп с «⚠️ Состав 3 из 4» и строкой «Организатор
+подтвердил…»; шаблоны и activity-DTO с `minParticipants`; env
+`ROSTER_WARNING_MINUTES_BEFORE_DEADLINE` (дефолт 180).
 
-Всё — в `event-formats-v2.md`, здесь только чтобы не искать:
+**Фронт.** `EventFormat = 'normal' | 'open'`, `formatBadge(format, limit, min)` (`👥 4–10` /
+`👥 До 10` / `👥 Ровно 4` / `🌊 Открытая`, ветка `default` сохранена), пикер из двух карточек,
+`RosterLimitsFields` + `useRosterLimits` (общие для формы и шторки правки), страница встречи:
+засечка минимума на кольце, полосы статуса по § 7.4 / § 9.1, «Проводим» с инлайн-подтверждением,
+таб «Без ответа» на наборе, диалог отказа по `declineConsequence`.
 
-- **Два формата:** обычная (максимум всегда, минимум по желанию, переключатель по умолчанию
-  выключен, шаблон запоминает) и открытая. Платная — позже, число там «нужно оплативших».
-- **Принцип:** минимум — условие сбора состава, не проведения. ① дедлайн отменяет при недоборе,
-  ② предупреждение за N минут до дедлайна с кнопкой «Напомнить», ③ распад после закрытия — DM
-  организатору, встречу не отменяет. **Автоотмена после закрытия отвергнута** (§ 1.2 спеки — три
-  причины, проверены на семи сценариях). Не поднимать.
-- **«Проводим»** — отметка `roster_decided_at`, НЕ снятие минимума. Глушит ③, строка в закрепе,
-  цены не меняются. Условие: состав закрыт, ниже минимума, до старта. Callback + REST через один
-  сервисный метод с `MANAGE_EVENTS` (§ 4.1 — Security обязателен).
-- **DM ③ — две кнопки:** «Проводим» (callback) и «Открыть встречу» (webApp). «Отменить» в чате
-  запрещена (решение 2026-08-31), только ссылкой на диалог в приложении.
-- **Цена отказа — одна формула:** `staysAtThreshold = confirmedBefore − 1 ≥ (min ?: confirmedBefore)`,
-  порядок условий в § 6. Последствие отказа `declineConsequence` — с сервера.
-- **Максимум обязателен** — `participant_limit IS NULL` = маркер открытой встречи для репутации.
-- **Напоминание — одно на этап** (сброс `stage2_reminded_at` в `closeRoster`); «Без ответа» на
-  наборе включает «Возможно», исключает создателя из списка и счётчика.
-- **Кик/выход** — через `RosterService.releaseSeat` (уже сделано для V85, в V86 добавить порог).
+**Доки.** `event-formats-v2.md` → `docs/modules/event-formats.md`; V85 → `docs/backlog/event-formats-v85.md`;
+выровнены `events.md`, `telegram-bot.md`, `event-templates.md`, `event-vote-block.md`,
+`event-stage2-composition.md`, `events-feed.md`, `unified-activity-creation.md`, `PRD-Clubs.md`,
+`docs/INDEX.md`; план прогона `event-formats-v2-staging-testplan.md`.
 
-## 3. Что делать дальше — по шагам
+## 3. Что делать дальше
 
-Трек **L**, полный флоу (`.claude/agents/00-SYSTEM.md`): Developer → Reviewer → Security → Tester →
-Analyst (alignment) → staging → PO → «готово, запушь».
+1. **Coolify staging:** добавить `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE=3` и редеплоить —
+   иначе при 10-минутном интервале набора правило ② «израсходуется» уже при создании.
+2. Прогон по `event-formats-v2-staging-testplan.md` (разделы 1–7). Отклонения — сюда, в § 5.
+3. «Готово, запушь» → PR → squash-мерж → прод получит V83–V86.
+4. Открытые вопросы PO (спека § 15): дефолт окна ② (180 мин), формулировки DM/закрепа,
+   «Ровно N» при min = max (сделано по здравому смыслу, в спеке не было), порядок кнопок в DM ③
+   («Проводим» сверху).
 
-1. **Миграция V86** — спека § 10. `min_participants`, `roster_decided_at`, `roster_warning_sent_at`,
-   CHECK, бэкфил из `limit_kind` (на staging `min` нет — проверено SELECT-ом 02.09), `DROP` колонки и
-   типа на обеих таблицах, `COMMENT ON` по-русски. Потом `./gradlew generateJooq`.
-2. **Модель и репозитории** — `EventFormat` → `NORMAL/OPEN`, `Event.minParticipants`,
-   `isOpenEvent`/`isRosterEvent` с `participantLimit == null`; новые запросы
-   `findEventsForRosterWarning`, обновление отметки ② при create/PUT (§ 3.2).
-3. **Сервисы** — `RosterService` (`handleRosterDeadline` по минимуму, `releaseSeat` с порогом,
-   `proceed`), `RosterPolicy` (одна формула + `declineConsequence`), `Stage2Service` (② в тике, ①
-   раньше ②; сброс напоминаний в `closeRoster`), `VoteService.remind` (текст по этапу, создатель
-   вне списка), `EventService` (гарды даты для минимума на create/PUT, совместимость литералов).
-4. **DTO и контроллер** — § 8: `format`, `minParticipants`, `rosterDecided`, `declineConsequence`;
-   `POST /proceed`; старые литералы на входе.
-5. **Бот** — § 3.1, § 4.1: DM ② и ③, два callback-префикса `roster:proceed:` / `roster:remind:`,
-   ответы, строка в рендере закрепа, тексты закрепа § 9.1.
-6. **Фронт** — § 9: пикер из двух карточек, форма (степпер + переключатель, правило даты,
-   подтягивание минимума), шторка правки § 9.3, страница встречи (бейдж `👥 4–10`, кольцо с
-   засечкой, полоса статуса по таблицам § 7.4 и § 9.1, «Проводим», таб «Без ответа» на наборе),
-   `eventFormat.ts`, шаблоны.
-7. **Тесты** по AC-1…AC-17 (§ 13). Прогон-план на staging переписать под v2 (старый
-   `party-club-staging-testplan.md` — по V85).
-8. Переименовать `event-formats-v2.md` → `event-formats.md`, старую спеку — в `docs/backlog/`,
-   строки в `docs/INDEX.md`.
+## 4. Ловушки, найденные в этой сессии
 
-## 4. Ловушки, найденные сегодня
-
-- **Правка встречи после закрытия заперта** гардом `status = upcoming AND stage_2_triggered = false`
-  (`JooqEventRepository.update…`). Поэтому «Проводим» — отдельный эндпоинт, а не PUT.
-- **Отмена встречи не откатывает реестр репутации:** списанное остаётся, даже если встречу потом
-  отменили. Это правильно, не «чинить».
-- **`participant_limit IS NULL`** читают пять мест (`JooqReputationRepository`, `JooqEventRepository`
-  ×2, `JooqEventResponseRepository` ×2) — не делать потолок nullable.
-- **`formatBadge`/`formatEmoji`** — `switch` без `default` был бы белым экраном у закэшированного
-  бандла при новом литерале. Ветка `default` уже добавлена; при смене литералов на `normal/open`
-  не убирать.
-- **Flyway на staging:** V83–V85 применены; prod-профиль без `baseline-on-migrate`/`repair` —
-  править их нельзя, только V86 поверх. Деплой на staging ветки без этих миграций уронит бэкенд
-  (обходится `SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:future` в Coolify — сегодня не ставили,
-  staging просто вернули на ветку форматов).
+- **Kotlin-LSP Serena не поднимается** (таймаут инициализации) — вся навигация была grep/cat.
+- **Локальная БД:** `flyway_schema_history` заканчивается на ранге 76, а схема при этом V85 —
+  V77–V85 применялись мимо Flyway. V86 для `generateJooq` тоже применена через `psql`. Локальный
+  `bootRun` упадёт на валидации Flyway; лечится `docker compose down -v` и чистым стартом.
+- **jOOQ KotlinGenerator:** конструктор `UsersRecord()` приватный — в тестах строить через
+  `mockk<UsersRecord> { every { id } returns … }`.
+- **`EventFormatInput` обязан иметь `@JsonValue`** на литерале: иначе `objectMapper.writeValueAsString`
+  в интеграционных тестах шлёт `NORMAL`, а `fromWire` его не знает → 400.
+- **Цикл зависимостей:** `RosterService → EventService`, поэтому отметку ② при create/PUT
+  считает сам `EventService` через чистый `RosterSchedule`, а не через `RosterService`.
+- **Тест закрепа** проверяет заголовок «Встреча: до 15 человек» — при смене словаря
+  `formatName` менять и `LivePinServiceTest`, и `LivePinRendererTest`.
 - **mockk:** `any<T>()` у `publishEvent(Any)` матчит любое событие — для `verify(exactly = 0)`
-  использовать `ofType(T::class)` (без импорта, это член scope).
-- **Единицы таймингов — минуты**, чтобы staging мог ужать: `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE`
-  дефолт 180, на staging 2–3.
+  использовать `ofType(T::class)`.
+- **`participant_limit IS NULL`** по-прежнему читают пять мест как маркер открытой встречи —
+  потолок nullable не делать.
+- Фронт: `useRosterLimits` гасит минимум эффектом при `minUnavailable`; после возврата даты на
+  безопасную минимум остаётся выключенным (организатор включает заново) — осознанно.
 
-## 5. Окружение staging
+## 5. Прогон на staging
 
-Как в старом хэндоффе § 6 и § 7 (env, `~/clubs-fast.sh`, доступ к БД): без изменений.
-Имя контейнера Postgres добывать подстановкой при каждом обращении.
+_Заполняется по ходу прогона._
 
 ## 6. Карта документов
 
 | Файл | Что |
 |---|---|
-| `docs/modules/event-formats-v2.md` | **спека цели** — всё, что реализовывать |
-| `docs/modules/event-formats.md` | V85, что задеплоено на staging; после V86 — в backlog |
-| `docs/backlog/event-formats-session-handoff.md` | старый хэндофф: env staging, инструменты; прогон V85 отменён |
-| `docs/design/event-roster-threshold/mockups/roster-*.html` | схемы дизайн-сессии, **локально, вне git** |
+| `docs/modules/event-formats.md` | **действующая спека v2** (модель, три правила, «Проводим», цена отказа, API, экран, V86, AC) |
+| `docs/backlog/event-formats-v2-staging-testplan.md` | план прогона на staging под v2 |
+| `docs/backlog/event-formats-v85.md` | архив спеки V85 |
+| `docs/backlog/event-formats-session-handoff.md` § 6–7 | env staging и инструменты (`~/clubs-fast.sh`, доступ к БД) |
 | `docs/modules/reputation-v2.md` § P1b | формула надёжности с весами (в проде) |
+| `docs/modules/telegram-bot.md` § «набор состава» | DM ②/③, callback-кнопки, ответы |
 
-Память проекта: `project_event_formats_restructure` (что отвергнуто и почему),
+Память проекта: `project_event_formats_restructure` (что отвергнуто и почему, состояние ветки),
 `project_reputation_severity_weight` (вес промаха — в проде).

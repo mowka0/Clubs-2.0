@@ -1,26 +1,32 @@
 package com.clubs.event
 
+import com.clubs.club.Club
+import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubRoleGuard
+import com.clubs.common.exception.ForbiddenException
+import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Набор состава для форматов с лимитом (docs/modules/event-formats.md).
+ * Набор состава обычной встречи v2 (docs/modules/event-formats.md § 3, § 4, § 7).
  *
- * MAX: голос кладёт в состав или очередь, дедлайн закрывает состав при любом числе участников.
- * MIN: голос всегда кладёт в состав (верхней границы нет), дедлайн либо закрывает состав, либо
- * отменяет встречу — это и есть правило, названное организатору при создании.
+ * Потолок — всегда потолок: голос кладёт в состав или очередь. Минимум по желанию: ① дедлайн
+ * отменяет при недоборе, ② предупреждение до дедлайна, ③ распад после закрытия зовёт
+ * организатора, «Проводим» глушит ③.
  */
 class RosterServiceTest {
 
@@ -28,8 +34,11 @@ class RosterServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val eventService = mockk<EventService>(relaxed = true)
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
+    private val clubRepository = mockk<ClubRepository>()
+    private val clubRoleGuard = mockk<ClubRoleGuard>(relaxed = true)
     private val service = RosterService(
-        eventRepository, eventResponseRepository, eventService, eventPublisher, defaultLeadMinutes = 1080
+        eventRepository, eventResponseRepository, eventService, eventPublisher, clubRepository, clubRoleGuard,
+        defaultLeadMinutes = 1080, warningMinutes = 180
     )
 
     private val eventId = UUID.randomUUID()
@@ -37,10 +46,11 @@ class RosterServiceTest {
 
     private fun event(
         participantLimit: Int? = 6,
-        limitKind: LimitKind? = LimitKind.max,
+        minParticipants: Int? = null,
         status: EventStatus = EventStatus.upcoming,
         eventDatetime: OffsetDateTime = OffsetDateTime.now().plusDays(2),
-        stage2LeadMinutes: Int? = null
+        stage2LeadMinutes: Int? = null,
+        rosterDecidedAt: OffsetDateTime? = null
     ) = Event(
         id = eventId,
         clubId = UUID.randomUUID(),
@@ -50,13 +60,14 @@ class RosterServiceTest {
         locationText = "Кофейня",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
-        limitKind = limitKind,
+        minParticipants = minParticipants,
         votingOpensDaysBefore = 14,
         stage2LeadMinutes = stage2LeadMinutes,
         status = status,
         stage2Triggered = status != EventStatus.upcoming,
         attendanceMarked = false,
         attendanceFinalized = false,
+        rosterDecidedAt = rosterDecidedAt,
         photoUrl = null,
         createdAt = null,
         updatedAt = null
@@ -92,7 +103,7 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `MAX, голос «Иду» при полном составе ставит в очередь`() {
+    fun `голос «Иду» при полном составе ставит в очередь`() {
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns response()
         every { eventResponseRepository.countConfirmed(eventId) } returns 6
 
@@ -104,18 +115,14 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `AC-1 MIN, голос «Иду» сверх порога всё равно кладёт в состав`() {
+    fun `AC-2 потолок работает и при минимуме — седьмой на «4–6» встаёт в очередь`() {
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns response()
         every { eventResponseRepository.countConfirmed(eventId) } returns 6
 
-        service.applyVote(event(participantLimit = 6, limitKind = LimitKind.min), userId, Stage_1Vote.going)
+        service.applyVote(event(participantLimit = 6, minParticipants = 4), userId, Stage_1Vote.going)
 
-        // Верхней границы у формата нет: порог — это «сколько нужно», а не «сколько влезет».
         verify(exactly = 1) {
-            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
-        }
-        verify(exactly = 0) {
-            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.waitlisted, any())
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.waitlisted, FinalStatus.waitlisted)
         }
     }
 
@@ -148,62 +155,63 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `формат «сколько придёт» набор не трогает`() {
-        service.applyVote(event(participantLimit = null, limitKind = null), userId, Stage_1Vote.going)
+    fun `AC-12 открытая встреча набор не трогает`() {
+        service.applyVote(event(participantLimit = null), userId, Stage_1Vote.going)
 
         verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
         verify(exactly = 0) { eventResponseRepository.lockEventSlots(any()) }
     }
 
-    // ---- закрытие набора ----
+    // ---- правило ①: дедлайн набора ----
 
     @Test
-    fun `AC-4 MIN, порог взят к дедлайну — состав закрыт, участникам уходит DM`() {
-        every { eventResponseRepository.countConfirmed(eventId) } returns 6
-        val target = event(participantLimit = 6, limitKind = LimitKind.min)
-
-        assertTrue(service.handleRosterDeadline(target))
-
-        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 6)) }
-        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
-    }
-
-    @Test
-    fun `AC-5 MIN, порог не взят — встреча отменяется с названной причиной`() {
-        every { eventResponseRepository.countConfirmed(eventId) } returns 4
-        val target = event(participantLimit = 6, limitKind = LimitKind.min)
-
-        assertTrue(service.handleRosterDeadline(target))
-
-        // Отмена идёт обычным каскадом (сбор → released, DM заинтересованным), а причина
-        // называет само правило формата — участник видит её в DM и на странице встречи.
-        verify(exactly = 1) {
-            eventService.cancelBySystem(target, "Не набрали 6 участников к закрытию набора")
-        }
-        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
-        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterClosedEvent>()) }
-    }
-
-    @Test
-    fun `AC-6 MAX закрывает состав при любом числе участников, включая ноль`() {
+    fun `AC-1 без минимума состав закрывается при любом числе участников, включая ноль`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 0
         val target = event(participantLimit = 6)
 
         assertTrue(service.handleRosterDeadline(target))
 
-        // Недобора у формата не существует: встреча состоится в любом случае.
         verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
         verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 0)) }
         verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test
-    fun `AC-7 встреча уже началась — состав замораживается молча, MIN не отменяется`() {
+    fun `AC-3 минимум набран к дедлайну — состав закрыт, напоминания сброшены под новый этап`() {
         every { eventResponseRepository.countConfirmed(eventId) } returns 4
+        val target = event(participantLimit = 6, minParticipants = 4)
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
+        verify(exactly = 1) { eventPublisher.publishEvent(RosterClosedEvent(target, 4)) }
+        // AC-10: одно напоминание на человека НА ЭТАП — после закрытия отметки набора обнуляются.
+        verify(exactly = 1) { eventResponseRepository.clearStage2Reminders(eventId) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
+    }
+
+    @Test
+    fun `AC-3 минимум не набран — встреча отменяется с названной причиной`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+        val target = event(participantLimit = 10, minParticipants = 4)
+
+        assertTrue(service.handleRosterDeadline(target))
+
+        // Отмена идёт обычным каскадом (сбор → released, DM заинтересованным), а причина
+        // называет само правило — участник видит её в DM и на странице встречи.
+        verify(exactly = 1) {
+            eventService.cancelBySystem(target, "Не набрали 4 участников к закрытию набора")
+        }
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterClosedEvent::class)) }
+    }
+
+    @Test
+    fun `встреча уже началась — состав замораживается молча, недобор не отменяет`() {
+        every { eventResponseRepository.countConfirmed(eventId) } returns 2
         val target = event(
             participantLimit = 6,
-            limitKind = LimitKind.min,
+            minParticipants = 4,
             eventDatetime = OffsetDateTime.now().minusMinutes(1)
         )
 
@@ -212,13 +220,13 @@ class RosterServiceTest {
         // Состав зафиксирован (иначе отметка явки читала бы пустой список), но ни «состав
         // собран» посреди встречи, ни отмена уже начавшейся встречи не происходят.
         verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 0) { eventPublisher.publishEvent(any<RosterClosedEvent>()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterClosedEvent::class)) }
         verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test
-    fun `формат «сколько придёт» идёт мимо набора`() {
-        assertEquals(false, service.handleRosterDeadline(event(participantLimit = null, limitKind = null)))
+    fun `открытая встреча идёт мимо набора`() {
+        assertFalse(service.handleRosterDeadline(event(participantLimit = null)))
     }
 
     @Test
@@ -231,10 +239,145 @@ class RosterServiceTest {
         )
     }
 
-    // ---- освобождение места киком / выходом из клуба ----
+    // ---- правило ②: предупреждение о недоборе ----
 
     @Test
-    fun `releaseSeat on roster collection only promotes the queue`() {
+    fun `AC-4 предупреждение уходит при недоборе и ставит отметку`() {
+        val now = OffsetDateTime.now()
+        val target = event(participantLimit = 10, minParticipants = 4)
+        every { eventRepository.markRosterWarningSent(eventId, now) } returns 1
+        every { eventResponseRepository.countConfirmed(eventId) } returns 2
+
+        service.handleRosterWarning(target, now)
+
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(RosterWarningEvent(target, 2, 4, target.eventDatetime.minusMinutes(1080)))
+        }
+    }
+
+    @Test
+    fun `AC-4 минимум уже набран — отметка ставится, DM нет`() {
+        val now = OffsetDateTime.now()
+        every { eventRepository.markRosterWarningSent(eventId, now) } returns 1
+        every { eventResponseRepository.countConfirmed(eventId) } returns 4
+
+        service.handleRosterWarning(event(participantLimit = 10, minParticipants = 4), now)
+
+        verify(exactly = 1) { eventRepository.markRosterWarningSent(eventId, now) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterWarningEvent::class)) }
+    }
+
+    @Test
+    fun `AC-4 отметка уже стоит — второго предупреждения нет`() {
+        val now = OffsetDateTime.now()
+        every { eventRepository.markRosterWarningSent(eventId, now) } returns 0
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.handleRosterWarning(event(participantLimit = 10, minParticipants = 4), now)
+
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterWarningEvent::class)) }
+    }
+
+    @Test
+    fun `без минимума правило ② молчит`() {
+        service.handleRosterWarning(event(participantLimit = 10), OffsetDateTime.now())
+
+        verify(exactly = 0) { eventRepository.markRosterWarningSent(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterWarningEvent::class)) }
+    }
+
+    @Test
+    fun `проход тика берёт встречи из отдельной выборки с окном предупреждения`() {
+        val now = OffsetDateTime.now()
+        val target = event(participantLimit = 10, minParticipants = 4)
+        every { eventRepository.findEventsForRosterWarning(now, 1080, 180) } returns listOf(target)
+        every { eventRepository.markRosterWarningSent(eventId, now) } returns 1
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.sendDueRosterWarnings(now)
+
+        verify(exactly = 1) { eventPublisher.publishEvent(ofType(RosterWarningEvent::class)) }
+    }
+
+    // ---- «Проводим» ----
+
+    private fun stubManager(target: Event) {
+        every { eventRepository.findById(eventId) } returns target
+        every { clubRepository.findById(target.clubId) } returns mockk<Club>(relaxed = true)
+    }
+
+    @Test
+    fun `AC-6 «Проводим» ставит отметку и перерисовывает закреп`() {
+        val target = event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2)
+        stubManager(target)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+        every { eventRepository.markRosterDecided(eventId) } returns 1
+
+        val result = service.proceed(eventId, userId)
+
+        assertEquals(ProceedResult(3, alreadyDecided = false), result)
+        verify(exactly = 1) { eventRepository.markRosterDecided(eventId) }
+        verify(exactly = 1) { eventPublisher.publishEvent(EventRosterChangedEvent(eventId)) }
+    }
+
+    @Test
+    fun `AC-6 повторный «Проводим» — no-op`() {
+        val target = event(
+            participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2,
+            rosterDecidedAt = OffsetDateTime.now().minusHours(1)
+        )
+        stubManager(target)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+
+        assertEquals(ProceedResult(3, alreadyDecided = true), service.proceed(eventId, userId))
+
+        verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
+    }
+
+    @Test
+    fun `AC-6 «Проводим» отвергается при составе не ниже минимума, до закрытия и после старта`() {
+        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2))
+        every { eventResponseRepository.countConfirmed(eventId) } returns 4
+        assertEquals(
+            "Состав не ниже минимума — подтверждать нечего",
+            assertThrows<ValidationException> { service.proceed(eventId, userId) }.message
+        )
+
+        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.upcoming))
+        assertThrows<ValidationException> { service.proceed(eventId, userId) }
+
+        stubManager(
+            event(
+                participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2,
+                eventDatetime = OffsetDateTime.now().minusMinutes(1)
+            )
+        )
+        assertEquals("Встреча уже началась", assertThrows<ValidationException> { service.proceed(eventId, userId) }.message)
+
+        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.cancelled))
+        assertEquals("Встреча отменена", assertThrows<ValidationException> { service.proceed(eventId, userId) }.message)
+
+        stubManager(event(participantLimit = 6, status = EventStatus.stage_2))
+        assertThrows<ValidationException> { service.proceed(eventId, userId) }
+
+        verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
+    }
+
+    @Test
+    fun `AC-6 «Проводим» без права вести встречи — 403, до любых проверок состава`() {
+        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2))
+        every { clubRoleGuard.requireCapability(any<Club>(), any(), any()) } throws ForbiddenException("no")
+
+        assertThrows<ForbiddenException> { service.proceed(eventId, userId) }
+
+        verify(exactly = 0) { eventResponseRepository.countConfirmed(any()) }
+        verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
+    }
+
+    // ---- освобождение места киком / выходом из клуба (AC-9) ----
+
+    @Test
+    fun `releaseSeat на наборе только двигает очередь`() {
         every { eventRepository.findById(eventId) } returns event(status = EventStatus.upcoming)
         val promoted = UUID.randomUUID()
         every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns promoted
@@ -249,7 +392,7 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `releaseSeat after close with nobody left cancels the event`() {
+    fun `AC-8 releaseSeat после закрытия с опустевшим составом отменяет встречу`() {
         val target = event(status = EventStatus.stage_2)
         every { eventRepository.findById(eventId) } returns target
         every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
@@ -257,12 +400,24 @@ class RosterServiceTest {
 
         service.releaseSeat(eventId)
 
-        verify(exactly = 1) { eventService.cancelBySystem(target, Stage2Service.ROSTER_DISBANDED_REASON) }
+        verify(exactly = 1) { eventService.cancelBySystem(target, RosterService.ROSTER_DISBANDED_REASON) }
     }
 
     @Test
-    fun `releaseSeat after close crossing MIN threshold notifies the organizer`() {
-        val target = event(participantLimit = 4, limitKind = LimitKind.min, status = EventStatus.stage_2)
+    fun `AC-8 опустевший состав отменяется и после «Проводим»`() {
+        val target = event(
+            participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2,
+            rosterDecidedAt = OffsetDateTime.now()
+        )
+
+        service.settleClosedRoster(target, 0)
+
+        verify(exactly = 1) { eventService.cancelBySystem(target, RosterService.ROSTER_DISBANDED_REASON) }
+    }
+
+    @Test
+    fun `AC-5 пересечение минимума вниз зовёт организатора`() {
+        val target = event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2)
         every { eventRepository.findById(eventId) } returns target
         every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
         every { eventResponseRepository.countConfirmed(eventId) } returns 3
@@ -274,14 +429,30 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `releaseSeat after close on MAX below limit stays silent`() {
+    fun `AC-5 повторное пересечение после возврата состава снова зовёт, а после «Проводим» — нет`() {
+        val target = event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2)
+
+        service.settleClosedRoster(target, 3)
+        service.settleClosedRoster(target, 3)
+        verify(exactly = 2) { eventPublisher.publishEvent(RosterBrokenEvent(target, 3, 4)) }
+
+        service.settleClosedRoster(target.copy(rosterDecidedAt = OffsetDateTime.now()), 3)
+        verify(exactly = 2) { eventPublisher.publishEvent(ofType(RosterBrokenEvent::class)) }
+
+        // Ниже черты, но не на ней: уже сигналили, повторных DM на каждый отказ нет.
+        service.settleClosedRoster(target, 2)
+        verify(exactly = 2) { eventPublisher.publishEvent(ofType(RosterBrokenEvent::class)) }
+    }
+
+    @Test
+    fun `releaseSeat после закрытия без минимума ниже потолка молчит`() {
         every { eventRepository.findById(eventId) } returns event(participantLimit = 6, status = EventStatus.stage_2)
         every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
         every { eventResponseRepository.countConfirmed(eventId) } returns 3
 
         service.releaseSeat(eventId)
 
-        // У MAX неполный состав ничего не значит: место просто пустует.
+        // Без минимума неполный состав ничего не значит: место просто пустует.
         verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
         verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterBrokenEvent::class)) }
         verify(exactly = 1) { eventPublisher.publishEvent(EventRosterChangedEvent(eventId)) }

@@ -1,6 +1,6 @@
 package com.clubs.eventtemplate
 
-import com.clubs.event.EventFormat
+import com.clubs.event.EventFormatInput
 import jakarta.validation.Validation
 import jakarta.validation.Validator
 import org.junit.jupiter.api.Test
@@ -28,7 +28,8 @@ class SaveEventTemplateRequestValidationTest {
         locationLon: Double? = 37.646488,
         locationHint: String? = null,
         participantLimit: Int? = 20,
-        format: EventFormat = EventFormat.MAX,
+        minParticipants: Int? = null,
+        format: EventFormatInput = EventFormatInput.NORMAL,
         stage2LeadMinutes: Int? = null,
         defaultWeekday: Short? = 2,
         defaultTime: LocalTime? = LocalTime.of(19, 0)
@@ -40,6 +41,7 @@ class SaveEventTemplateRequestValidationTest {
         locationLon = locationLon,
         locationHint = locationHint,
         participantLimit = participantLimit,
+        minParticipants = minParticipants,
         format = format,
         stage2LeadMinutes = stage2LeadMinutes,
         defaultWeekday = defaultWeekday,
@@ -87,7 +89,7 @@ class SaveEventTemplateRequestValidationTest {
     fun `формат без лимита вместе с лимитом отклоняется`() {
         assertEquals(
             setOf("participantLimitConsistent"),
-            violatedProperties(request(format = EventFormat.ANY, participantLimit = 20))
+            violatedProperties(request(format = EventFormatInput.OPEN, participantLimit = 20))
         )
     }
 
@@ -95,11 +97,11 @@ class SaveEventTemplateRequestValidationTest {
     fun `формат с лимитом без лимита отклоняется`() {
         assertEquals(
             setOf("participantLimitConsistent"),
-            violatedProperties(request(format = EventFormat.MAX, participantLimit = null))
+            violatedProperties(request(format = EventFormatInput.NORMAL, participantLimit = null))
         )
         assertEquals(
             setOf("participantLimitConsistent"),
-            violatedProperties(request(format = EventFormat.MIN, participantLimit = null))
+            violatedProperties(request(format = EventFormatInput.LEGACY_MIN, participantLimit = null))
         )
     }
 
@@ -107,13 +109,16 @@ class SaveEventTemplateRequestValidationTest {
     fun `формат без лимита со своим интервалом набора отклоняется`() {
         assertEquals(
             setOf("stage2LeadConsistent"),
-            violatedProperties(request(format = EventFormat.ANY, participantLimit = null, stage2LeadMinutes = 1080))
+            violatedProperties(request(format = EventFormatInput.OPEN, participantLimit = null, stage2LeadMinutes = 1080))
         )
     }
 
     @Test
-    fun `шаблон минимума со своим интервалом набора проходит`() {
-        assertEquals(emptySet(), violatedProperties(request(format = EventFormat.MIN, stage2LeadMinutes = 2160)))
+    fun `шаблон с минимумом и своим интервалом набора проходит, минимум выше лимита — нет`() {
+        assertEquals(emptySet(), violatedProperties(request(minParticipants = 4, stage2LeadMinutes = 2160)))
+        assertEquals(setOf("minParticipantsConsistent"), violatedProperties(request(participantLimit = 4, minParticipants = 5)))
+        // Легаси-литерал `min` подставляет минимум равным лимиту (AC-17).
+        assertEquals(20, request(format = EventFormatInput.LEGACY_MIN).effectiveMinParticipants)
     }
 
     @Test

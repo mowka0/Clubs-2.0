@@ -2,6 +2,7 @@ import { FC, ReactNode, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
 import type { EventFormat } from '../../types/api';
+import { formatWords } from '../../utils/eventFormat';
 
 interface ActivityTypeOptionsProps {
   /** Вызывается с выбранным типом активности. Побочных эффектов здесь нет — шаг/хаптику владеет родительский flow. */
@@ -156,27 +157,21 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick, onPi
   );
 };
 
-// Формат события (решение PO 2026-08-31) — ответ на один вопрос «сколько человек нужно».
-// Числа на этом шаге ещё нет, поэтому карточки названы самим правилом, а не «не меньше 6»:
-// конкретика появляется в форме и на бейджах, где лимит уже выбран.
+// Формат события (V86, решение PO 2026-09-02): две карточки, третья («с бронью») появится с
+// деньгами. Чисел на этом шаге ещё нет, поэтому карточки названы правилом, а не «4–10»:
+// конкретика появляется в форме и на бейджах, где максимум и минимум уже выбраны.
 const EVENT_FORMAT_OPTIONS: { key: EventFormat; emoji: string; title: string; subtitle: string }[] = [
   {
-    key: 'min',
-    emoji: '🎯',
-    title: 'Минимум участников',
-    subtitle: 'Собираемся, если наберётся нужное число. Не наберём — встреча отменится',
+    key: 'normal',
+    emoji: '👥',
+    title: 'Обычная встреча',
+    subtitle: 'Мест ограниченное число, можно задать минимум',
   },
   {
-    key: 'max',
-    emoji: '🎟',
-    title: 'Максимум участников',
-    subtitle: 'Встреча будет в любом случае, но мест ограниченное число',
-  },
-  {
-    key: 'any',
+    key: 'open',
     emoji: '🌊',
-    title: 'Сколько придёт',
-    subtitle: 'Без ограничений и без обязательств — приходят все',
+    title: 'Открытая встреча',
+    subtitle: 'Без мест и без обязательств — приходят все',
   },
 ];
 
@@ -234,16 +229,11 @@ interface EventTemplateOptionsProps {
   isDeleting: boolean;
 }
 
-// Подпись формата в строке шаблона — СЛОВАМИ, без эмодзи: цветной 🎟 внутри приглушённой
-// строки метаданных рисовался платформенным шрифтом (ярко-красный «ADMIT ONE») и выбивался
-// из строки (правка PO 2026-08-11). Эмодзи-ярлыки форматов остались там, где они и были
-// задуманы, — на карточках лент и в шапке страницы встречи.
+// Подпись формата в строке шаблона — СЛОВАМИ, без эмодзи (правка PO 2026-08-11): цветной
+// эмодзи внутри приглушённой строки метаданных рисовался платформенным шрифтом и выбивался
+// из строки. Словарь общий с бейджами (eventFormat.ts), чтобы «4–10» читалось одинаково везде.
 function formatLabel(template: EventTemplateDto): string {
-  switch (template.format) {
-    case 'min': return `не меньше ${template.participantLimit}`;
-    case 'max': return `не больше ${template.participantLimit}`;
-    case 'any': return 'без лимита';
-  }
+  return formatWords(template.format, template.participantLimit, template.minParticipants);
 }
 
 const WEEKDAY_SHORT = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];

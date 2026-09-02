@@ -55,7 +55,7 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
             статусные чипы (Отменено / call-to-action) — рядом, в той же строке. */}
         <div className="rd-badges-row">
           <span className="rd-badge rd-neutral">
-            {formatBadge(event.format, event.participantLimit)}
+            {formatBadge(event.format, event.participantLimit, event.minParticipants)}
           </span>
           {event.status === 'cancelled' ? (
             <span className="rd-badge rd-decline">Отменено</span>

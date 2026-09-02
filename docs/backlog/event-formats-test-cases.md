@@ -1,5 +1,8 @@
 # Форматы «минимум N» и «максимум N»: поведение и тест-кейсы
 
+> ⚠️ **АРХИВ (V85).** Кейсы описывают форматы min/max, которых в v2 (V86) нет. Действующий
+> план прогона — `event-formats-v2-staging-testplan.md`; критерии приёмки — `docs/modules/event-formats.md` § 13.
+
 > Ветка `feature/roster-threshold` (V85), staging `https://staging.77-42-23-177.sslip.io`.
 > Спека — `docs/modules/event-formats.md`. Здесь то же самое, но с точки зрения проверяющего:
 > что должно происходить и как это увидеть.

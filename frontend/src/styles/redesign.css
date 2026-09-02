@@ -1644,6 +1644,13 @@
 .rd-roster-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rd-roster-txt b { font-size: 13px; font-weight: 650; color: var(--text); }
 .rd-roster-txt span { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+/* Засечка минимума на кольце занятости (V86): риска на дуге там, где проходит порог «соберёмся». */
+.rd-roster-notch { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; opacity: 0.75; }
+/* Строка «Минимум участников» с переключателем — в форме создания и в шторке правки.
+   Подпись — тот же .rd-label, что у соседних полей, но в ряд с тумблером, а не над ним. */
+.rd-roster-min-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rd-roster-min-row .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-roster-min-row .rd-cl-tgl { margin-top: 0; }
 /* В табе очереди номер стоит внутри общей строки ростера, а не в своей .rd-wl-row. */
 .rd-resp-row .rd-wl-pos { margin-right: 8px; }
 /* Черта внутри вкладки «Идут» на наборе: выше — кто проходит, ниже — очередь на замену.

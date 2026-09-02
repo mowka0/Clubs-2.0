@@ -19,8 +19,10 @@ export interface EventTemplateDto {
   locationLat: number | null;
   locationLon: number | null;
   locationHint: string | null;
-  /** Число участников; смысл задаёт format. null = шаблон формата «сколько придёт». */
+  /** Максимум участников; null = шаблон открытой встречи. */
   participantLimit: number | null;
+  /** Минимум участников (V86); null = выключен. Шаблон запоминает включённый минимум (§ 8). */
+  minParticipants: number | null;
   format: EventFormat;
   stage2LeadMinutes: number | null;
   photoUrl: string | null;
@@ -45,6 +47,7 @@ export interface SaveEventTemplateBody {
   locationLon?: number | null;
   locationHint?: string | null;
   participantLimit?: number | null;
+  minParticipants?: number | null;
   format: EventFormat;
   stage2LeadMinutes?: number | null;
   photoUrl?: string | null;

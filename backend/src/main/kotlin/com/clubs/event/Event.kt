@@ -1,36 +1,55 @@
 package com.clubs.event
 
 import com.clubs.generated.jooq.enums.EventStatus
-import com.clubs.generated.jooq.enums.LimitKind
+import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonValue
 import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Формат встречи — ответ на единственный вопрос «сколько человек нужно» (решение PO 2026-08-31).
- * Собирается из пары «есть ли лимит» + «как его читать»: наружу пара не торчит, всё ветвление
- * в сервисах, DTO и на фронте идёт по этому значению. Спека: docs/modules/event-formats.md.
+ * Формат встречи (v2, решение PO 2026-09-02): их два, и различаются они наличием мест.
+ * Определяется целиком по `participant_limit` — второго представления у факта нет.
+ * Спека: docs/modules/event-formats.md.
  *
- * [wire] — значение на проводе и в БД. Строчное, как литералы jOOQ-энумов и `status` в DTO:
- * фронт и колонка `limit_kind` читают одни и те же три слова.
+ * [wire] — значение наружу: строчное, как литералы jOOQ-энумов и `status` в DTO.
  */
 enum class EventFormat(@get:JsonValue val wire: String) {
-    /** Минимум участников: не наберём к дедлайну — встреча отменится. Верхней границы нет. */
-    MIN("min"),
+    /** Обычная встреча: максимум мест всегда, минимум по желанию (см. [Event.minParticipants]). */
+    NORMAL("normal"),
 
-    /** Максимум участников: встреча состоится при любом составе, сверх лимита — очередь. */
-    MAX("max"),
+    /** Открытая встреча: без мест, без очереди и целиком вне репутации. */
+    OPEN("open")
+}
 
-    /** Сколько придёт: без ограничений, без очереди и целиком вне репутации. */
-    ANY("any");
+/**
+ * Литерал формата НА ВХОДЕ (`CreateEventRequest`, `SaveEventTemplateRequest`). Кроме двух живых
+ * значений принимает три из V85 — до следующего релиза: фронт с закэшированным старым бандлом
+ * иначе получал бы 400 на создание встречи (известный хвост immutable-кэша). Наружу старые
+ * литералы не уходят никогда — там только [EventFormat].
+ */
+enum class EventFormatInput(
+    // @JsonValue и здесь: тесты и клиенты, сериализующие запрос, должны получать литерал, а не имя константы.
+    @get:JsonValue val wire: String,
+    val format: EventFormat,
+    /** Бывший `min`: число было порогом, поэтому минимум подставляется равным лимиту («ровно N»). */
+    val impliesMinimum: Boolean = false
+) {
+    NORMAL("normal", EventFormat.NORMAL),
+    OPEN("open", EventFormat.OPEN),
+    LEGACY_MIN("min", EventFormat.NORMAL, impliesMinimum = true),
+    LEGACY_MAX("max", EventFormat.NORMAL),
+    LEGACY_ANY("any", EventFormat.OPEN);
 
-    /** Обратная сторона [Event.format]: как формат ложится в колонку `limit_kind`. */
-    val limitKind: LimitKind?
-        get() = when (this) {
-            MIN -> LimitKind.min
-            MAX -> LimitKind.max
-            ANY -> null
-        }
+    val isOpen: Boolean
+        get() = format == EventFormat.OPEN
+
+    companion object {
+        @JvmStatic
+        @JsonCreator
+        fun fromWire(raw: String): EventFormatInput =
+            entries.firstOrNull { it.wire == raw }
+                ?: throw IllegalArgumentException("Unknown event format: $raw")
+    }
 }
 
 data class Event(
@@ -49,12 +68,12 @@ data class Event(
     // Опциональное уточнение организатора к месту, отдельное от адреса; null = нет.
     val locationHint: String? = null,
     val eventDatetime: OffsetDateTime,
-    // Число участников, смысл которого задаёт limitKind (V85); null = формат «сколько придёт»:
-    // без очереди, порога и штрафа отказа, целиком вне репутации.
+    // Максимум участников — потолок мест: сверх него голос «Иду» встаёт в очередь. null = открытая
+    // встреча (V62): без очереди, порога и штрафа отказа, целиком вне репутации.
     val participantLimit: Int?,
-    // Как читать participantLimit: порог набора (min) или потолок мест (max). null строго при
-    // participantLimit = null — инвариант пары держит CHECK chk_events_limit_kind.
-    val limitKind: LimitKind? = null,
+    // Минимум участников — порог набора (V86), по желанию организатора; null = выключен. Условие
+    // сбора состава, а не проведения: не набрали к дедлайну — отмена, просел после закрытия — DM.
+    val minParticipants: Int? = null,
     val votingOpensDaysBefore: Int,
     // Свой интервал Этапа 2 (минут до старта, V67); null = глобальный дефолт из конфига.
     // Дефолт null — точечные выборки (findMyFeed) могут не читать колонку.
@@ -65,33 +84,29 @@ data class Event(
     val attendanceFinalized: Boolean,
     // Опциональная причина от организатора, задаваемая при отмене (F5-14); иначе null.
     val cancellationReason: String? = null,
+    // «Проводим» (V86): организатор подтвердил встречу составом ниже минимума; null = не нажимал.
+    val rosterDecidedAt: OffsetDateTime? = null,
+    // Предупреждение о недоборе (V86) отправлено или израсходовано; null = момент ещё впереди.
+    val rosterWarningSentAt: OffsetDateTime? = null,
     val photoUrl: String?,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?
 ) {
     /** Формат встречи одним значением — единственный дискриминатор для сервисов и DTO. */
     val format: EventFormat
-        get() = limitKind.toFormat()
+        get() = if (participantLimit == null) EventFormat.OPEN else EventFormat.NORMAL
 
     // «Целиком вне репутации»: у формата без лимита никто не держит дефицитное место, поэтому
     // ни отказ, ни выход из клуба не штрафуются. Отдельное имя оставлено намеренно — читающему
-    // ReputationService важен именно этот смысл, а не то, какой это из трёх форматов.
+    // ReputationService важен именно этот смысл, а не то, какой это формат.
     val isOpenEvent: Boolean
-        get() = format == EventFormat.ANY
+        get() = participantLimit == null
 
     // У встречи есть состав, который набирается голосами и закрывается в дедлайн набора.
-    // Верно для обоих форматов с лимитом: разница между ними — что происходит в сам дедлайн.
     val isRosterEvent: Boolean
-        get() = format != EventFormat.ANY
-}
+        get() = !isOpenEvent
 
-/**
- * Как читается колонка `limit_kind` — обратная сторона [EventFormat.limitKind]. Пару
- * «есть лимит ⟺ есть его смысл» держит CHECK, поэтому null здесь однозначно значит
- * «лимита нет», а не «забыли заполнить».
- */
-fun LimitKind?.toFormat(): EventFormat = when (this) {
-    LimitKind.min -> EventFormat.MIN
-    LimitKind.max -> EventFormat.MAX
-    null -> EventFormat.ANY
+    /** Организатор уже сказал «Проводим»: состав ниже минимума его больше не беспокоит. */
+    val isRosterDecided: Boolean
+        get() = rosterDecidedAt != null
 }

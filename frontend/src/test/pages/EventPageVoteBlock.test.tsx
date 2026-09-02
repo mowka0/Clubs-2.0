@@ -50,12 +50,15 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 20,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
-    format: 'max',
+    format: 'normal',
     goingCount: 2,
     maybeCount: 1,
     notGoingCount: 1,
     confirmedCount: 0,
     noAnswerCount: 0,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
     rosterDeadline: null,
@@ -139,8 +142,8 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
     expect(filled).toBeCloseTo(circumference * 0.6, 1);
   });
 
-  it('AC-VB3: «сколько придёт» — кольцо закрашено целиком, знаменателя нет', async () => {
-    mockEndpoints({ event: stage1Event({ format: 'any', participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
+  it('AC-VB3: открытая — кольцо закрашено целиком, знаменателя нет', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'open', participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
     const { container } = renderEventPage();
 
     expect(await screen.findByText('идут')).toBeInTheDocument();
@@ -204,25 +207,39 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
   });
 });
 
-describe('EventPage — бейдж формата встречи (PO 2026-08-01)', () => {
-  it('«максимум» → «🎟 НЕ БОЛЬШЕ N»', async () => {
+describe('EventPage — бейдж формата встречи (event-formats.md § 9.1)', () => {
+  it('обычная без минимума → «👥 ДО N»', async () => {
     mockEndpoints({ event: stage1Event() });
     renderEventPage();
 
-    expect(await screen.findByText('🎟 НЕ БОЛЬШЕ 20')).toBeInTheDocument();
+    expect(await screen.findByText('👥 ДО 20')).toBeInTheDocument();
   });
 
-  it('«минимум» → «🎯 НЕ МЕНЬШЕ N»', async () => {
-    mockEndpoints({ event: stage1Event({ format: 'min' }) });
+  it('обычная с минимумом → «👥 MIN–MAX»', async () => {
+    mockEndpoints({ event: stage1Event({ minParticipants: 4 }) });
     renderEventPage();
 
-    expect(await screen.findByText('🎯 НЕ МЕНЬШЕ 20')).toBeInTheDocument();
+    expect(await screen.findByText('👥 4–20')).toBeInTheDocument();
   });
 
-  it('«сколько придёт» → «🌊 СКОЛЬКО ПРИДЁТ»', async () => {
-    mockEndpoints({ event: stage1Event({ format: 'any', participantLimit: null, stage2LeadMinutes: null }) });
+  it('открытая → «🌊 ОТКРЫТАЯ»', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'open', participantLimit: null, stage2LeadMinutes: null }) });
     renderEventPage();
 
-    expect(await screen.findByText('🌊 СКОЛЬКО ПРИДЁТ')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
+  });
+
+  it('засечка минимума на кольце есть только при включённом минимуме', async () => {
+    mockEndpoints({ event: stage1Event({ minParticipants: 4 }) });
+    const { container, unmount } = renderEventPage();
+
+    await screen.findByText('👥 4–20');
+    expect(container.querySelector('.rd-roster-notch')).not.toBeNull();
+    unmount();
+
+    mockEndpoints({ event: stage1Event() });
+    const second = renderEventPage();
+    await screen.findByText('👥 ДО 20');
+    expect(second.container.querySelector('.rd-roster-notch')).toBeNull();
   });
 });

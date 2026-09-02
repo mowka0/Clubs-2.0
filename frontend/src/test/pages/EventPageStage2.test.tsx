@@ -57,12 +57,15 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     // «Сколько придёт»: подтверждение участия (кнопки «Подтвердить»/«Отказаться») осталось только
     // у этого формата. У форматов с лимитом (V85) состав закрывается голосами, и их экран
     // проверяет EventPageRoster.test.tsx.
-    format: 'any',
+    format: 'open',
     goingCount: 3,
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
     noAnswerCount: 0,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
     // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
     // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
     stage2LeadMinutes: null,
@@ -133,7 +136,7 @@ beforeEach(() => {
  */
 function seatedEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return stage2Event({
-    format: 'max',
+    format: 'normal',
     participantLimit: 10,
     stage2LeadMinutes: 1080,
     rosterClosed: true,
@@ -441,17 +444,19 @@ describe('EventPage — открытая встреча (participantLimit = null
     const eventDatetime = overrides.eventDatetime ?? FUTURE;
     return stage2Event({
       participantLimit: null,
-      format: 'any',
+      format: 'open',
+      // Последствие отказа называет сервер (V86 § 6): у открытой встречи — всегда `open`.
+      declineConsequence: 'open',
       eventDatetime,
       ...overrides,
     });
   }
 
-  it('бейдж хиро — «СКОЛЬКО ПРИДЁТ», счётчики без знаменателя', async () => {
+  it('бейдж хиро — «ОТКРЫТАЯ», счётчики без знаменателя', async () => {
     mockEndpoints({ event: openEvent({ confirmedCount: 7 }), myVote: 'going' });
     renderEventPage();
 
-    expect(await screen.findByText('🌊 СКОЛЬКО ПРИДЁТ')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
     // «Состав · 7» без « / limit»
     expect(screen.getByText('Состав · 7')).toBeInTheDocument();
     expect(screen.queryByText(/Состав · 7 \//)).not.toBeInTheDocument();
@@ -493,7 +498,7 @@ describe('EventPage — открытая встреча (participantLimit = null
     );
     renderEventPage();
 
-    expect(await screen.findByText('🌊 СКОЛЬКО ПРИДЁТ')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
     expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
   });
 

@@ -75,7 +75,8 @@ describe('eventToTemplateBody', () => {
     locationLon: 37.64,
     locationHint: 'Вход со двора',
     participantLimit: 12,
-    format: 'max' as const,
+    minParticipants: null,
+    format: 'normal' as const,
     stage2LeadMinutesOverride: 2160,
     photoUrl: 'https://cdn/photo.webp',
     // Вторник 18 августа 2026, 19:00 по местному времени.
@@ -89,7 +90,8 @@ describe('eventToTemplateBody', () => {
     expect(body.title).toBe('Разговорный клуб');
     expect(body.locationLat).toBe(55.76);
     expect(body.participantLimit).toBe(12);
-    expect(body.format).toBe('max');
+    expect(body.minParticipants).toBeNull();
+    expect(body.format).toBe('normal');
     expect(body.stage2LeadMinutes).toBe(2160);
     expect(body.defaultWeekday).toBe(2);
     expect(body.defaultTime).toBe('19:00:00');
@@ -97,21 +99,22 @@ describe('eventToTemplateBody', () => {
     expect(Object.keys(body)).not.toContain('eventDatetime');
   });
 
-  it('«сколько придёт» превращается в шаблон без лимита и без интервала набора', () => {
+  it('открытая встреча превращается в шаблон без лимита и без интервала набора', () => {
     const body = eventToTemplateBody(
-      { ...event, format: 'any' as const, participantLimit: null, stage2LeadMinutesOverride: 4320 },
+      { ...event, format: 'open' as const, participantLimit: null, stage2LeadMinutesOverride: 4320 },
       'Открытая пробежка',
     );
 
-    expect(body.format).toBe('any');
+    expect(body.format).toBe('open');
     expect(body.participantLimit).toBeNull();
     expect(body.stage2LeadMinutes).toBeNull();
   });
 
-  it('«минимум участников» переносит формат вместе со своим интервалом набора', () => {
-    const body = eventToTemplateBody({ ...event, format: 'min' as const }, 'Настолка на шестерых');
+  it('включённый минимум переносится в шаблон вместе с интервалом набора (AC-14)', () => {
+    const body = eventToTemplateBody({ ...event, minParticipants: 4 }, 'Настолка от четырёх');
 
-    expect(body.format).toBe('min');
+    expect(body.format).toBe('normal');
+    expect(body.minParticipants).toBe(4);
     expect(body.stage2LeadMinutes).toBe(2160);
   });
 
@@ -137,7 +140,8 @@ describe('templateToSaveBody', () => {
     locationLon: null,
     locationHint: 'в зуме',
     participantLimit: 10,
-    format: 'max',
+    minParticipants: null,
+    format: 'normal',
     stage2LeadMinutes: null,
     photoUrl: null,
     defaultWeekday: 2,
@@ -156,8 +160,9 @@ describe('templateToSaveBody', () => {
     expect(Object.keys(body)).not.toContain('createdAt');
   });
 
-  it('формат переносится в тело сохранения как есть', () => {
-    expect(templateToSaveBody(template).format).toBe('max');
-    expect(templateToSaveBody({ ...template, format: 'min' }).format).toBe('min');
+  it('формат и минимум переносятся в тело сохранения как есть', () => {
+    expect(templateToSaveBody(template).format).toBe('normal');
+    expect(templateToSaveBody(template).minParticipants).toBeNull();
+    expect(templateToSaveBody({ ...template, minParticipants: 4 }).minParticipants).toBe(4);
   });
 });

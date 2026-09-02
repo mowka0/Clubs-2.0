@@ -39,11 +39,6 @@ class Stage2Service(
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
-    companion object {
-        /** Причина автоотмены, когда из закрытого состава ушёл последний участник. */
-        const val ROSTER_DISBANDED_REASON = "Состав распался: не осталось участников"
-    }
-
     // Окно подтверждения — [flip .. старт события], а сам flip случается где угодно внутри одного
     // периода опроса после границы триггера — поэтому тик должен быть сильно мельче упреждения
     // триггера. Старый захардкоженный тик 5 мин съедал короткое staging-упреждение (3 мин) целиком:
@@ -53,7 +48,8 @@ class Stage2Service(
     fun triggerStage2ForReadyEvents() {
         // Интервал пер-событийный (V67): сравнение «пора ли» ушло в SQL (COALESCE со своим lead),
         // конфиг отдаём как дефолт для событий без собственного значения.
-        val events = eventRepository.findEventsToTriggerStage2(OffsetDateTime.now(), stage2TriggerMinutesBefore)
+        val now = OffsetDateTime.now()
+        val events = eventRepository.findEventsToTriggerStage2(now, stage2TriggerMinutesBefore)
         events.forEach { event ->
             try {
                 triggerStage2(event)
@@ -62,12 +58,14 @@ class Stage2Service(
                 log.error("Failed to trigger Stage 2 for event ${event.id}", e)
             }
         }
+        // Правило ② — после дедлайнов в том же проходе: предупреждение не догоняет отмену.
+        rosterService.sendDueRosterWarnings(now)
     }
 
     private fun triggerStage2(event: Event) {
-        // Встречи с лимитом (V85) закрывают набор своим путём: MAX — всегда, MIN — если порог
-        // взят, иначе встреча отменяется. Приглашения «подтвердите участие» у них нет — место
-        // даёт голос, а не подтверждение.
+        // Встречи с местами закрывают набор своим путём (правило ①): минимума нет или он взят —
+        // состав закрыт, иначе встреча отменяется. Приглашения «подтвердите участие» у них нет —
+        // место даёт голос, а не подтверждение.
         if (rosterService.handleRosterDeadline(event)) return
 
         eventRepository.transitionToStage2(event.id)
@@ -151,13 +149,12 @@ class Stage2Service(
 
         // Открытая встреча (participantLimit = null): дефицита мест нет — каждый подтвердивший
         // сразу confirmed, ветка waitlisted недостижима. См. events.md § «Открытая встреча».
-        // У формата MIN лимит — порог, а не потолок (V85): после закрытия состава место занимает
-        // любой, очередь у него недостижима — тот же гард, что в RosterService.applyVote. Без него
-        // пятый на «минимум 4» попадал в очередь, которая никогда не сдвинется.
+        // У обычной потолок — всегда потолок (V86): свободное место после чьего-то отказа
+        // занимается сразу, дальше — очередь.
         val limit = event.participantLimit
         val newStatus: Stage_2Vote
         val finalStatus: FinalStatus
-        if (limit == null || event.format == EventFormat.MIN || confirmedCount < limit) {
+        if (limit == null || confirmedCount < limit) {
             newStatus = Stage_2Vote.confirmed
             finalStatus = FinalStatus.confirmed
         } else {
@@ -218,15 +215,14 @@ class Stage2Service(
         // Запрет выталкивал людей в молчаливую неявку (−200), которая дороже любого честного отказа.
         val declineKind = RosterPolicy.declineKind(
             DeclineSituation(
-                format = event.format,
+                isOpenEvent = event.isOpenEvent,
                 heldSlot = heldScarceSlot,
                 // Сюда попадают только события в stage_2, то есть с уже закрытым составом.
                 rosterClosed = true,
                 withinDeclineCutoff = !event.eventDatetime.isAfter(now.plusMinutes(lateDeclineThresholdMinutes)),
                 hasReplacement = firstWaitlisted != null,
-                // MIN: ущерб не в месте, а в срыве встречи — платит только тот, кто роняет
-                // состав ниже порога.
-                staysAtThreshold = event.participantLimit?.let { confirmedBefore - 1 >= it } ?: true
+                // Обещанное — минимум, если он задан; без минимума — каждое занятое место.
+                staysAtThreshold = RosterPolicy.staysAtThreshold(confirmedBefore, event.minParticipants)
             )
         )
 
@@ -247,24 +243,9 @@ class Stage2Service(
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
-        val limit = event.participantLimit
-        when {
-            // Состав опустел: ушёл последний, кто держал место. Встречи без людей не существует,
-            // и держать её висящей нечестно — отменяем сразу, тем же каскадом, что и вручную
-            // (пост в чат + DM тем, кого пост не покрыл, + сбор в released). Решение PO
-            // 2026-09-01: до этого экран у формата MAX обещал «состав собран» даже при нуле.
-            //
-            // Отличается от закрытия набора с нулём, где отмены НЕ происходит: там состав
-            // никогда и не собирался, дедлайн просто прошёл, и место ещё может кто-то занять.
-            // Здесь же человек, взявший на себя обещание, его снял — это событие, а не тишина.
-            count == 0 && !event.isOpenEvent ->
-                eventService.cancelBySystem(event, ROSTER_DISBANDED_REASON)
-            // MIN: этот отказ увёл состав ниже порога — зовём организатора решать. Строгое
-            // равенство сигналит ровно на пересечении черты, следующие отказы повторных DM не
-            // порождают. У MAX неполный состав ничего не значит: место просто пустует.
-            event.format == EventFormat.MIN && limit != null && count == limit - 1 ->
-                eventPublisher.publishEvent(RosterBrokenEvent(event, count, limit))
-        }
+        // Опустевший состав отменяет встречу, пробитый минимум зовёт организатора (правило ③) —
+        // общий путь с киком и выходом из клуба, см. RosterService.settleClosedRoster.
+        if (!event.isOpenEvent) rosterService.settleClosedRoster(event, count)
         val penalty = declineKind?.let { -ReputationPolicy.pointsFor(it) } ?: 0
         return ConfirmResponseDto(eventId, "declined", count, event.participantLimit, penalty)
     }

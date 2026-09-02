@@ -12,15 +12,17 @@ export interface CreateEventBody {
   // Уточнение к месту (≤200 символов), отдельное от адреса.
   locationHint?: string;
   eventDatetime: string;
-  // Число участников; смысл задаёт format. null = «сколько придёт».
+  // Максимум участников; null ТОЛЬКО у открытой встречи (бэкенд: open ⟺ participantLimit = null).
   participantLimit: number | null;
-  // Формат встречи — единственное поле, отвечающее на вопрос «сколько человек нужно» (V85).
-  // Заявляется НАМЕРЕННО: бэкенд требует согласованности (any ⇔ participantLimit=null), чтобы
-  // случайно пропущенный лимит давал 400, а не молча создавал встречу другого формата.
+  // Минимум участников (V86): 1 ≤ min ≤ participantLimit; null / не задан = выключен. У открытой
+  // не передаётся. Дедлайн набора (дата − интервал) в прошлом при включённом минимуме → 400.
+  minParticipants?: number | null;
+  // Формат заявляется НАМЕРЕННО: бэкенд требует согласованности с лимитом, чтобы случайно
+  // пропущенный лимит давал 400, а не молча создавал встречу другого формата.
   format: EventFormat;
   votingOpensDaysBefore?: number;
   // За сколько минут до старта закрывается набор состава, 360..7200 (CHECK в БД шире, 60..7200).
-  // Не задан = дефолт сервера (18 ч). Для формата «сколько придёт» не передаётся (400).
+  // Не задан = дефолт сервера (18 ч). У открытой встречи не передаётся (400).
   stage2LeadMinutes?: number;
   photoUrl?: string;
 }
@@ -79,8 +81,10 @@ export interface UpdateEventBody {
   locationHint?: string | null;
   /** ISO-строка (UTC). */
   eventDatetime: string;
-  /** null у открытой встречи; для встречи с местами обязателен. */
+  /** null у открытой встречи; для обычной обязателен. */
   participantLimit?: number | null;
+  /** Минимум участников; null = выключить. Те же инварианты, что при создании. */
+  minParticipants?: number | null;
   stage2LeadMinutes?: number | null;
   photoUrl?: string | null;
 }
@@ -153,6 +157,15 @@ export function remindToConfirm(eventId: string, userId?: string): Promise<{ rem
 
 export function declineParticipation(eventId: string): Promise<ParticipationResultDto> {
   return apiClient.post(`/api/events/${eventId}/decline`);
+}
+
+/**
+ * «Проводим» (V86 § 4): менеджер отмечает, что встреча состоится составом ниже минимума. Минимум
+ * и цена отказа не меняются — только отметка. 400 с русским текстом, если состав не ниже минимума,
+ * набор ещё идёт или встреча началась; 403 без права вести встречи.
+ */
+export function proceedRoster(eventId: string): Promise<EventDetailDto> {
+  return apiClient.post<EventDetailDto>(`/api/events/${eventId}/proceed`);
 }
 
 export function markAttendance(eventId: string, attendance: { userId: string; attended: boolean }[]): Promise<{ eventId: string; markedCount: number }> {

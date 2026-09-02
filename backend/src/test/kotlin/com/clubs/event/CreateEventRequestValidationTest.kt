@@ -2,8 +2,10 @@ package com.clubs.event
 
 import jakarta.validation.Validation
 import jakarta.validation.Validator
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.OffsetDateTime
 
 /**
@@ -21,7 +23,8 @@ class CreateEventRequestValidationTest {
         locationLon: Double? = 37.646488,
         locationHint: String? = null,
         participantLimit: Int? = 20,
-        format: EventFormat = EventFormat.MAX,
+        minParticipants: Int? = null,
+        format: EventFormatInput = EventFormatInput.NORMAL,
         stage2LeadMinutes: Int? = null
     ) = CreateEventRequest(
         title = "Test event",
@@ -32,6 +35,7 @@ class CreateEventRequestValidationTest {
         locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = participantLimit,
+        minParticipants = minParticipants,
         format = format,
         votingOpensDaysBefore = 14,
         stage2LeadMinutes = stage2LeadMinutes
@@ -89,20 +93,51 @@ class CreateEventRequestValidationTest {
     @Test
     fun `stage2 lead on a format without a roster is rejected`() {
         val violated = violatedProperties(
-            request(participantLimit = null, format = EventFormat.ANY, stage2LeadMinutes = 2160)
+            request(participantLimit = null, format = EventFormatInput.OPEN, stage2LeadMinutes = 2160)
         )
         assertTrue("stage2LeadConsistent" in violated)
     }
 
     @Test
-    fun `min format with a limit and a custom lead passes`() {
-        assertTrue(validator.validate(request(format = EventFormat.MIN, stage2LeadMinutes = 2160)).isEmpty())
+    fun `minimum with a limit and a custom lead passes`() {
+        assertTrue(validator.validate(request(minParticipants = 4, stage2LeadMinutes = 2160)).isEmpty())
     }
 
     @Test
-    fun `min format without a limit is rejected`() {
-        val violated = violatedProperties(request(participantLimit = null, format = EventFormat.MIN))
-        assertTrue("participantLimitConsistent" in violated)
+    fun `minimum equal to the limit passes, above the limit is rejected`() {
+        assertTrue(validator.validate(request(participantLimit = 4, minParticipants = 4)).isEmpty())
+        assertTrue("minParticipantsConsistent" in violatedProperties(request(participantLimit = 4, minParticipants = 5)))
+        assertTrue("minParticipants" in violatedProperties(request(minParticipants = 0)))
+    }
+
+    @Test
+    fun `minimum on an open format is rejected`() {
+        val violated = violatedProperties(request(participantLimit = null, format = EventFormatInput.OPEN, minParticipants = 4))
+        assertTrue("minParticipantsConsistent" in violated)
+    }
+
+    // AC-17: старые литералы V85 принимаются до следующего релиза; `min` подставляет минимум = лимит.
+    @Test
+    fun `legacy literals map to the two formats and min implies a minimum`() {
+        assertEquals(EventFormatInput.LEGACY_MIN, EventFormatInput.fromWire("min"))
+        assertEquals(EventFormat.NORMAL, EventFormatInput.fromWire("max").format)
+        assertEquals(EventFormat.OPEN, EventFormatInput.fromWire("any").format)
+        assertEquals(20, request(format = EventFormatInput.LEGACY_MIN).effectiveMinParticipants)
+        assertEquals(null, request(format = EventFormatInput.LEGACY_MAX).effectiveMinParticipants)
+        assertEquals(4, request(format = EventFormatInput.LEGACY_MIN, minParticipants = 4).effectiveMinParticipants)
+        assertTrue(validator.validate(request(format = EventFormatInput.LEGACY_MIN)).isEmpty())
+        assertTrue(validator.validate(request(format = EventFormatInput.LEGACY_ANY, participantLimit = null)).isEmpty())
+    }
+
+    @Test
+    fun `legacy literal is accepted by Jackson, the wire value is the literal, an unknown one is rejected`() {
+        val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        assertEquals(EventFormatInput.LEGACY_MIN, mapper.readValue("\"min\"", EventFormatInput::class.java))
+        assertEquals(EventFormatInput.NORMAL, mapper.readValue("\"normal\"", EventFormatInput::class.java))
+        assertEquals("\"normal\"", mapper.writeValueAsString(EventFormatInput.NORMAL))
+        assertThrows<com.fasterxml.jackson.databind.JsonMappingException> {
+            mapper.readValue("\"urgent\"", EventFormatInput::class.java)
+        }
     }
 
     @Test
@@ -150,10 +185,10 @@ class CreateEventRequestValidationTest {
         assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 
-    // «Сколько придёт»: формат заявляется ЯВНО + отсутствием лимита.
+    // Открытая: формат заявляется ЯВНО + отсутствием лимита.
     @Test
-    fun `format any with a null limit passes`() {
-        val violations = validator.validate(request(participantLimit = null, format = EventFormat.ANY))
+    fun `format open with a null limit passes`() {
+        val violations = validator.validate(request(participantLimit = null, format = EventFormatInput.OPEN))
         assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 
@@ -165,8 +200,8 @@ class CreateEventRequestValidationTest {
 
     // Противоречивый ввод: формат без лимита вместе с лимитом.
     @Test
-    fun `format any combined with a limit is rejected`() {
-        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = 20, format = EventFormat.ANY)))
+    fun `format open combined with a limit is rejected`() {
+        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = 20, format = EventFormatInput.OPEN)))
     }
 
     // @Positive продолжает отсекать бессмысленные ненулевые значения.

@@ -41,6 +41,7 @@ class ClubsBot(
     private val eventResponseRepository: EventResponseRepository,
     private val chatLinkBotService: ChatLinkBotService,
     private val chatDoorService: ChatDoorService,
+    private val rosterCallbackService: RosterCallbackService,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -82,7 +83,7 @@ class ClubsBot(
             return
         }
 
-        // Inline-кнопки бота (сейчас единственная — «Отвязать чат» из DM-петли подтверждения привязки).
+        // Inline-кнопки бота: «Отвязать чат» (привязка) и кнопки набора состава (V86).
         if (update.hasCallbackQuery()) {
             try {
                 handleCallbackQuery(update.callbackQuery)
@@ -217,20 +218,29 @@ class ClubsBot(
     }
 
     /**
-     * Ответ на inline-кнопку. Форматы data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService)
+     * Ответ на inline-кнопку. Форматы data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService),
+     * «roster:proceed:<uuid>» и «roster:remind:<uuid>» (см. RosterCallbackService). Права на
+     * действие проверяет сервис по `query.from.id` — сам факт нажатия кнопки прав не даёт.
      */
     private fun handleCallbackQuery(query: CallbackQuery) {
         val data = query.data ?: return
-        val answerText = if (data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX)) {
-            val clubId = try {
-                UUID.fromString(data.removePrefix(ChatLinkBotService.UNLINK_CALLBACK_PREFIX))
-            } catch (_: IllegalArgumentException) {
+        val answerText = when {
+            data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX) ->
+                parseCallbackId(data, ChatLinkBotService.UNLINK_CALLBACK_PREFIX)
+                    ?.let { chatLinkBotService.handleUnlinkCallback(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(RosterCallbackService.PROCEED_CALLBACK_PREFIX) ->
+                parseCallbackId(data, RosterCallbackService.PROCEED_CALLBACK_PREFIX)
+                    ?.let { rosterCallbackService.handleProceed(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(RosterCallbackService.REMIND_CALLBACK_PREFIX) ->
+                parseCallbackId(data, RosterCallbackService.REMIND_CALLBACK_PREFIX)
+                    ?.let { rosterCallbackService.handleRemind(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            else -> {
+                log.warn("Unknown callback data ignored: {}", data.take(32))
                 null
             }
-            clubId?.let { chatLinkBotService.handleUnlinkCallback(query.from.id, it) } ?: "Некорректный запрос"
-        } else {
-            log.warn("Unknown callback data ignored: {}", data.take(32))
-            null
         }
 
         // Telegram требует ответить на каждый callback, иначе у пользователя крутится спиннер.
@@ -243,6 +253,13 @@ class ClubsBot(
         } catch (e: Exception) {
             log.warn("Failed to answer callback query {}: {}", query.id, e.message)
         }
+    }
+
+    /** UUID из `callback_data` после префикса; битые данные (подделка, обрезка) — null. */
+    private fun parseCallbackId(data: String, prefix: String): UUID? = try {
+        UUID.fromString(data.removePrefix(prefix))
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
     /**

@@ -37,8 +37,10 @@ sealed class ActivityItemDto {
         val eventDatetime: OffsetDateTime,
         // null = место не указано (опционально с V58).
         val locationText: String?,
-        // null = формат «сколько придёт» — карточка показывает счёт без знаменателя.
+        // null = открытая встреча — карточка показывает счёт без знаменателя.
         val participantLimit: Int?,
+        // Порог набора (V86); null = минимум выключен. Бейдж «4–10» рисуется по паре с лимитом.
+        val minParticipants: Int?,
         // Формат для бейджа карточки — тот же словарь, что на всех лентах.
         val format: EventFormat,
         val goingCount: Int,

@@ -1,6 +1,5 @@
 package com.clubs.event
 
-import com.clubs.generated.jooq.enums.LimitKind
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.auth.ClubRoleGuard
@@ -89,7 +88,7 @@ class VoteServiceTest {
 
     private fun upcomingEvent(eventDatetime: OffsetDateTime, votingOpensDaysBefore: Int = 14) = Event(
         id = eventId, clubId = clubId, createdBy = UUID.randomUUID(), title = "E", description = null,
-        locationText = "P", eventDatetime = eventDatetime, participantLimit = 10, limitKind = LimitKind.max,
+        locationText = "P", eventDatetime = eventDatetime, participantLimit = 10,
         votingOpensDaysBefore = votingOpensDaysBefore, status = EventStatus.upcoming,
         stage2Triggered = false, attendanceMarked = false, attendanceFinalized = false,
         photoUrl = null, createdAt = null, updatedAt = null
@@ -295,7 +294,7 @@ class VoteServiceTest {
         // У формата «сколько придёт» до Этапа 2 отвечать нечего — напоминать не о чем.
         stubStage2Event(ownerId = userId)
         every { eventRepository.findById(eventId) } returns
-            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(participantLimit = null, limitKind = null)
+            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(participantLimit = null)
         assertEquals(
             "Confirmation is not open for this event",
             assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
@@ -387,7 +386,6 @@ class VoteServiceTest {
         locationText = "Place",
         eventDatetime = OffsetDateTime.now().plusDays(1),
         participantLimit = 4,
-        limitKind = LimitKind.max,
         votingOpensDaysBefore = 14,
         status = status,
         stage2Triggered = status != EventStatus.upcoming,

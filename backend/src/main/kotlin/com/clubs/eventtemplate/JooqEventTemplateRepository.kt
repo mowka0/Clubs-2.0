@@ -96,7 +96,8 @@ class JooqEventTemplateRepository(
         EVENT_TEMPLATES.LOCATION_LON to request.locationLon,
         EVENT_TEMPLATES.LOCATION_HINT to request.locationHint,
         EVENT_TEMPLATES.PARTICIPANT_LIMIT to request.participantLimit,
-        EVENT_TEMPLATES.LIMIT_KIND to request.format.limitKind,
+        // Легаси-литерал `min` подставляет минимум равным лимиту — см. EventFormatInput.
+        EVENT_TEMPLATES.MIN_PARTICIPANTS to request.effectiveMinParticipants,
         EVENT_TEMPLATES.STAGE2_LEAD_MINUTES to request.stage2LeadMinutes,
         EVENT_TEMPLATES.PHOTO_URL to request.photoUrl,
         EVENT_TEMPLATES.DEFAULT_WEEKDAY to request.defaultWeekday,

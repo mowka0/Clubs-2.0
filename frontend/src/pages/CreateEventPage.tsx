@@ -18,12 +18,11 @@ export const CreateEventPage: FC = () => {
   const { id: clubId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
-  // Формат из шага пикера «+». Неизвестное значение (старая ссылка, опечатка) схлопывается в
-  // «максимум участников»: это смысл лимита у всех встреч, созданных до V85. При входе по
-  // шаблону формат несёт сам шаблон, и ?format не читается.
+  // Формат из шага пикера «+». Неизвестное значение (старая ссылка `?format=min|max|any`,
+  // опечатка) схлопывается в обычную встречу — это смысл лимита у всех встреч до V86.
+  // При входе по шаблону формат несёт сам шаблон, и ?format не читается.
   const formatParam = searchParams.get('format');
-  const initialFormat: EventFormat =
-    formatParam === 'min' || formatParam === 'any' ? formatParam : 'max';
+  const initialFormat: EventFormat = formatParam === 'open' ? 'open' : 'normal';
 
   const templatesQuery = useClubEventTemplatesQuery(templateId ? clubId : undefined);
 

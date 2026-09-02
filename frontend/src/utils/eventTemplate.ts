@@ -65,6 +65,7 @@ export function eventToTemplateBody(
     locationLon: number | null;
     locationHint: string | null;
     participantLimit: number | null;
+    minParticipants: number | null;
     format: EventFormat;
     stage2LeadMinutesOverride: number | null;
     photoUrl: string | null;
@@ -82,12 +83,14 @@ export function eventToTemplateBody(
     locationLon: event.locationLon,
     locationHint: event.locationHint,
     participantLimit: event.participantLimit,
+    // Шаблон запоминает включённый минимум (V86 § 8): клуб, живущий с кворумами, получает его по умолчанию.
+    minParticipants: event.minParticipants,
     format: event.format,
     // Берём СОБСТВЕННЫЙ интервал события, а не эффективный: подставленный сервером дефолт,
     // записанный в шаблон, молча стал бы явным выбором организатора и перестал бы следовать
     // за настройкой бэкенда (тот же урок, что у формы редактирования встречи).
-    // У формата «сколько придёт» своего интервала не бывает — бэкенд отклонит.
-    stage2LeadMinutes: event.format === 'any' ? null : event.stage2LeadMinutesOverride,
+    // У открытой встречи своего интервала не бывает — бэкенд отклонит.
+    stage2LeadMinutes: event.format === 'open' ? null : event.stage2LeadMinutesOverride,
     photoUrl: event.photoUrl,
     defaultWeekday: isoWeekdayOf(startsAt),
     defaultTime: localTimeOf(startsAt),
@@ -112,6 +115,7 @@ export function templateToSaveBody(
     locationLon: template.locationLon,
     locationHint: template.locationHint,
     participantLimit: template.participantLimit,
+    minParticipants: template.minParticipants,
     format: template.format,
     stage2LeadMinutes: template.stage2LeadMinutes,
     photoUrl: template.photoUrl,
