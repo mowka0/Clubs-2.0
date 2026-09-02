@@ -356,12 +356,23 @@ class ReputationLedgerIntegrationTest {
         // Глобальная — по всей истории: track record есть у ОБОИХ клубов, reliable только активный.
         assertEquals(2, result.global.trackRecordClubs, "left club still counts toward M")
         assertEquals(1, result.global.reliableClubs)
-        assertTrue(result.global.score != null && result.global.score!! in 55..65, "score between the two clubs")
+        // Глобальный балл лежит МЕЖДУ клубами — конкретное значение зависит от весов тяжести,
+        // поэтому проверяем инвариант, а не магическое число: после V85 он сдвинулся вслед за
+        // подешевевшей просрочкой складчины.
+        val historyTrust = result.historyClubs.single().trust!!
+        val activeTrust = result.activeClubs.single().trust!!
+        assertTrue(
+            result.global.score != null && result.global.score!! in (historyTrust + 1)..(activeTrust - 1),
+            "global ${result.global.score} must sit between $historyTrust and $activeTrust"
+        )
         // Покинутый клуб живёт в «Истории», не в активном списке — но НЕ выброшен (дыра A).
         assertEquals(listOf(clubId), result.activeClubs.map { it.clubId })
         assertEquals(listOf(club2), result.historyClubs.map { it.clubId })
         assertTrue(result.activeClubs.single().trust!! >= 90, "3 kept → high Trust")
-        assertTrue(result.historyClubs.single().trust!! < 40, "3 broken promises → low Trust survives leaving")
+        // 3 просроченные складчины: 47 после V85 вместо прежних 30. Просрочка стоит −40, то есть
+        // вес 0.4 — впятеро легче неявки, ровно как и задумано в шкале очков. Раньше формула этого
+        // не видела и наказывала за неоплату так же, как за молчаливый неприход.
+        assertTrue(result.historyClubs.single().trust!! < 60, "low Trust survives leaving")
     }
 
     @Test

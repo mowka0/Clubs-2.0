@@ -21,6 +21,7 @@ class TrustPolicyTest {
     private val IRONCLAD = ReputationKind.ironclad      // kept
     private val NO_SHOW = ReputationKind.no_show        // broke
     private val UNRESOLVED = ReputationKind.confirmed_unresolved // neutral
+    private val ABANDONED = ReputationKind.abandoned_slot        // broke, вес 1.0 — точка отсчёта
 
     // --- per-club Trust: the simulated contract ---
 
@@ -35,8 +36,10 @@ class TrustPolicyTest {
     }
 
     @Test
-    fun `a single early slip does NOT crater (S2 = 52, not near zero)`() {
-        assertEquals(52, TrustPolicy.perClubTrust(listOf(out(NO_SHOW, 5)), now))
+    fun `a single early slip does NOT crater (S2 = 37, not near zero)`() {
+        // 52 → 37 с введением тяжести (V85): неявка весит 2.0, а не 1.0. Не кратер, но заметно
+        // больнее — ровно то, ради чего тяжесть вводилась.
+        assertEquals(37, TrustPolicy.perClubTrust(listOf(out(NO_SHOW, 5)), now))
     }
 
     @Test
@@ -46,23 +49,48 @@ class TrustPolicyTest {
     }
 
     @Test
-    fun `five kept against one broken stays healthy (S4 = 76)`() {
+    fun `five kept against one no-show no longer reaches the reliable zone (S4 = 63)`() {
+        // 76 → 63 (порог надёжности 70): одна молчаливая неявка теперь перевешивает пять
+        // посещений. Сознательное следствие тяжести — самый дорогой вид и должен быть самым
+        // трудным для отыгрыша. Ранний отказ (abandoned_slot, вес 1.0) прежние 76 сохраняет.
         val outcomes = List(5) { out(IRONCLAD, 10) } + out(NO_SHOW, 10)
-        assertEquals(76, TrustPolicy.perClubTrust(outcomes, now))
+        assertEquals(63, TrustPolicy.perClubTrust(outcomes, now))
+        assertEquals(76, TrustPolicy.perClubTrust(List(5) { out(IRONCLAD, 10) } + out(ABANDONED, 10), now))
     }
 
     @Test
     fun `a PATTERN of broken promises is punished below 40 (S7)`() {
         val outcomes = List(3) { out(NO_SHOW, 10) }
         val trust = TrustPolicy.perClubTrust(outcomes, now)
-        assertEquals(30, trust)
+        assertEquals(18, trust)
         assertTrue(trust < 40, "a pattern of no-shows must drop below 40, was $trust")
     }
 
     @Test
-    fun `an old sin decays away as recent behaviour recovers (S6 = 89)`() {
+    fun `an old sin decays away as recent behaviour recovers (S6 = 86)`() {
         val outcomes = listOf(out(NO_SHOW, 300)) + List(3) { out(IRONCLAD, 10) }
-        assertEquals(89, TrustPolicy.perClubTrust(outcomes, now))
+        assertEquals(86, TrustPolicy.perClubTrust(outcomes, now))
+    }
+
+    /**
+     * Лестница тяжести (решение PO 2026-08-31): цена нарушенного обещания перестала быть числом
+     * в диалоге и стала весом в формуле. Один и тот же промах бьёт тем сильнее, чем дороже стоил.
+     */
+    @Test
+    fun `broken promises hit proportionally to their price`() {
+        fun trustAfter(kind: ReputationKind) = TrustPolicy.perClubTrust(listOf(out(kind, 0)), now)
+
+        // Виды позднего отказа (−50 / −150) приедут вместе с форматами встреч (V83+); до этого
+        // лестницу держат три вида, которые есть в проде: просрочка складчины, брошенное место, неявка.
+        val expired = trustAfter(ReputationKind.skladchina_expired)  // −40
+        val abandoned = trustAfter(ABANDONED)                        // −100
+        val noShow = trustAfter(NO_SHOW)                             // −200
+
+        assertEquals(listOf(67, 51, 36), listOf(expired, abandoned, noShow))
+        assertTrue(
+            expired > abandoned && abandoned > noShow,
+            "чем дороже промах, тем ниже надёжность: $expired > $abandoned > $noShow"
+        )
     }
 
     @Test
