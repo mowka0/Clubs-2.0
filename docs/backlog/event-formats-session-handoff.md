@@ -186,6 +186,10 @@
 
 ## 6. Факты окружения staging
 
+> ⚠️ Устарело 2026-09-05: PO ужал тайминги под прогон v2 (`STAGE2_TRIGGER_MINUTES_BEFORE=4`,
+> `STAGE2_POLL_MS=10000`, `LATE_DECLINE_THRESHOLD_MINUTES=2`, `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE=3`).
+> Актуальная таблица — `event-formats-v2-staging-testplan.md` § 0. Скрипт `~/clubs-fast.sh` переписан.
+
 Проверено **в контейнере** 01.09, а не по старым записям:
 
 | Переменная | Значение | Что даёт |
