@@ -259,31 +259,24 @@ describe('CreateEventPage — максимум и минимум участни�
     expect(minInput()).toHaveValue('5');
   });
 
-  it('дата ближе интервала набора гасит минимум, и он не уходит в body (AC-11)', async () => {
+  it('дата ближе интервала набора не даёт создать встречу с местами (AC-11)', async () => {
     const { events } = mockCreate();
     const { user } = renderPage('');
 
     await screen.findByRole('heading', { name: 'Обычная встреча' });
-    await user.click(minSwitch());
-    expect(minSwitch()).toHaveAttribute('aria-checked', 'true');
-
-    // Через 2 часа при интервале 18 ч по умолчанию: набор не успеет закрыться.
+    // Через 2 часа при интервале 18 ч по умолчанию: набор не успеет закрыться. Минимум при этом
+    // не гаснет и не прячется — правило одно и живёт на отправке, а не в полях формы.
     setDatetime(2 * HOUR);
-
-    await waitFor(() => expect(minSwitch()).toHaveAttribute('aria-checked', 'false'));
-    expect(minSwitch()).toBeDisabled();
-    expect(screen.getByText(
-      'До встречи меньше 18 часов — набор не успеет закрыться. Оставьте только максимум',
-    )).toBeInTheDocument();
+    expect(minSwitch()).not.toBeDisabled();
 
     await user.type(screen.getByPlaceholderText('Например: Йога в парке'), 'Баня');
     await user.type(screen.getByPlaceholderText('Вход со двора, домофон 12'), 'у входа');
     await user.click(screen.getByRole('button', { name: 'Создать событие' }));
 
-    await waitFor(() => expect(events).toHaveLength(1));
-    expect(events[0]!.format).toBe('normal');
-    expect(events[0]!.participantLimit).toBe(20);
-    expect(events[0]!.minParticipants).toBeNull();
+    expect(await screen.findByText(
+      'До встречи меньше 18 часов — набор не успеет закрыться. Подвиньте время встречи или выберите интервал набора короче',
+    )).toBeInTheDocument();
+    expect(events).toHaveLength(0);
   });
 
   it('включённый минимум уходит и во встречу, и в попутно сохранённый шаблон', async () => {

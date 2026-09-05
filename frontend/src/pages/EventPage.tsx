@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { formatLeadInterval, formatNearDay, formatTimeHM, pluralRu, toDatetimeLocalValue } from '../utils/formatters';
+import { formatNearDay, formatTimeHM, pluralRu, toDatetimeLocalValue } from '../utils/formatters';
 import { eventToTemplateBody } from '../utils/eventTemplate';
 import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
@@ -332,15 +332,9 @@ export const EventPage: FC = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [editPickerOpen, setEditPickerOpen] = useState(false);
   // Максимум и минимум в шторке правки — тем же хуком, что форма создания (§ 9.3): те же
-  // инварианты и то же правило даты. Сравниваем с ЭФФЕКТИВНЫМ интервалом события: шторка его
-  // не правит, а сервер проверяет ровно его. Дата в прошлом тоже «слишком близко» — её отдельно
-  // отклонит валидация при сохранении.
-  const editLeadMinutes = eventQuery.data?.stage2LeadMinutes ?? null;
-  const editTimeMs = editDatetime ? new Date(editDatetime).getTime() : null;
-  const editRosterTooLate =
-    editLeadMinutes != null && editTimeMs !== null && !Number.isNaN(editTimeMs)
-    && editTimeMs - Date.now() < editLeadMinutes * 60_000;
-  const editLimits = useRosterLimits({ participantLimit: 1, minParticipants: null }, editRosterTooLate);
+  // инварианты. Перенос даты ближе интервала набора отклоняет сервер (400), шторка показывает
+  // его текст — клиентской проверки нет намеренно (одно правило, одно место).
+  const editLimits = useRosterLimits({ participantLimit: 1, minParticipants: null });
   // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
   const [confirmingDecline, setConfirmingDecline] = useState(false);
   // Инлайн-подтверждение «Проводим» (V86 § 4) — как у отказа, без вложенных модалок.
@@ -732,12 +726,6 @@ export const EventPage: FC = () => {
   // до часового completion-прохода, поэтому гейтим ещё и по !eventHappened — зеркалит
   // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
-
-  // Перенос даты ближе интервала набора — не блокируем (паритет с созданием): без минимума это
-  // факт «набор закроется сразу после сохранения», с минимумом переключатель гаснет сам (§ 9.3).
-  const editStage2Immediate = editRosterTooLate && editTimeMs !== null && editTimeMs > Date.now();
-  const editLeadLabel =
-    event.stage2LeadMinutes != null ? formatLeadInterval(event.stage2LeadMinutes) : null;
 
   // «Путь назад», вариант C (reputation-path-back.md AC-8): строка-мотиватор «придёте — надёжность
   // вырастет» при просадке Trust в клубе события. Скрыта у терминальных статусов: confirmed уже
@@ -1982,21 +1970,8 @@ export const EventPage: FC = () => {
               </label>
 
               {/* У открытой встречи мест нет вовсе — формат неизменяем, поля не показываем.
-                  Те же степперы и правило даты, что в форме создания (§ 9.3). */}
-              {!isOpenEvent && (
-                <RosterLimitsFields
-                  state={editLimits}
-                  minUnavailable={editRosterTooLate}
-                  leadLabel={editLeadLabel ?? ''}
-                />
-              )}
-
-              {editStage2Immediate && editLeadLabel && (
-                <div className="rd-body-text">
-                  ⚡️ До встречи меньше интервала набора (за {editLeadLabel}) — набор закроется
-                  сразу после сохранения.
-                </div>
-              )}
+                  Те же степперы, что в форме создания (§ 9.3). */}
+              {!isOpenEvent && <RosterLimitsFields state={editLimits} />}
               {editError && <div className="rd-error">{editError}</div>}
               <div className="rd-cta-wrap">
                 <button

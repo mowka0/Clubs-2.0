@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { BrandStepper } from '../BrandStepper';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -17,17 +17,11 @@ export interface RosterLimits {
 /**
  * Состояние пары «максимум + минимум» с инвариантами § 9.2 — ОДНО на форму создания и шторку
  * правки, чтобы правила не разъехались: включение даёт минимум 2 (не выше максимума), снижение
- * максимума ниже минимума подтягивает минимум, а при недоступном минимуме (дата ближе интервала
- * набора) переключатель выключается сам — отправить включённый минимум в этом состоянии нельзя
- * по построению, серверный гард даты на клиенте не дублируется.
+ * максимума ниже минимума подтягивает минимум. Дата ближе интервала набора здесь не учитывается:
+ * такую встречу отклоняет сервер целиком, а не гасит минимум (решение PO 2026-09-05).
  */
-export function useRosterLimits(initial: RosterLimits, minUnavailable: boolean) {
+export function useRosterLimits(initial: RosterLimits) {
   const [limits, setLimits] = useState<RosterLimits>(initial);
-
-  useEffect(() => {
-    if (!minUnavailable) return;
-    setLimits((l) => (l.minParticipants === null ? l : { ...l, minParticipants: null }));
-  }, [minUnavailable]);
 
   const setParticipantLimit = (participantLimit: number) =>
     setLimits((l) => ({
@@ -54,10 +48,6 @@ export type RosterLimitsState = ReturnType<typeof useRosterLimits>;
 
 interface RosterLimitsFieldsProps {
   state: RosterLimitsState;
-  /** Дата ближе выбранного интервала набора: минимум недоступен, переключатель гаснет (§ 9.2). */
-  minUnavailable: boolean;
-  /** Интервал набора словами («18 часов») — для подписи недоступного минимума. */
-  leadLabel: string;
 }
 
 /**
@@ -65,12 +55,10 @@ interface RosterLimitsFieldsProps {
  * и шторку правки (§ 9.2, § 9.3). Подписи называют правило вслух: это ровно то обещание,
  * которое система исполнит в дедлайн набора.
  */
-export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state, minUnavailable, leadLabel }) => {
+export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state }) => {
   const haptic = useHaptic();
   const { limits, setParticipantLimit, setMinEnabled, setMinParticipants } = state;
-  // Пока эффект хука не погасил минимум, переключатель уже показывается выключенным —
-  // иначе на один рендер мелькало бы «включён, но недоступен».
-  const minEnabled = limits.minParticipants !== null && !minUnavailable;
+  const minEnabled = limits.minParticipants !== null;
 
   return (
     <>
@@ -96,7 +84,6 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state, minUnav
             role="switch"
             aria-checked={minEnabled}
             aria-label="Минимум участников"
-            disabled={minUnavailable}
             onClick={() => { haptic.select(); setMinEnabled(!minEnabled); }}
           />
         </div>
@@ -110,11 +97,9 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state, minUnav
           />
         )}
         <span className="rd-hint">
-          {minUnavailable
-            ? `До встречи меньше ${leadLabel} — набор не успеет закрыться. Оставьте только максимум`
-            : minEnabled
-              ? `Собираемся, если будет минимум ${limits.minParticipants}. Не наберём к закрытию набора — встреча отменится`
-              : 'Выключен — встреча состоится при любом составе'}
+          {minEnabled
+            ? `Собираемся, если будет минимум ${limits.minParticipants}. Не наберём к закрытию набора — встреча отменится`
+            : 'Выключен — встреча состоится при любом составе'}
         </span>
       </div>
     </>

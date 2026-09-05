@@ -1,4 +1,4 @@
-import { FC, useEffect, useRef, useState } from 'react';
+import { FC, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../../hooks/useHaptic';
 import { AvatarUpload } from '../AvatarUpload';
@@ -154,27 +154,12 @@ export const EventForm: FC<EventFormProps> = ({
   // Тянут прямо сейчас — на время протяжки гасим плавность заливки, иначе она догоняет палец.
   const [leadDragging, setLeadDragging] = useState(false);
 
-  const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
-  const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
-  // Набор не помещается до начала встречи. Сравниваем с ВЫБРАННЫМ интервалом, а не с самым
-  // коротким пресетом: сервер проверяет ровно его (`EventService.requireRosterFitsBeforeStart`),
-  // и захардкоженные 6 часов пропускали бы, например, встречу через 10 часов с дефолтным
-  // интервалом 18 ч — форма сказала бы «ок», а бэкенд ответил 400.
-  // Правило про КОНКРЕТНУЮ дату, которой у шаблона нет, — в режиме правки молчит. Один механизм
-  // (V86 § 9.2): минимум становится недоступен и гаснет сам, без минимума это не ошибка —
-  // состав закроется сразу, места займут те, кто откликнется первым.
-  const rosterTooLate =
-    !isTemplateMode && hasLimit && msToEvent !== null && msToEvent < effectiveStage2Lead * 60_000;
-
   // Максимум и минимум участников — общий хук с шторкой правки на странице встречи (§ 9.3).
   // Шаблон подставляет и включённый минимум: клуб, живущий с кворумами, получает его по умолчанию.
-  const rosterLimits = useRosterLimits(
-    {
-      participantLimit: template?.participantLimit ?? PARTICIPANT_LIMIT_DEFAULT,
-      minParticipants: template?.minParticipants ?? null,
-    },
-    rosterTooLate,
-  );
+  const rosterLimits = useRosterLimits({
+    participantLimit: template?.participantLimit ?? PARTICIPANT_LIMIT_DEFAULT,
+    minParticipants: template?.minParticipants ?? null,
+  });
   const { limits } = rosterLimits;
 
   /** Индекс отметки, ближайшей к точке X (координата viewport). */
@@ -198,31 +183,9 @@ export const EventForm: FC<EventFormProps> = ({
   const applyLeadIndex = (index: number) => {
     const preset = STAGE2_LEAD_PRESETS[index];
     if (preset === undefined || preset.minutes === effectiveStage2Lead) return;
-    // Насечка дальше оставшегося до встречи времени недоступна (V83): такой набор закрылся бы
-    // ещё до создания встречи, и организатор мгновенно получал бы «состав не набрался».
-    if (isLeadDisabled(preset.minutes)) return;
     haptic.select();
     setStage2LeadMinutes(preset.minutes);
   };
-
-  /**
-   * Насечка недоступна, если её интервал не помещается в оставшееся до встречи время: набор,
-   * который закрывается в прошлом, — это мгновенный недобор, а не выбор. Заменяет прежнее
-   * предупреждение «Этап 2 начнётся сразу после создания»: случай стал невыбираемым (V83).
-   * У шаблона даты нет — там доступны все насечки.
-   */
-  const isLeadDisabled = (minutes: number): boolean =>
-    !isTemplateMode && msToEvent !== null && msToEvent <= minutes * 60_000;
-
-  // Выбранное значение перестало помещаться (сдвинули дату назад) — опускаем до ближайшего
-  // допустимого, иначе форма молча отправила бы заведомо просроченный набор.
-  useEffect(() => {
-    if (isTemplateMode || !hasLimit || msToEvent === null) return;
-    if (!isLeadDisabled(effectiveStage2Lead)) return;
-    const fits = [...STAGE2_LEAD_PRESETS].reverse().find((p) => !isLeadDisabled(p.minutes));
-    if (fits !== undefined && fits.minutes !== effectiveStage2Lead) setStage2LeadMinutes(fits.minutes);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventDatetime, effectiveStage2Lead, hasLimit, isTemplateMode]);
 
   const fail = (msg: string) => {
     haptic.notify('error');
@@ -250,6 +213,15 @@ export const EventForm: FC<EventFormProps> = ({
     if (eventDate.getTime() <= Date.now()) {
       return fail('Дата события должна быть в будущем');
     }
+    // Набор должен помещаться до начала встречи — одно правило вместо режима «состав закроется
+    // сразу» (решение PO 2026-09-05; встреча «на сегодня» станет отдельным форматом). Сервер
+    // проверяет то же самое в `EventService.requireRosterFitsBeforeStart`.
+    if (hasLimit && eventDate.getTime() - Date.now() < effectiveStage2Lead * 60_000) {
+      return fail(
+        `До встречи меньше ${formatLeadInterval(effectiveStage2Lead)} — набор не успеет закрыться. ` +
+          'Подвиньте время встречи или выберите интервал набора короче',
+      );
+    }
     if (saveAsTemplate && !templateName.trim()) return fail('Укажите имя шаблона');
     if (saveAsTemplate && templateName.trim().length > TEMPLATE_NAME_MAX) {
       return fail(`Имя шаблона: максимум ${TEMPLATE_NAME_MAX} символов`);
@@ -265,8 +237,7 @@ export const EventForm: FC<EventFormProps> = ({
       eventDatetime: eventDate.toISOString(),
       // Пара «лимит + формат»: бэкенд валидирует их согласованность (open ⟺ лимита нет).
       participantLimit: hasLimit ? limits.participantLimit : null,
-      // Минимум уходит только включённым; при недоступном (дата ближе интервала) хук уже
-      // погасил его, так что просроченный набор с минимумом отсюда не уйдёт.
+      // Минимум уходит только включённым.
       minParticipants: hasLimit ? limits.minParticipants : null,
       format,
       // Интервал набора — только у обычной встречи и только при ЯВНОМ выборе организатора
@@ -614,7 +585,6 @@ export const EventForm: FC<EventFormProps> = ({
                       <button
                         key={p.minutes}
                         type="button"
-                        disabled={isLeadDisabled(p.minutes)}
                         className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
                         // Тап по насечке остаётся отдельным обработчиком ради клавиатуры: указателем
                         // значение уже поставил onPointerDown выше, и повторный вызов гасится
@@ -628,31 +598,18 @@ export const EventForm: FC<EventFormProps> = ({
                   </div>
                 </div>
                 <span className="rd-hint">
-                  {msToEvent !== null && isLeadDisabled(STAGE2_LEAD_PRESETS[STAGE2_LEAD_PRESETS.length - 1].minutes)
-                    ? `До встречи ${formatLeadInterval(Math.floor(msToEvent / 60_000))} — более длинные интервалы не помещаются.`
-                    : limits.minParticipants !== null
-                      ? 'До этого момента идёт набор. Наберётся минимум — встреча состоится, не наберётся — отменится.'
-                      : 'До этого момента идёт набор. В этот момент состав закроется — тем, кто успел.'}
+                  {limits.minParticipants !== null
+                    ? 'До этого момента идёт набор. Наберётся минимум — встреча состоится, не наберётся — отменится.'
+                    : 'До этого момента идёт набор. В этот момент состав закроется — тем, кто успел.'}
                 </span>
               </div>
-            )}
-            {/* Без минимума близкая дата — не ошибка, а факт: это бывший формат «срочная». */}
-            {rosterTooLate && (
-              <span className="rd-hint">
-                До встречи меньше {formatLeadInterval(effectiveStage2Lead)} — набор закроется
-                сразу, места займут те, кто откликнется первым.
-              </span>
             )}
           </div>
         )}
 
         {/* Открытая встреча: мест нет — степперы не рендерятся вовсе. */}
         {hasLimit && (
-          <RosterLimitsFields
-            state={rosterLimits}
-            minUnavailable={rosterTooLate}
-            leadLabel={formatLeadInterval(effectiveStage2Lead)}
-          />
+          <RosterLimitsFields state={rosterLimits} />
         )}
 
         {/* Попутное сохранение шаблона при создании встречи: завести новый из этой встречи

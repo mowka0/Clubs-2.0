@@ -62,7 +62,7 @@
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
-| `CreateEventPage.tsx` | `events.md`, `event-templates.md`, `event-geo.md`, `venue-search.md` |
+| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md` |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
@@ -119,7 +119,7 @@
 | Файл | О чём | Правлен |
 |---|---|---|
 | `events.md` | встречи, двухэтапное подтверждение | 2026-08-21 |
-| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат. Модель V85 (min/max/any) — `docs/backlog/event-formats-v85.md` | 2026-09-02 |
+| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат; с 2026-09-05 режим «набор закроется сразу» убран — дата обязана быть дальше интервала. Модель V85 (min/max/any) — `docs/backlog/event-formats-v85.md` | 2026-09-05 |
 | `events-feed.md` | вкладка «Активности», история | 2026-08-16 |
 | `event-vote-block.md` | блок «Набор» на странице события | 2026-08-21 |
 | `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-21 |

@@ -92,26 +92,47 @@ class EventServiceTest {
     }
 
     @Test
-    fun `AC-11 createEvent without a minimum accepts a date inside the roster interval`() {
-        // Без минимума тот же случай законен и означает «состав закроется сразу» — так покрыт
-        // бывший формат «срочная встреча».
+    fun `AC-11 createEvent without a minimum rejects a date inside the roster interval too`() {
+        // Режим «состав закроется сразу» (бывшая «срочная») убран целиком (PO 2026-09-05):
+        // у любой встречи с местами набор обязан помещаться до старта.
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.createEvent(
+                clubId,
+                request().copy(
+                    eventDatetime = OffsetDateTime.now().plusHours(2),
+                    stage2LeadMinutes = 360
+                ),
+                ownerId
+            )
+        }
+
+        verify(exactly = 0) { eventRepository.create(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `AC-11 createEvent for an open event ignores the roster interval`() {
+        // У открытой встречи набора нет — близкая дата законна.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId).copy(participantLimit = null)
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
         every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
 
         eventService.createEvent(
             clubId,
             request().copy(
-                eventDatetime = OffsetDateTime.now().plusHours(2),
-                stage2LeadMinutes = 360
+                format = EventFormatInput.OPEN,
+                participantLimit = null,
+                eventDatetime = OffsetDateTime.now().plusHours(2)
             ),
             ownerId
         )
 
         verify(exactly = 1) { eventRepository.create(any(), clubId, ownerId, any()) }
-        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
     }
 
     @Test
@@ -402,9 +423,28 @@ class EventServiceTest {
     }
 
     @Test
+    fun `updateEvent rejects a date that leaves no room for the roster`() {
+        // AC-11: набор обязан помещаться до старта у любой встречи с местами, минимум не при чём
+        // (PO 2026-09-05). Без минимума перенос так близко тоже запрещён.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.updateEvent(
+                event.id, ownerId,
+                editRequest(event, stage2LeadMinutes = 2160)
+                    .copy(eventDatetime = OffsetDateTime.now().plusHours(2))
+            )
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+    }
+
+    @Test
     fun `updateEvent rejects a date that leaves no room for a roster with a minimum`() {
-        // AC-11: дедлайн набора в прошлом означает мгновенную отмену встречи — переносить дату
-        // так близко нельзя. Без минимума тот же перенос легален (состав закроется сразу).
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val minEvent = sampleEvent(clubId, ownerId).copy(minParticipants = 4)

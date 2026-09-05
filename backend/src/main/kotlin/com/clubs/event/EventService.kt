@@ -53,7 +53,7 @@ class EventService(
             locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() }
         )
         val minParticipants = normalizedRequest.effectiveMinParticipants
-        requireRosterFitsBeforeStart(minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes)
+        requireRosterFitsBeforeStart(normalizedRequest.participantLimit, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes)
         val event = eventRepository.create(
             normalizedRequest, clubId, userId,
             rosterWarningSentAt = initialRosterWarningMark(
@@ -254,27 +254,27 @@ class EventService(
         if (event.isOpenEvent && request.stage2LeadMinutes != null) {
             throw ValidationException("У открытой встречи нет набора — интервал неприменим")
         }
-        requireRosterFitsBeforeStart(request.minParticipants, request.eventDatetime, request.stage2LeadMinutes)
+        requireRosterFitsBeforeStart(request.participantLimit, request.eventDatetime, request.stage2LeadMinutes)
     }
 
     /**
-     * Набор с минимумом обязан помещаться до начала встречи: дедлайн в прошлом означает, что
-     * ближайший тик отменит встречу, не дав никому проголосовать. Без минимума дедлайн в прошлом
-     * легален и значит «состав закроется сразу» — так покрывается бывшая «срочная встреча».
+     * Набор встречи с местами обязан помещаться до её начала: дедлайн в прошлом означал бы, что
+     * голосовать некогда и состав закрылся бы ближайшим тиком. Такой случай запрещён целиком
+     * (решение PO 2026-09-05): встреча «на сегодня» — будущий отдельный формат, а не особый режим
+     * обычной. У открытой встречи набора нет — проверка не применяется.
      *
      * Проверка живёт здесь, а не в DTO: там неизвестен глобальный дефолт интервала.
      */
     private fun requireRosterFitsBeforeStart(
-        minParticipants: Int?,
+        participantLimit: Int?,
         eventDatetime: OffsetDateTime,
         stage2LeadMinutes: Int?
     ) {
-        if (minParticipants == null) return
+        if (participantLimit == null) return
         val leadMinutes = (stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()
         if (!eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(leadMinutes))) {
             throw ValidationException(
-                "До встречи меньше ${formatLead(leadMinutes)} — набор не успеет закрыться. " +
-                    "Выключите минимум или сдвиньте дату."
+                "До встречи меньше ${formatLead(leadMinutes)} — набор не успеет закрыться. Подвиньте время встречи."
             )
         }
     }
