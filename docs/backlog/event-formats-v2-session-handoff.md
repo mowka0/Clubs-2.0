@@ -100,6 +100,7 @@ af9c784b… / Club not found` — сирота от 05.06, её клуб уда�
 | Файл | Что |
 |---|---|
 | `docs/modules/event-formats.md` | **действующая спека v2** (модель, три правила, «Проводим», цена отказа, API, экран, V86, AC) |
+| `docs/design/event-formats/scenarios.html` | **схема сценариев для PO** (05.09): набор → закрытие → состав → явка, цена отказа, где репутация; открыть файлом в браузере |
 | `docs/backlog/event-formats-v2-staging-testplan.md` | **план прогона** с тремя людьми «Партии» и расчётом репутации |
 | `docs/backlog/event-formats-v85.md` | архив спеки V85 |
 | `docs/backlog/event-formats-session-handoff.md` § 7 | доступ к БД staging; § 6 (env) устарел — см. план § 0 |
