@@ -1,6 +1,6 @@
 # Хэндофф: форматы встреч v2 — V86 на staging, прогон с репутацией
 
-> Обновлено 2026-09-05. **Читать первым** при продолжении работы над форматами встреч.
+> Обновлено 2026-09-05 (среда проверена, прогон не начат). **Читать первым** при продолжении работы над форматами встреч.
 > Команда для старта новой сессии: «продолжи с docs/backlog/event-formats-v2-session-handoff.md».
 
 ## 1. Где мы
@@ -30,11 +30,12 @@
 
 ## 3. Прогон: с чего начать в новой сессии
 
-1. **Env staging** (PO выставляет 2026-09-05): `STAGE2_TRIGGER_MINUTES_BEFORE=4`,
-   `STAGE2_POLL_MS=10000`, `LATE_DECLINE_THRESHOLD_MINUTES=2`,
-   `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE=3`. Удалить мусор `ROSTER_SHORTFALL_RESPONSE_MINUTES`,
-   `ROSTER_DEADLINE_MIN_LEAD_MINUTES`, `TRAEFIK_SERVICE_NAME`. Редеплой. Prod переопределений не
-   имеет — там менять нечего.
+1. **Env staging** — ✅ выставлен PO и **проверен в контейнере** 2026-09-05 04:44 UTC (деплой
+   `7cc0a18`, старые контейнеры удалены): `STAGE2_TRIGGER_MINUTES_BEFORE=4`, `STAGE2_POLL_MS=10000`,
+   `LATE_DECLINE_THRESHOLD_MINUTES=2`, `ROSTER_WARNING_MINUTES_BEFORE_DEADLINE=3`; мусор
+   `ROSTER_SHORTFALL_RESPONSE_MINUTES`, `ROSTER_DEADLINE_MIN_LEAD_MINUTES`, `TRAEFIK_SERVICE_NAME`
+   удалён. Compose-файлы эти переменные не перекрывают (греп по коду). Prod переопределений не
+   имеет — там менять нечего. Проверка на будущее: `docker exec <backend-u91a5392…> printenv | grep STAGE2`.
 2. **Скрипт `~/clubs-fast.sh`** переписан под V86 и эти тайминги: `show` / `warn` / `early` / `late`
    (описание режимов — план § 0). Старая версия падала на удалённой колонке `limit_kind`.
 3. **База чисел** (05.09): Clubs 49 (kept 15,46 / broke 9,09, 35 исходов), XX 39 (9,69 / 9,33, 25),
@@ -74,6 +75,13 @@ min = max (сделано по здравому смыслу), порядок к
 ## 5. Прогон на staging
 
 _Заполняется по ходу прогона: кейс, шаг, что увидели вместо ожидаемого, решение._
+
+**Готовность среды, 2026-09-05 04:44 UTC (до ТК-0):** бэкенд `7cc0a18` healthy, Flyway
+«validated 86 migrations», база чисел пересчитана запросом § 8 и совпала с планом (Clubs 15,458 /
+9,093 → **49**; XX 9,686 / 9,327 → **39**; последний исход 02.09). `~/clubs-fast.sh show` работает.
+Шум в логе, к форматам не относится: `SkladchinaScheduler — Failed to auto-close skladchina
+af9c784b… / Club not found` — сирота от 05.06, её клуб удалён из базы staging руками; один ERROR на
+тик шедулера складчин, на прогон не влияет.
 
 ## 6. Карта документов
 
