@@ -15,6 +15,7 @@ import {
   getMyEvents,
   getMyVote,
   markAttendance,
+  proceedRoster,
   remindToConfirm,
   resolveDispute,
   updateEvent,
@@ -147,6 +148,19 @@ export function useDeclineParticipationMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (eventId: string) => declineParticipation(eventId),
+    onSuccess: (_data, eventId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
+    },
+  });
+}
+
+/** «Проводим» (V86): отметка меняет полосу статуса и цену отказа — инвалидация как у отказа. */
+export function useProceedRosterMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) => proceedRoster(eventId),
     onSuccess: (_data, eventId) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });

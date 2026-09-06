@@ -1,11 +1,14 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
+import com.clubs.event.EventFormatInput
 import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.DecimalMax
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.LocalTime
@@ -28,8 +31,9 @@ data class EventTemplateDto(
     val locationLon: Double?,
     val locationHint: String?,
     val participantLimit: Int?,
-    val isOpenEvent: Boolean,
-    val isUrgentEvent: Boolean,
+    // Минимум участников (V86); null = выключен. Форма включает переключатель и подставляет число.
+    val minParticipants: Int?,
+    val format: EventFormat,
     val stage2LeadMinutes: Int?,
     val photoUrl: String?,
     // 1 = понедельник … 7 = воскресенье, в локальной зоне организатора; null = дата не угадывается.
@@ -78,15 +82,20 @@ data class SaveEventTemplateRequest(
     @field:Size(max = 200, message = "Location hint must be at most 200 characters")
     val locationHint: String? = null,
 
-    // null = шаблон открытой встречи; согласованность с флагом проверяет isParticipantLimitConsistent.
+    // null = шаблон открытой встречи; согласованность проверяет isParticipantLimitConsistent.
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    val isOpenEvent: Boolean = false,
+    // Минимум участников (V86), по желанию; не выше лимита — инвариант ниже.
+    @field:Positive(message = "Minimum participants must be positive")
+    val minParticipants: Int? = null,
 
-    val isUrgentEvent: Boolean = false,
+    // Формат встречи — одно поле вместо прежней пары флагов (V85), см. CreateEventRequest.format.
+    // Литералы V85 принимаются до следующего релиза — см. EventFormatInput.
+    @field:NotNull(message = "Event format is required")
+    val format: EventFormatInput,
 
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
 
@@ -103,17 +112,23 @@ data class SaveEventTemplateRequest(
     val isLocationPairConsistent: Boolean
         get() = (locationLat == null) == (locationLon == null)
 
-    @get:AssertTrue(message = "Open event template must have no participant limit; a regular one requires it")
+    @get:AssertTrue(message = "Format 'open' must have no participant limit; 'normal' requires one")
     val isParticipantLimitConsistent: Boolean
-        get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+        get() = format.isOpen == (participantLimit == null)
 
-    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    // Порог не выше потолка (зеркалит CHECK chk_event_templates_min_participants); у открытой
+    // лимита нет, значит, нет и минимума.
+    @get:AssertTrue(message = "Minimum participants must not exceed the participant limit")
+    val isMinParticipantsConsistent: Boolean
+        get() = minParticipants == null || (participantLimit != null && minParticipants <= participantLimit)
+
+    @get:AssertTrue(message = "Format 'open' has no roster; stage2LeadMinutes is not applicable")
     val isStage2LeadConsistent: Boolean
-        get() = !isOpenEvent || stage2LeadMinutes == null
+        get() = !format.isOpen || stage2LeadMinutes == null
 
-    @get:AssertTrue(message = "Urgent event template must be a limited event without a custom stage 2 lead")
-    val isUrgentConsistent: Boolean
-        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
+    /** Порог с учётом легаси-литерала `min` (число было порогом → «ровно N»). */
+    val effectiveMinParticipants: Int?
+        get() = minParticipants ?: participantLimit?.takeIf { format.impliesMinimum }
 
     /**
      * Схлопывает пробелы: обрезанные строки, пустые → null. Сервис нормализует запрос ОДИН раз

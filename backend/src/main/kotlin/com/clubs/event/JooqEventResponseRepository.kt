@@ -108,9 +108,10 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
             )
-            // Очередь — по времени вставания в лист ожидания на ЭТАПЕ 2 (stage_2_timestamp
-            // проставляется при updateStage2Vote(waitlisted)), НЕ по голосу Этапа 1. Кто раньше
-            // подтвердил при полном зале — тот выше. Waitlisted всегда имеет stage_2_timestamp.
+            // Очередь — по времени вставания в лист ожидания (stage_2_timestamp проставляется
+            // при updateStage2Vote(waitlisted)). У 🎟 с порогом набора (V83) метка ставится в
+            // момент ГОЛОСА «Иду» — очередь там и есть «кто раньше проголосовал». У формата без лимита
+            // метка ставится при подтверждении. Waitlisted всегда имеет stage_2_timestamp.
             .orderBy(EVENT_RESPONSES.STAGE_2_TIMESTAMP.asc())
             .limit(1)
             .fetchOne()
@@ -121,6 +122,18 @@ class JooqEventResponseRepository(
             .set(EVENT_RESPONSES.STAGE_2_VOTE, vote)
             .set(EVENT_RESPONSES.STAGE_2_TIMESTAMP, OffsetDateTime.now())
             .set(EVENT_RESPONSES.FINAL_STATUS, finalStatus)
+            .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
+            .where(EVENT_RESPONSES.ID.eq(id))
+            .returning()
+            .fetchOne()!!
+        return mapper.toDomain(record)
+    }
+
+    override fun clearStage2Vote(id: UUID): EventResponse {
+        val record = dsl.update(EVENT_RESPONSES)
+            .setNull(EVENT_RESPONSES.STAGE_2_VOTE)
+            .setNull(EVENT_RESPONSES.STAGE_2_TIMESTAMP)
+            .setNull(EVENT_RESPONSES.FINAL_STATUS)
             .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
             .where(EVENT_RESPONSES.ID.eq(id))
             .returning()
@@ -202,6 +215,14 @@ class JooqEventResponseRepository(
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 
+    override fun findTelegramIdsByStage2Vote(eventId: UUID, vote: Stage_2Vote): List<Long> =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENT_RESPONSES)
+            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(vote)))
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+
     override fun findStage2InviteTelegramIds(eventId: UUID): List<Long> =
         // Аудитория приглашения на Этап 2 строится от УЧАСТНИКОВ КЛУБА с доступом (не от голосов),
         // чтобы включить не ответивших на Этапе 1. LEFT JOIN на ответы: у не ответившего строки нет
@@ -247,7 +268,13 @@ class JooqEventResponseRepository(
             .leftJoin(EVENT_RESPONSES).on(
                 EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
             )
-            .where(EVENTS.ID.eq(eventId).and(pendingAnswerCondition()))
+            .where(
+                EVENTS.ID.eq(eventId)
+                    // Создатель встречи — не адресат напоминания (V86); счётчик noAnswer в
+                    // JooqEventRepository.getVoteCounts исключает его тем же условием.
+                    .and(MEMBERSHIPS.USER_ID.ne(EVENTS.CREATED_BY))
+                    .and(pendingAnswerCondition())
+            )
             // Сначала те, кто уже проявил интерес: с них организатору логично начинать обзвон.
             .orderBy(
                 DSL.case_()
@@ -271,7 +298,7 @@ class JooqEventResponseRepository(
                 )
             }
 
-    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long> {
+    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<RemindedRecipient> {
         if (userIds.isEmpty()) return emptyList()
         // Промолчавшему отмечать напоминание негде — строки ответа у него нет. Создаём заглушку
         // (оба голоса NULL); ON CONFLICT DO NOTHING делает вставку безопасной для тех, у кого
@@ -294,12 +321,21 @@ class JooqEventResponseRepository(
             .fetch()
             .mapNotNull { it.get(EVENT_RESPONSES.USER_ID) }
         if (remindedUserIds.isEmpty()) return emptyList()
-        return dsl.select(USERS.TELEGRAM_ID)
+        return dsl.select(USERS.ID, USERS.TELEGRAM_ID)
             .from(USERS)
             .where(USERS.ID.`in`(remindedUserIds))
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
+            .fetch()
+            .mapNotNull { r ->
+                val telegramId = r.get(USERS.TELEGRAM_ID) ?: return@mapNotNull null
+                RemindedRecipient(r.get(USERS.ID)!!, telegramId)
+            }
     }
+
+    override fun clearStage2Reminders(eventId: UUID): Int =
+        dsl.update(EVENT_RESPONSES)
+            .setNull(EVENT_RESPONSES.STAGE2_REMINDED_AT)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE2_REMINDED_AT.isNotNull))
+            .execute()
 
     override fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

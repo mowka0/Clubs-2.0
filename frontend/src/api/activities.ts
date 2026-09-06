@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import type { EventFormat } from '../types/api';
 
 export type ActivityType = 'event' | 'skladchina';
 export type ActivityFilter = 'all' | ActivityType;
@@ -24,10 +25,12 @@ export interface EventActivityDto extends ActivityBase {
   eventDatetime: string;
   // null = место не указано (опционально с V58).
   locationText: string | null;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  // null = открытая встреча — счёт показывается без знаменателя.
   participantLimit: number | null;
-  // Срочная встреча (V69) — бейдж «⚡ Срочная» вместо «🎟 Обычная».
-  isUrgent: boolean;
+  // Минимум участников для бейджа «👥 4–10»; null = выключен.
+  minParticipants: number | null;
+  // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+  format: EventFormat;
   goingCount: number;
   // Размер подтверждённого ростера Этапа 2. Карточка показывает `goingCount` во время stage 1 и
   // переключается на `confirmedCount`, когда голосование закрывается (stage_2/completed), — так же,

@@ -8,8 +8,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
-import com.clubs.event.EventRosterChangedEvent
-import com.clubs.event.WaitlistPromotedEvent
+import com.clubs.event.RosterService
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.reputation.ExitObligation
@@ -31,6 +30,7 @@ class MembershipService(
     private val mapper: MembershipMapper,
     private val membershipActivator: MembershipActivator,
     private val eventResponseRepository: EventResponseRepository,
+    private val rosterService: RosterService,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
     private val trustService: TrustService,
@@ -251,19 +251,10 @@ class MembershipService(
         // не должен оставаться в «Ждём:»).
         cascadedSkladchinas.forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
-        // Каждый освободившийся подтверждённый слот продвигает следующего из waitlist, чтобы выход не
-        // сокращал ростер. Повышённому шлём DM (WaitlistPromotedEvent → AFTER_COMMIT), как и при отказе.
-        val promotedWaitlist = freedEventIds.count { eventId ->
-            val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
-            // Живой закреп: бронь освободилась (и, возможно, занята из очереди) — перерисовать статус.
-            eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
-            if (promotedUserId != null) {
-                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
-                true
-            } else {
-                false
-            }
-        }
+        // Освобождение места — общий путь с отказом (RosterService.releaseSeat): повышение из
+        // очереди с DM повышенному, а в закрытом составе — отмена при нуле и DM организатору при
+        // пробитом пороге. Раньше выход двигал очередь напрямую и обе проверки обходил.
+        val promotedWaitlist = freedEventIds.count { rosterService.releaseSeat(it) != null }
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         membershipRepository.cancel(membership.id)

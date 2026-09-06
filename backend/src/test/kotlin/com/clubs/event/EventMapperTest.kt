@@ -14,8 +14,8 @@ import java.util.UUID
  */
 class EventMapperTest {
 
-    // 240 мин — дефолт events.stage2-decline-cutoff-minutes; в этих тестах поле не проверяется.
-    private val mapper = EventMapper(declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1080)
+    // 240 мин — дефолт events.late-decline-threshold-minutes; в этих тестах поле не проверяется.
+    private val mapper = EventMapper(lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1080)
     private val now = OffsetDateTime.parse("2026-07-20T12:00:00Z")
 
     private fun event(
@@ -25,7 +25,10 @@ class EventMapperTest {
         // null = открытая встреча (V62) — кейс дедлайна отказа передаёт null явно.
         participantLimit: Int? = 10,
         // Свой интервал Этапа 2 (V67); null = событие следует глобальному дефолту.
-        stage2LeadMinutes: Int? = null
+        stage2LeadMinutes: Int? = null,
+        // Порог набора (V86); null = минимум выключен.
+        minParticipants: Int? = null,
+        rosterDecidedAt: OffsetDateTime? = null
     ) = Event(
         id = UUID.randomUUID(),
         clubId = UUID.randomUUID(),
@@ -35,12 +38,14 @@ class EventMapperTest {
         locationText = "Place",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        minParticipants = minParticipants,
         votingOpensDaysBefore = votingOpensDaysBefore,
         stage2LeadMinutes = stage2LeadMinutes,
         status = status,
         stage2Triggered = false,
         attendanceMarked = false,
         attendanceFinalized = false,
+        rosterDecidedAt = rosterDecidedAt,
         photoUrl = null,
         createdAt = null,
         updatedAt = null
@@ -99,8 +104,11 @@ class EventMapperTest {
         assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
     }
 
+    // Встреча с порогом набора (V83): состав закрывается сам, подтверждать нечего — бейдж
+    // «требуется действие» на закрытом составе врал бы. Действие у формата бывает только на
+    // наборе (status=upcoming, голос не отдан).
     @Test
-    fun `stage_2 upcoming with going vote and no final status is actionRequired`() {
+    fun `roster event in stage_2 is never actionRequired`() {
         val item = feedItem(
             event(EventStatus.stage_2, now.plusDays(1)),
             myVote = Stage_1Vote.going,
@@ -108,33 +116,16 @@ class EventMapperTest {
             isHistory = false
         )
 
-        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
+        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isFalse()
     }
 
-    // Открытая встреча (V62): порога отказа нет — дедлайн совпадает со стартом события,
-    // у события с лимитом он по-прежнему старт − cutoff (240 мин в этом мапере).
+    // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23): голос
+    // Этапа 1 не финален, даже «Не пойду» может передумать. Верно для формата «сколько придёт» —
+    // у форматов с лимитом состав закрывается сам, и подтверждать нечего.
     @Test
-    fun `confirmedDeclineDeadline is the event start for an open event and start minus cutoff otherwise`() {
-        val start = now.plusDays(2)
-
-        val open = mapper.toDetailDto(
-            event(EventStatus.stage_2, start, participantLimit = null), 0, 0, 0, 0
-        )
-        assertThat(open.confirmedDeclineDeadline).isEqualTo(start)
-        assertThat(open.participantLimit).isNull()
-
-        val limited = mapper.toDetailDto(
-            event(EventStatus.stage_2, start), 0, 0, 0, 0
-        )
-        assertThat(limited.confirmedDeclineDeadline).isEqualTo(start.minusMinutes(240))
-    }
-
-    // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23):
-    // голос Этапа 1 не финален (даже «Не пойду» может передумать), у срочной (V69) его нет вовсе.
-    @Test
-    fun `stage_2 with no vote (urgent case) and no final status is actionRequired`() {
+    fun `stage_2 with no vote and no final status is actionRequired`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null),
             myVote = null,
             myFinalStatus = null,
             isHistory = false
@@ -146,7 +137,7 @@ class EventMapperTest {
     @Test
     fun `stage_2 with a not_going stage-1 vote is still actionRequired`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null),
             myVote = Stage_1Vote.not_going,
             myFinalStatus = null,
             isHistory = false
@@ -158,7 +149,7 @@ class EventMapperTest {
     @Test
     fun `stage_2 stops being actionRequired once the user decided on stage 2`() {
         val item = feedItem(
-            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            event(EventStatus.stage_2, now.plusHours(5)).copy(participantLimit = null),
             myVote = null,
             myFinalStatus = FinalStatus.confirmed,
             isHistory = false
@@ -183,11 +174,88 @@ class EventMapperTest {
         assertThat(open.stage2LeadMinutes).isNull()
     }
 
-    // Величина штрафа за брошенный слот идёт с бэка (из ReputationPolicy), а не хардкодом фронта —
-    // тот же класс фикса, что confirmedDeclineDeadline (PO 2026-07-21).
+    // Цена отказа приходит с бэка готовой (V83, ReputationPolicy + RosterPolicy): фронт не выводит
+    // её из даты, формата и размера очереди — копия этой логики на клиенте разъехалась бы.
     @Test
-    fun `abandoned slot penalty is sourced from ReputationPolicy`() {
-        val dto = mapper.toDetailDto(event(EventStatus.stage_2, now.plusDays(2)), 0, 0, 0, 0)
-        assertThat(dto.abandonedSlotPenaltyPoints).isEqualTo(100)
+    fun `declineCostPoints — 100 на закрытом составе без замены и 0, пока набор идёт`() {
+        val start = now.plusDays(2)
+
+        // now передаём явно: у мапера дефолт — реальное «сейчас», и фиксированная дата фикстуры
+        // без него оказалась бы в прошлом (тогда порог отказа считался бы пройденным).
+        val closed = mapper.toDetailDto(event(EventStatus.stage_2, start), 0, 0, 0, 0, now = now)
+        assertThat(closed.declineCostPoints).isEqualTo(100)
+
+        val collecting = mapper.toDetailDto(event(EventStatus.upcoming, start), 0, 0, 0, 0, now = now)
+        assertThat(collecting.declineCostPoints).isEqualTo(0)
+    }
+
+    @Test
+    fun `declineCostPoints — 0 при живой очереди и 150 внутри порога отказа`() {
+        val start = now.plusDays(2)
+
+        val withQueue = mapper.toDetailDto(
+            event(EventStatus.stage_2, start), 0, 0, 0, 0, waitlistedCount = 2, now = now
+        )
+        assertThat(withQueue.declineCostPoints).isEqualTo(0)
+
+        // Порог отказа мапера — 240 мин: встреча через час уже внутри него, замены нет.
+        val lastHour = mapper.toDetailDto(
+            event(EventStatus.stage_2, now.plusHours(1)), 0, 0, 0, 0, now = now
+        )
+        assertThat(lastHour.declineCostPoints).isEqualTo(150)
+    }
+
+    // Минимум — обещанное (V86, § 6): пока состав остаётся не ниже него, отказ бесплатен.
+    @Test
+    fun `declineCostPoints — 0, пока состав остаётся не ниже минимума, и 100 на черте`() {
+        val start = now.plusDays(2)
+        val target = event(EventStatus.stage_2, start, minParticipants = 4)
+
+        assertThat(mapper.toDetailDto(target, 0, 0, 0, confirmedCount = 5, now = now).declineCostPoints).isEqualTo(0)
+        assertThat(mapper.toDetailDto(target, 0, 0, 0, confirmedCount = 4, now = now).declineCostPoints).isEqualTo(100)
+    }
+
+    // Последствие отказа называет сервер (AC-7): клиент не выводит его из условий.
+    @Test
+    fun `declineConsequence — null на наборе, replaced при очереди, roster_empty у последнего`() {
+        val start = now.plusDays(2)
+
+        assertThat(mapper.toDetailDto(event(EventStatus.upcoming, start), 0, 0, 0, 3, now = now).declineConsequence).isNull()
+        assertThat(
+            mapper.toDetailDto(event(EventStatus.stage_2, start), 0, 0, 0, 3, waitlistedCount = 1, now = now).declineConsequence
+        ).isEqualTo(DeclineConsequence.REPLACED)
+        assertThat(mapper.toDetailDto(event(EventStatus.stage_2, start), 0, 0, 0, 1, now = now).declineConsequence)
+            .isEqualTo(DeclineConsequence.ROSTER_EMPTY)
+    }
+
+    @Test
+    fun `declineConsequence — below_minimum до «Проводим», seat_empty после, open у открытой`() {
+        val start = now.plusDays(2)
+        val withMin = event(EventStatus.stage_2, start, minParticipants = 4)
+
+        assertThat(mapper.toDetailDto(withMin, 0, 0, 0, 4, now = now).declineConsequence)
+            .isEqualTo(DeclineConsequence.BELOW_MINIMUM)
+        val decided = mapper.toDetailDto(withMin.copy(rosterDecidedAt = now), 0, 0, 0, 4, now = now)
+        assertThat(decided.declineConsequence).isEqualTo(DeclineConsequence.SEAT_EMPTY)
+        assertThat(decided.rosterDecided).isTrue()
+        assertThat(mapper.toDetailDto(event(EventStatus.stage_2, start), 0, 0, 0, 3, now = now).declineConsequence)
+            .isEqualTo(DeclineConsequence.SEAT_EMPTY)
+        assertThat(
+            mapper.toDetailDto(event(EventStatus.stage_2, start, participantLimit = null), 0, 0, 0, 3, now = now).declineConsequence
+        ).isEqualTo(DeclineConsequence.OPEN)
+    }
+
+    @Test
+    fun `format и minParticipants выводятся из лимита и порога во всех проекциях`() {
+        val start = now.plusDays(2)
+        val withMin = event(EventStatus.upcoming, start, minParticipants = 4)
+        val open = event(EventStatus.upcoming, start, participantLimit = null)
+
+        assertThat(mapper.toDetailDto(withMin, 0, 0, 0, 0).format).isEqualTo(EventFormat.NORMAL)
+        assertThat(mapper.toDetailDto(withMin, 0, 0, 0, 0).minParticipants).isEqualTo(4)
+        assertThat(mapper.toDetailDto(open, 0, 0, 0, 0).format).isEqualTo(EventFormat.OPEN)
+        assertThat(mapper.toListItemDto(withMin, 0).minParticipants).isEqualTo(4)
+        assertThat(mapper.toTeaserDto(EventWithGoingCount(withMin, 0)).minParticipants).isEqualTo(4)
+        assertThat(mapper.toMyFeedItemDto(feedItem(withMin), now).minParticipants).isEqualTo(4)
     }
 }

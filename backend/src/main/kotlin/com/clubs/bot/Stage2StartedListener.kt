@@ -31,6 +31,6 @@ class Stage2StartedListener(
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onStage2ReminderSent(event: Stage2ReminderSentEvent) {
         log.info("Manual Stage 2 reminder for event {} — {} recipient(s)", event.event.id, event.telegramIds.size)
-        notificationService.sendStage2Reminder(event.event, event.telegramIds)
+        notificationService.sendStage2Reminder(event.event, event.telegramIds, event.rosterDeadline)
     }
 }

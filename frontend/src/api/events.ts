@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubEventsTeaserDto, EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { ClubEventsTeaserDto, EventDetailDto, EventFormat, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -12,17 +12,18 @@ export interface CreateEventBody {
   // Уточнение к месту (≤200 символов), отдельное от адреса.
   locationHint?: string;
   eventDatetime: string;
-  // null = открытая встреча (V62): без лимита участников, гонки за места и листа ожидания.
+  // Максимум участников; null ТОЛЬКО у открытой встречи (бэкенд: open ⟺ participantLimit = null).
   participantLimit: number | null;
-  // Явный флаг формата (бэкенд требует согласованности: open ⇔ participantLimit=null),
-  // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
-  isOpenEvent?: boolean;
+  // Минимум участников (V86): 1 ≤ min ≤ participantLimit; null / не задан = выключен. У открытой
+  // не передаётся. Дедлайн набора (дата − интервал) в прошлом при включённом минимуме → 400.
+  minParticipants?: number | null;
+  // Формат заявляется НАМЕРЕННО: бэкенд требует согласованности с лимитом, чтобы случайно
+  // пропущенный лимит давал 400, а не молча создавал встречу другого формата.
+  format: EventFormat;
   votingOpensDaysBefore?: number;
-  // За сколько минут до старта откроется подтверждение мест (Этап 2), 1080..7200 (V68).
-  // Не задан = дефолт сервера (18 ч). Для открытой и срочной встречи не передаётся (400).
+  // За сколько минут до старта закрывается набор состава, 360..7200 (CHECK в БД шире, 60..7200).
+  // Не задан = дефолт сервера (18 ч). У открытой встречи не передаётся (400).
   stage2LeadMinutes?: number;
-  // Срочная встреча (PO 2026-07-23): без Этапа 1, событие рождается сразу в подтверждении мест.
-  isUrgentEvent?: boolean;
   photoUrl?: string;
 }
 
@@ -69,7 +70,7 @@ export function cancelEvent(eventId: string, reason?: string): Promise<EventDeta
 
 /**
  * Полный набор редактируемых полей встречи. PUT-семантика: присылаем ВСЁ, что можно менять,
- * null = очистить поле. Формат встречи (обычная/открытая/срочная) неизменяем и сюда не входит.
+ * null = очистить поле. Формат встречи неизменяем и сюда не входит.
  */
 export interface UpdateEventBody {
   title: string;
@@ -80,8 +81,10 @@ export interface UpdateEventBody {
   locationHint?: string | null;
   /** ISO-строка (UTC). */
   eventDatetime: string;
-  /** null у открытой встречи; для встречи с местами обязателен. */
+  /** null у открытой встречи; для обычной обязателен. */
   participantLimit?: number | null;
+  /** Минимум участников; null = выключить. Те же инварианты, что при создании. */
+  minParticipants?: number | null;
   stage2LeadMinutes?: number | null;
   photoUrl?: string | null;
 }
@@ -99,7 +102,12 @@ export function castVote(eventId: string, vote: string): Promise<{ eventId: stri
   return apiClient.post(`/api/events/${eventId}/vote`, { vote });
 }
 
-export function getMyVote(eventId: string): Promise<{ vote: string | null }> {
+/**
+ * `vote` — голос (going/maybe/not_going) или финальный статус Этапа 2; `seat` — место в составе
+ * встречи с порогом набора, пока набор идёт («confirmed» / «waitlisted» / null). Разделены
+ * намеренно: на наборе голос «Иду» при полном составе кладёт в очередь, и одно поле это скрыло бы.
+ */
+export function getMyVote(eventId: string): Promise<{ vote: string | null; seat: string | null }> {
   return apiClient.get(`/api/events/${eventId}/my-vote`);
 }
 
@@ -116,7 +124,20 @@ export function getMyAttendance(eventId: string): Promise<MyAttendanceDto> {
   return apiClient.get(`/api/events/${eventId}/my-attendance`);
 }
 
-export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
+/**
+ * Ответ подтверждения/отказа. `penaltyPoints` — сколько очков ФАКТИЧЕСКИ списал отказ (0 —
+ * бесплатно): названная на экране цена могла разойтись с фактической, пока был открыт диалог
+ * (очередь успела опустеть), поэтому итог берётся из ответа, а не пересчитывается клиентом.
+ */
+export interface ParticipationResultDto {
+  eventId: string;
+  status: string;
+  confirmedCount: number;
+  participantLimit: number | null;
+  penaltyPoints: number;
+}
+
+export function confirmParticipation(eventId: string): Promise<ParticipationResultDto> {
   return apiClient.post(`/api/events/${eventId}/confirm`);
 }
 
@@ -130,12 +151,25 @@ export function getEventPendingMembers(eventId: string): Promise<EventResponderD
  * `userId` — конкретный молчун; без него напоминание уходит всем, кому ещё можно.
  * Возвращает число реально отправленных: повторное напоминание тому же участнику даёт 0.
  */
-export function remindToConfirm(eventId: string, userId?: string): Promise<{ remindedCount: number }> {
+export interface RemindedPerson { userId: string; firstName: string; lastName: string | null }
+export function remindToConfirm(
+  eventId: string,
+  userId?: string,
+): Promise<{ remindedCount: number; reminded?: RemindedPerson[] }> {
   return apiClient.post(`/api/events/${eventId}/remind`, userId ? { userId } : {});
 }
 
-export function declineParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
+export function declineParticipation(eventId: string): Promise<ParticipationResultDto> {
   return apiClient.post(`/api/events/${eventId}/decline`);
+}
+
+/**
+ * «Проводим» (V86 § 4): менеджер отмечает, что встреча состоится составом ниже минимума. Минимум
+ * и цена отказа не меняются — только отметка. 400 с русским текстом, если состав не ниже минимума,
+ * набор ещё идёт или встреча началась; 403 без права вести встречи.
+ */
+export function proceedRoster(eventId: string): Promise<EventDetailDto> {
+  return apiClient.post<EventDetailDto>(`/api/events/${eventId}/proceed`);
 }
 
 export function markAttendance(eventId: string, attendance: { userId: string; attended: boolean }[]): Promise<{ eventId: string; markedCount: number }> {

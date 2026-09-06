@@ -80,16 +80,15 @@ class TrustPolicyTest {
     fun `broken promises hit proportionally to their price`() {
         fun trustAfter(kind: ReputationKind) = TrustPolicy.perClubTrust(listOf(out(kind, 0)), now)
 
-        // Виды позднего отказа (−50 / −150) приедут вместе с форматами встреч (V83+); до этого
-        // лестницу держат три вида, которые есть в проде: просрочка складчины, брошенное место, неявка.
-        val expired = trustAfter(ReputationKind.skladchina_expired)  // −40
-        val abandoned = trustAfter(ABANDONED)                        // −100
-        val noShow = trustAfter(NO_SHOW)                             // −200
+        val covered = trustAfter(ReputationKind.late_decline_covered)      // −50
+        val abandoned = trustAfter(ABANDONED)                             // −100
+        val uncovered = trustAfter(ReputationKind.late_decline_uncovered) // −150
+        val noShow = trustAfter(NO_SHOW)                                  // −200
 
-        assertEquals(listOf(67, 51, 36), listOf(expired, abandoned, noShow))
+        assertEquals(listOf(64, 51, 42, 36), listOf(covered, abandoned, uncovered, noShow))
         assertTrue(
-            expired > abandoned && abandoned > noShow,
-            "чем дороже промах, тем ниже надёжность: $expired > $abandoned > $noShow"
+            covered > abandoned && abandoned > uncovered && uncovered > noShow,
+            "чем дороже промах, тем ниже надёжность: $covered > $abandoned > $uncovered > $noShow"
         )
     }
 

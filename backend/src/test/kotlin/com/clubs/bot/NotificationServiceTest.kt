@@ -28,7 +28,7 @@ class NotificationServiceTest {
     private val telegramClient = mockk<TelegramClient>(relaxed = true)
     private val gateway = mockk<ChatTelegramGateway>(relaxed = true)
     private val service = NotificationService(
-        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway), "bot", "https://app"
+        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway), gateway, "bot", "https://app", 1080L
     )
 
     @Test

@@ -41,6 +41,7 @@ class MembershipServiceTest {
     private lateinit var reputationService: ReputationService
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var awardService: AwardService
+    private lateinit var rosterService: com.clubs.event.RosterService
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -56,12 +57,14 @@ class MembershipServiceTest {
         reputationService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         awardService = mockk(relaxed = true)
+        rosterService = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
             mapper,
             membershipActivator,
             eventResponseRepository,
+            rosterService,
             skladchinaRepository,
             applicationRepository,
             trustService,
@@ -440,7 +443,9 @@ class MembershipServiceTest {
         // Каскад/лок слотов затрагивает ОБА события — живой закреп открытой встречи тоже перерисуется.
         verify(exactly = 1) { eventResponseRepository.lockEventSlots(limitedEventId) }
         verify(exactly = 1) { eventResponseRepository.lockEventSlots(openEventId) }
-        verify(exactly = 1) { eventResponseRepository.promoteFirstWaitlisted(openEventId) }
+        // Освобождение места — через общий путь RosterService (промоут, отмена при нуле, порог MIN).
+        verify(exactly = 1) { rosterService.releaseSeat(openEventId) }
+        verify(exactly = 1) { rosterService.releaseSeat(limitedEventId) }
     }
 
     @Test

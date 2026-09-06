@@ -28,19 +28,14 @@ data class EventTemplates(
     var locationLon: Double? = null,
     var locationHint: String? = null,
     var participantLimit: Int? = null,
-    @Suppress("INAPPLICABLE_JVM_NAME")
-    @set:JvmName("setIsOpenEvent")
-    var isOpenEvent: Boolean? = null,
-    @Suppress("INAPPLICABLE_JVM_NAME")
-    @set:JvmName("setIsUrgentEvent")
-    var isUrgentEvent: Boolean? = null,
     var stage2LeadMinutes: Int? = null,
     var photoUrl: String? = null,
     var defaultWeekday: Short? = null,
     var defaultTime: LocalTime? = null,
     var createdBy: UUID,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var minParticipants: Int? = null
 ): Serializable {
 
 
@@ -100,18 +95,6 @@ data class EventTemplates(
         }
         else if (this.participantLimit != o.participantLimit)
             return false
-        if (this.isOpenEvent == null) {
-            if (o.isOpenEvent != null)
-                return false
-        }
-        else if (this.isOpenEvent != o.isOpenEvent)
-            return false
-        if (this.isUrgentEvent == null) {
-            if (o.isUrgentEvent != null)
-                return false
-        }
-        else if (this.isUrgentEvent != o.isUrgentEvent)
-            return false
         if (this.stage2LeadMinutes == null) {
             if (o.stage2LeadMinutes != null)
                 return false
@@ -150,6 +133,12 @@ data class EventTemplates(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.minParticipants == null) {
+            if (o.minParticipants != null)
+                return false
+        }
+        else if (this.minParticipants != o.minParticipants)
+            return false
         return true
     }
 
@@ -166,8 +155,6 @@ data class EventTemplates(
         result = prime * result + (if (this.locationLon == null) 0 else this.locationLon.hashCode())
         result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
         result = prime * result + (if (this.participantLimit == null) 0 else this.participantLimit.hashCode())
-        result = prime * result + (if (this.isOpenEvent == null) 0 else this.isOpenEvent.hashCode())
-        result = prime * result + (if (this.isUrgentEvent == null) 0 else this.isUrgentEvent.hashCode())
         result = prime * result + (if (this.stage2LeadMinutes == null) 0 else this.stage2LeadMinutes.hashCode())
         result = prime * result + (if (this.photoUrl == null) 0 else this.photoUrl.hashCode())
         result = prime * result + (if (this.defaultWeekday == null) 0 else this.defaultWeekday.hashCode())
@@ -175,6 +162,7 @@ data class EventTemplates(
         result = prime * result + this.createdBy.hashCode()
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.minParticipants == null) 0 else this.minParticipants.hashCode())
         return result
     }
 
@@ -191,8 +179,6 @@ data class EventTemplates(
         sb.append(", ").append(locationLon)
         sb.append(", ").append(locationHint)
         sb.append(", ").append(participantLimit)
-        sb.append(", ").append(isOpenEvent)
-        sb.append(", ").append(isUrgentEvent)
         sb.append(", ").append(stage2LeadMinutes)
         sb.append(", ").append(photoUrl)
         sb.append(", ").append(defaultWeekday)
@@ -200,6 +186,7 @@ data class EventTemplates(
         sb.append(", ").append(createdBy)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(minParticipants)
 
         sb.append(")")
         return sb.toString()

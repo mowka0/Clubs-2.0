@@ -114,30 +114,37 @@ class ReputationService(
     }
 
     /**
-     * Штраф за отказ от ПОДТВЕРЖДЁННОГО места на Этапе 2, когда в очереди нет замены (abandoned_slot,
-     * −100). Вызывается из Stage2Service.declineParticipation В ТОЙ ЖЕ транзакции (default REQUIRED →
-     * отказ + штраф атомарны), только при пустом waitlist — иначе слот сразу закрывает первый из
-     * очереди, ущерба нет. Идемпотентно по конструкции леджера: UNIQUE(user, source) + ON CONFLICT DO
-     * NOTHING (одна строка на пару user×event; у отказавшегося её ещё нет — явка не размечалась).
-     * occurredAt = момент отказа (якорь decay).
+     * Штраф за отказ от УЖЕ ЗАНЯТОГО места (Stage2Service.declineParticipation) в той же транзакции,
+     * что и сам отказ (default REQUIRED → отказ + штраф атомарны). Какой именно [kind] — решает
+     * [com.clubs.event.RosterPolicy]: цена зависит от того, закрыт ли состав, близко ли встреча и
+     * нашлась ли замена в очереди (V83). Бесплатный отказ сюда не доходит: политика возвращает null,
+     * и вызывающий не создаёт строку вовсе — иначе три бесплатных отказа выводили бы человека из
+     * «Новичка» через outcome_count. Идемпотентно по конструкции леджера: UNIQUE(user, source) +
+     * ON CONFLICT DO NOTHING. occurredAt = момент отказа (якорь decay).
      */
     @Transactional
-    fun penalizeAbandonedSlot(userId: UUID, clubId: UUID, eventId: UUID, occurredAt: OffsetDateTime) {
+    fun penalizeDecline(
+        kind: ReputationKind,
+        userId: UUID,
+        clubId: UUID,
+        eventId: UUID,
+        occurredAt: OffsetDateTime
+    ) {
         appendAndRecompute(
             listOf(
                 LedgerEntry(
                     userId = userId,
                     clubId = clubId,
                     axis = ReputationAxis.attendance,
-                    kind = ReputationKind.abandoned_slot,
-                    points = ReputationPolicy.pointsFor(ReputationKind.abandoned_slot),
+                    kind = kind,
+                    points = ReputationPolicy.pointsFor(kind),
                     occurredAt = occurredAt,
                     sourceType = ReputationSource.event,
                     sourceId = eventId
                 )
             )
         )
-        log.info("Abandoned-slot penalty: userId={} clubId={} eventId={}", userId, clubId, eventId)
+        log.info("Decline penalty: kind={} userId={} clubId={} eventId={}", kind, userId, clubId, eventId)
     }
 
     /**

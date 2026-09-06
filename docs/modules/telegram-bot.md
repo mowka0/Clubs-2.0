@@ -89,7 +89,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 1. `update.hasPreCheckoutQuery()` → `handlePreCheckoutQuery(query)` → return
 2. `update.hasMyChatMember()` → health привязки чата (`ChatLinkBotService.handleMyChatMember`) → return
 3. `update.hasChatJoinRequest()` → «дверь» (`ChatDoorService.onChatJoinRequest`) → return
-4. `update.hasCallbackQuery()` → inline-кнопки (сейчас только `chatlink:unlink:<uuid>` из DM-петли подтверждения) → return
+4. `update.hasCallbackQuery()` → inline-кнопки: `chatlink:unlink:<uuid>` (DM-петля подтверждения привязки), `roster:proceed:<uuid>` и `roster:remind:<uuid>` (DM набора состава, V86 — `bot/RosterCallbackService`; права проверяет сервисный метод по `query.from.id`, факт нажатия прав не даёт; битый uuid → «Некорректный запрос») → return
 5. `update.hasMessage()` == false → return
 6. `message.migrateToChatId != null` → перенос привязки на новый chat_id (`handleChatMigration`) → return
 7. `update.message.hasSuccessfulPayment()` → залоггировать stray-платёж (Stars упразднён) → return (важно: проверяется **до** `hasText()`, потому что `successful_payment` приходит как message без `text`)
@@ -126,7 +126,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
    🗓 {eventDatetime, dd.MM.yyyy HH:mm | "не указана"}
    ✅ Пойдут: {goingCount}
    🤔 Возможно: {maybeCount}
-   👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без репутации и лимита мест»
+   👥 Мест — {participantLimit}   ← строка по формату (V85): «Нужно минимум N — иначе встреча отменится» / «Мест — N» / «Без ограничений — приходят все желающие, репутация не считается»
    ```
 
 **Inline-кнопка:** отсутствует `[GAP-008]`. PRD §4.6 AC требует «Все уведомления содержат inline-кнопку перехода в Mini App».
@@ -196,26 +196,30 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — telegram_id участников **с доступом к клубу**: только `active` (канонический предикат `MembershipAccess.hasAccess`). `frozen`/`expired`/`cancelled` исключены — у них нет доступа к событию, не должны получать о нём DM. `[GAP-010 ✅]`
 **Текст** — общий шаблон встречи `EventMessageTemplate` (PO 2026-07-26), единый для DM и
 чата: формат встречи **жирным заголовком**, затем что / о чём / когда / где. Хвост у DM свой —
-`EventMessageTemplate.dmFacts`: **только неизменные факты** (места, у срочной — дедлайн
-подтверждения). Живых счётчиков голосов в DM нет (PO 2026-08-08): личное сообщение
+`EventMessageTemplate.dmFacts`: **только неизменные факты** — что означает число участников, и у
+встречи с местами срок «⏳ До {старт − интервал} передумать можно без влияния на репутацию.»
+(PO 2026-09-06: участник вне чата закрепа не видит и иначе срока не узнал бы; дефолт интервала —
+`events.stage2-trigger-minutes-before`). Живых счётчиков голосов в DM нет (PO 2026-08-08): личное сообщение
 отправляется один раз и не перерисовывается, поэтому «✅ Идут — 0» навсегда оставался нулём и
 спорил с закрепом чата, который как раз обновляется. Счётчики живут только там (§ живой закреп).
-Срочность определяется по флагу `is_urgent` (V69), не по статусу — обычное событие могло
+Формат определяется парой `participant_limit` + `min_participants` (V86), не по статусу — событие могло
 флипнуться в `stage_2` до отправки async-DM. Требует `parse_mode=HTML`; пользовательский ввод
 (название, описание, место) экранируется в `EventMessageTemplate.escapeHtml` — неэкранированный
 `<` или `&` ломает разметку всего сообщения, и Telegram молча его не доставляет.
 ```
-<b>Срочная встреча</b>       ← is_urgent; ниже дедлайн подтверждения (Этапа 1 у неё нет)
-<b>Открытая встреча</b>      ← participant_limit IS NULL
-<b>Обычная встреча</b>       ← остальные
+<b>Встреча: 4–10 человек</b>  ← минимум задан (V86)
+<b>Встреча: до 10 человек</b>  ← без минимума
+<b>Встреча: ровно N человек</b> ← минимум = максимум
+<b>Встреча: открытая</b>       ← participant_limit IS NULL
 
 {title}
 {description}                ← строки нет, если описание пустое
 когда: {eventDatetime, dd.MM.yyyy HH:mm МСК}
 где: {адрес (уточнение)}     ← строки нет, если места нет вовсе (V58)
 
-👥 Мест — {participantLimit} ← у открытой: «👥 Без лимита мест — приходят все желающие»
-⏳ Подтвердить до — {eventDatetime}  ← только у срочной (она рождается в Этапе 2)
+👥 Мест — {participantLimit} ← у открытой: «👥 Без ограничений — приходят все желающие, репутация не считается»
+⏳ До {старт − интервал} передумать можно без влияния на репутацию.  ← только у встречи с местами (PO 2026-09-06)
+⏳ Подтвердить до — {eventDatetime}  ← только в закрепе Этапа 2 у открытой
 ```
 Тот же шаблон (уже со счётчиками) использует живой закреп чата
 (`LivePinRenderer.stage1Text/stage2Text`), а также
@@ -262,6 +266,34 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ```
 **Inline-кнопка:** «Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}`.
 **Подключение:** публикуется `WaitlistPromotedEvent(eventId, promotedUserId)` в ДВУХ местах авто-повышения: `Stage2Service.declineParticipation` (отказ подтверждённого освободил слот) и `MembershipService` (выход подтверждённого из клуба; `promoteFirstWaitlisted` возвращает `UUID?` повышённого). `bot/WaitlistPromotedListener` (`@TransactionalEventListener`, AFTER_COMMIT) дозапрашивает событие по `eventId` и зовёт `@Async sendWaitlistPromoted`. AFTER_COMMIT обязателен: DM читает закоммиченное повышение. Best-effort, зеркалит `sendStage2Started`.
+
+### `sendRosterClosed` / `sendRosterWarning` / `sendRosterBroken` — набор состава (V83–V86)
+
+Спека: [`event-formats.md`](./event-formats.md) § 3–4. Все три — `@Async`, слушатель
+`bot/RosterListener` (`@TransactionalEventListener`, AFTER_COMMIT). Адресат DM ② и ③ —
+создатель встречи (`findEventCreatorTelegramId`), фолбэк владелец клуба.
+
+- **`sendRosterClosed(event, confirmedCount)`** — на `RosterClosedEvent` (правило ①, минимум
+  набран или его нет): составу «✅ Состав собран … Идут N из M. Встреча состоится — ждём вас»,
+  очереди «📋 Состав собран без вас». Кнопка «Открыть встречу» (WebApp).
+- **`sendRosterWarning(event, organizerTelegramId, confirmedCount, minParticipants, rosterDeadline)`**
+  — на `RosterWarningEvent` (правило ②, за `events.roster-warning-minutes-before-deadline` до
+  дедлайна при недоборе): «⏳ Минимум пока не набран … Набрано 2 из 4. Если к {дедлайн} не наберём —
+  встреча отменится.» Кнопка одна, callback `roster:remind:<eventId>` →
+  `VoteService.remind` (все, кто без ответа); успех — DM «🔔 Напомнили: имена» с кнопкой «📅 Открыть событие», без алерта (PO 2026-09-06);
+  алерты «Напоминать некому» /
+  «Нет прав». Отправляется через `ChatTelegramGateway.sendDmWithCallbackButton`.
+- **`sendRosterBroken(event, organizerTelegramId, confirmedCount, minParticipants)`** — на
+  `RosterBrokenEvent` (правило ③, отказ/кик/выход увёл закрытый состав ниже минимума, «Проводим»
+  не нажато): «⚠️ Состав стал неполным … Состав 3 из 4. Встреча состоится, если ничего не делать.
+  Отменить можно на странице встречи.» Кнопки: callback «Проводим втроём» (`roster:proceed:<eventId>`
+  → `RosterService.proceed`; ответы «Проводим составом N» / «Уже отмечено» / «Состав не ниже
+  минимума…» / «Встреча отменена» / «Встреча уже началась» / «Нет прав») и WebApp «Открыть
+  встречу» (`sendDmWithWebAppAndCallbackButton`, `callbackFirst = true`). Кнопки «Отменить» в чате
+  нет намеренно (решение 2026-08-31).
+- **`sendStage2Reminder(event, telegramIds, rosterDeadline?)`** — ручное напоминание менеджера,
+  текст по этапу (V86): до дедлайна «🔔 Организатор ждёт ответа … Ответьте до {дедлайн} — до этого момента
+  передумать можно без влияния на репутацию» с кнопкой «Открыть встречу», после дедлайна — прежний текст с «✅ Подтвердить участие».
 
 ### `sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
 

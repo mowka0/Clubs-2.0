@@ -42,6 +42,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: 'creator-1',
     title: 'Прошедшее событие',
     description: null,
     locationText: 'Бар',
@@ -52,14 +53,18 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'completed',
-    isUrgent: false,
+    format: 'normal',
     goingCount: 2,
     maybeCount: 0,
     notGoingCount: 1,
     confirmedCount: 1,
     noAnswerCount: 0,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
     // Событие прошло — дедлайн отказа неактуален; задаём валидную дату (окно закрыто по eventHappened).
-    confirmedDeclineDeadline: PAST, abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+    stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+    rosterDeadline: null, rosterClosed: true, waitlistedCount: 0, declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -201,6 +206,25 @@ describe('EventPage — отметка посещаемости', () => {
     // Анну не трогали — по умолчанию «пришла».
     const anna = postedBody!.attendance.find((a) => a.userId === 'u-confirmed');
     expect(anna?.attended).toBe(true);
+  });
+
+  it('после отметки явки секция озаглавлена «Кто пришёл» и содержит только пришедших (PO 2026-09-06)', async () => {
+    mockEventEndpoints({
+      ownerId: OWNER_ID,
+      event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
+    });
+    server.use(
+      http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
+        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent', disputeNote: null },
+        { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended', disputeNote: null },
+      ])),
+    );
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто пришёл/)).toBeInTheDocument();
+    expect(screen.getByText(/Дмитрий/)).toBeInTheDocument();
+    expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Анна/)).not.toBeInTheDocument();
   });
 
   it('после отметки организатор видит read-only статус без чеклиста', async () => {

@@ -189,8 +189,7 @@ class ClubRankIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                                participant_limit, status, attendance_marked, attendance_finalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
             VALUES ('$id', '$club', '$owner', 'E', 'P', '$datetime', 20, 'completed'::event_status, $marked, $finalized)
             """.trimIndent(),
         )

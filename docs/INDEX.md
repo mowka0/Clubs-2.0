@@ -37,7 +37,7 @@
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
 | `common/security` (`SecurityConfig`, `RateLimitFilter`) | `auth.md`, `infrastructure.md` |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
-| `event` | `events.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
+| `event` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
 | `feedback` | `feedback.md` |
 | `geo` (`SuggestService`, `CityCenterRepository` → подсказки; `GeocoderService` → гео события) | `venue-search.md`, `event-geo.md` |
@@ -61,8 +61,8 @@
 | `ClubPage.tsx` | `club-page-unified.md`, `clubs.md` |
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
-| `EventPage.tsx` | `events.md`, `event-vote-block.md`, `event-stage2-composition.md` |
-| `CreateEventPage.tsx` | `events.md`, `event-templates.md`, `event-geo.md`, `venue-search.md` |
+| `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
+| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md` |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
@@ -118,10 +118,11 @@
 ### Встречи и активности
 | Файл | О чём | Правлен |
 |---|---|---|
-| `events.md` | встречи, двухэтапное подтверждение | 2026-08-16 |
+| `events.md` | встречи, двухэтапное подтверждение | 2026-08-21 |
+| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат; с 2026-09-05 режим «набор закроется сразу» убран — дата обязана быть дальше интервала. Отвергнутые модели V83/V85 — § 12 спеки, их тексты только в git-истории ветки | 2026-09-05 |
 | `events-feed.md` | вкладка «Активности», история | 2026-08-16 |
-| `event-vote-block.md` | блок «Набор» на странице события | 2026-08-16 |
-| `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-16 |
+| `event-vote-block.md` | блок «Набор» на странице события | 2026-08-21 |
+| `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-21 |
 | `event-templates.md` | шаблоны встреч | 2026-08-12 |
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
@@ -191,9 +192,14 @@
 Подпапки `docs/design/<фича>/mockups/` — HTML-мокапы и картинки дизайн-сессий.
 Артефакты обсуждения, **в сверке не участвуют**.
 
-Активная дизайн-сессия: `docs/design/event-roster-threshold/` — порог набора для формата
-«🎟 Встреча с местами» (решения PO 2026-08-21 + мокап экранов). Хэндофф для разработки —
-`docs/backlog/event-roster-threshold-handoff.md`.
+**Состояние работ по форматам встреч — `docs/backlog/event-formats-v2-session-handoff.md`**
+(ветка, что пройдено в прогоне, открытые решения, факты окружения). Читать первым.
+**План прогона v2 (V86) на staging — `docs/backlog/event-formats-v2-staging-testplan.md`** (env staging — план § 0).
+Промежуточные документы V83/V85 (старые хэндоффы, тест-кейсы, спека V85) удалены из ветки 2026-09-05 по решению PO — при необходимости git-история до `cade9de`.
+
+Дизайн-сессия `docs/design/event-roster-threshold/` — набор состава и цена отказа (решения PO
+2026-08-21, упрощение недобора 2026-08-31 + мокапы). **Реализована** и поглощена перестройкой
+форматов; спека — `docs/modules/event-formats.md`.
 
 ---
 

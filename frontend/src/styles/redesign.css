@@ -1630,6 +1630,45 @@
 }
 .rd-remind-all:disabled { color: var(--text-faint); cursor: default; }
 
+/* ── Полоса статуса набора (V83) ───────────────────────────────────────────────────────
+   Одна строка-ответ на «что сейчас и что дальше»: сколько ещё нужно людей и когда закроется
+   набор, а после закрытия — цена отказа. Стоит между заголовком блока и кольцом, поэтому
+   намеренно низкоконтрастная: главное число — по-прежнему в кольце. */
+.rd-roster-note {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; margin-bottom: 12px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--hairline-2);
+}
+.rd-roster-note.rd-ok { background: var(--live-soft); border-color: transparent; }
+.rd-roster-ico { font-size: 15px; line-height: 1.2; flex-shrink: 0; }
+.rd-roster-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rd-roster-txt b { font-size: 13px; font-weight: 650; color: var(--text); }
+.rd-roster-txt span { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+/* Засечка минимума на кольце занятости (V86): риска на дуге там, где проходит порог «соберёмся». */
+.rd-roster-notch { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; opacity: 0.75; }
+/* Строка «Минимум участников» с переключателем — в форме создания и в шторке правки.
+   Подпись — тот же .rd-label, что у соседних полей, но в ряд с тумблером, а не над ним. */
+.rd-roster-min-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rd-roster-min-row .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-roster-min-row .rd-cl-tgl { margin-top: 0; }
+/* В табе очереди номер стоит внутри общей строки ростера, а не в своей .rd-wl-row. */
+.rd-resp-row .rd-wl-pos { margin-right: 8px; }
+/* Черта внутри вкладки «Идут» на наборе: выше — кто проходит, ниже — очередь на замену.
+   Отдельной панели для очереди на этой фазе нет, поэтому граница живёт в самом списке. */
+.rd-resp-split {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 8px 2px; padding-top: 8px;
+  border-top: 1px dashed var(--hairline-2);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.rd-resp-split span { letter-spacing: 0; font-weight: 600; }
+/* Строки очереди приглушены — место у них ещё не своё. */
+.rd-resp-row.rd-queued .rd-vn { color: var(--text-dim); }
+/* Точка «вы здесь» на своём табе: маркер вместо отдельной строки статуса. */
+.rd-seg-you { margin-left: 5px; color: var(--accent); font-size: 15px; line-height: 1; }
+.rd-seg-btn.rd-active .rd-seg-you { color: inherit; }
+
 /* Лист ожидания — вертикальный нумерованный список в порядке приоритета продвижения. */
 .rd-wl-panel { padding: 4px; margin-bottom: 18px; }
 .rd-wl-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; }
@@ -3031,14 +3070,18 @@
 @keyframes rd-s2-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .rd-s2-track {
   position: relative; height: 4px; border-radius: 2px;
-  background: var(--hairline-2); margin: 18px 10px 0;
+  background: var(--hairline-2); margin: 18px 7px 0;
 }
 .rd-s2-fill {
   position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
   background: var(--accent-grad); box-shadow: 0 0 10px var(--accent-glow);
   transition: width .25s ease;
 }
-.rd-s2-ticks { display: flex; justify-content: space-between; margin: 0 -2px; }
+.rd-s2-ticks { display: flex; justify-content: space-between; }
+/* Крайние насечки прижаты к краям блока, чтобы «6 ч» начинался там же, где текст подсказки, а
+   дорожка шла от центра первой кнопки до центра последней (PO 2026-09-06). */
+.rd-s2-tick:first-child { align-items: flex-start; padding-left: 0; }
+.rd-s2-tick:last-child { align-items: flex-end; padding-right: 0; }
 .rd-s2-tick {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   min-width: 52px; padding: 0 2px 2px; border: none; background: none; cursor: pointer;
@@ -3432,3 +3475,7 @@
 .rd-wz-pv-ava img { width: 100%; height: 100%; object-fit: cover; }
 .rd-wz-pv-name { text-align: center; font-size: 16px; font-weight: 700; padding: 9px 0 3px; }
 .rd-wz-pv-meta { text-align: center; font-size: 11.5px; color: var(--text-faint); }
+
+/* Строки отметки явки: у `.rd-pick-row` есть поздняя версия для пикера активностей с padding
+   12px 16px — на странице встречи она раздувала зазор между участниками (PO 2026-09-06). */
+.rd-att-row { padding: 0; gap: 8px; }

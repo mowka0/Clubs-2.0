@@ -1,5 +1,6 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
 import com.clubs.generated.jooq.tables.records.EventTemplatesRecord
 import org.springframework.stereotype.Component
 
@@ -17,8 +18,9 @@ class EventTemplateMapper {
         locationLon = record.locationLon,
         locationHint = record.locationHint,
         participantLimit = record.participantLimit,
-        isOpenEvent = record.isOpenEvent!!,
-        isUrgentEvent = record.isUrgentEvent!!,
+        minParticipants = record.minParticipants,
+        // Формат определяет только наличие мест — как у события.
+        format = if (record.participantLimit == null) EventFormat.OPEN else EventFormat.NORMAL,
         stage2LeadMinutes = record.stage2LeadMinutes,
         photoUrl = record.photoUrl,
         defaultWeekday = record.defaultWeekday,
@@ -42,8 +44,8 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            minParticipants = minParticipants,
+            format = format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,
@@ -61,8 +63,8 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            minParticipants = effectiveMinParticipants,
+            format = format.format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,
@@ -83,8 +85,8 @@ class EventTemplateMapper {
             locationLon = locationLon,
             locationHint = locationHint,
             participantLimit = participantLimit,
-            isOpenEvent = isOpenEvent,
-            isUrgentEvent = isUrgentEvent,
+            minParticipants = minParticipants,
+            format = format,
             stage2LeadMinutes = stage2LeadMinutes,
             photoUrl = photoUrl,
             defaultWeekday = defaultWeekday,

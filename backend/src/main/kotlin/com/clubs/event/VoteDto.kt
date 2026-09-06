@@ -16,7 +16,15 @@ data class VoteResponseDto(
 )
 
 data class MyVoteDto(
-    val vote: String?
+    val vote: String?,
+    /**
+     * Место участника в составе встречи с порогом набора (V83): `confirmed` — в составе,
+     * `waitlisted` — в очереди, null — вне набора или формат без порога. Отдаётся ОТДЕЛЬНО от
+     * [vote], потому что на наборе это разные вещи: голос «Иду» подсвечивает кнопку и держит
+     * человека во вкладке «Идут», а место отвечает на вопрос «я вообще прохожу?» — при полном
+     * составе тот же голос «Иду» кладёт в очередь, и не сказать об этом нельзя.
+     */
+    val seat: String? = null
 )
 
 /**
@@ -34,6 +42,13 @@ data class EventResponderDto(
     val lastName: String?,
     val avatarUrl: String?,
     val status: String,
+    /**
+     * Место участника в составе, пока идёт НАБОР (V83): `confirmed` — держит место, `waitlisted` —
+     * в очереди, null — вне набора или формат без порога. На наборе [status] несёт ГОЛОС (иначе
+     * человек выпал бы из вкладки «Идут»), а место — вот здесь: список внутри вкладки делится на
+     * тех, кто проходит, и тех, кто за чертой. После закрытия состава место несёт сам [status].
+     */
+    val seat: String? = null,
     val attendance: String?,
     // Опциональная свободная заметка, которую оставил участник при оспаривании (показывается организатору).
     val disputeNote: String?,
@@ -46,9 +61,17 @@ data class EventResponderDto(
     val remindedAt: OffsetDateTime? = null
 )
 
-/** Итог нажатия «Напомнить» / «Напомнить всем»: сколько напоминаний реально ушло. */
+/** Итог нажатия «Напомнить» / «Напомнить всем»: сколько напоминаний реально ушло и кому. */
 data class RemindResultDto(
-    val remindedCount: Int
+    val remindedCount: Int,
+    val reminded: List<RemindedPersonDto> = emptyList()
+)
+
+/** Кому ушло напоминание — для тоста «Напомнили: …» и DM-отчёта организатору (PO 2026-09-06). */
+data class RemindedPersonDto(
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?
 )
 
 /** Тело запроса напоминания: конкретный участник либо `null` — «все, кому ещё можно». */

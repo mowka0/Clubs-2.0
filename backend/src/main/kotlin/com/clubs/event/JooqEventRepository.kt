@@ -24,7 +24,12 @@ class JooqEventRepository(
     private val mapper: EventMapper
 ) : EventRepository {
 
-    override fun create(request: CreateEventRequest, clubId: UUID, createdBy: UUID): Event {
+    override fun create(
+        request: CreateEventRequest,
+        clubId: UUID,
+        createdBy: UUID,
+        rosterWarningSentAt: OffsetDateTime?
+    ): Event {
         val record = dsl.insertInto(EVENTS)
             .set(EVENTS.ID, UUID.randomUUID())
             .set(EVENTS.CLUB_ID, clubId)
@@ -37,9 +42,11 @@ class JooqEventRepository(
             .set(EVENTS.LOCATION_HINT, request.locationHint)
             .set(EVENTS.EVENT_DATETIME, request.eventDatetime)
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
+            // Легаси-литерал `min` подставляет минимум равным лимиту — см. EventFormatInput.
+            .set(EVENTS.MIN_PARTICIPANTS, request.effectiveMinParticipants)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
             .set(EVENTS.STAGE2_LEAD_MINUTES, request.stage2LeadMinutes)
-            .set(EVENTS.IS_URGENT, request.isUrgentEvent)
+            .set(EVENTS.ROSTER_WARNING_SENT_AT, rosterWarningSentAt)
             .set(EVENTS.STATUS, EventStatus.upcoming)
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
@@ -116,9 +123,12 @@ class JooqEventRepository(
             )
         // Подтверждение Stage-2 ещё не отдано. Этап 2 открыт всем участникам (PR #92), поэтому
         // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
-        // голос Этапа 1 (включая «Не пойду») не финален, у срочной встречи (V69) его нет вовсе.
+        // голос Этапа 1 (включая «Не пойду») не финален. Встречи с лимитом (V85) исключены: у них
+        // состав закрывается сам, подтверждать нечего. Дискриминатор тот же, что у
+        // Event.isRosterEvent — наличие лимита.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+            .and(EVENTS.PARTICIPANT_LIMIT.isNull)
 
         return dsl.select(EVENTS.ID)
             .from(EVENTS)
@@ -198,8 +208,10 @@ class JooqEventRepository(
             .`when`(
                 // То же правило, что в findActionRequiredEventIds (PO 2026-07-23): Этап 2 открыт
                 // всем — подтверждение ждём от каждого участника без решения на самом Этапе 2.
+                // Встречи с лимитом (V85) исключены — подтверждений у них нет.
                 EVENTS.STATUS.eq(EventStatus.stage_2)
-                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull),
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+                    .and(EVENTS.PARTICIPANT_LIMIT.isNull),
                 1
             )
             .otherwise(0)
@@ -217,8 +229,8 @@ class JooqEventRepository(
             EVENTS.LOCATION_TEXT,
             EVENTS.EVENT_DATETIME,
             EVENTS.PARTICIPANT_LIMIT,
+            EVENTS.MIN_PARTICIPANTS,
             EVENTS.VOTING_OPENS_DAYS_BEFORE,
-            EVENTS.IS_URGENT,
             EVENTS.STATUS,
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
@@ -269,8 +281,8 @@ class JooqEventRepository(
                 locationText = r.get(EVENTS.LOCATION_TEXT),
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT),
+                minParticipants = r.get(EVENTS.MIN_PARTICIPANTS),
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
-                isUrgent = r.get(EVENTS.IS_URGENT) ?: false,
                 status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
@@ -305,8 +317,10 @@ class JooqEventRepository(
         val confirmed = dsl.selectCount().from(EVENT_RESPONSES)
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed)))
             .fetchOne(0, Int::class.java) ?: 0
-        // «Без ответа» на Этапе 2: участники клуба с доступом, кроме сказавших «не пойду» и кроме
-        // уже ответивших. Считается от мембершипов — промолчавшего в event_responses нет.
+        // «Без ответа»: участники клуба с доступом, кроме сказавших «не пойду», кроме уже взявших
+        // место и кроме создателя встречи. Считается от мембершипов — промолчавшего в
+        // event_responses нет. Тот же предикат, что у списка /pending (V86: плитка и список
+        // обязаны совпадать — раньше плитка считала N, а список показывал N−1 без создателя).
         val noAnswer = dsl.selectCount()
             .from(EVENTS)
             .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MembershipAccess.hasAccess()))
@@ -315,13 +329,18 @@ class JooqEventRepository(
             )
             .where(
                 EVENTS.ID.eq(eventId)
+                    .and(MEMBERSHIPS.USER_ID.ne(EVENTS.CREATED_BY))
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
             )
             .fetchOne(0, Int::class.java) ?: 0
+        // Очередь: нужна и плитке «В очереди», и цене отказа (замена есть → отказ дешевле, V83).
+        val waitlisted = dsl.selectCount().from(EVENT_RESPONSES)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted)))
+            .fetchOne(0, Int::class.java) ?: 0
         return mapOf(
             "going" to going, "maybe" to maybe, "notGoing" to notGoing,
-            "confirmed" to confirmed, "noAnswer" to noAnswer
+            "confirmed" to confirmed, "noAnswer" to noAnswer, "waitlisted" to waitlisted
         )
     }
 
@@ -344,6 +363,55 @@ class JooqEventRepository(
             )
             .fetch()
             .map(mapper::toDomain)
+
+    override fun findEventsForRosterWarning(
+        now: OffsetDateTime,
+        defaultLeadMinutes: Long,
+        warningMinutes: Long
+    ): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.eq(EventStatus.upcoming)
+                    .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
+                    .and(EVENTS.MIN_PARTICIPANTS.isNotNull)
+                    .and(EVENTS.ROSTER_WARNING_SENT_AT.isNull)
+                    // Момент ② = дедлайн − окно предупреждения уже наступил …
+                    .and(
+                        DSL.condition(
+                            "{0} - (COALESCE({1}, {2}) * INTERVAL '1 minute') - ({3} * INTERVAL '1 minute') <= {4}",
+                            EVENTS.EVENT_DATETIME,
+                            EVENTS.STAGE2_LEAD_MINUTES,
+                            DSL.value(defaultLeadMinutes),
+                            DSL.value(warningMinutes),
+                            DSL.value(now)
+                        )
+                    )
+                    // … а сам дедлайн ещё впереди: после него встречу решает правило ①, не ②.
+                    .and(
+                        DSL.condition(
+                            "{0} - (COALESCE({1}, {2}) * INTERVAL '1 minute') > {3}",
+                            EVENTS.EVENT_DATETIME,
+                            EVENTS.STAGE2_LEAD_MINUTES,
+                            DSL.value(defaultLeadMinutes),
+                            DSL.value(now)
+                        )
+                    )
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markRosterWarningSent(id: UUID, at: OffsetDateTime): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.ROSTER_WARNING_SENT_AT, at)
+            .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_WARNING_SENT_AT.isNull))
+            .execute()
+
+    override fun markRosterDecided(id: UUID): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.ROSTER_DECIDED_AT, OffsetDateTime.now())
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_DECIDED_AT.isNull))
+            .execute()
 
     /**
      * Возвращает ближайшее предстоящее событие среди всех клубов.
@@ -441,8 +509,10 @@ class JooqEventRepository(
             .set(EVENTS.LOCATION_HINT, edit.locationHint)
             .set(EVENTS.EVENT_DATETIME, edit.eventDatetime)
             .set(EVENTS.PARTICIPANT_LIMIT, edit.participantLimit)
+            .set(EVENTS.MIN_PARTICIPANTS, edit.minParticipants)
             .set(EVENTS.STAGE2_LEAD_MINUTES, edit.stage2LeadMinutes)
             .set(EVENTS.PHOTO_URL, edit.photoUrl)
+            .set(EVENTS.ROSTER_WARNING_SENT_AT, edit.rosterWarningSentAt)
             .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
             .where(
                 EVENTS.ID.eq(eventId)
@@ -510,6 +580,13 @@ class JooqEventRepository(
             .from(EVENTS)
             .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
             .join(USERS).on(USERS.ID.eq(CLUBS.OWNER_ID))
+            .where(EVENTS.ID.eq(eventId))
+            .fetchOne(USERS.TELEGRAM_ID)
+
+    override fun findEventCreatorTelegramId(eventId: UUID): Long? =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENTS)
+            .join(USERS).on(USERS.ID.eq(EVENTS.CREATED_BY))
             .where(EVENTS.ID.eq(eventId))
             .fetchOne(USERS.TELEGRAM_ID)
 

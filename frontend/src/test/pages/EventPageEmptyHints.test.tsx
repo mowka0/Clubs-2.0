@@ -39,6 +39,7 @@ function buildEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',
@@ -49,13 +50,17 @@ function buildEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
-    isUrgent: false,
+    format: 'normal',
     goingCount: 0,
     maybeCount: 0,
     notGoingCount: 0,
     confirmedCount: 0,
     noAnswerCount: 0,
-    confirmedDeclineDeadline: PAST, abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
+    stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
+    rosterDeadline: null, rosterClosed: false, waitlistedCount: 0, declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -127,11 +132,14 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     expect(screen.queryByText(/Поделись событием в чате клуба/)).not.toBeInTheDocument();
   });
 
-  it('организатор: то же событие → вариант про чат клуба', async () => {
+  it('организатор: строки-намёка нет вовсе', async () => {
+    // Совет «поделись в чате клуба» убран (PO 2026-09-01): при привязанном чате событие туда уже
+    // опубликовано живым закрепом, а без чата совет применить некуда.
     mockEndpoints({ event: buildEvent(), responders: [], ownerId: VIEWER_ID });
     renderEventPage();
 
-    expect(await screen.findByText(/Голосов пока нет\. Поделись событием в чате клуба/)).toBeInTheDocument();
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.queryByText(/Поделись событием в чате клуба/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });
 
@@ -148,13 +156,14 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
 
   it('Этап 2 (stage_2): строки-намёка нет (гейт showVoting)', async () => {
     mockEndpoints({
-      event: buildEvent({ status: 'stage_2', eventDatetime: FUTURE }),
+      // Состав закрыт (V83): у встречи с порогом набора это и есть смысл статуса stage_2.
+      event: buildEvent({ status: 'stage_2', eventDatetime: FUTURE, rosterClosed: true }),
       responders: [],
       ownerId: 'someone-else',
     });
     renderEventPage();
 
-    expect(await screen.findByText(/Состав ·/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места ·/)).toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Голосов пока нет/)).not.toBeInTheDocument();
   });
@@ -165,7 +174,7 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     renderEventPage();
 
     // Страница загрузилась (блок набора виден), но строки-намёка нет — responders не isSuccess.
-    expect(await screen.findByText(/Набор ·/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места ·/)).toBeInTheDocument();
     expect(screen.queryByText(/Голосов пока нет/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });

@@ -1,5 +1,6 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormatInput
 import com.clubs.auth.JwtService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.jooq.DSLContext
@@ -134,8 +135,8 @@ class EventTemplateIntegrationTest {
         name: String = "Разговорный клуб",
         title: String = "Разговорный клуб",
         participantLimit: Int? = 12,
-        isOpenEvent: Boolean = false,
-        isUrgentEvent: Boolean = false,
+        minParticipants: Int? = null,
+        format: EventFormatInput = EventFormatInput.NORMAL,
         stage2LeadMinutes: Int? = null,
         defaultWeekday: Short? = 2,
         defaultTime: LocalTime? = LocalTime.of(19, 0)
@@ -148,8 +149,8 @@ class EventTemplateIntegrationTest {
         locationLon = 37.646488,
         locationHint = "Вход со двора",
         participantLimit = participantLimit,
-        isOpenEvent = isOpenEvent,
-        isUrgentEvent = isUrgentEvent,
+        minParticipants = minParticipants,
+        format = format,
         stage2LeadMinutes = stage2LeadMinutes,
         defaultWeekday = defaultWeekday,
         defaultTime = defaultTime
@@ -433,14 +434,14 @@ class EventTemplateIntegrationTest {
     }
 
     @Test
-    fun `AC-7 шаблон открытой встречи хранится без лимита и без интервала Этапа 2`() {
+    fun `AC-7 шаблон открытой встречи хранится без лимита и без интервала набора`() {
         createdId(
-            body(name = "Открытая пробежка", title = "Пробежка", participantLimit = null, isOpenEvent = true)
+            body(name = "Открытая пробежка", title = "Пробежка", participantLimit = null, format = EventFormatInput.OPEN)
         )
 
         mockMvc.perform(get("/api/clubs/$clubId/event-templates").header("Authorization", "Bearer $ownerToken"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$[0].isOpenEvent").value(true))
+            .andExpect(jsonPath("$[0].format").value("open"))
             .andExpect(jsonPath("$[0].participantLimit").doesNotExist())
             .andExpect(jsonPath("$[0].stage2LeadMinutes").doesNotExist())
     }

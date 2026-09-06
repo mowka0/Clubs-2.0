@@ -39,7 +39,7 @@ class LivePinRendererTest {
     fun `stage1 — голоса, места, время в МСК`() {
         val text = renderer.stage1Text(event, going = 9, maybe = 3)
         // Общий шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где.
-        assertTrue(text.contains("<b>Обычная встреча</b>"))
+        assertTrue(text.contains("<b>Встреча: до 15 человек</b>"))
         assertTrue(text.contains("Поход в баню"))
         assertTrue(text.contains("когда: 12.07.2026 19:00 МСК"))
         // Призыв к действию стоит прямо над счётчиками (PO 2026-08-10)
@@ -75,24 +75,24 @@ class LivePinRendererTest {
     @Test
     fun `stage2 — подтверждённые, очередь и дедлайн = старт события`() {
         val text = renderer.stage2Text(event, confirmed = 12, waitlisted = 2)
-        assertTrue(text.contains("<b>Обычная встреча</b>"))
+        assertTrue(text.contains("<b>Встреча: до 15 человек</b>"))
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("📋 В очереди — 2"))
         assertTrue(text.contains("⏳ Подтвердить до — 12.07.2026 19:00 МСК"))
     }
 
-    // Открытая встреча (V62): лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
+    // Открытая: лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
     @Test
     fun `открытая встреча — без лимита мест, счёт без знаменателя и без строки очереди`() {
         val open = event.copy(participantLimit = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.contains("<b>Открытая встреча</b>"))
-        assertTrue(stage1.contains("👥 Без лимита мест — приходят все желающие"))
+        assertTrue(stage1.contains("<b>Встреча: открытая</b>"))
+        assertTrue(stage1.contains("👥 Без ограничений — приходят все желающие, репутация не считается"))
         assertFalse(stage1.contains("Мест —"))
 
         val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)
-        assertTrue(stage2.contains("<b>Открытая встреча</b>"))
+        assertTrue(stage2.contains("<b>Встреча: открытая</b>"))
         assertTrue(stage2.contains("✅ Подтвердили — 12\n"))
         assertFalse(stage2.contains("Подтвердили — 12 из"))
         assertFalse(stage2.contains("В очереди"))
@@ -103,8 +103,14 @@ class LivePinRendererTest {
 
     @Test
     fun `кнопка зависит от этапа`() {
+        // У форматов с лимитом (V85) подтверждать нечего — после закрытия состава кнопка просто
+        // открывает встречу. Подтверждение осталось у формата «сколько придёт».
         assertEquals("Проголосовать", renderer.buttonText(event))
-        assertEquals("Подтвердить участие", renderer.buttonText(event.copy(stage2Triggered = true)))
+        assertEquals("Открыть встречу", renderer.buttonText(event.copy(stage2Triggered = true)))
+        assertEquals(
+            "Подтвердить участие",
+            renderer.buttonText(event.copy(stage2Triggered = true, participantLimit = null))
+        )
     }
 
     @Test
@@ -146,7 +152,7 @@ class LivePinRendererTest {
     @Test
     fun `отмена — причина опциональна`() {
         val withReason = renderer.cancelledText(event, "все заболели")
-        assertTrue(withReason.contains("<b>Обычная встреча отменена</b>"))
+        assertTrue(withReason.contains("<b>Встреча: до 15 человек отменена</b>"))
         assertTrue(withReason.contains("причина: все заболели"))
         assertFalse(renderer.cancelledText(event, null).contains("причина"))
     }
@@ -156,7 +162,7 @@ class LivePinRendererTest {
         val moved = event.copy(locationText = "парк имени Революции 1905 года")
         val text = renderer.editedText(EventEditedEvent(event = moved, oldEvent = event))
 
-        assertTrue(text.contains("<b>Обычная встреча меняет место</b>"))
+        assertTrue(text.contains("<b>Встреча: до 15 человек меняет место</b>"))
         // Именно \n\n: адреса длинные, переносятся на две-три строки и без отступа читаются
         // как один абзац — разница «было/стало» теряется (правка PO 2026-08-10).
         assertTrue(text.contains("где было: Сандуны\n\nгде стало: парк имени Революции 1905 года"))
@@ -167,8 +173,52 @@ class LivePinRendererTest {
     @Test
     fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.contains("<b>Обычная встреча началась</b>"))
+        assertTrue(text.contains("<b>Встреча: до 15 человек началась</b>"))
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
+    }
+
+    // Набор с минимумом (V86): заголовок «4–15», недостача от минимума, свободные места от потолка.
+    @Test
+    fun `набор с минимумом — нужно ещё, минимум набран, мест нет`() {
+        val withMin = event.copy(minParticipants = 4)
+        val deadline = OffsetDateTime.of(2026, 7, 11, 22, 0, 0, 0, ZoneOffset.UTC)
+
+        val short = renderer.rosterText(withMin, confirmed = 3, deadline = deadline)
+        assertTrue(short.contains("<b>Встреча: 4–15 человек</b>"))
+        assertTrue(short.contains("👥 Максимум мест — 15, минимум 4. Нужно ещё 1 — иначе встреча отменится."))
+        assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
+
+        val reached = renderer.rosterText(withMin, confirmed = 5, deadline = deadline)
+        assertTrue(reached.contains("👥 Максимум мест — 15, минимум 4. Минимум набран, свободно 10."))
+        assertTrue(reached.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
+        assertTrue(!reached.contains("встреча отменится"))
+
+        val full = renderer.rosterText(withMin, confirmed = 15, deadline = deadline)
+        assertTrue(full.contains("👥 Мест нет: 15 из 15. Дальше — очередь на замену."))
+
+        val noMin = renderer.rosterText(event, confirmed = 3, deadline = deadline)
+        assertTrue(noMin.contains("👥 Заняты 3 из 15 мест — свободно 12."))
+        assertTrue(noMin.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
+        assertTrue(!noMin.contains("встреча отменится"))
+    }
+
+    // AC-15: ниже минимума без «Проводим» — не «✅ Состав собран», а честная строка про решение.
+    @Test
+    fun `закрытый состав — ниже минимума честно, после «Проводим» подтверждение организатора`() {
+        val withMin = event.copy(minParticipants = 4, stage2Triggered = true, status = EventStatus.stage_2)
+
+        val below = renderer.rosterClosedText(withMin, confirmed = 3, waitlisted = 0)
+        assertTrue(below.contains("⚠️ Состав 3 из 4 — встреча состоится, если организатор не решит иначе."))
+        assertFalse(below.contains("Состав собран"))
+
+        val decided = renderer.rosterClosedText(withMin.copy(rosterDecidedAt = OffsetDateTime.now()), confirmed = 3, waitlisted = 1)
+        assertTrue(decided.contains("👥 Состав 3 из 15."))
+        assertTrue(decided.contains("Организатор подтвердил: встреча состоится составом 3."))
+        assertTrue(decided.contains("📋 В очереди — 1"))
+
+        val ok = renderer.rosterClosedText(withMin, confirmed = 4, waitlisted = 0)
+        assertTrue(ok.contains("✅ Состав собран: 4 из 15."))
+        assertTrue(renderer.rosterClosedText(event, confirmed = 2, waitlisted = 0).contains("✅ Состав собран: 2 из 15."))
     }
 }

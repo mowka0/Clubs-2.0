@@ -32,7 +32,8 @@ class ClubsBotTest {
             eventRepository = eventRepository,
             eventResponseRepository = eventResponseRepository,
             chatLinkBotService = mockk(relaxed = true),
-            chatDoorService = mockk(relaxed = true)
+            chatDoorService = mockk(relaxed = true),
+            rosterCallbackService = mockk(relaxed = true)
         )
     }
 

@@ -42,8 +42,8 @@ const TEMPLATE: EventTemplateDto = {
   locationLon: 37.64,
   locationHint: 'Вход со двора',
   participantLimit: 12,
-  isOpenEvent: false,
-  isUrgentEvent: false,
+  minParticipants: null,
+  format: 'normal',
   stage2LeadMinutes: 2160,
   photoUrl: null,
   defaultWeekday: 2,
@@ -113,11 +113,11 @@ describe('EditEventTemplatePage', () => {
     // Описание, место и интервал Этапа 2 — тоже на месте.
     expect(screen.getByDisplayValue('Говорим по-английски')).toBeInTheDocument();
     expect(screen.getByText('ул. Покровка, 47')).toBeInTheDocument();
-    expect(screen.getByText('Подтверждение мест')).toBeInTheDocument();
+    expect(screen.getByText('Передумать бесплатно')).toBeInTheDocument();
     // Интервал шаблона (2160 минут) показан словами и собирается из двух текстовых узлов,
     // поэтому матчим по textContent элемента.
     expect(
-      screen.getByText((_, el) => el?.tagName === 'B' && el.textContent === 'за 36 часов'),
+      screen.getByText((_, el) => el?.tagName === 'B' && el.textContent === 'можно за 36 часов до встречи'),
     ).toBeInTheDocument();
   });
 
@@ -163,6 +163,7 @@ describe('EditEventTemplatePage', () => {
     // PUT — полная замена: содержимое уезжает целиком, а не одним изменённым полем.
     expect(body.locationHint).toBe('Вход со двора');
     expect(body.participantLimit).toBe(12);
+    expect(body.minParticipants).toBeNull();
     expect(body.stage2LeadMinutes).toBe(2160);
     expect(body.defaultWeekday).toBe(4);
     expect(body.defaultTime).toBe('19:00:00');
@@ -201,6 +202,23 @@ describe('EditEventTemplatePage', () => {
     await screen.findByDisplayValue('Разговорный клуб');
     expect(screen.queryByText('Сделать срочной')).toBeNull();
     expect(screen.getByText(/Формат встречи/)).toBeInTheDocument();
+  });
+
+  it('AC-14 минимум шаблона показывается включённым и уезжает в PUT; правило даты в правке молчит', async () => {
+    mockTemplates([{ ...TEMPLATE, minParticipants: 4 }]);
+    const { user } = renderPage();
+
+    await screen.findByDisplayValue('Разговорный клуб');
+    const minSwitch = screen.getByRole('switch', { name: 'Минимум участников' });
+    expect(minSwitch).toHaveAttribute('aria-checked', 'true');
+    // У шаблона даты нет — минимум доступен всегда.
+    expect(minSwitch).not.toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Значение минимума' })).toHaveValue('4');
+
+    await user.click(screen.getByText('Сохранить шаблон'));
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect((puts[0] as Record<string, unknown>).minParticipants).toBe(4);
   });
 
   it('удалённый шаблон не открывает пустую форму', async () => {

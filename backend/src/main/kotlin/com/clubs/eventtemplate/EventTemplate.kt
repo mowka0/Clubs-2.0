@@ -1,5 +1,6 @@
 package com.clubs.eventtemplate
 
+import com.clubs.event.EventFormat
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -27,10 +28,12 @@ data class EventTemplate(
     val locationLat: Double?,
     val locationLon: Double?,
     val locationHint: String?,
-    // null = шаблон открытой встречи (согласовано с isOpenEvent).
+    // Потолок мест; null = шаблон открытой встречи.
     val participantLimit: Int?,
-    val isOpenEvent: Boolean,
-    val isUrgentEvent: Boolean,
+    // Минимум участников (V86); шаблон ЗАПОМИНАЕТ включённый минимум и подставляет его в форму —
+    // так клуб, который живёт с кворумами, получает его по умолчанию. null = выключен.
+    val minParticipants: Int?,
+    val format: EventFormat,
     // Свой интервал Этапа 2 в минутах; null = глобальный дефолт бэкенда.
     val stage2LeadMinutes: Int?,
     val photoUrl: String?,
@@ -67,8 +70,8 @@ data class EventTemplateContent(
     val locationLon: Double?,
     val locationHint: String?,
     val participantLimit: Int?,
-    val isOpenEvent: Boolean,
-    val isUrgentEvent: Boolean,
+    val minParticipants: Int?,
+    val format: EventFormat,
     val stage2LeadMinutes: Int?,
     val photoUrl: String?,
     val defaultWeekday: Short?,

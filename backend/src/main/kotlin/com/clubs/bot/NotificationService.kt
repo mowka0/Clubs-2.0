@@ -1,11 +1,13 @@
 package com.clubs.bot
 
-import com.clubs.common.util.EventFormatTexts
 import com.clubs.common.util.absolutePhotoUrl
 import com.clubs.event.Event
+import com.clubs.event.RosterSchedule
+import com.clubs.event.EventFormat
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventResponseRepository
+import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.locationDisplay
 import com.clubs.event.locationDisplayOrDash
@@ -35,8 +37,13 @@ class NotificationService(
     private val eventResponseRepository: EventResponseRepository,
     private val telegramClient: TelegramClient,
     private val chatAwareBroadcast: ChatAwareBroadcast,
+    // DM с callback-кнопками набора (V86): единственные не-WebApp кнопки в личке живут в gateway.
+    private val chatTelegramGateway: ChatTelegramGateway,
     @Value("\${telegram.bot-username}") private val botUsername: String,
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    // Глобальный срок «передумать без влияния на репутацию» — для DM о создании, когда у встречи
+    // нет своего интервала (см. events.stage2-trigger-minutes-before).
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val defaultLeadMinutes: Long = 1080
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -82,10 +89,12 @@ class NotificationService(
         // Единый шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где
         // и факты по формату. Счётчиков голосов в DM НЕТ (PO 2026-08-08): личное сообщение
         // не перерисовывается, и «Идут — 0» навсегда оставался нулём — живой счёт живёт в
-        // закрепе чата, который бот редактирует. Срочность внутри dmFacts берётся по флагу V69,
-        // а НЕ по статусу: обычное событие, созданное близко к старту, могло флипнуться в
-        // stage_2 до отправки async-DM и ошибочно назваться срочным.
-        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event, fmt)}"
+        // закрепе чата, который бот редактирует.
+        // Срок в DM (PO 2026-09-06): участник, которого нет в чате, закрепа не видит и иначе не
+        // узнал бы, до какого момента голос ни к чему не обязывает. У открытой встречи срока нет.
+        val deadline = if (event.isOpenEvent) null
+            else RosterSchedule.deadline(event.eventDatetime, event.stage2LeadMinutes, defaultLeadMinutes)
+        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event, deadline, fmt)}"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
@@ -177,20 +186,124 @@ class NotificationService(
      * адресатов была бы просто неверной.
      */
     @Async
-    fun sendStage2Reminder(event: Event, telegramIds: List<Long>) {
+    fun sendStage2Reminder(event: Event, telegramIds: List<Long>, rosterDeadline: java.time.OffsetDateTime? = null) {
         if (telegramIds.isEmpty()) {
             log.info("Stage 2 reminder DM SKIPPED — no recipients for eventId={}", event.id)
             return
         }
-        log.info("Stage 2 reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
-        val text = "🔔 Скоро встреча\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
-            "чтобы он знал, на сколько человек рассчитывать."
+        log.info("Stage 2 reminder DM: eventId={} recipients={} collecting={}", event.id, telegramIds.size, rosterDeadline != null)
+        // Текст зависит от этапа (V86): на наборе просим проголосовать до дедлайна — подтверждать
+        // там нечего, место даёт голос; после закрытия — подтвердить участие, как раньше.
+        val text = if (rosterDeadline != null) {
+            "🔔 Организатор ждёт ответа\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+                "Идёте или нет? Ответьте до ${rosterDeadline.format(fmt)} — до этого момента " +
+                "передумать можно без влияния на репутацию."
+        } else {
+            "🔔 Скоро встреча\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+                "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
+                "чтобы он знал, на сколько человек рассчитывать."
+        }
+        val buttonText = if (rosterDeadline != null) "Открыть встречу" else "✅ Подтвердить участие"
         val webAppPath = "/events/${event.id}"
 
         telegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "✅ Подтвердить участие")
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = buttonText)
         }
+    }
+
+    /**
+     * Состав собран: набор закрылся, встреча состоится. Участникам состава и очереди уходят
+     * РАЗНЫЕ тексты — «ждём вас» человеку в очереди было бы обманом. Просьбы что-либо подтверждать
+     * здесь нет: место даёт голос, а не подтверждение. У открытой очереди нет, и вторая рассылка
+     * просто не находит адресатов.
+     */
+    @Async
+    fun sendRosterClosed(event: Event, confirmedCount: Int) {
+        val webAppPath = "/events/${event.id}"
+        val countPart = when (event.format) {
+            EventFormat.NORMAL -> "Идут $confirmedCount из ${event.participantLimit}"
+            EventFormat.OPEN -> "Идут $confirmedCount"
+        }
+
+        val confirmedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.confirmed)
+        val confirmedText = "✅ Состав собран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "$countPart. Встреча состоится — ждём вас."
+        confirmedIds.forEach { sendDm(it.toString(), confirmedText, webAppPath = webAppPath, buttonText = "Открыть встречу") }
+
+        val waitlistedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.waitlisted)
+        val waitlistedText = "📋 Состав собран без вас\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Мест не хватило, вы в очереди. Если кто-то откажется, место перейдёт вам — придёт уведомление."
+        waitlistedIds.forEach { sendDm(it.toString(), waitlistedText, webAppPath = webAppPath, buttonText = "Открыть встречу") }
+
+        log.info(
+            "Roster-closed DM: eventId={} confirmed={} waitlisted={}",
+            event.id, confirmedIds.size, waitlistedIds.size
+        )
+    }
+
+    /**
+     * Правило ③ (V86): состав закрыт, но отказ увёл его ниже минимума. Это УВЕДОМЛЕНИЕ, а не
+     * развилка: встреча идёт своим чередом, бездействие = провести меньшим составом. Одно
+     * положительное действие — «Проводим» (callback, глушит повторные ③) — и переход к встрече.
+     * «Отменить» в чате запрещена (решение 2026-08-31): необратимая кнопка живёт на странице
+     * встречи за подтверждением.
+     */
+    @Async
+    fun sendRosterBroken(
+        event: Event,
+        organizerTelegramId: Long,
+        confirmedCount: Int,
+        minParticipants: Int
+    ) {
+        val text = "⚠️ Состав стал неполным\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Состав $confirmedCount из $minParticipants. Встреча состоится, если ничего не делать. " +
+            "Отменить можно на странице встречи."
+
+        chatTelegramGateway.sendDmWithWebAppAndCallbackButton(
+            telegramId = organizerTelegramId,
+            text = text,
+            webAppButtonText = "Открыть встречу",
+            webAppPath = "/events/${event.id}",
+            callbackButtonText = proceedButtonText(confirmedCount),
+            callbackData = RosterCallbackService.PROCEED_CALLBACK_PREFIX + event.id,
+            callbackFirst = true
+        )
+        log.info("Roster-broken DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, minParticipants)
+    }
+
+    /**
+     * Правило ② (V86): до дедлайна набора осталось окно предупреждения, минимум не набран.
+     * Ничего не решает — единственное действие обратимо: напомнить тем, кто не ответил.
+     */
+    @Async
+    fun sendRosterWarning(
+        event: Event,
+        organizerTelegramId: Long,
+        confirmedCount: Int,
+        minParticipants: Int,
+        rosterDeadline: java.time.OffsetDateTime
+    ) {
+        val text = "⏳ Минимум пока не набран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Набрано $confirmedCount из $minParticipants. Если к ${rosterDeadline.format(fmt)} не наберём — " +
+            "встреча отменится."
+
+        chatTelegramGateway.sendDmWithCallbackButton(
+            telegramId = organizerTelegramId,
+            text = text,
+            buttonText = "🔔 Напомнить тем, кто не ответил",
+            callbackData = RosterCallbackService.REMIND_CALLBACK_PREFIX + event.id
+        )
+        log.info("Roster-warning DM sent: eventId={} confirmed={}/{}", event.id, confirmedCount, minParticipants)
+    }
+
+    /** «Проводим втроём»: наречие для 2–10, дальше «составом N» — русские числительные не склоняются механически. */
+    private fun proceedButtonText(count: Int): String {
+        val adverb = when (count) {
+            2 -> "вдвоём"; 3 -> "втроём"; 4 -> "вчетвером"; 5 -> "впятером"; 6 -> "вшестером"
+            7 -> "всемером"; 8 -> "ввосьмером"; 9 -> "вдевятером"; 10 -> "вдесятером"
+            else -> null
+        }
+        return adverb?.let { "Проводим $it" } ?: "Проводим составом $count"
     }
 
     /**
@@ -540,6 +653,16 @@ class NotificationService(
         buttonText: String = DEFAULT_BUTTON_TEXT
     ) {
         sendDm(telegramId.toString(), text, webAppPath, buttonText)
+    }
+
+    /** Отчёт организатору после «Напомнить» из DM ②: кому ушло напоминание, с кнопкой на встречу (PO 2026-09-06). */
+    fun sendRemindReport(organizerTelegramId: Long, eventId: UUID, names: List<String>) {
+        sendDm(
+            organizerTelegramId.toString(),
+            "🔔 Напомнили: ${names.joinToString(", ")}",
+            webAppPath = "/events/$eventId",
+            buttonText = "📅 Открыть событие"
+        )
     }
 
     private fun sendDm(

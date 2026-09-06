@@ -4,7 +4,6 @@ import {
   isoWeekdayOf,
   localTimeOf,
   nextOccurrenceLocal,
-  templateFormat,
   templateToSaveBody,
 } from '../../utils/eventTemplate';
 import type { EventTemplateDto } from '../../api/eventTemplates';
@@ -76,7 +75,8 @@ describe('eventToTemplateBody', () => {
     locationLon: 37.64,
     locationHint: 'Вход со двора',
     participantLimit: 12,
-    isUrgent: false,
+    minParticipants: null,
+    format: 'normal' as const,
     stage2LeadMinutesOverride: 2160,
     photoUrl: 'https://cdn/photo.webp',
     // Вторник 18 августа 2026, 19:00 по местному времени.
@@ -90,7 +90,8 @@ describe('eventToTemplateBody', () => {
     expect(body.title).toBe('Разговорный клуб');
     expect(body.locationLat).toBe(55.76);
     expect(body.participantLimit).toBe(12);
-    expect(body.isOpenEvent).toBe(false);
+    expect(body.minParticipants).toBeNull();
+    expect(body.format).toBe('normal');
     expect(body.stage2LeadMinutes).toBe(2160);
     expect(body.defaultWeekday).toBe(2);
     expect(body.defaultTime).toBe('19:00:00');
@@ -98,22 +99,23 @@ describe('eventToTemplateBody', () => {
     expect(Object.keys(body)).not.toContain('eventDatetime');
   });
 
-  it('открытая встреча превращается в шаблон без лимита и без интервала Этапа 2', () => {
+  it('открытая встреча превращается в шаблон без лимита и без интервала набора', () => {
     const body = eventToTemplateBody(
-      { ...event, participantLimit: null, stage2LeadMinutesOverride: 4320 },
+      { ...event, format: 'open' as const, participantLimit: null, stage2LeadMinutesOverride: 4320 },
       'Открытая пробежка',
     );
 
-    expect(body.isOpenEvent).toBe(true);
+    expect(body.format).toBe('open');
     expect(body.participantLimit).toBeNull();
     expect(body.stage2LeadMinutes).toBeNull();
   });
 
-  it('срочная встреча переносит флаг и обнуляет интервал Этапа 2', () => {
-    const body = eventToTemplateBody({ ...event, isUrgent: true }, 'Спонтанный забег');
+  it('включённый минимум переносится в шаблон вместе с интервалом набора (AC-14)', () => {
+    const body = eventToTemplateBody({ ...event, minParticipants: 4 }, 'Настолка от четырёх');
 
-    expect(body.isUrgentEvent).toBe(true);
-    expect(body.stage2LeadMinutes).toBeNull();
+    expect(body.format).toBe('normal');
+    expect(body.minParticipants).toBe(4);
+    expect(body.stage2LeadMinutes).toBe(2160);
   });
 
   it('не подставляет серверный дефолт вместо собственного интервала события', () => {
@@ -125,7 +127,7 @@ describe('eventToTemplateBody', () => {
   });
 });
 
-describe('templateToSaveBody / templateFormat', () => {
+describe('templateToSaveBody', () => {
   const template: EventTemplateDto = {
     id: 't1',
     clubId: 'c1',
@@ -138,8 +140,8 @@ describe('templateToSaveBody / templateFormat', () => {
     locationLon: null,
     locationHint: 'в зуме',
     participantLimit: 10,
-    isOpenEvent: false,
-    isUrgentEvent: false,
+    minParticipants: null,
+    format: 'normal',
     stage2LeadMinutes: null,
     photoUrl: null,
     defaultWeekday: 2,
@@ -158,9 +160,9 @@ describe('templateToSaveBody / templateFormat', () => {
     expect(Object.keys(body)).not.toContain('createdAt');
   });
 
-  it('формат выводится из флагов шаблона', () => {
-    expect(templateFormat(template)).toBe('limited');
-    expect(templateFormat({ ...template, isOpenEvent: true })).toBe('open');
-    expect(templateFormat({ ...template, isUrgentEvent: true })).toBe('urgent');
+  it('формат и минимум переносятся в тело сохранения как есть', () => {
+    expect(templateToSaveBody(template).format).toBe('normal');
+    expect(templateToSaveBody(template).minParticipants).toBeNull();
+    expect(templateToSaveBody({ ...template, minParticipants: 4 }).minParticipants).toBe(4);
   });
 });

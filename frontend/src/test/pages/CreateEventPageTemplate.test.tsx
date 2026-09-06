@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { toDatetimeLocalValue } from '../../utils/formatters';
 import type { EventTemplateDto } from '../../api/eventTemplates';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -29,6 +30,7 @@ vi.mock('../../telegram/sdk', () => ({
 import { CreateEventPage } from '../../pages/CreateEventPage';
 
 const CLUB_ID = 'club-1';
+const HOUR = 3_600_000;
 
 const TEMPLATE: EventTemplateDto = {
   id: 'tpl-1',
@@ -42,8 +44,8 @@ const TEMPLATE: EventTemplateDto = {
   locationLon: 37.64,
   locationHint: 'Вход со двора',
   participantLimit: 12,
-  isOpenEvent: false,
-  isUrgentEvent: false,
+  minParticipants: null,
+  format: 'normal',
   stage2LeadMinutes: 2160,
   photoUrl: null,
   defaultWeekday: 2,
@@ -56,6 +58,25 @@ function mockTemplates(templates: EventTemplateDto[]) {
   server.use(
     http.get(`*/api/clubs/${CLUB_ID}/event-templates`, () => HttpResponse.json(templates)),
   );
+}
+
+/** Перехваченные тела POST: встреча и шаблон. */
+function mockCreate() {
+  const events: Record<string, unknown>[] = [];
+  const templates: Record<string, unknown>[] = [];
+  server.use(
+    http.post(`*/api/clubs/${CLUB_ID}/events`, async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      events.push(body);
+      return HttpResponse.json({ id: 'evt-new', ...body }, { status: 201 });
+    }),
+    http.post(`*/api/clubs/${CLUB_ID}/event-templates`, async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      templates.push(body);
+      return HttpResponse.json({ ...TEMPLATE, id: 'tpl-new', ...body }, { status: 201 });
+    }),
+  );
+  return { events, templates };
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -72,6 +93,15 @@ function renderPage(search: string) {
     { routerEntries: [`/clubs/${CLUB_ID}/events/new${search}`] },
   );
   return { ...result, user };
+}
+
+const minSwitch = () => screen.getByRole('switch', { name: 'Минимум участников' });
+const minInput = () => screen.getByRole('textbox', { name: 'Значение минимума' });
+const maxInput = () => screen.getByRole('textbox', { name: 'Максимум участников' });
+
+function setDatetime(msFromNow: number) {
+  const input = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+  fireEvent.change(input!, { target: { value: toDatetimeLocalValue(new Date(Date.now() + msFromNow)) } });
 }
 
 /** Форма создания встречи, открытая по шаблону (docs/modules/event-templates.md § 8). */
@@ -109,22 +139,26 @@ describe('CreateEventPage — открытие по шаблону', () => {
     expect(picked.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('AC-7 шаблон открытой встречи прячет степпер лимита', async () => {
-    mockTemplates([{ ...TEMPLATE, isOpenEvent: true, participantLimit: null, stage2LeadMinutes: null }]);
+  it('AC-7 шаблон открытой встречи прячет степперы мест и блок набора', async () => {
+    mockTemplates([{ ...TEMPLATE, format: 'open', participantLimit: null, stage2LeadMinutes: null }]);
     renderPage('?template=tpl-1');
 
     await screen.findByDisplayValue('Разговорный клуб');
     expect(screen.getByRole('heading', { name: 'Открытая встреча' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Лимит участников')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Максимум участников' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Минимум участников' })).toBeNull();
+    expect(screen.queryByText('Передумать бесплатно')).toBeNull();
   });
 
-  it('AC-7 шаблон срочной встречи прячет блок интервала Этапа 2', async () => {
-    mockTemplates([{ ...TEMPLATE, isUrgentEvent: true, stage2LeadMinutes: null }]);
+  it('AC-14 шаблон с минимумом включает переключатель и подставляет число', async () => {
+    mockTemplates([{ ...TEMPLATE, participantLimit: 12, minParticipants: 6 }]);
     renderPage('?template=tpl-1');
 
     await screen.findByDisplayValue('Разговорный клуб');
-    expect(screen.getByRole('heading', { name: 'Срочная встреча' })).toBeInTheDocument();
-    expect(screen.queryByText('Подтверждение мест')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Обычная встреча' })).toBeInTheDocument();
+    expect(minSwitch()).toHaveAttribute('aria-checked', 'true');
+    expect(minInput()).toHaveValue('6');
+    expect(screen.getByText(/Собираемся, если будет минимум 6\./)).toBeInTheDocument();
   });
 
   it('удалённый шаблон не роняет форму, а честно об этом сообщает', async () => {
@@ -132,7 +166,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     renderPage('?template=tpl-1');
 
     expect(await screen.findByText(/Шаблон не найден/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Новое событие' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Обычная встреча' })).toBeInTheDocument();
   });
 
   it('без ?template форма открывается пустой и запрос шаблонов не уходит', async () => {
@@ -145,7 +179,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     );
     renderPage('');
 
-    expect(await screen.findByRole('heading', { name: 'Новое событие' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Обычная встреча' })).toBeInTheDocument();
     expect(screen.queryByText(/Заполнено по шаблону/)).toBeNull();
     await waitFor(() => expect(requested).not.toHaveBeenCalled());
   });
@@ -163,12 +197,109 @@ describe('CreateEventPage — открытие по шаблону', () => {
     mockTemplates([]);
     const { user } = renderPage('');
 
-    await screen.findByRole('heading', { name: 'Новое событие' });
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
     expect(screen.getByText('Сохранить как шаблон')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Разговорный клуб \(вторники\)/)).toBeNull();
 
     await user.click(screen.getByRole('checkbox'));
 
     expect(screen.getByPlaceholderText(/Разговорный клуб \(вторники\)/)).toBeInTheDocument();
+  });
+});
+
+/** Максимум и минимум обычной встречи (docs/modules/event-formats.md § 9.2). */
+describe('CreateEventPage — максимум и минимум участников', () => {
+  it('открытая встреча по ?format=open — без мест и без набора', async () => {
+    renderPage('?format=open');
+
+    expect(await screen.findByRole('heading', { name: 'Открытая встреча' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Максимум участников' })).toBeNull();
+    expect(screen.queryByText('Передумать бесплатно')).toBeNull();
+  });
+
+  it('минимум по умолчанию выключен, максимум со своей подписью', async () => {
+    renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    expect(maxInput()).toHaveValue('20');
+    expect(screen.getByText('Мест 20. Кто не успел — встанет в очередь на замену')).toBeInTheDocument();
+    expect(minSwitch()).toHaveAttribute('aria-checked', 'false');
+    expect(minSwitch()).not.toBeDisabled();
+    expect(screen.queryByRole('textbox', { name: 'Значение минимума' })).toBeNull();
+  });
+
+  it('включение минимума даёт 2 и называет правило', async () => {
+    const { user } = renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    await user.click(minSwitch());
+
+    expect(minSwitch()).toHaveAttribute('aria-checked', 'true');
+    expect(minInput()).toHaveValue('2');
+    expect(screen.getByText(
+      'Собираемся, если будет минимум 2. Не наберётся вовремя — встреча отменится',
+    )).toBeInTheDocument();
+  });
+
+  it('снижение максимума ниже минимума подтягивает минимум к максимуму', async () => {
+    const { user } = renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    await user.click(minSwitch());
+    await user.clear(minInput());
+    await user.type(minInput(), '8');
+    await user.tab();
+    expect(minInput()).toHaveValue('8');
+
+    await user.clear(maxInput());
+    await user.type(maxInput(), '5');
+    await user.tab();
+
+    expect(maxInput()).toHaveValue('5');
+    expect(minInput()).toHaveValue('5');
+  });
+
+  it('дата ближе интервала набора не даёт создать встречу с местами (AC-11)', async () => {
+    const { events } = mockCreate();
+    const { user } = renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    // Через 2 часа при интервале 18 ч по умолчанию: набор не успеет закрыться. Минимум при этом
+    // не гаснет и не прячется — правило одно и живёт на отправке, а не в полях формы.
+    setDatetime(2 * HOUR);
+    expect(minSwitch()).not.toBeDisabled();
+
+    await user.type(screen.getByPlaceholderText('Например: Йога в парке'), 'Баня');
+    await user.type(screen.getByPlaceholderText('Вход со двора, домофон 12'), 'у входа');
+    await user.click(screen.getByRole('button', { name: 'Создать событие' }));
+
+    expect(await screen.findByText(
+      'До встречи меньше 18 часов. Подвиньте время встречи или выберите срок короче',
+    )).toBeInTheDocument();
+    expect(events).toHaveLength(0);
+  });
+
+  it('включённый минимум уходит и во встречу, и в попутно сохранённый шаблон', async () => {
+    const { events, templates } = mockCreate();
+    const { user } = renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    setDatetime(3 * 24 * HOUR);
+    await user.click(minSwitch());
+    await user.clear(minInput());
+    await user.type(minInput(), '4');
+    await user.tab();
+    await user.type(screen.getByPlaceholderText('Например: Йога в парке'), 'Баня');
+    await user.type(screen.getByPlaceholderText('Вход со двора, домофон 12'), 'у входа');
+    await user.click(screen.getByRole('checkbox'));
+    await user.type(screen.getByPlaceholderText(/Разговорный клуб \(вторники\)/), 'Баня по средам');
+    await user.click(screen.getByRole('button', { name: 'Создать событие' }));
+
+    await waitFor(() => expect(events).toHaveLength(1));
+    expect(events[0]!.minParticipants).toBe(4);
+    expect(events[0]!.participantLimit).toBe(20);
+    await waitFor(() => expect(templates).toHaveLength(1));
+    expect(templates[0]!.minParticipants).toBe(4);
+    expect(templates[0]!.format).toBe('normal');
   });
 });

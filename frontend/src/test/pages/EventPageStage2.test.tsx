@@ -36,15 +36,15 @@ const CLUB_ID = 'club-1';
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const SOON = new Date(Date.now() + 2 * 3_600_000).toISOString(); // через 2ч < порога 4ч
-// Дефолтный порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч). Дедлайн отказа
-// подтверждённого = eventDatetime − 4ч — то, что бэкенд кладёт в confirmedDeclineDeadline.
-const DECLINE_CUTOFF_MS = 4 * 3_600_000;
+// Порог отказа бэкенда (events.late-decline-threshold-minutes=240 = 4ч) с V83 не запрещает отказ,
+// а делает его дороже: кнопка живёт до старта встречи, цену считает бэкенд (declineCostPoints).
 
 function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   const eventDatetime = overrides.eventDatetime ?? FUTURE;
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',
@@ -52,21 +52,29 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     locationLon: null,
     locationHint: null,
     eventDatetime,
-    participantLimit: 10,
+    participantLimit: null,
     votingOpensDaysBefore: 14,
     status: 'stage_2',
-    isUrgent: false,
+    // «Сколько придёт»: подтверждение участия (кнопки «Подтвердить»/«Отказаться») осталось только
+    // у этого формата. У форматов с лимитом (V85) состав закрывается голосами, и их экран
+    // проверяет EventPageRoster.test.tsx.
+    format: 'open',
     goingCount: 3,
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
     noAnswerCount: 0,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
     // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
     // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
-    confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),
-    stage2LeadMinutes: 1080,
+    stage2LeadMinutes: null,
     stage2LeadMinutesOverride: null,
-    abandonedSlotPenaltyPoints: 100,
+    rosterDeadline: null,
+    rosterClosed: false,
+    waitlistedCount: 0,
+    declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -122,6 +130,21 @@ beforeEach(() => {
   } as never);
 });
 
+/**
+ * Встреча с местами и закрытым составом — сценарии, где место дефицитно: счёт со знаменателем,
+ * репутация, пояснения отметки явки. Базовая фикстура файла намеренно другая («сколько придёт»):
+ * там проверяется само окно подтверждения, а не механика мест.
+ */
+function seatedEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+  return stage2Event({
+    format: 'normal',
+    participantLimit: 10,
+    stage2LeadMinutes: 1080,
+    rosterClosed: true,
+    ...overrides,
+  });
+}
+
 describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
   it('показывает кнопки подтверждения для stage_2 события до его начала', async () => {
     mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
@@ -158,35 +181,17 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
   });
 
-  it('подтверждённый (≥4ч): «Отказаться» → инлайн-подтверждение; без очереди предупреждает про репутацию', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders: [] });
-    const { user } = renderEventPage();
-
-    await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
-    expect(screen.getByText(/Освободить место/)).toBeInTheDocument();
-    expect(screen.getByText(/спишется 100 очков/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Освободить' })).toBeInTheDocument();
-  });
-
-  it('подтверждённый: при наличии очереди диалог обещает замену (без штрафа-предупреждения)', async () => {
-    const responders: EventResponderDto[] = [
-      { userId: 'me', firstName: 'Я', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
-      { userId: 'w', firstName: 'Ждун', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
-    ];
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders });
-    const { user } = renderEventPage();
-
-    await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
-    expect(screen.getByText(/займёт первый из очереди/)).toBeInTheDocument();
-    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
-  });
-
-  it('подтверждённый: за <4ч до старта кнопки «Отказаться» нет', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: SOON }), myVote: 'confirmed' });
+  it('подтверждённый: за <4ч до старта кнопка «Отказаться» ЕСТЬ — отказ стал платным (V83)', async () => {
+    // Прежде кнопка здесь пряталась (запрет отказа внутри порога). Запрет снят: единственным
+    // выходом оставалась молчаливая неявка за −200, что дороже любого честного отказа.
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: SOON, declineCostPoints: 150 }),
+      myVote: 'confirmed',
+    });
     renderEventPage();
 
     expect(await screen.findByText('Подтверждение участия')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
   });
 
   it('waitlisted видит «Отказаться» (выход из очереди) без порога', async () => {
@@ -250,7 +255,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     ];
     mockEndpoints({
       // confirmedCount=1: один подтвердил, один отказался.
-      event: stage2Event({ status: 'stage_2', confirmedCount: 1, goingCount: 2 }),
+      event: seatedEvent({ status: 'stage_2', confirmedCount: 1, goingCount: 2 }),
       myVote: 'declined',
       responders,
       ownerId: 'someone-else',
@@ -258,7 +263,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     renderEventPage();
 
     // Заголовок состава считается по подтверждениям, а не по голосам Этапа 1.
-    expect(await screen.findByText(/Состав · 1 \/ 10/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места · 1 \/ 10/)).toBeInTheDocument();
     // «Кто идёт» = только подтверждённые; отказавшийся выпал.
     expect(screen.getByText(/Кто идёт/)).toBeInTheDocument();
     expect(screen.queryByText('Борис')).not.toBeInTheDocument();
@@ -306,7 +311,7 @@ describe('EventPage — отмена события (F5-14)', () => {
   });
 
   it('«путь назад» (C): при просадке Trust в клубе события видна строка-мотиватор с проекцией', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    mockEndpoints({ event: seatedEvent({ eventDatetime: FUTURE }), myVote: 'going' });
     server.use(
       http.get('*/api/users/me/reputation', () => HttpResponse.json({
         global: { reliableClubs: 0, trackRecordClubs: 1, score: 60 },
@@ -380,7 +385,7 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
   });
 
   it('легаси-событие без координат: место текстом, без карты и кнопок', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    mockEndpoints({ event: seatedEvent({ eventDatetime: FUTURE }), myVote: 'going' });
     renderEventPage();
 
     expect(await screen.findByText('Бар')).toBeInTheDocument();
@@ -425,7 +430,7 @@ describe('EventPage — фото события как фон хиро', () => {
   });
 
   it('без фото — фолбэк на аватар клуба отсутствует у клуба без аватарки (без backgroundImage)', async () => {
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    mockEndpoints({ event: seatedEvent({ eventDatetime: FUTURE }), myVote: 'going' });
     const { container } = renderEventPage();
 
     await screen.findByText('Событие');
@@ -440,17 +445,19 @@ describe('EventPage — открытая встреча (participantLimit = null
     const eventDatetime = overrides.eventDatetime ?? FUTURE;
     return stage2Event({
       participantLimit: null,
+      format: 'open',
+      // Последствие отказа называет сервер (V86 § 6): у открытой встречи — всегда `open`.
+      declineConsequence: 'open',
       eventDatetime,
-      confirmedDeclineDeadline: eventDatetime,
       ...overrides,
     });
   }
 
-  it('бейдж хиро — «ОТКРЫТАЯ ВСТРЕЧА», счётчики без знаменателя', async () => {
+  it('бейдж хиро — «ОТКРЫТАЯ», счётчики без знаменателя', async () => {
     mockEndpoints({ event: openEvent({ confirmedCount: 7 }), myVote: 'going' });
     renderEventPage();
 
-    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
     // «Состав · 7» без « / limit»
     expect(screen.getByText('Состав · 7')).toBeInTheDocument();
     expect(screen.queryByText(/Состав · 7 \//)).not.toBeInTheDocument();
@@ -492,7 +499,7 @@ describe('EventPage — открытая встреча (participantLimit = null
     );
     renderEventPage();
 
-    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
     expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
   });
 
@@ -519,7 +526,7 @@ describe('EventPage — открытая встреча (participantLimit = null
       { userId: 'u1', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
     ];
     mockEndpoints({
-      event: stage2Event({ eventDatetime: PAST }),
+      event: seatedEvent({ eventDatetime: PAST }),
       myVote: 'confirmed',
       responders,
       ownerId: VIEWER_ID,

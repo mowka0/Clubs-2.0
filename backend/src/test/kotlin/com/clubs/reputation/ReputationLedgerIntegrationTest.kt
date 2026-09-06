@@ -320,7 +320,9 @@ class ReputationLedgerIntegrationTest {
         )
         // Брошенный слот — тоже BROKE (V45-рассинхрон закрыт: раньше SQL-список его терял,
         // и счётчик «нарушил» занижался при корректном Trust).
-        reputationService.penalizeAbandonedSlot(member, clubId, insertFinalizedEvent(), OffsetDateTime.now())
+        reputationService.penalizeDecline(
+            ReputationKind.abandoned_slot, member, clubId, insertFinalizedEvent(), OffsetDateTime.now()
+        )
 
         val (kept, broke, neutral) = counts(member)
         assertEquals(2, kept, "kept_count (ironclad + skladchina_paid)")
@@ -713,9 +715,7 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                                participant_limit, voting_opens_days_before, status,
-                                attendance_marked, attendance_finalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', ${participantLimit ?: "NULL"}, 14, 'completed', true, true)
             """.trimIndent()
         )
@@ -728,9 +728,7 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                                participant_limit, voting_opens_days_before, status,
-                                attendance_marked, attendance_finalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', false, true)
             """.trimIndent()
         )
@@ -749,9 +747,7 @@ class ReputationLedgerIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                                participant_limit, voting_opens_days_before, status,
-                                attendance_marked, attendance_finalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
             VALUES ('$id', '$club', '$ownerId', 'Active', 'Place', '$datetime', $limit, 14, 'stage_2', false, false)
             """.trimIndent()
         )
@@ -764,9 +760,7 @@ class ReputationLedgerIntegrationTest {
         val past = OffsetDateTime.now().minusHours(2)
         dsl.execute(
             """
-            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
-                                participant_limit, voting_opens_days_before, status,
-                                attendance_marked, attendance_finalized)
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status, attendance_marked, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Finalized', 'Place', '$past', 10, 14, 'stage_2', true, true)
             """.trimIndent()
         )

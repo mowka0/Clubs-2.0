@@ -149,28 +149,6 @@ open class EventTemplatesDao(configuration: Configuration?) : DAOImpl<EventTempl
     fun fetchByParticipantLimit(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.PARTICIPANT_LIMIT, *values.toTypedArray())
 
     /**
-     * Fetch records that have <code>is_open_event BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfIsOpenEvent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.IS_OPEN_EVENT, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>is_open_event IN (values)</code>
-     */
-    fun fetchByIsOpenEvent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.IS_OPEN_EVENT, *values.toTypedArray())
-
-    /**
-     * Fetch records that have <code>is_urgent_event BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfIsUrgentEvent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.IS_URGENT_EVENT, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>is_urgent_event IN (values)</code>
-     */
-    fun fetchByIsUrgentEvent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.IS_URGENT_EVENT, *values.toTypedArray())
-
-    /**
      * Fetch records that have <code>stage2_lead_minutes BETWEEN lowerInclusive
      * AND upperInclusive</code>
      */
@@ -246,4 +224,15 @@ open class EventTemplatesDao(configuration: Configuration?) : DAOImpl<EventTempl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>min_participants BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfMinParticipants(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetchRange(EventTemplates.EVENT_TEMPLATES.MIN_PARTICIPANTS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>min_participants IN (values)</code>
+     */
+    fun fetchByMinParticipants(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.EventTemplates> = fetch(EventTemplates.EVENT_TEMPLATES.MIN_PARTICIPANTS, *values.toTypedArray())
 }

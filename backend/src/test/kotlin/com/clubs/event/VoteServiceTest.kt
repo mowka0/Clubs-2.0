@@ -36,9 +36,12 @@ class VoteServiceTest {
     private val membershipRepository = mockk<MembershipRepository>()
     private val clubRepository = mockk<ClubRepository>()
     private val eventPublisher = mockk<org.springframework.context.ApplicationEventPublisher>(relaxed = true)
+    // Механика набора состава (V83) проверяется отдельно (RosterServiceTest): здесь важно, что
+    // голос записан и прочитан обратно.
+    private val rosterService = mockk<RosterService>(relaxed = true)
     private val service = VoteService(
         eventRepository, eventResponseRepository, membershipRepository, clubRepository,
-        ClubRoleGuard(clubRepository, membershipRepository), eventPublisher
+        ClubRoleGuard(clubRepository, membershipRepository), rosterService, eventPublisher
     )
 
     private val eventId = UUID.randomUUID()
@@ -270,9 +273,13 @@ class VoteServiceTest {
         val b = UUID.randomUUID()
         every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
             listOf(pendingMember(Stage_1Vote.going, id = a), pendingMember(null, id = b))
-        every { eventResponseRepository.markStage2Reminded(eventId, listOf(a, b)) } returns listOf(1L, 2L)
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(a, b)) } returns
+            listOf(RemindedRecipient(a, 1L), RemindedRecipient(b, 2L))
 
-        assertEquals(2, service.remind(eventId, userId, null).remindedCount)
+        val result = service.remind(eventId, userId, null)
+        assertEquals(2, result.remindedCount)
+        // Кому напомнили — имена из pending по фактически отмеченным строкам (PO 2026-09-06).
+        assertEquals(listOf(a, b), result.reminded.map { it.userId })
     }
 
     /** Чужой userId не должен попасть в рассылку и создать строку-заглушку постороннему. */
@@ -287,9 +294,11 @@ class VoteServiceTest {
     }
 
     @Test
-    fun `remind is rejected before Stage 2 and after the event starts`() {
+    fun `remind is rejected without an open answer window and after the event starts`() {
+        // У формата «сколько придёт» до Этапа 2 отвечать нечего — напоминать не о чем.
         stubStage2Event(ownerId = userId)
-        every { eventRepository.findById(eventId) } returns upcomingEvent(OffsetDateTime.now().plusHours(3))
+        every { eventRepository.findById(eventId) } returns
+            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(participantLimit = null)
         assertEquals(
             "Confirmation is not open for this event",
             assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
@@ -300,6 +309,18 @@ class VoteServiceTest {
             "Event has already started",
             assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
         )
+    }
+
+    @Test
+    fun `remind works while a roster is still being collected`() {
+        // Главный случай напоминания у форматов с лимитом (V85): событие ещё `upcoming`, и именно
+        // молчание участников решает, наберётся ли состав. После закрытия отвечать уже нечего.
+        stubStage2Event(ownerId = userId)
+        every { eventRepository.findById(eventId) } returns upcomingEvent(OffsetDateTime.now().plusHours(3))
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns emptyList()
+        every { eventResponseRepository.markStage2Reminded(eventId, emptyList()) } returns emptyList()
+
+        assertEquals(0, service.remind(eventId, userId, null).remindedCount)
     }
 
     @Test
@@ -317,7 +338,7 @@ class VoteServiceTest {
         val target = UUID.randomUUID()
         every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
             listOf(pendingMember(Stage_1Vote.going, id = target))
-        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns listOf(7L)
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns listOf(RemindedRecipient(target, 7L))
 
         assertEquals(1, service.remind(eventId, userId, target).remindedCount)
     }
@@ -338,4 +359,59 @@ class VoteServiceTest {
             updatedAt = null
         )
     }
+
+    @Test
+    fun `roster event in collecting phase reports the stage-1 vote, not the seat status (V83)`() {
+        // Голос «Иду» у встречи с порогом сразу пишет final_status=confirmed. Если отдать его
+        // наружу, участник выпадет из вкладки «Идут», а его кнопка перестанет подсвечиваться:
+        // состав в этой фазе показывает кольцо, а список и кнопки живут голосами.
+        every { eventRepository.findById(eventId) } returns rosterEvent(EventStatus.upcoming)
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+
+        assertEquals("going", service.getMyVote(eventId, userId).vote)
+    }
+
+    @Test
+    fun `roster event with a closed roster reports the seat status`() {
+        every { eventRepository.findById(eventId) } returns rosterEvent(EventStatus.stage_2)
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+
+        assertEquals("confirmed", service.getMyVote(eventId, userId).vote)
+    }
+
+    private fun rosterEvent(status: EventStatus) = Event(
+        id = eventId,
+        clubId = UUID.randomUUID(),
+        createdBy = UUID.randomUUID(),
+        title = "T",
+        description = null,
+        locationText = "Place",
+        eventDatetime = OffsetDateTime.now().plusDays(1),
+        participantLimit = 4,
+        votingOpensDaysBefore = 14,
+        status = status,
+        stage2Triggered = status != EventStatus.upcoming,
+        attendanceMarked = false,
+        attendanceFinalized = false,
+        photoUrl = null,
+        createdAt = null,
+        updatedAt = null
+    )
+
+    private fun responseWith(stage1: Stage_1Vote?, finalStatus: FinalStatus?) = EventResponse(
+        id = UUID.randomUUID(),
+        eventId = eventId,
+        userId = userId,
+        stage1Vote = stage1,
+        stage1Timestamp = OffsetDateTime.now(),
+        stage2Vote = null,
+        stage2Timestamp = null,
+        finalStatus = finalStatus,
+        attendance = null,
+        attendanceFinalized = false,
+        createdAt = null,
+        updatedAt = null
+    )
 }

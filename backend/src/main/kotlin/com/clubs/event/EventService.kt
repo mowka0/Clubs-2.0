@@ -10,6 +10,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,7 +24,13 @@ class EventService(
     private val clubRoleGuard: ClubRoleGuard,
     private val eventMapper: EventMapper,
     private val eventPublisher: ApplicationEventPublisher,
-    private val skladchinaRepository: SkladchinaRepository
+    private val skladchinaRepository: SkladchinaRepository,
+    // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
+    // EventMapper. Нужен, чтобы проверить, помещается ли набор с минимумом до начала встречи.
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long,
+    // Окно предупреждения о недоборе (правило ②) — тот же ключ, что у RosterService. Нужен, чтобы
+    // при создании и правке поставить отметку «израсходовано», если момент ② уже позади (§ 3.2).
+    @Value("\${events.roster-warning-minutes-before-deadline:180}") private val rosterWarningMinutes: Long
 ) {
 
     companion object {
@@ -45,17 +52,17 @@ class EventService(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
             locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() }
         )
-        val persisted = eventRepository.create(normalizedRequest, clubId, userId)
-        // Срочная встреча (решение PO 2026-07-23): Этапа 1 нет — событие рождается сразу в
-        // подтверждении мест, тем же transitionToStage2 и в той же транзакции. Уведомление
-        // одно (EventBotNotifier ниже): stage_2-событие зовёт подтверждать, а не голосовать.
-        val event = if (normalizedRequest.isUrgentEvent) {
-            eventRepository.transitionToStage2(persisted.id)
-            persisted.copy(status = EventStatus.stage_2, stage2Triggered = true)
-        } else persisted
+        val minParticipants = normalizedRequest.effectiveMinParticipants
+        requireRosterFitsBeforeStart(normalizedRequest.participantLimit, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes)
+        val event = eventRepository.create(
+            normalizedRequest, clubId, userId,
+            rosterWarningSentAt = initialRosterWarningMark(
+                minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
+            )
+        )
         log.info(
-            "Event created: id={} clubId={} title='{}' userId={} urgent={}",
-            event.id, clubId, event.title, userId, normalizedRequest.isUrgentEvent
+            "Event created: id={} clubId={} title='{}' userId={} format={}",
+            event.id, clubId, event.title, userId, normalizedRequest.format
         )
         // DM участникам рассылает EventBotNotifier на AFTER_COMMIT. Публикация внутри
         // транзакции позволяет слушателю вовсе не сработать, если внешний
@@ -112,8 +119,26 @@ class EventService(
             maybeCount = counts["maybe"] ?: 0,
             notGoingCount = counts["notGoing"] ?: 0,
             confirmedCount = counts["confirmed"] ?: 0,
-            noAnswerCount = counts["noAnswer"] ?: 0
+            noAnswerCount = counts["noAnswer"] ?: 0,
+            waitlistedCount = counts["waitlisted"] ?: 0
         )
+    }
+
+    /**
+     * Системная отмена встречи без участия человека: набор не собрался, а организатор не ответил
+     * на DM в отведённое окно (V83). Тот же каскад, что у ручной отмены (сбор → released, DM
+     * заинтересованным на AFTER_COMMIT), но без гейта capability — инициатор здесь планировщик.
+     * Гонку с ручной отменой снимает SQL-guard внутри cancelEvent: 0 строк → просто выходим.
+     */
+    @Transactional
+    fun cancelBySystem(event: Event, reason: String) {
+        if (eventRepository.cancelEvent(event.id, reason) == 0) {
+            log.info("System cancel skipped — event already inactive: id={}", event.id)
+            return
+        }
+        skladchinaRepository.cancelActiveByEventId(event.id)
+        log.info("Event cancelled by system: id={} reason='{}'", event.id, reason)
+        eventPublisher.publishEvent(EventCancelledEvent(event, reason))
     }
 
     /**
@@ -129,6 +154,7 @@ class EventService(
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг отменяет событие.
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
+        event.requireCreatorOrOwner(club.ownerId, userId)
 
         val normalizedReason = reason?.trim()?.takeIf { it.isNotEmpty() }
         if (eventRepository.cancelEvent(eventId, normalizedReason) == 0) {
@@ -146,7 +172,7 @@ class EventService(
      * только организатор/со-орг и только на Этапе 1 — с началом подтверждения мест правки
      * запрещены, подтвердившие обещали прийти в конкретное место и время. SQL-guard
      * (status=upcoming AND stage_2_triggered=false AND event_datetime > now) даёт 0 строк
-     * ⇒ 409 для события в Этапе 2 / срочного / начавшегося / завершённого / отменённого.
+     * ⇒ 409 для события в Этапе 2 / начавшегося / завершённого / отменённого.
      *
      * Дата ближе интервала Этапа 2 намеренно НЕ отклоняется — как при создании: событие
      * просто перейдёт в Этап 2 ближайшим тиком шедулера.
@@ -161,6 +187,7 @@ class EventService(
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг редактирует встречу.
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
+        event.requireCreatorOrOwner(club.ownerId, userId)
 
         validateFormatInvariants(event, request)
 
@@ -173,8 +200,14 @@ class EventService(
             locationHint = request.locationHint,
             eventDatetime = request.eventDatetime,
             participantLimit = request.participantLimit,
+            minParticipants = request.minParticipants,
             stage2LeadMinutes = request.stage2LeadMinutes,
-            photoUrl = request.photoUrl
+            photoUrl = request.photoUrl,
+            // Отметка ② пересчитывается под новые дату/интервал/минимум (§ 3.2): перенос дальше
+            // возвращает право на одно предупреждение, перенос ближе момента — «израсходовано».
+            rosterWarningSentAt = initialRosterWarningMark(
+                request.minParticipants, request.eventDatetime, request.stage2LeadMinutes
+            )
         )
         if (eventRepository.updateEvent(eventId, edit) == 0) {
             throw ConflictException("Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено")
@@ -189,8 +222,10 @@ class EventService(
             locationHint = edit.locationHint,
             eventDatetime = edit.eventDatetime,
             participantLimit = edit.participantLimit,
+            minParticipants = edit.minParticipants,
             stage2LeadMinutes = edit.stage2LeadMinutes,
-            photoUrl = edit.photoUrl
+            photoUrl = edit.photoUrl,
+            rosterWarningSentAt = edit.rosterWarningSentAt
         )
         val edited = EventEditedEvent(updated, oldEvent = event)
         log.info(
@@ -210,16 +245,62 @@ class EventService(
      */
     private fun validateFormatInvariants(event: Event, request: UpdateEventRequest) {
         if (event.isOpenEvent && request.participantLimit != null) {
-            throw ValidationException("Открытая встреча не имеет лимита участников")
+            throw ValidationException("У открытой встречи нет мест — лимит неприменим")
         }
         if (!event.isOpenEvent && request.participantLimit == null) {
-            throw ValidationException("Для встречи с местами нужен лимит участников")
+            throw ValidationException("Для встречи с местами нужен максимум участников")
+        }
+        if (event.isOpenEvent && request.minParticipants != null) {
+            throw ValidationException("У открытой встречи нет мест — минимум неприменим")
         }
         if (event.isOpenEvent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У открытой встречи нет Этапа 2 — интервал подтверждения неприменим")
+            throw ValidationException("У открытой встречи нет мест — срок неприменим")
         }
-        if (event.isUrgent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У срочной встречи нет Этапа 1 — интервал подтверждения неприменим")
+        requireRosterFitsBeforeStart(request.participantLimit, request.eventDatetime, request.stage2LeadMinutes)
+    }
+
+    /**
+     * Набор встречи с местами обязан помещаться до её начала: дедлайн в прошлом означал бы, что
+     * голосовать некогда и состав закрылся бы ближайшим тиком. Такой случай запрещён целиком
+     * (решение PO 2026-09-05): встреча «на сегодня» — будущий отдельный формат, а не особый режим
+     * обычной. У открытой встречи набора нет — проверка не применяется.
+     *
+     * Проверка живёт здесь, а не в DTO: там неизвестен глобальный дефолт интервала.
+     */
+    private fun requireRosterFitsBeforeStart(
+        participantLimit: Int?,
+        eventDatetime: OffsetDateTime,
+        stage2LeadMinutes: Int?
+    ) {
+        if (participantLimit == null) return
+        val leadMinutes = (stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()
+        if (!eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(leadMinutes))) {
+            throw ValidationException(
+                "До встречи меньше ${formatLead(leadMinutes)}. Подвиньте время встречи."
+            )
+        }
+    }
+
+    /** Отметка ② на момент создания/правки — см. RosterSchedule.initialWarningMark. */
+    private fun initialRosterWarningMark(
+        minParticipants: Int?,
+        eventDatetime: OffsetDateTime,
+        stage2LeadMinutes: Int?
+    ): OffsetDateTime? = RosterSchedule.initialWarningMark(
+        minParticipants,
+        RosterSchedule.deadline(eventDatetime, stage2LeadMinutes, stage2TriggerMinutesBefore),
+        rosterWarningMinutes,
+        OffsetDateTime.now()
+    )
+
+    /** «18 ч» / «6 ч 30 мин» / «3 мин» — интервал набора для текста ошибки. */
+    private fun formatLead(minutes: Long): String {
+        val hours = minutes / 60
+        val rest = minutes % 60
+        return when {
+            hours == 0L -> "$rest мин"
+            rest == 0L -> "$hours ч"
+            else -> "$hours ч $rest мин"
         }
     }
 }

@@ -44,7 +44,10 @@ data class Events(
     var stage2LeadMinutes: Int? = null,
     @Suppress("INAPPLICABLE_JVM_NAME")
     @set:JvmName("setIsUrgent")
-    var isUrgent: Boolean? = null
+    var isUrgent: Boolean? = null,
+    var minParticipants: Int? = null,
+    var rosterDecidedAt: OffsetDateTime? = null,
+    var rosterWarningSentAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -190,6 +193,24 @@ data class Events(
         }
         else if (this.isUrgent != o.isUrgent)
             return false
+        if (this.minParticipants == null) {
+            if (o.minParticipants != null)
+                return false
+        }
+        else if (this.minParticipants != o.minParticipants)
+            return false
+        if (this.rosterDecidedAt == null) {
+            if (o.rosterDecidedAt != null)
+                return false
+        }
+        else if (this.rosterDecidedAt != o.rosterDecidedAt)
+            return false
+        if (this.rosterWarningSentAt == null) {
+            if (o.rosterWarningSentAt != null)
+                return false
+        }
+        else if (this.rosterWarningSentAt != o.rosterWarningSentAt)
+            return false
         return true
     }
 
@@ -221,6 +242,9 @@ data class Events(
         result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
         result = prime * result + (if (this.stage2LeadMinutes == null) 0 else this.stage2LeadMinutes.hashCode())
         result = prime * result + (if (this.isUrgent == null) 0 else this.isUrgent.hashCode())
+        result = prime * result + (if (this.minParticipants == null) 0 else this.minParticipants.hashCode())
+        result = prime * result + (if (this.rosterDecidedAt == null) 0 else this.rosterDecidedAt.hashCode())
+        result = prime * result + (if (this.rosterWarningSentAt == null) 0 else this.rosterWarningSentAt.hashCode())
         return result
     }
 
@@ -252,6 +276,9 @@ data class Events(
         sb.append(", ").append(locationHint)
         sb.append(", ").append(stage2LeadMinutes)
         sb.append(", ").append(isUrgent)
+        sb.append(", ").append(minParticipants)
+        sb.append(", ").append(rosterDecidedAt)
+        sb.append(", ").append(rosterWarningSentAt)
 
         sb.append(")")
         return sb.toString()

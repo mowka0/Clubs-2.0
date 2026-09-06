@@ -8,6 +8,7 @@ import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
+import com.clubs.event.RosterService
 import com.clubs.event.yandexMapsUrl
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -44,7 +45,8 @@ class LivePinService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val renderer: LivePinRenderer,
-    private val gateway: ChatTelegramGateway
+    private val gateway: ChatTelegramGateway,
+    private val rosterService: RosterService
 ) {
     private val log = LoggerFactory.getLogger(LivePinService::class.java)
 
@@ -300,13 +302,23 @@ class LivePinService(
     }
 
     private fun renderStatus(event: Event): String =
-        if (event.stage2Triggered) {
+        // Встречи с лимитом (V85) живут своими двумя состояниями: идёт набор → «собрались N из
+        // M», состав закрыт → «состав собран». Подтверждений у них нет, поэтому общие тексты
+        // Этапа 1/Этапа 2 им не подходят.
+        if (event.isRosterEvent) {
+            val confirmed = eventResponseRepository.countConfirmed(event.id)
+            if (event.stage2Triggered) {
+                renderer.rosterClosedText(event, confirmed, eventResponseRepository.countWaitlisted(event.id))
+            } else {
+                renderer.rosterText(event, confirmed, rosterService.rosterDeadline(event))
+            }
+        } else if (event.stage2Triggered) {
+            // Сюда доходит только формат «сколько придёт»: у остальных набор увёл выше. Очередь
+            // у него недостижима — COUNT-запрос на каждую перерисовку закрепа не тратим.
             renderer.stage2Text(
                 event,
                 confirmed = eventResponseRepository.countConfirmed(event.id),
-                // Открытая встреча (V62): waitlist недостижим, а рендерер строку очереди не выводит —
-                // не тратим COUNT-запрос на каждую перерисовку закрепа.
-                waitlisted = if (event.isOpenEvent) 0 else eventResponseRepository.countWaitlisted(event.id)
+                waitlisted = 0
             )
         } else {
             val counts = eventResponseRepository.countByVote(event.id)

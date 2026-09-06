@@ -538,10 +538,11 @@ class ChatTelegramGateway(
     }
 
     /**
-     * DM с двумя кнопками: сверху WebApp-переход в приложение, снизу callback-действие.
+     * DM с двумя кнопками: WebApp-переход в приложение и callback-действие.
      *
-     * Порядок не случаен: подтверждение привязки читают как «готово, что дальше» — дальше идут
-     * в клуб, а «Отвязать чат» здесь запасной выход и стоять первым не должен.
+     * Порядок задаёт вызывающий: подтверждение привязки читают как «готово, что дальше» — дальше
+     * идут в клуб, а «Отвязать чат» там запасной выход и стоять первым не должен; у DM «состав
+     * стал неполным» наоборот — единственное положительное действие «Проводим» идёт первым.
      */
     fun sendDmWithWebAppAndCallbackButton(
         telegramId: Long,
@@ -549,7 +550,8 @@ class ChatTelegramGateway(
         webAppButtonText: String,
         webAppPath: String,
         callbackButtonText: String,
-        callbackData: String
+        callbackData: String,
+        callbackFirst: Boolean = false
     ): Boolean = try {
         val webAppButton = InlineKeyboardButton.builder()
             .text(webAppButtonText)
@@ -559,10 +561,12 @@ class ChatTelegramGateway(
             .text(callbackButtonText)
             .callbackData(callbackData)
             .build()
+        val rows = if (callbackFirst) listOf(InlineKeyboardRow(callbackButton), InlineKeyboardRow(webAppButton))
+            else listOf(InlineKeyboardRow(webAppButton), InlineKeyboardRow(callbackButton))
         val msg = SendMessage.builder()
             .chatId(telegramId.toString())
             .text(text)
-            .replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(webAppButton), InlineKeyboardRow(callbackButton))))
+            .replyMarkup(InlineKeyboardMarkup(rows))
             .build()
         telegramClient.execute(msg)
         true

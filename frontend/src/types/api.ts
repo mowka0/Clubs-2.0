@@ -582,9 +582,25 @@ export interface MembershipDto {
   duesClaimMethod?: string | null;
 }
 
+/**
+ * Формат встречи (V86, docs/modules/event-formats.md § 1). Значения те же, что на бэке:
+ *  - `normal` — обычная встреча: максимум участников всегда, минимум по желанию
+ *    (`minParticipants`); сверх максимума — очередь, недобор минимума к закрытию — отмена;
+ *  - `open` — открытая: без мест, очереди и репутации (`participantLimit` = null).
+ */
+export type EventFormat = 'normal' | 'open';
+
+/**
+ * Что произойдёт от отказа из закрытого состава — называет СЕРВЕР (§ 6), клиент только
+ * подбирает текст диалога: копия правил на клиенте разъехалась бы с рантаймом (урок V83).
+ */
+export type DeclineConsequence = 'open' | 'replaced' | 'roster_empty' | 'below_minimum' | 'seat_empty';
+
 export interface EventDetailDto {
   id: string;
   clubId: string;
+  /** Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06). */
+  createdBy: string;
   title: string;
   description: string | null;
   // null = место не указано (опционально с V58) — блок места не показывается вовсе.
@@ -596,34 +612,46 @@ export interface EventDetailDto {
   // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
   locationHint: string | null;
   eventDatetime: string;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  // null = открытая встреча (V62) — счёт показывается без знаменателя. У обычной встречи это
+  // максимум: кольцо и свободные места считаются от него.
   participantLimit: number | null;
+  // Минимум участников (V86): null = минимум выключен. Недостача считается от него; всё
+  // ветвление «есть ли порог» идёт по `minParticipants != null`, а не по формату.
+  minParticipants: number | null;
   votingOpensDaysBefore: number;
   // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт бэка —
-  // фронт порог не хардкодит (тот же урок, что confirmedDeclineDeadline). null = открытая встреча.
+  // фронт порог не хардкодит: все пороги считает бэкенд. null = открытая встреча.
   stage2LeadMinutes: number | null;
   // Собственный интервал события; null = «используется глобальный дефолт». Для ПОКАЗА берём
   // stage2LeadMinutes выше, а в PUT возвращаем это поле: отправка эффективного значения
   // превратила бы подставленный дефолт в собственный интервал события (и упиралась бы
-  // в @Min(1080), когда дефолт на окружении ужат).
+  // в @Min(360), когда дефолт на окружении ужат).
   stage2LeadMinutesOverride: number | null;
   status: string;
-  // Срочная встреча (V69) — вместе с participantLimit определяет формат в бейдже хиро:
-  // «⚡ срочная» / «🌊 открытая» / «🎟 с местами». Те же ярлыки, что на карточках лент.
-  isUrgent: boolean;
+  // Формат встречи: `open` ⟺ participantLimit = null. Порог набора — отдельное поле minParticipants.
+  format: EventFormat;
   goingCount: number;
   maybeCount: number;
   notGoingCount: number;
   confirmedCount: number;
   /** Сколько участников клуба ещё не ответили на Этапе 2 (кроме сказавших «не пойду»). */
   noAnswerCount: number;
-  // Крайний момент (ISO), до которого подтверждённый участник может отказаться от места. Считается
-  // бэкендом из events.stage2-decline-cutoff-minutes — фронт не хранит копию порога, а прячет кнопку
-  // «Отказаться» у confirmed, когда текущее время ≥ этого значения. Источник истины — бэкенд.
-  confirmedDeclineDeadline: string;
-  // Сколько очков спишется за отказ от подтверждённого места без замены (abandoned_slot).
-  // Величина приходит с бэка (ReputationPolicy) — фронт число не хардкодит.
-  abandonedSlotPenaltyPoints: number;
+  // --- Набор состава (V85) ---
+  // Когда закрывается набор состава (ISO). null = открытая встреча, у неё набора нет.
+  rosterDeadline: string | null;
+  // Состав закрыт: голоса больше ничего не набирают.
+  rosterClosed: boolean;
+  // Организатор нажал «Проводим» при составе ниже минимума (V86 § 4): полоса статуса —
+  // «Проводим составом N», кнопка менеджеру больше не показывается.
+  rosterDecided: boolean;
+  // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди». Потолок есть
+  // у любой обычной встречи, у открытой лимита нет.
+  waitlistedCount: number;
+  // Сколько очков спишется за отказ ПРЯМО СЕЙЧАС участнику из состава (0 = бесплатно).
+  // Считает сервер (RosterPolicy): цена зависит от состояния события, и клиент её не выводит.
+  declineCostPoints: number;
+  // Последствие отказа для диалога (§ 6); null, пока идёт набор, и для очереди.
+  declineConsequence: DeclineConsequence | null;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
   // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.
@@ -639,8 +667,11 @@ export interface EventListItemDto {
   title: string;
   eventDatetime: string;
   locationText: string | null;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  format: EventFormat;
+  // null = открытая встреча — счёт показывается без знаменателя.
   participantLimit: number | null;
+  // Минимум участников для бейджа «👥 4–10»; null = выключен.
+  minParticipants: number | null;
   goingCount: number;
   status: string;
 }
@@ -654,9 +685,12 @@ export interface TeaserEventDto {
   title: string;
   eventDatetime: string;
   status: string;
-  // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая», как на карточках ленты.
-  isUrgent: boolean;
-  isOpenEvent: boolean;
+  // Формат для бейджа, как на карточках ленты.
+  format: EventFormat;
+  // Максимум участников; null у открытой встречи.
+  participantLimit: number | null;
+  // Минимум участников для бейджа «👥 4–10»; null = выключен.
+  minParticipants: number | null;
   // До Этапа 2 показываем «идут N» (голоса), после — «подтвердили N».
   goingCount: number;
   confirmedCount: number;
@@ -675,6 +709,12 @@ export interface EventResponderDto {
   avatarUrl: string | null;
   /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
+  /**
+   * Место в составе, пока идёт набор (V83): «confirmed» — проходит, «waitlisted» — за чертой,
+   * null — вне набора или формат без порога. На наборе `status` несёт голос, поэтому «кто
+   * проходит» — только здесь; после закрытия состава место несёт сам `status`.
+   */
+  seat?: string | null;
   /** Отметка посещения после события, как только организатор её проставил; null до отметки. */
   attendance: 'attended' | 'absent' | 'disputed' | null;
   /** Необязательная заметка участника при оспаривании (видна организатору). */
@@ -833,10 +873,12 @@ export interface MyEventListItemDto {
   myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
-  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  // null = открытая встреча — счёт показывается без знаменателя.
   participantLimit: number | null;
-  // Срочная встреча (V69) — бейдж «⚡ СРОЧНАЯ» вместо «🎟 ОБЫЧНАЯ».
-  isUrgent: boolean;
+  // Минимум участников для бейджа «👥 4–10»; null = выключен.
+  minParticipants: number | null;
+  // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+  format: EventFormat;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

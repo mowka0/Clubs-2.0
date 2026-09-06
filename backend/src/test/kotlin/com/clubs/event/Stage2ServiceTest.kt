@@ -4,6 +4,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
@@ -32,11 +33,17 @@ class Stage2ServiceTest {
     private val membershipRepository = mockk<MembershipRepository>()
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     private val reputationService = mockk<com.clubs.reputation.ReputationService>(relaxed = true)
-    // declineCutoffMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
+    // Встреча с порогом набора (V83) идёт своим путём — здесь проверяется механика ⚡/🌊,
+    // поэтому набор-сервис отвечает «это не моё событие».
+    private val rosterService = mockk<RosterService>(relaxed = true).also {
+        every { it.handleRosterDeadline(any()) } returns false
+    }
+    private val eventService = mockk<EventService>(relaxed = true)
+    // lateDeclineThresholdMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
     // строит свой инстанс с реальным значением.
     private val service = Stage2Service(
-        eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
-        declineCutoffMinutes = 0, stage2TriggerMinutesBefore = 1440
+        eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+        eventPublisher, reputationService, lateDeclineThresholdMinutes = 0, stage2TriggerMinutesBefore = 1440
     )
 
     private val eventId = UUID.randomUUID()
@@ -82,25 +89,57 @@ class Stage2ServiceTest {
             eventResponseRepository.updateStage2Vote(waitlistedId, Stage_2Vote.confirmed, FinalStatus.confirmed)
         }
         // Есть замена → отказ бесплатный, штраф abandoned_slot НЕ начисляется.
-        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeDecline(any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun `confirmed decline within the cutoff window is rejected and mutates nothing`() {
-        // Свой инстанс с реальным порогом 4ч; событие через 2ч → отказ подтверждённого запрещён.
+    fun `confirmed decline within the cutoff window is allowed and costs 150 without replacement (V83)`() {
+        // Прежде здесь стоял ЗАПРЕТ «отказаться можно не позже чем за 4 часа» (решение снято PO
+        // 2026-08-21): запрет выталкивал людей в молчаливую неявку, которая стоит дороже (−200).
+        // Реальный порог 4 ч; событие через 2 ч; очередь пуста → late_decline_uncovered (−150).
         val strict = Stage2Service(
-            eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
-            declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
             response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
 
-        val ex = assertFailsWith<ValidationException> { strict.declineParticipation(eventId, userId) }
-        assert(ex.message!!.contains("не позже"))
-        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
-        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+        val result = strict.declineParticipation(eventId, userId)
+
+        assertEquals("declined", result.status)
+        assertEquals(150, result.penaltyPoints)
+        verify(exactly = 1) {
+            reputationService.penalizeDecline(ReputationKind.late_decline_uncovered, userId, clubId, eventId, any())
+        }
+    }
+
+    @Test
+    fun `confirmed decline within the cutoff window costs 50 when a replacement is queued (V83)`() {
+        val promotedUserId = UUID.randomUUID()
+        val strict = Stage2Service(
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
+        )
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.waitlisted).copy(userId = promotedUserId)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        val result = strict.declineParticipation(eventId, userId)
+
+        assertEquals(50, result.penaltyPoints)
+        // Замена всё равно поднимается: состав не должен остаться неполным.
+        verify(exactly = 1) { eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId)) }
+        verify(exactly = 1) {
+            reputationService.penalizeDecline(ReputationKind.late_decline_covered, userId, clubId, eventId, any())
+        }
     }
 
     @Test
@@ -114,8 +153,10 @@ class Stage2ServiceTest {
 
         service.declineParticipation(eventId, userId)
 
-        // Замены нет → отказавшийся оставил дыру → штраф −100.
-        verify(exactly = 1) { reputationService.penalizeAbandonedSlot(userId, clubId, eventId, any()) }
+        // Замены нет, но до встречи ещё далеко → дыра в составе: abandoned_slot (−100).
+        verify(exactly = 1) {
+            reputationService.penalizeDecline(ReputationKind.abandoned_slot, userId, clubId, eventId, any())
+        }
     }
 
     @Test
@@ -144,8 +185,8 @@ class Stage2ServiceTest {
         // Реальный порог 4ч; событие через 2ч. У события с лимитом это был бы отказ «не позже чем…»,
         // у открытой встречи порога нет, штраф и промоут не существуют.
         val strict = Stage2Service(
-            eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
-            declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+            eventRepository, eventResponseRepository, membershipRepository, rosterService, eventService,
+            eventPublisher, reputationService, lateDeclineThresholdMinutes = 240, stage2TriggerMinutesBefore = 1440
         )
         every { eventRepository.findById(eventId) } returns
             event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)
@@ -157,7 +198,7 @@ class Stage2ServiceTest {
         val result = strict.declineParticipation(eventId, userId)
 
         assertEquals("declined", result.status)
-        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeDecline(any(), any(), any(), any(), any()) }
         // Промоут из очереди даже не запрашивается — waitlist у открытой встречи недостижим.
         verify(exactly = 0) { eventResponseRepository.findFirstWaitlisted(any()) }
     }
@@ -365,7 +406,60 @@ class Stage2ServiceTest {
         service.declineParticipation(eventId, userId)
 
         verify(exactly = 1) { eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId)) }
-        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeDecline(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `decline hands the closed roster to RosterService with the count after the decline`() {
+        // Опустел ли состав и пробит ли минимум — решает общий путь RosterService.settleClosedRoster
+        // (тот же, что у кика и выхода из клуба); отказ лишь сообщает ему новый размер состава.
+        every { eventRepository.findById(eventId) } returns
+            event(
+                eventDatetime = OffsetDateTime.now().plusHours(2),
+                participantLimit = 2, minParticipants = 2
+            )
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) { rosterService.settleClosedRoster(match { it.minParticipants == 2 }, 1) }
+    }
+
+    @Test
+    fun `decline that empties a closed roster cancels the event`() {
+        // Ушёл последний, кто держал место. Встречи без людей не бывает — отменяем тем же
+        // каскадом, что и вручную: пост в чат, DM непокрытым, сбор в released.
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 1)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) { rosterService.settleClosedRoster(any(), 0) }
+    }
+
+    @Test
+    fun `decline with a replacement keeps the roster full and stays silent`() {
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = 2)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.waitlisted).copy(userId = UUID.randomUUID())
+        every { eventResponseRepository.countConfirmed(eventId) } returns 2
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) { rosterService.settleClosedRoster(any(), 2) }
     }
 
     @Test
@@ -380,8 +474,9 @@ class Stage2ServiceTest {
     private fun event(
         eventDatetime: OffsetDateTime,
         status: EventStatus = EventStatus.stage_2,
-        // null = открытая встреча (V62) — кейсы AC-OPEN1/2 передают null явно.
-        participantLimit: Int? = 10
+        // null = формат «сколько придёт» — кейсы AC-OPEN1/2 передают null явно.
+        participantLimit: Int? = 10,
+        minParticipants: Int? = null
     ) = Event(
         id = eventId,
         clubId = clubId,
@@ -391,6 +486,7 @@ class Stage2ServiceTest {
         locationText = "Place",
         eventDatetime = eventDatetime,
         participantLimit = participantLimit,
+        minParticipants = minParticipants,
         votingOpensDaysBefore = 14,
         status = status,
         stage2Triggered = true,

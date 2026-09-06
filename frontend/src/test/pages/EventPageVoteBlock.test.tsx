@@ -40,6 +40,7 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',
@@ -50,16 +51,21 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 20,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
-    isUrgent: false,
+    format: 'normal',
     goingCount: 2,
     maybeCount: 1,
     notGoingCount: 1,
     confirmedCount: 0,
     noAnswerCount: 0,
-    confirmedDeclineDeadline: FUTURE,
+    minParticipants: null,
+    rosterDecided: false,
+    declineConsequence: null,
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
-    abandonedSlotPenaltyPoints: 100,
+    rosterDeadline: null,
+    rosterClosed: false,
+    waitlistedCount: 0,
+    declineCostPoints: 0,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -119,12 +125,15 @@ beforeEach(() => {
 });
 
 describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
-  it('AC-VB1/VB2: кольцо считает занятость мест, «возможно» на него не влияет', async () => {
-    mockEndpoints({ event: stage1Event({ goingCount: 12, maybeCount: 5, notGoingCount: 2 }) });
+  it('AC-VB1/VB2: кольцо считает СОСТАВ, «возможно» на него не влияет', async () => {
+    // V83: у встречи с порогом набора голос «Иду» сразу кладёт в состав, поэтому кольцо считает
+    // confirmedCount на обеих фазах, а подпись — «в составе» вместо «мест занято».
+    mockEndpoints({
+      event: stage1Event({ goingCount: 12, maybeCount: 5, notGoingCount: 2, confirmedCount: 12 }),
+    });
     const { container } = renderEventPage();
 
-    // «12» есть и в счётчике кнопки, и в кольце — проверяем именно кольцо.
-    expect(await screen.findByText('мест занято')).toBeInTheDocument();
+    expect(await screen.findByText('в составе')).toBeInTheDocument();
     expect(container.querySelector('.rd-donut-num')).toHaveTextContent('12 / 20');
 
     // Дуга отмеряется stroke-dasharray = длина_окружности × going/лимит. 12/20 = 60%.
@@ -134,8 +143,8 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
     expect(filled).toBeCloseTo(circumference * 0.6, 1);
   });
 
-  it('AC-VB3: открытая встреча — кольцо закрашено целиком, знаменателя нет', async () => {
-    mockEndpoints({ event: stage1Event({ participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
+  it('AC-VB3: открытая — кольцо закрашено целиком, знаменателя нет', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'open', participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
     const { container } = renderEventPage();
 
     expect(await screen.findByText('идут')).toBeInTheDocument();
@@ -199,25 +208,39 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
   });
 });
 
-describe('EventPage — бейдж формата встречи (PO 2026-08-01)', () => {
-  it('событие с местами → «🎟 ВСТРЕЧА С МЕСТАМИ»', async () => {
+describe('EventPage — бейдж формата встречи (event-formats.md § 9.1)', () => {
+  it('обычная без минимума → «👥 ДО N»', async () => {
     mockEndpoints({ event: stage1Event() });
     renderEventPage();
 
-    expect(await screen.findByText('🎟 ВСТРЕЧА С МЕСТАМИ')).toBeInTheDocument();
+    expect(await screen.findByText('👥 ДО 20')).toBeInTheDocument();
   });
 
-  it('срочная встреча → «⚡ СРОЧНАЯ ВСТРЕЧА»', async () => {
-    mockEndpoints({ event: stage1Event({ isUrgent: true, status: 'stage_2' }) });
+  it('обычная с минимумом → «👥 MIN–MAX»', async () => {
+    mockEndpoints({ event: stage1Event({ minParticipants: 4 }) });
     renderEventPage();
 
-    expect(await screen.findByText('⚡ СРОЧНАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('👥 4–20')).toBeInTheDocument();
   });
 
-  it('открытая встреча → «🌊 ОТКРЫТАЯ ВСТРЕЧА»', async () => {
-    mockEndpoints({ event: stage1Event({ participantLimit: null, stage2LeadMinutes: null }) });
+  it('открытая → «🌊 ОТКРЫТАЯ»', async () => {
+    mockEndpoints({ event: stage1Event({ format: 'open', participantLimit: null, stage2LeadMinutes: null }) });
     renderEventPage();
 
-    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
+  });
+
+  it('засечка минимума на кольце есть только при включённом минимуме', async () => {
+    mockEndpoints({ event: stage1Event({ minParticipants: 4 }) });
+    const { container, unmount } = renderEventPage();
+
+    await screen.findByText('👥 4–20');
+    expect(container.querySelector('.rd-roster-notch')).not.toBeNull();
+    unmount();
+
+    mockEndpoints({ event: stage1Event() });
+    const second = renderEventPage();
+    await screen.findByText('👥 ДО 20');
+    expect(second.container.querySelector('.rd-roster-notch')).toBeNull();
   });
 });

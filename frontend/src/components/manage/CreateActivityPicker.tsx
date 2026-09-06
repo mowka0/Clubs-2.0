@@ -1,6 +1,8 @@
 import { FC, ReactNode, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
+import type { EventFormat } from '../../types/api';
+import { formatWords } from '../../utils/eventFormat';
 
 interface ActivityTypeOptionsProps {
   /** Вызывается с выбранным типом активности. Побочных эффектов здесь нет — шаг/хаптику владеет родительский flow. */
@@ -155,35 +157,26 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick, onPi
   );
 };
 
-// Формат события (решения PO 2026-07-21 и 2026-07-23): «с местами» — классика с лимитом,
-// гонкой за места и листом ожидания; «срочная» — то же с местами, но БЕЗ Этапа 1 (рождается
-// сразу в подтверждении мест, для встреч в ближайшие часы); «открытая встреча» — без лимита
-// (participantLimit = null на бэке), целиком вне репутации. Один движок, разные контракты.
-export type EventFormatKey = 'limited' | 'open' | 'urgent';
-
-const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string; subtitle: string }[] = [
+// Формат события (V86, решение PO 2026-09-02): две карточки, третья («с бронью») появится с
+// деньгами. Чисел на этом шаге ещё нет, поэтому карточки названы правилом, а не «4–10»:
+// конкретика появляется в форме и на бейджах, где максимум и минимум уже выбраны.
+const EVENT_FORMAT_OPTIONS: { key: EventFormat; emoji: string; title: string; subtitle: string }[] = [
   {
-    key: 'limited',
-    emoji: '🎟',
-    title: 'С местами',
-    subtitle: 'Лимит участников, репутация и лист ожидания',
-  },
-  {
-    key: 'urgent',
-    emoji: '⚡️',
-    title: 'Срочная встреча',
-    subtitle: 'В ближайшие часы: без голосования — сразу подтверждение мест',
+    key: 'normal',
+    emoji: '👥',
+    title: 'Обычная встреча',
+    subtitle: 'Мест ограниченное число, можно задать минимум',
   },
   {
     key: 'open',
     emoji: '🌊',
     title: 'Открытая встреча',
-    subtitle: 'Без лимита и вне репутации — приходят все желающие',
+    subtitle: 'Без мест и без обязательств — приходят все',
   },
 ];
 
 interface EventFormatOptionsProps {
-  onPick: (format: EventFormatKey) => void;
+  onPick: (format: EventFormat) => void;
   /**
    * Сколько сохранённых шаблонов доступно вызывающему. 0 — пункт «Готовые шаблоны» не
    * показывается вовсе: пустой список хуже отсутствующего пункта.
@@ -194,8 +187,8 @@ interface EventFormatOptionsProps {
 }
 
 // Ключ пункта «Готовые шаблоны» на шаге формата. Формат встречи шаблон несёт сам, поэтому
-// пункт не выбирает формат, а уводит на список — отсюда отдельный ключ вне EventFormatKey.
-type FormatStepKey = EventFormatKey | 'templates';
+// пункт не выбирает формат, а уводит на список — отсюда отдельный ключ вне EventFormat.
+type FormatStepKey = EventFormat | 'templates';
 
 /** Выбор формата, показывается после «Событие» в flow создания (зеркалит шаг «Тип сбора»). */
 export const EventFormatOptions: FC<EventFormatOptionsProps> = ({
@@ -236,14 +229,11 @@ interface EventTemplateOptionsProps {
   isDeleting: boolean;
 }
 
-// Подпись формата в строке шаблона — СЛОВАМИ, без эмодзи: цветной 🎟 внутри приглушённой
-// строки метаданных рисовался платформенным шрифтом (ярко-красный «ADMIT ONE») и выбивался
-// из строки (правка PO 2026-08-11). Эмодзи-ярлыки форматов остались там, где они и были
-// задуманы, — на карточках лент и в шапке страницы встречи.
+// Подпись формата в строке шаблона — СЛОВАМИ, без эмодзи (правка PO 2026-08-11): цветной
+// эмодзи внутри приглушённой строки метаданных рисовался платформенным шрифтом и выбивался
+// из строки. Словарь общий с бейджами (eventFormat.ts), чтобы «4–10» читалось одинаково везде.
 function formatLabel(template: EventTemplateDto): string {
-  if (template.isOpenEvent) return 'без лимита';
-  if (template.isUrgentEvent) return 'срочная';
-  return `${template.participantLimit} мест`;
+  return formatWords(template.format, template.participantLimit, template.minParticipants);
 }
 
 const WEEKDAY_SHORT = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];

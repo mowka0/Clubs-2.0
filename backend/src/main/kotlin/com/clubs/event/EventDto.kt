@@ -16,6 +16,8 @@ import java.util.UUID
 data class EventDetailDto(
     val id: UUID,
     val clubId: UUID,
+    // Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06) — фронт гейтит кнопки.
+    val createdBy: UUID,
     val title: String,
     val description: String?,
     // null = место не указано (опционально с V58) — фронт прячет блок места целиком.
@@ -27,11 +29,13 @@ data class EventDetailDto(
     // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»); null = нет.
     val locationHint: String?,
     val eventDatetime: OffsetDateTime,
-    // null = открытая встреча (V62): без гонки за места и листа ожидания, фронт прячет знаменатель.
+    // Потолок мест; null только у открытой встречи (V62): без гонки за места и очереди.
     val participantLimit: Int?,
+    // Порог набора (V86); null = минимум выключен. Всё ветвление «есть ли порог» — по нему.
+    val minParticipants: Int?,
     val votingOpensDaysBefore: Int,
     // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт —
-    // фронт показывает «подтверждение мест за N ч», не хардкодя порог (урок confirmedDeclineDeadline).
+    // фронт показывает «набор закрывается за N ч», не хардкодя порог: пороги считает бэкенд.
     // null = открытая встреча (гонки за места нет, интервал не настраивается; технический флип
     // статуса у неё всё же происходит — по глобальному дефолту).
     val stage2LeadMinutes: Int?,
@@ -41,30 +45,34 @@ data class EventDetailDto(
     // молча стал бы собственным значением события.
     val stage2LeadMinutesOverride: Int?,
     val status: String,
-    // Срочная встреча (V69): рождается сразу в stage_2, Этапа 1 у неё нет. На механику не влияет —
-    // нужна подаче: страница события показывает формат («⚡ срочная» / «🌊 открытая» / «🎟 с местами»)
-    // теми же ярлыками, что карточки лент, где поле уже отдаётся.
-    val isUrgent: Boolean,
+    // Формат встречи — единственный дискриминатор для клиента: бейдж, тексты блока набора и
+    // цена отказа читаются по нему и по minParticipants, а не по комбинации флагов.
+    val format: EventFormat,
     val goingCount: Int,
     val maybeCount: Int,
     val notGoingCount: Int,
     val confirmedCount: Int,
-    // Сколько участников клуба ещё не ответили на Этапе 2 (все с доступом, кроме сказавших
-    // «не пойду» и уже ответивших). Только счётчик — имена отдаёт менеджерский /pending.
+    // Сколько участников клуба ещё не ответили (все с доступом, кроме сказавших «не пойду», уже
+    // взявших место и создателя встречи). Только счётчик — имена отдаёт менеджерский /pending.
     val noAnswerCount: Int,
-    // Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник ещё может отказаться от места
-    // (= eventDatetime − events.stage2-decline-cutoff-minutes). Фронт прячет кнопку «Отказаться»
-    // у confirmed, когда now ≥ этого значения; бэк остаётся источником истины (declineParticipation
-    // отклонит поздний отказ). У waitlisted порога нет. Значение — чистая функция от даты события,
-    // поэтому одинаково для всех (не пер-юзер) и живёт в общем DTO. Убирает прежний рассинхрон:
-    // фронт держал копию порога хардкодом (4 ч), не связанную с рантайм-env бэка.
-    val confirmedDeclineDeadline: OffsetDateTime,
-    // Сколько очков репутации спишется за отказ от подтверждённого места без замены в очереди
-    // (abandoned_slot, положительное число для текста «спишется N очков»). Источник истины —
-    // ReputationPolicy на бэке; фронт НЕ хардкодит величину (тот же урок, что confirmedDeclineDeadline:
-    // копия порога на клиенте разъезжается с рантаймом). У открытой встречи штрафа нет — фронт
-    // предупреждение не показывает, поле игнорирует.
-    val abandonedSlotPenaltyPoints: Int,
+    // --- Набор состава ---
+    // Момент закрытия набора (= eventDatetime − эффективный stage2LeadMinutes); null у открытой
+    // встречи, у которой набора нет. Считает бэкенд: у фронта нет глобального дефолта.
+    val rosterDeadline: OffsetDateTime?,
+    // Состав закрыт: голоса больше не меняют его. У открытой всегда false.
+    val rosterClosed: Boolean,
+    // Размер очереди — плитка «В очереди» и текст «вас заменит первый из очереди».
+    val waitlistedCount: Int,
+    // Организатор нажал «Проводим» (V86): состав ниже минимума — его решение, полоса статуса
+    // говорит «Проводим составом N».
+    val rosterDecided: Boolean,
+    // Сколько очков спишется, если участник ИЗ СОСТАВА откажется прямо сейчас (0 = бесплатно).
+    // Цену считает сервер по RosterPolicy: клиент не выводит её из условий (тот же урок,
+    // что stage2LeadMinutes). Для waitlisted не применяется — выход из очереди бесплатен.
+    val declineCostPoints: Int,
+    // Что случится при отказе (V86, § 6): текст диалога выбирает клиент по значению, а не по
+    // условиям. null — пока идёт набор (диалог без последствий).
+    val declineConsequence: DeclineConsequence?,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
     // F5-14: опциональная причина отмены от организатора; null, если отменено без указания причины.
@@ -78,8 +86,12 @@ data class EventListItemDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val locationText: String?,
-    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    // Формат для бейджа карточки («👥 4–10» / «👥 До 10» / «🌊 Открытая»).
+    val format: EventFormat,
+    // null = открытая встреча — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
+    // Порог набора; null = минимум выключен. Бейдж «4–10» рисуется по паре с лимитом.
+    val minParticipants: Int?,
     val goingCount: Int,
     val status: String,
     val photoUrl: String?
@@ -100,16 +112,21 @@ data class MyEventListItemDto(
     val myParticipationStatus: String?,
     val goingCount: Int,
     val confirmedCount: Int,
-    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    // null = открытая встреча — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
-    // Срочная встреча (V69) — карточка показывает бейдж «⚡ срочная» вместо «🎟 обычная».
-    val isUrgent: Boolean,
+    // Порог набора; null = минимум выключен.
+    val minParticipants: Int?,
+    // Формат для бейджа карточки — тот же словарь, что на всех лентах.
+    val format: EventFormat,
     val actionRequired: Boolean,
     // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
     // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:
     // статус completed выставляется кроном с запасом 6ч, окно рассинхрона до ~7ч реально (AC-H14).
     val isHistory: Boolean
 )
+
+// Нижняя граница минимума участников: двое — уже встреча, «минимум 1» смысла не имеет (PO 2026-09-06).
+const val MIN_PARTICIPANTS_FLOOR = 2
 
 data class CreateEventRequest(
     @field:NotBlank(message = "Title is required")
@@ -138,34 +155,35 @@ data class CreateEventRequest(
     @field:Future(message = "Event datetime must be in the future")
     val eventDatetime: OffsetDateTime,
 
-    // null = ОТКРЫТАЯ ВСТРЕЧА (V62): событие без лимита участников — отдельный продуктовый
-    // тип поверх того же движка. @Positive пропускает null по контракту Bean Validation,
-    // ненулевое значение валидируется как раньше. Инвариант пары с isOpenEvent — ниже.
+    // Потолок мест; null = открытая встреча. @Positive пропускает null по контракту Bean
+    // Validation, ненулевое значение валидируется как раньше. Инвариант пары с format — ниже.
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    // Явный флаг формата: открытая встреча заявляется НАМЕРЕННО, а не отсутствием participantLimit.
-    // Без флага случайно пропущенное поле лимита молча создавало бы событие другого продуктового
-    // типа (без гонки за места и репутации за посещение) вместо прежнего 400.
-    val isOpenEvent: Boolean = false,
+    // Порог набора (V86), по желанию; null = выключен. Не выше лимита — инвариант ниже.
+    @field:Positive(message = "Minimum participants must be positive")
+    val minParticipants: Int? = null,
+
+    // Формат встречи заявляется НАМЕРЕННО, а не выводится из отсутствия лимита: пропущенное поле
+    // лимита должно давать 400, а не молча создавать встречу другого продуктового типа. Литералы
+    // V85 (min/max/any) принимаются до следующего релиза — см. EventFormatInput.
+    @field:NotNull(message = "Event format is required")
+    val format: EventFormatInput,
 
     @field:Min(value = 1, message = "Voting opens days before must be at least 1")
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
     val votingOpensDaysBefore: Int = 14,
 
-    // За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест) — выбор
-    // организатора (V67/V68, решения PO 2026-07-23). null = глобальный дефолт
-    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 18ч/36ч/3 дня/5 дней.
-    // Встречи «ближе 18 часов» закрывает формат «Срочная встреча» (isUrgentEvent), а не малый
-    // интервал. Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68).
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    // За сколько МИНУТ до старта закрывается НАБОР СОСТАВА — выбор организатора (V67/V68,
+    // с V83 поле несёт смысл «дедлайн набора»). null = глобальный дефолт
+    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 6ч/12ч/18ч/36ч/3 дня.
+    // Встречу, до которой осталось меньше интервала, без минимума принимаем как есть (дедлайн
+    // уже в прошлом → состав закроется ближайшим тиком), а с минимумом отвергаем: иначе тот же
+    // тик отменил бы её, не дав никому проголосовать (EventService.createEvent).
+    // Диапазон ЗДЕСЬ уже, чем CHECK chk_events_stage2_lead_minutes (60..7200, V83).
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
-
-    // Срочная встреча (решение PO 2026-07-23): обычное событие с местами, но БЕЗ Этапа 1 —
-    // рождается сразу в stage_2, участники немедленно подтверждают места. Репутация работает
-    // как у обычного события. Явный флаг по тому же принципу, что isOpenEvent.
-    val isUrgentEvent: Boolean = false,
 
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
@@ -182,24 +200,29 @@ data class CreateEventRequest(
     val isSomeLocationProvided: Boolean
         get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
 
-    // Формат и лимит согласованы: открытая встреча — БЕЗ лимита, обычное событие — С лимитом.
-    // Ловит и старый баг-класс «забыли поле» (limit=null без флага → 400, как до V62), и
-    // противоречивый ввод (флаг + лимит одновременно).
-    @get:AssertTrue(message = "Open event must have no participant limit; a regular event requires one")
+    // Формат и лимит — один факт, записанный дважды: открытая БЕЗ лимита, обычная С лимитом.
+    // Ловит и старый баг-класс «забыли поле лимита», и противоречивый ввод.
+    @get:AssertTrue(message = "Format 'open' must have no participant limit; 'normal' requires one")
     val isParticipantLimitConsistent: Boolean
-        get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+        get() = format.isOpen == (participantLimit == null)
 
-    // Открытая встреча целиком вне двухэтапки — свой lead Этапа 2 для неё бессмысленен и
-    // почти наверняка означает ошибку клиента, а не намерение.
-    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    // Порог не выше потолка (зеркалит CHECK chk_events_min_participants). Заодно закрывает
+    // «минимум у открытой»: у неё нет лимита, значит, и минимума быть не может.
+    @get:AssertTrue(message = "Minimum participants must be at least 2 and not exceed the participant limit")
+    val isMinParticipantsConsistent: Boolean
+        // Минимум от 2 (PO 2026-09-06): «минимум 1» — это встреча при любом составе, для неё минимум выключают.
+        get() = minParticipants == null ||
+            (participantLimit != null && minParticipants >= MIN_PARTICIPANTS_FLOOR && minParticipants <= participantLimit)
+
+    // У открытой набора нет — свой интервал для неё бессмысленен и почти наверняка
+    // означает ошибку клиента, а не намерение.
+    @get:AssertTrue(message = "Format 'open' has no roster; stage2LeadMinutes is not applicable")
     val isStage2LeadConsistent: Boolean
-        get() = !isOpenEvent || stage2LeadMinutes == null
+        get() = !format.isOpen || stage2LeadMinutes == null
 
-    // Срочная встреча = событие с местами (не открытая) и без своего интервала: Этапа 1 нет,
-    // поэтому «за сколько до старта переходить в Этап 2» к ней неприменимо.
-    @get:AssertTrue(message = "Urgent event must be a limited event without a custom stage 2 lead")
-    val isUrgentConsistent: Boolean
-        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
+    /** Порог с учётом легаси-литерала `min` (число было порогом → «ровно N»). */
+    val effectiveMinParticipants: Int?
+        get() = minParticipants ?: participantLimit?.takeIf { format.impliesMinimum }
 }
 
 
@@ -231,9 +254,12 @@ data class TeaserEventDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val status: String,
-    // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая» — как на карточках ленты.
-    val isUrgent: Boolean,
-    val isOpenEvent: Boolean,
+    // Формат для бейджа — как на карточках ленты.
+    val format: EventFormat,
+    // Потолок мест, null у открытой.
+    val participantLimit: Int?,
+    // Порог набора; null = минимум выключен.
+    val minParticipants: Int?,
     // Раскладка фазы для счётчика: до Этапа 2 — «идут N» (голоса), после — «подтвердили N».
     val goingCount: Int,
     val confirmedCount: Int
@@ -241,7 +267,7 @@ data class TeaserEventDto(
 
 /**
  * Полное редактирование встречи организатором (решение PO 2026-07-26). Окно то же, что у
- * переноса: ТОЛЬКО Этап 1 — с началом подтверждения мест правки запрещены, подтвердившие
+ * переноса: ТОЛЬКО пока идёт набор — с закрытием состава правки запрещены, участники
  * обещали прийти в конкретное место и время.
  *
  * Семантика PUT: клиент присылает ПОЛНЫЙ набор редактируемых полей (форма редактирования
@@ -249,13 +275,12 @@ data class TeaserEventDto(
  * избавляет от трёхзначной логики partial-update, где null неотличим от «поле не прислали».
  *
  * НЕ редактируется:
- * - формат встречи (обычная/открытая/срочная) — он определяет механику мест и репутации,
+ * - формат встречи — он определяет механику мест и репутации,
  *   смена формата на лету переписала бы правила уже идущего голосования;
  * - `votingOpensDaysBefore` — окно Этапа 1 уже открыто, менять его задним числом бессмысленно.
  *
- * Инварианты, зависящие от формата (лимит у открытой, свой интервал Этапа 2 у открытой и
- * срочной), проверяются в [EventService.updateEvent]: здесь формат неизвестен, он берётся
- * из самого события.
+ * Инварианты, зависящие от формата (лимит у открытой, свой интервал у открытой), проверяются
+ * в [EventService.updateEvent]: здесь формат неизвестен, он берётся из самого события.
  */
 data class UpdateEventRequest(
     @field:NotBlank(message = "Title is required")
@@ -283,12 +308,16 @@ data class UpdateEventRequest(
     val eventDatetime: OffsetDateTime,
 
     // null = открытая встреча (формат события неизменяем, поэтому согласованность с ним
-    // проверяет Service). Для события с местами лимит обязателен и положителен.
+    // проверяет Service). Для встречи с местами лимит обязателен и положителен.
     @field:Positive(message = "Participant limit must be positive")
     val participantLimit: Int? = null,
 
-    // Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68); null = глобальный дефолт.
-    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    // Порог набора (V86): включается и выключается в том же окне, что правится лимит.
+    @field:Positive(message = "Minimum participants must be positive")
+    val minParticipants: Int? = null,
+
+    // Нижняя граница — пресет формы (6 ч); CHECK в БД шире (60..7200, V83). null = глобальный дефолт.
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
     @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
 
@@ -303,4 +332,10 @@ data class UpdateEventRequest(
     @get:AssertTrue(message = "Either a map point or a location hint is required")
     val isSomeLocationProvided: Boolean
         get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
+
+    @get:AssertTrue(message = "Minimum participants must be at least 2 and not exceed the participant limit")
+    val isMinParticipantsConsistent: Boolean
+        // Минимум от 2 (PO 2026-09-06): «минимум 1» — это встреча при любом составе, для неё минимум выключают.
+        get() = minParticipants == null ||
+            (participantLimit != null && minParticipants >= MIN_PARTICIPANTS_FLOOR && minParticipants <= participantLimit)
 }

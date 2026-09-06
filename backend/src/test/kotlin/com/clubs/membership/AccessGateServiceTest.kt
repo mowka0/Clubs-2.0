@@ -29,6 +29,7 @@ class AccessGateServiceTest {
     private lateinit var skladchinaRepository: com.clubs.skladchina.SkladchinaRepository
     private lateinit var notificationService: com.clubs.bot.NotificationService
     private lateinit var eventPublisher: org.springframework.context.ApplicationEventPublisher
+    private lateinit var rosterService: com.clubs.event.RosterService
     private lateinit var service: AccessGateService
 
     private val clubId = UUID.randomUUID()
@@ -45,6 +46,7 @@ class AccessGateServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         notificationService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
+        rosterService = mockk(relaxed = true)
         // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
         // accessPeriodDays = 0 — прод-дефолт «календарный месяц»; staging-режим N дней покрыт отдельным тестом.
         service = AccessGateService(
@@ -52,6 +54,7 @@ class AccessGateServiceTest {
             userRepository = userRepository, clubRepository = clubRepository,
             applicationRepository = applicationRepository,
             eventResponseRepository = eventResponseRepository,
+            rosterService = rosterService,
             skladchinaRepository = skladchinaRepository,
             notificationService = notificationService,
             eventPublisher = eventPublisher,
@@ -207,6 +210,7 @@ class AccessGateServiceTest {
             userRepository = userRepository, clubRepository = clubRepository,
             applicationRepository = applicationRepository,
             eventResponseRepository = eventResponseRepository,
+            rosterService = rosterService,
             skladchinaRepository = skladchinaRepository,
             notificationService = notificationService,
             eventPublisher = eventPublisher,
@@ -423,34 +427,33 @@ class AccessGateServiceTest {
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active)
         every { membershipRepository.remove(any()) } returns 1
         val eventId = UUID.randomUUID()
-        val promotedUserId = UUID.randomUUID()
         every { eventResponseRepository.findConfirmedActiveEventObligations(targetUserId, clubId) } returns
             listOf(com.clubs.event.EventObligation(eventId, OffsetDateTime.now().plusDays(1)))
-        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns promotedUserId
 
         service.removeMember(clubId, targetUserId, callerId, "нарушение правил клуба")
 
-        // Слот сериализован локом, ответы удалены, складчины очищены, очередь продвинута
+        // Слот сериализован локом, ответы удалены, складчины очищены; освобождение места —
+        // через общий путь RosterService.releaseSeat (промоут, отмена при нуле, порог MIN),
+        // и строго ПОСЛЕ удаления строки: иначе метод повысил бы очередь на ещё занятое место.
         verify { eventResponseRepository.lockEventSlots(eventId) }
-        verify { eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId) }
         verify { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId) }
-        verify { eventPublisher.publishEvent(com.clubs.event.WaitlistPromotedEvent(eventId, promotedUserId)) }
-        verify { eventPublisher.publishEvent(com.clubs.event.EventRosterChangedEvent(eventId)) }
+        io.mockk.verifyOrder {
+            eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
+            rosterService.releaseSeat(eventId)
+        }
+        // Штрафов за кик нет — репутацию рушит организатор, а не участник.
+        verify(exactly = 0) { eventResponseRepository.promoteFirstWaitlisted(any()) }
     }
 
     @Test
-    fun `removeMember без очереди — слот просто освобождается, промоут-событие не летит`() {
+    fun `removeMember без броней — RosterService не трогается`() {
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active)
         every { membershipRepository.remove(any()) } returns 1
-        val eventId = UUID.randomUUID()
-        every { eventResponseRepository.findConfirmedActiveEventObligations(targetUserId, clubId) } returns
-            listOf(com.clubs.event.EventObligation(eventId, OffsetDateTime.now().plusDays(1)))
-        every { eventResponseRepository.promoteFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.findConfirmedActiveEventObligations(targetUserId, clubId) } returns emptyList()
 
         service.removeMember(clubId, targetUserId, callerId, "нарушение правил клуба")
 
-        verify { eventPublisher.publishEvent(com.clubs.event.EventRosterChangedEvent(eventId)) }
-        verify(exactly = 0) { eventPublisher.publishEvent(ofType(com.clubs.event.WaitlistPromotedEvent::class)) }
+        verify(exactly = 0) { rosterService.releaseSeat(any()) }
     }
 
     @Test

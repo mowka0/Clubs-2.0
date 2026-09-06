@@ -23,11 +23,13 @@ class VoteService(
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
+    private val rosterService: RosterService,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
 
+    @Transactional
     fun castVote(eventId: UUID, userId: UUID, request: CastVoteRequest): VoteResponseDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
 
@@ -53,6 +55,9 @@ class VoteService(
             ?: throw ValidationException("Invalid vote value: ${request.vote}")
 
         eventResponseRepository.upsertStage1Vote(eventId, userId, voteEnum)
+        // Встреча с порогом набора (V83): голос «Иду» сразу кладёт в состав или в очередь, любой
+        // другой — выводит оттуда. У формата «сколько придёт» голос по-прежнему только мнение.
+        rosterService.applyVote(event, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
         // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
@@ -68,15 +73,34 @@ class VoteService(
     }
 
     fun getMyVote(eventId: UUID, userId: UUID): MyVoteDto {
-        eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
         // После Этапа 2 действующий статус пользователя — final_status (confirmed / waitlisted /
         // declined); до Этапа 2 — голос этапа 1. EventPage завязывает на это единственное поле
         // И кнопки подтверждения/отказа, И бейдж статуса, поэтому подтверждённый пользователь
         // должен прочитать назад "confirmed", а не неизменившийся "going" с этапа 1 — иначе UI
         // никогда не отразит подтверждение/отказ. Тот же приоритет, что в getEventResponders ниже.
-        return MyVoteDto(vote = response?.finalStatus?.literal ?: response?.stage1Vote?.literal)
+        return MyVoteDto(
+            vote = effectiveStatus(event, response?.stage1Vote?.literal, response?.finalStatus?.literal),
+            // Место показываем только пока идёт набор: после закрытия состава его несёт сам vote.
+            seat = if (isCollectingRoster(event)) response?.stage2Vote?.literal else null
+        )
     }
+
+    /**
+     * Действующий статус участника для UI. Обычно это final_status с откатом на голос Этапа 1,
+     * но у встречи с ПОРОГОМ НАБОРА (V83), пока набор идёт, приоритет обратный: голос «Иду» сразу
+     * пишет final_status = confirmed, и если отдать его наружу, человек выпадет из вкладки «Идут»,
+     * а кнопка его голоса перестанет подсвечиваться — состав в этой фазе показывает кольцо, а
+     * список и кнопки живут голосами.
+     */
+    private fun effectiveStatus(event: Event, stage1: String?, finalStatus: String?): String? =
+        if (isCollectingRoster(event)) stage1 ?: finalStatus
+        else finalStatus ?: stage1
+
+    /** Встреча с лимитом, у которой набор ещё идёт: голос и место значат разное. */
+    private fun isCollectingRoster(event: Event): Boolean =
+        event.isRosterEvent && event.status == EventStatus.upcoming
 
     /**
      * Возвращает список откликнувшихся на событие (с данными пользователя + текущим намерением).
@@ -106,7 +130,8 @@ class VoteService(
                 firstName = r.firstName,
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
-                status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
+                status = effectiveStatus(event, r.stage1Vote?.literal, r.finalStatus?.literal) ?: "going",
+                seat = if (isCollectingRoster(event)) r.finalStatus?.literal else null,
                 attendance = r.attendance?.literal,
                 disputeNote = if (isManager) r.disputeNote else null,
                 telegramUsername = if (isManager) r.telegramUsername else null
@@ -115,8 +140,8 @@ class VoteService(
     }
 
     /**
-     * Таб «Без ответа»: участники клуба, от которых ещё ждут ответа на Этапе 2. Только менеджеру —
-     * рядовому участнику знать, кто молчит, незачем.
+     * Таб «Без ответа»: участники клуба, от которых ещё ждут ответа — на наборе и после закрытия
+     * (V86). Только менеджеру — рядовому участнику знать, кто молчит, незачем.
      */
     fun getPendingMembers(eventId: UUID, userId: UUID): List<EventResponderDto> {
         requireEventManager(eventId, userId)
@@ -143,19 +168,34 @@ class VoteService(
     @Transactional
     fun remind(eventId: UUID, userId: UUID, targetUserId: UUID?): RemindResultDto {
         val event = requireEventManager(eventId, userId)
-        // Окно то же, в котором участник может подтвердить (см. Stage2Service.confirmParticipation).
-        if (event.status != EventStatus.stage_2) throw ValidationException("Confirmation is not open for this event")
+        // Окно то же, в котором участник может ответить: подтверждение (Этап 2) либо идущий набор
+        // состава. Второе — событие ещё `upcoming` — и есть главный случай напоминания у форматов
+        // с лимитом: после закрытия состава отвечать уже нечего, а до него молчание участников
+        // решает, наберётся ли встреча вообще.
+        if (event.status != EventStatus.stage_2 && !isCollectingRoster(event)) {
+            throw ValidationException("Confirmation is not open for this event")
+        }
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")
 
         // Цели пересекаем с серверным набором: чужой userId не должен попасть в рассылку.
-        val pending = eventResponseRepository.findStage2PendingMembers(eventId).map { it.userId }
+        val pendingMembers = eventResponseRepository.findStage2PendingMembers(eventId)
+        val pending = pendingMembers.map { it.userId }
         val targets = targetUserId?.let { target -> pending.filter { it == target } } ?: pending
-        val telegramIds = eventResponseRepository.markStage2Reminded(eventId, targets)
+        val reminded = eventResponseRepository.markStage2Reminded(eventId, targets)
+        val telegramIds = reminded.map { it.telegramId }
 
         // DM — на AFTER_COMMIT: уведомление без закоммиченной отметки означало бы повторную отправку.
-        if (telegramIds.isNotEmpty()) eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds))
+        // Текст зависит от этапа: на наборе зовём проголосовать до дедлайна, после — подтвердить.
+        if (telegramIds.isNotEmpty()) {
+            val rosterDeadline = if (isCollectingRoster(event)) rosterService.rosterDeadline(event) else null
+            eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds, rosterDeadline))
+        }
         log.info("Stage 2 reminder: eventId={} userId={} reminded={}", eventId, userId, telegramIds.size)
-        return RemindResultDto(remindedCount = telegramIds.size)
+        // Кому именно напомнили — для тоста на странице и DM-отчёта организатору (PO 2026-09-06).
+        val remindedIds = reminded.map { it.userId }.toSet()
+        val people = pendingMembers.filter { it.userId in remindedIds }
+            .map { RemindedPersonDto(userId = it.userId, firstName = it.firstName, lastName = it.lastName) }
+        return RemindResultDto(remindedCount = telegramIds.size, reminded = people)
     }
 
     /** Событие + гейт «владелец или активный со-организатор клуба события». */

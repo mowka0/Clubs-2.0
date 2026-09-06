@@ -1,5 +1,6 @@
 package com.clubs.activity.dto
 
+import com.clubs.event.EventFormat
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -33,7 +34,8 @@ class ActivityItemDtoTest {
             eventDatetime = OffsetDateTime.parse("2026-06-01T18:00:00Z"),
             locationText = "Main square",
             participantLimit = 20,
-            isUrgent = false,
+            minParticipants = null,
+            format = EventFormat.NORMAL,
             goingCount = 5,
             confirmedCount = 3,
             status = "PUBLISHED",
@@ -69,7 +71,8 @@ class ActivityItemDtoTest {
             eventDatetime = OffsetDateTime.parse("2026-06-01T18:00:00Z"),
             locationText = "Main square",
             participantLimit = 20,
-            isUrgent = false,
+            minParticipants = null,
+            format = EventFormat.NORMAL,
             goingCount = 0,
             confirmedCount = 0,
             status = "PUBLISHED",

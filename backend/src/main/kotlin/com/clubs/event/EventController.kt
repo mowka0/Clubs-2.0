@@ -25,7 +25,8 @@ class EventController(
     private val eventService: EventService,
     private val voteService: VoteService,
     private val stage2Service: Stage2Service,
-    private val attendanceService: AttendanceService
+    private val attendanceService: AttendanceService,
+    private val rosterService: RosterService
 ) {
 
     private val log = LoggerFactory.getLogger(EventController::class.java)
@@ -133,6 +134,21 @@ class EventController(
     ): ResponseEntity<RemindResultDto> {
         log.info("Remind to confirm: eventId={} userId={} target={}", id, user.userId, request?.userId)
         return ResponseEntity.ok(voteService.remind(id, user.userId, request?.userId))
+    }
+
+    /**
+     * «Проводим» (V86): организатор подтверждает встречу составом ниже минимума. Отметка, а не
+     * снятие минимума. Капабилити-гейт (MANAGE_EVENTS) — в сервисе, он же обслуживает
+     * callback-кнопку бота; отдельный эндпоинт, а не PUT: правка встречи после закрытия заперта.
+     */
+    @PostMapping("/api/events/{id}/proceed")
+    fun proceedRoster(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventDetailDto> {
+        log.info("Proceed roster: eventId={} userId={}", id, user.userId)
+        rosterService.proceed(id, user.userId)
+        return ResponseEntity.ok(eventService.getEvent(id))
     }
 
     @PostMapping("/api/events/{id}/confirm")
