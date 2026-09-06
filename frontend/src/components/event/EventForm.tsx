@@ -218,8 +218,8 @@ export const EventForm: FC<EventFormProps> = ({
     // проверяет то же самое в `EventService.requireRosterFitsBeforeStart`.
     if (hasLimit && eventDate.getTime() - Date.now() < effectiveStage2Lead * 60_000) {
       return fail(
-        `До встречи меньше ${formatLeadInterval(effectiveStage2Lead)} — набор не успеет закрыться. ` +
-          'Подвиньте время встречи или выберите интервал набора короче',
+        `До встречи меньше ${formatLeadInterval(effectiveStage2Lead)}. ` +
+          'Подвиньте время встречи или выберите срок короче',
       );
     }
     if (saveAsTemplate && !templateName.trim()) return fail('Укажите имя шаблона');
@@ -537,8 +537,8 @@ export const EventForm: FC<EventFormProps> = ({
             >
               <span className="rd-s2-dot" aria-hidden="true">👥</span>
               <span className="rd-s2-txt">
-                <span>Набор состава</span>
-                <b>закрывается за {formatLeadInterval(effectiveStage2Lead)}</b>
+                <span>Передумать бесплатно</span>
+                <b>можно за {formatLeadInterval(effectiveStage2Lead)} до встречи</b>
               </span>
               <span className="rd-s2-edit">{leadEditorOpen ? 'Скрыть' : 'Изменить'}</span>
             </button>
@@ -598,9 +598,8 @@ export const EventForm: FC<EventFormProps> = ({
                   </div>
                 </div>
                 <span className="rd-hint">
-                  {limits.minParticipants !== null
-                    ? 'До этого момента идёт набор. Наберётся минимум — встреча состоится, не наберётся — отменится.'
-                    : 'До этого момента идёт набор. В этот момент состав закроется — тем, кто успел.'}
+                  {`Передумать бесплатно можно за ${formatLeadInterval(effectiveStage2Lead)} до встречи, позже можно, но влияет на репутацию.`}
+                  {limits.minParticipants !== null && ' Не наберётся минимум к этому моменту — встреча отменится.'}
                 </span>
               </div>
             )}

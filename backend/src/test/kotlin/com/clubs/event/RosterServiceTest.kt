@@ -200,7 +200,7 @@ class RosterServiceTest {
         // Отмена идёт обычным каскадом (сбор → released, DM заинтересованным), а причина
         // называет само правило — участник видит её в DM и на странице встречи.
         verify(exactly = 1) {
-            eventService.cancelBySystem(target, "Не набрали 4 участников к закрытию набора")
+            eventService.cancelBySystem(target, "Не набрали 4 участников к назначенному сроку")
         }
         verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
         verify(exactly = 0) { eventPublisher.publishEvent(ofType(RosterClosedEvent::class)) }

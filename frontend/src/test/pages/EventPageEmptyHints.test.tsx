@@ -162,7 +162,7 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     });
     renderEventPage();
 
-    expect(await screen.findByText(/Состав ·/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места ·/)).toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Голосов пока нет/)).not.toBeInTheDocument();
   });
@@ -173,7 +173,7 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     renderEventPage();
 
     // Страница загрузилась (блок набора виден), но строки-намёка нет — responders не isSuccess.
-    expect(await screen.findByText(/Набор ·/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места ·/)).toBeInTheDocument();
     expect(screen.queryByText(/Голосов пока нет/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });

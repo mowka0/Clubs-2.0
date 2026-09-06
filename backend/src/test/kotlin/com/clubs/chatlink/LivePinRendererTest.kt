@@ -187,18 +187,20 @@ class LivePinRendererTest {
         val short = renderer.rosterText(withMin, confirmed = 3, deadline = deadline)
         assertTrue(short.contains("<b>Встреча: 4–15 человек</b>"))
         assertTrue(short.contains("👥 Собрались 3 из 4–15 — нужно ещё 1."))
-        assertTrue(short.contains("⏳ Набор закрывается 12.07.2026 01:00 МСК. Не наберём — встреча отменится."))
+        assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию. Не наберём к этому моменту — встреча отменится."))
 
         val reached = renderer.rosterText(withMin, confirmed = 5, deadline = deadline)
         assertTrue(reached.contains("👥 Собрались 5 из 4–15 — минимум набран, свободно 10."))
-        assertTrue(reached.contains("Состав закроется тем, кто успел."))
+        assertTrue(reached.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
+        assertTrue(!reached.contains("встреча отменится"))
 
         val full = renderer.rosterText(withMin, confirmed = 15, deadline = deadline)
         assertTrue(full.contains("👥 Мест нет: 15 из 15. Дальше — очередь на замену."))
 
         val noMin = renderer.rosterText(event, confirmed = 3, deadline = deadline)
         assertTrue(noMin.contains("👥 Заняты 3 из 15 мест — свободно 12."))
-        assertTrue(noMin.contains("Состав закроется тем, кто успел."))
+        assertTrue(noMin.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
+        assertTrue(!noMin.contains("встреча отменится"))
     }
 
     // AC-15: ниже минимума без «Проводим» — не «✅ Состав собран», а честная строка про решение.

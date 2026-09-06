@@ -814,11 +814,11 @@ export const EventPage: FC = () => {
    */
   const rosterStatusNote = (() => {
     if (!isRosterEvent || isCancelled || eventHappened) return null;
+    const seatsWord = `${freeSeats} ${pluralRu(freeSeats, ['место', 'места', 'мест'])}`;
     if (!rosterClosed) {
-      const deadlinePart = event.rosterDeadline
-        ? `Набор закрывается ${formatDeadlineShort(event.rosterDeadline)}`
-        : 'Когда набор закроется';
-      const seatsWord = `${freeSeats} ${pluralRu(freeSeats, ['место', 'места', 'мест'])}`;
+      // Дедлайн не «закрывает» ничего — свободное место можно занять и после него. Меняется
+      // только цена передумать, и полоса называет ровно это (решение PO 2026-09-05).
+      const deadlineAt = event.rosterDeadline ? formatDeadlineShort(event.rosterDeadline) : null;
       const headline = (() => {
         // Мест уже нет: голос принят, но человек за чертой — сказать об этом важнее,
         // чем повторить общий счётчик, который он и так видит в кольце.
@@ -830,12 +830,16 @@ export const EventPage: FC = () => {
         return hasMinimum ? `Минимум набран · свободно ${seatsWord}` : `Свободно ${seatsWord}`;
       })();
       const detail = mySeat === 'waitlisted'
-        ? 'Если кто-то передумает до закрытия набора, место перейдёт вам'
+        ? (deadlineAt
+          ? `Если кто-то передумает до ${deadlineAt}, место перейдёт вам`
+          : 'Если кто-то передумает, место перейдёт вам')
         : rosterShortage > 0
           // Отмена по недобору — не «робот решил», а правило, названное при создании.
           // Промолчать о нём здесь значило бы сделать её неожиданной.
-          ? `${deadlinePart} — если не наберём, встреча отменится`
-          : `${deadlinePart} — состав закроется тем, кто успел`;
+          ? (deadlineAt ? `До ${deadlineAt} — иначе встреча отменится` : 'Иначе встреча отменится')
+          : (deadlineAt
+            ? `До ${deadlineAt} передумать можно без влияния на репутацию`
+            : 'Пока передумать можно без влияния на репутацию');
       return (
         <div className="rd-roster-note">
           <span className="rd-roster-ico" aria-hidden="true">{mySeat === 'waitlisted' ? '🎫' : '⏳'}</span>
@@ -903,16 +907,20 @@ export const EventPage: FC = () => {
               : belowMinimum
                 // «Проводим» нажато (§ 4): организатор уже сказал, что проведёт этим составом.
                 ? `Проводим составом ${event.confirmedCount}`
-                : 'Состав собран — встреча состоится'}
+                : freeSeats > 0
+                  ? `Свободно ${seatsWord} — занять можно до старта`
+                  : 'Состав собран — встреча состоится'}
           </b>
           {/* Полоса объясняет ПРАВИЛО, а точную цену на момент действия называет подпись под
               кнопкой отказа ниже — иначе одна и та же фраза повторялась бы дважды. */}
-          {myVote === 'confirmed' && (
+          {myVote === 'confirmed' ? (
             <span>
               {event.declineCostPoints > 0
-                ? 'Отказ теперь платный: чем ближе встреча и чем пустее очередь, тем дороже'
-                : 'Отказаться бесплатно можно, пока есть замена в очереди'}
+                ? 'Отказ теперь влияет на репутацию: чем ближе встреча и чем пустее очередь, тем дороже'
+                : 'Отказаться без последствий можно, пока есть замена в очереди'}
             </span>
+          ) : (
+            <span>Место теперь — обещание: отказ повлияет на репутацию</span>
           )}
         </span>
       </div>
@@ -1144,14 +1152,16 @@ export const EventPage: FC = () => {
 
       {!isCancelled && (
       <>
-      {/* Набор (Этап 1) / состав (Этап 2+) — пончик + голосование либо счётчики без действий */}
+      {/* Места (встреча с местами, обе стадии) / идут → состав (открытая) — пончик + голосование
+          либо счётчики без действий */}
       <div className="rd-section-sub-h">
         {isRosterEvent
-          // У набора и закрытого состава один и тот же счёт — меняется только слово.
-          ? `${rosterClosed ? 'Состав' : 'Набор'} · ${event.confirmedCount}${limitSuffix}`
+          // Одно слово на обе стадии (PO 2026-09-05): места те же, дедлайн меняет лишь цену
+          // передумать, и об этом говорит полоса ниже, а не заголовок.
+          ? `Места · ${event.confirmedCount}${limitSuffix}`
           : finalComposition
             ? `Состав · ${event.confirmedCount}${limitSuffix}`
-            : `Набор · ${event.goingCount}${limitSuffix}`}
+            : `Идут · ${event.goingCount}${limitSuffix}`}
       </div>
       {rosterStatusNote}
       {/* Только ошибки голосования Этапа 1; ошибки confirm/decline Этапа 2 рендерятся в своём
@@ -1749,6 +1759,9 @@ export const EventPage: FC = () => {
                     ? (rosterFull ? 'Встать в очередь' : 'Занять свободное место')
                     : 'Подтвердить участие'}
               </button>
+              {isRosterEvent && !rosterFull && (
+                <span className="rd-hint">Место сразу станет обещанием — отказ повлияет на репутацию</span>
+              )}
               {(myVote === 'going' || myVote === 'maybe') && (
                 <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
                   Отказаться

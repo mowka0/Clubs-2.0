@@ -147,7 +147,7 @@ describe('CreateEventPage — открытие по шаблону', () => {
     expect(screen.getByRole('heading', { name: 'Открытая встреча' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Максимум участников' })).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Минимум участников' })).toBeNull();
-    expect(screen.queryByText('Набор состава')).toBeNull();
+    expect(screen.queryByText('Передумать бесплатно')).toBeNull();
   });
 
   it('AC-14 шаблон с минимумом включает переключатель и подставляет число', async () => {
@@ -214,7 +214,7 @@ describe('CreateEventPage — максимум и минимум участни�
 
     expect(await screen.findByRole('heading', { name: 'Открытая встреча' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Максимум участников' })).toBeNull();
-    expect(screen.queryByText('Набор состава')).toBeNull();
+    expect(screen.queryByText('Передумать бесплатно')).toBeNull();
   });
 
   it('минимум по умолчанию выключен, максимум со своей подписью', async () => {
@@ -237,7 +237,7 @@ describe('CreateEventPage — максимум и минимум участни�
     expect(minSwitch()).toHaveAttribute('aria-checked', 'true');
     expect(minInput()).toHaveValue('2');
     expect(screen.getByText(
-      'Собираемся, если будет минимум 2. Не наберём к закрытию набора — встреча отменится',
+      'Собираемся, если будет минимум 2. Не наберётся вовремя — встреча отменится',
     )).toBeInTheDocument();
   });
 
@@ -274,7 +274,7 @@ describe('CreateEventPage — максимум и минимум участни�
     await user.click(screen.getByRole('button', { name: 'Создать событие' }));
 
     expect(await screen.findByText(
-      'До встречи меньше 18 часов — набор не успеет закрыться. Подвиньте время встречи или выберите интервал набора короче',
+      'До встречи меньше 18 часов. Подвиньте время встречи или выберите срок короче',
     )).toBeInTheDocument();
     expect(events).toHaveLength(0);
   });

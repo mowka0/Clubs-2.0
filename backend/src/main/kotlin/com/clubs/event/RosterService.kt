@@ -176,7 +176,7 @@ class RosterService(
         when {
             event.status == EventStatus.cancelled -> throw ValidationException("Встреча отменена")
             !event.eventDatetime.isAfter(OffsetDateTime.now()) -> throw ValidationException("Встреча уже началась")
-            event.status != EventStatus.stage_2 -> throw ValidationException("Набор ещё идёт — состав не закрыт")
+            event.status != EventStatus.stage_2 -> throw ValidationException("«Проводим» пока недоступно — состав ещё меняется без влияния на репутацию")
         }
         val confirmed = eventResponseRepository.countConfirmed(eventId)
         if (event.isRosterDecided) return ProceedResult(confirmed, alreadyDecided = true)
@@ -197,7 +197,7 @@ class RosterService(
         RosterSchedule.deadline(event.eventDatetime, event.stage2LeadMinutes, defaultLeadMinutes)
 
     /** Причина отмены, которую увидят участники в DM и на странице встречи. */
-    private fun shortfallReason(min: Int) = "Не набрали $min участников к закрытию набора"
+    private fun shortfallReason(min: Int) = "Не набрали $min участников к назначенному сроку"
 
     /** Состав закрыт: голоса больше не набирают его, встреча состоится. */
     private fun closeRoster(event: Event, confirmed: Int) {

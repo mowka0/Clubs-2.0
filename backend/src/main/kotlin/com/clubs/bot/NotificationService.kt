@@ -188,7 +188,8 @@ class NotificationService(
         // там нечего, место даёт голос; после закрытия — подтвердить участие, как раньше.
         val text = if (rosterDeadline != null) {
             "🔔 Организатор ждёт ответа\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-                "Идёте или нет? Проголосуйте — набор закрывается ${rosterDeadline.format(fmt)}."
+                "Идёте или нет? Ответьте до ${rosterDeadline.format(fmt)} — до этого момента " +
+                "передумать можно без влияния на репутацию."
         } else {
             "🔔 Скоро встреча\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
                 "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
@@ -275,8 +276,8 @@ class NotificationService(
         rosterDeadline: java.time.OffsetDateTime
     ) {
         val text = "⏳ Минимум пока не набран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "Набрано $confirmedCount из $minParticipants. Набор закроется ${rosterDeadline.format(fmt)} — " +
-            "если не наберём, встреча отменится."
+            "Набрано $confirmedCount из $minParticipants. Если к ${rosterDeadline.format(fmt)} не наберём — " +
+            "встреча отменится."
 
         chatTelegramGateway.sendDmWithCallbackButton(
             telegramId = organizerTelegramId,

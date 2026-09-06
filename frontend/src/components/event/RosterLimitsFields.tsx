@@ -98,7 +98,7 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state }) => {
         )}
         <span className="rd-hint">
           {minEnabled
-            ? `Собираемся, если будет минимум ${limits.minParticipants}. Не наберём к закрытию набора — встреча отменится`
+            ? `Собираемся, если будет минимум ${limits.minParticipants}. Не наберётся вовремя — встреча отменится`
             : 'Выключен — встреча состоится при любом составе'}
         </span>
       </div>

@@ -275,8 +275,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   очереди «📋 Состав собран без вас». Кнопка «Открыть встречу» (WebApp).
 - **`sendRosterWarning(event, organizerTelegramId, confirmedCount, minParticipants, rosterDeadline)`**
   — на `RosterWarningEvent` (правило ②, за `events.roster-warning-minutes-before-deadline` до
-  дедлайна при недоборе): «⏳ Минимум пока не набран … Набрано 2 из 4. Набор закроется {дедлайн} —
-  если не наберём, встреча отменится.» Кнопка одна, callback `roster:remind:<eventId>` →
+  дедлайна при недоборе): «⏳ Минимум пока не набран … Набрано 2 из 4. Если к {дедлайн} не наберём —
+  встреча отменится.» Кнопка одна, callback `roster:remind:<eventId>` →
   `VoteService.remind` (все, кто без ответа); ответы «Напомнили N» / «Напоминать некому» /
   «Нет прав». Отправляется через `ChatTelegramGateway.sendDmWithCallbackButton`.
 - **`sendRosterBroken(event, organizerTelegramId, confirmedCount, minParticipants)`** — на
@@ -288,8 +288,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   встречу» (`sendDmWithWebAppAndCallbackButton`, `callbackFirst = true`). Кнопки «Отменить» в чате
   нет намеренно (решение 2026-08-31).
 - **`sendStage2Reminder(event, telegramIds, rosterDeadline?)`** — ручное напоминание менеджера,
-  текст по этапу (V86): на наборе «🔔 Организатор ждёт ответа … Проголосуйте — набор закрывается
-  {дедлайн}» с кнопкой «Открыть встречу», после закрытия — прежний текст с «✅ Подтвердить участие».
+  текст по этапу (V86): до дедлайна «🔔 Организатор ждёт ответа … Ответьте до {дедлайн} — до этого момента
+  передумать можно без влияния на репутацию» с кнопкой «Открыть встречу», после дедлайна — прежний текст с «✅ Подтвердить участие».
 
 ### `sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
 

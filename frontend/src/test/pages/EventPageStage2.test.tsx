@@ -262,7 +262,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     renderEventPage();
 
     // Заголовок состава считается по подтверждениям, а не по голосам Этапа 1.
-    expect(await screen.findByText(/Состав · 1 \/ 10/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места · 1 \/ 10/)).toBeInTheDocument();
     // «Кто идёт» = только подтверждённые; отказавшийся выпал.
     expect(screen.getByText(/Кто идёт/)).toBeInTheDocument();
     expect(screen.queryByText('Борис')).not.toBeInTheDocument();

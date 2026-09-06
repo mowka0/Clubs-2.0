@@ -249,10 +249,10 @@ class EventService(
             throw ValidationException("Для встречи с местами нужен максимум участников")
         }
         if (event.isOpenEvent && request.minParticipants != null) {
-            throw ValidationException("У открытой встречи нет набора — минимум неприменим")
+            throw ValidationException("У открытой встречи нет мест — минимум неприменим")
         }
         if (event.isOpenEvent && request.stage2LeadMinutes != null) {
-            throw ValidationException("У открытой встречи нет набора — интервал неприменим")
+            throw ValidationException("У открытой встречи нет мест — срок неприменим")
         }
         requireRosterFitsBeforeStart(request.participantLimit, request.eventDatetime, request.stage2LeadMinutes)
     }
@@ -274,7 +274,7 @@ class EventService(
         val leadMinutes = (stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt()).toLong()
         if (!eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(leadMinutes))) {
             throw ValidationException(
-                "До встречи меньше ${formatLead(leadMinutes)} — набор не успеет закрыться. Подвиньте время встречи."
+                "До встречи меньше ${formatLead(leadMinutes)}. Подвиньте время встречи."
             )
         }
     }

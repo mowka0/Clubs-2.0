@@ -165,11 +165,11 @@ describe('EventPage — набор обычной встречи (event-formats.
       event: rosterEvent({ minParticipants: 6 }), myVote: 'going',
     });
 
-    expect(await screen.findByText(/Набор · 4 \/ 6/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места · 4 \/ 6/)).toBeInTheDocument();
     expect(screen.getByText('в составе')).toBeInTheDocument();
     expect(container.querySelector('.rd-donut-num')).toHaveTextContent('4 / 6');
     expect(screen.getByText('Нужно ещё 2 человека')).toBeInTheDocument();
-    expect(screen.getByText(/если не наберём, встреча отменится/)).toBeInTheDocument();
+    expect(screen.getByText(/иначе встреча отменится/)).toBeInTheDocument();
     // Бейдж хиро капсом (regression V85): min = max читается «ровно», а не «6–6».
     expect(screen.getByText('👥 РОВНО 6')).toBeInTheDocument();
   });
@@ -180,7 +180,7 @@ describe('EventPage — набор обычной встречи (event-formats.
     });
 
     expect(await screen.findByText('Минимум набран · свободно 2 места')).toBeInTheDocument();
-    expect(screen.getByText(/состав закроется тем, кто успел/)).toBeInTheDocument();
+    expect(screen.getByText(/передумать можно без влияния на репутацию/)).toBeInTheDocument();
     expect(screen.queryByText(/встреча отменится/)).toBeNull();
   });
 
@@ -197,7 +197,7 @@ describe('EventPage — набор обычной встречи (event-formats.
     renderEventPageWith({ event: rosterEvent({ confirmedCount: 4 }), myVote: 'going' });
 
     expect(await screen.findByText('Свободно 2 места')).toBeInTheDocument();
-    expect(screen.getByText(/состав закроется тем, кто успел/)).toBeInTheDocument();
+    expect(screen.getByText(/передумать можно без влияния на репутацию/)).toBeInTheDocument();
     expect(screen.queryByText(/встреча отменится/)).toBeNull();
     expect(screen.getByText('👥 ДО 6')).toBeInTheDocument();
   });
@@ -277,7 +277,7 @@ describe('EventPage — закрытый состав обычной встре�
       responders: [responder({ userId: VIEWER_ID, firstName: 'Я' })],
     });
 
-    expect(await screen.findByText(/Состав · 6 \/ 6/)).toBeInTheDocument();
+    expect(await screen.findByText(/Места · 6 \/ 6/)).toBeInTheDocument();
     expect(screen.getByText('состав собран')).toBeInTheDocument();
     expect(screen.getByText('Состав собран — встреча состоится')).toBeInTheDocument();
     // Подтверждать нечего: место дал голос. Отдельной секции «Ваше участие» тоже нет —
@@ -316,7 +316,7 @@ describe('EventPage — закрытый состав обычной встре�
     )).toBeInTheDocument();
     expect(screen.queryByText('Состав собран — встреча состоится')).toBeNull();
     // Недостача считается от минимума, знаменатель кольца — от максимума.
-    expect(screen.getByText(/Состав · 3 \/ 6/)).toBeInTheDocument();
+    expect(screen.getByText(/Места · 3 \/ 6/)).toBeInTheDocument();
   });
 
   it('ниже минимума после «Проводим» — «Проводим составом N»', async () => {
