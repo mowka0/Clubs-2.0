@@ -208,6 +208,23 @@ describe('EventPage — отметка посещаемости', () => {
     expect(anna?.attended).toBe(true);
   });
 
+  it('после отметки явки секция озаглавлена «Кто пришёл» и содержит только пришедших (PO 2026-09-06)', async () => {
+    mockEventEndpoints({
+      ownerId: OWNER_ID,
+      event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
+      responders: [
+        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent', disputeNote: null },
+        { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended', disputeNote: null },
+      ],
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто пришёл/)).toBeInTheDocument();
+    expect(screen.getByText(/Дмитрий/)).toBeInTheDocument();
+    expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Анна/)).not.toBeInTheDocument();
+  });
+
   it('после отметки организатор видит read-only статус без чеклиста', async () => {
     mockEventEndpoints({ ownerId: OWNER_ID, event: pastCompletedEvent({ attendanceMarked: true }) });
     renderEventPage();

@@ -790,7 +790,12 @@ export const EventPage: FC = () => {
   // запросом. Это НЕ «В очереди»: там как раз ответили, но упёрлись в лимит мест.
   const pendingCount = event.noAnswerCount;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
-  const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
+  // Явка отмечена — список отвечает на «кто пришёл», а не «кто собирался» (PO 2026-09-06):
+  // только отмеченные пришедшими, включая тех, кому спор разрешили в «пришёл».
+  const attendanceShown = eventHappened && event.attendanceMarked;
+  const comingList = attendanceShown
+    ? responders.filter((r) => r.attendance === 'attended')
+    : finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
   // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
   // stage_1_timestamp ASC — тому же ключу, по которому продвигается очередь (findFirstWaitlisted),
   // поэтому фильтр сохраняет реальный порядок продвижения.
@@ -937,6 +942,46 @@ export const EventPage: FC = () => {
       </div>
     );
   })();
+
+  // Блок «Ваша явка» (ATT-3): виден отмеченному отсутствующим, пока окно спора открыто.
+  const myAttendanceBlock = (canDispute || myDisputePending || myDisputeRejected) ? (
+        <>
+          <div className="rd-section-sub-h">Ваша явка</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: canDispute ? 10 : 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+              {myDisputePending
+                ? 'Вы оспорили отметку об отсутствии. Организатор примет решение до закрытия окна.'
+                : myDisputeRejected
+                  ? 'Организатор рассмотрел ваш спор — отметка «не пришёл» осталась.'
+                  : 'Организатор отметил вас как отсутствующего. Если это ошибка — оспорьте, и организатор пересмотрит.'}
+            </div>
+          </div>
+          {canDispute && (
+            <>
+              <textarea
+                className="rd-textarea"
+                style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                placeholder="Комментарий организатору (необязательно)"
+                maxLength={500}
+                value={disputeNote}
+                onChange={(e) => setDisputeNote(e.target.value)}
+              />
+              {attendanceError && <div className="rd-error">{attendanceError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleDispute}
+                  disabled={disputeMutation.isPending}
+                >
+                  {disputeMutation.isPending ? <Spinner size="s" /> : 'Оспорить'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      
+  ) : null;
 
   const showVoteRosterHint =
     !isCancelled && showVoting && respondersQuery.isSuccess && comingList.length === 0;
@@ -1400,7 +1445,7 @@ export const EventPage: FC = () => {
           <div className="rd-section-sub-h">
             {showRosterTabs
               ? 'Участники'
-              : <>Кто идёт <span className="rd-count">· {comingList.length}</span></>}
+              : <>{attendanceShown ? 'Кто пришёл' : 'Кто идёт'} <span className="rd-count">· {comingList.length}</span></>}
           </div>
           {showRosterTabs && (
             <div className="rd-seg rd-seg-flush" style={{ marginBottom: 10 }}>
@@ -1410,7 +1455,7 @@ export const EventPage: FC = () => {
                 aria-pressed={stage2Tab === 'confirmed'}
                 onClick={() => { haptic.impact('light'); setStage2Tab('confirmed'); setRosterExpanded(false); }}
               >
-                Кто идёт ({comingList.length})
+                {attendanceShown ? 'Кто пришёл' : 'Кто идёт'} ({comingList.length})
                 {myVote === 'confirmed' && <span className="rd-seg-you" aria-hidden="true">•</span>}
               </button>
               {showWaitlistTab && (
@@ -1548,7 +1593,7 @@ export const EventPage: FC = () => {
                   const present = attended[r.userId] ?? true;
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   return (
-                    <div className="rd-pick-row" key={r.userId}>
+                    <div className="rd-pick-row rd-att-row" key={r.userId}>
                       <button
                         type="button"
                         className={`rd-pick-toggle${present ? ' rd-selected' : ''}`}
@@ -1598,12 +1643,16 @@ export const EventPage: FC = () => {
           <div className="rd-section-sub-h">Посещаемость</div>
           <div
             className="rd-glass"
-            style={{ padding: '14px 16px', marginBottom: disputeWindowOpen && disputedCandidates.length > 0 ? 10 : 14 }}
+            style={{
+              padding: '14px 16px',
+              marginBottom: (disputeWindowOpen && disputedCandidates.length > 0) || myAttendanceBlock ? 10 : 14,
+            }}
           >
             <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
               ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
             </div>
           </div>
+          {myAttendanceBlock}
           {/* Вход в split_bill. Один сплит на событие: активный — открываем, успешно закрытый —
               показываем («счёт уже собран»); иначе кнопка создаёт новый сплит. */}
           {(() => {
@@ -1702,44 +1751,9 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Спор со стороны участника (ATT-3): виден отмеченному отсутствующим, пока окно открыто. */}
-      {(canDispute || myDisputePending || myDisputeRejected) && (
-        <>
-          <div className="rd-section-sub-h">Ваша явка</div>
-          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: canDispute ? 10 : 14 }}>
-            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-              {myDisputePending
-                ? 'Вы оспорили отметку об отсутствии. Организатор примет решение до закрытия окна.'
-                : myDisputeRejected
-                  ? 'Организатор рассмотрел ваш спор — отметка «не пришёл» осталась.'
-                  : 'Организатор отметил вас как отсутствующего. Если это ошибка — оспорьте, и организатор пересмотрит.'}
-            </div>
-          </div>
-          {canDispute && (
-            <>
-              <textarea
-                className="rd-textarea"
-                style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
-                placeholder="Комментарий организатору (необязательно)"
-                maxLength={500}
-                value={disputeNote}
-                onChange={(e) => setDisputeNote(e.target.value)}
-              />
-              {attendanceError && <div className="rd-error">{attendanceError}</div>}
-              <div className="rd-cta-wrap">
-                <button
-                  type="button"
-                  className="rd-btn-primary"
-                  onClick={handleDispute}
-                  disabled={disputeMutation.isPending}
-                >
-                  {disputeMutation.isPending ? <Spinner size="s" /> : 'Оспорить'}
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
+      {/* Спор со стороны участника (ATT-3) — у менеджера живёт под плашкой «Посещаемость
+          отмечена» (PO 2026-09-06), у остальных — здесь же, где была бы плашка. */}
+      {!showAttendanceDone && myAttendanceBlock}
 
       {/* Этап 2 — подтверждение участия */}
       {showStage2 && (
