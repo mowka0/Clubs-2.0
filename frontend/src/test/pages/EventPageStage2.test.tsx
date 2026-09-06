@@ -44,6 +44,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',

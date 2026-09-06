@@ -40,6 +40,7 @@ function makeClient(): QueryClient {
 const mockEvent: EventDetailDto = {
   id: 'evt-1',
   clubId: 'club-1',
+  createdBy: 'creator-1',
   title: 'Test event',
   description: null,
   locationText: 'Park',

@@ -59,6 +59,7 @@ class EventMapper(
         return EventDetailDto(
             id = event.id,
             clubId = event.clubId,
+            createdBy = event.createdBy,
             title = event.title,
             description = event.description,
             locationText = event.locationText,

@@ -1069,10 +1069,13 @@ export const EventPage: FC = () => {
     </>
   );
 
-  // «Проводим» (V86 § 4): только менеджеру, только при закрытом составе ниже минимума и без
+  // Проводить, отменять и править встречу может только её создатель (PO 2026-09-06), и только
+  // пока он остаётся менеджером клуба — зеркалит `Event.requireCreatedBy` после гейта на бэке.
+  const isCreator = isManager && event.createdBy === userId;
+  // «Проводим» (V86 § 4): только создателю, только при закрытом составе ниже минимума и без
   // отметки; после старта решать уже нечего.
   const showProceed =
-    isManager && rosterClosed && belowMinimum && !event.rosterDecided && !eventHappened;
+    isCreator && rosterClosed && belowMinimum && !event.rosterDecided && !eventHappened;
 
   // Формат встречи в бейдже хиро (PO 2026-08-01): вместо родового «СОБЫТИЕ» — конкретный
   // формат, тем же словарём, что на карточках лент.
@@ -1808,7 +1811,11 @@ export const EventPage: FC = () => {
                         pluralRu(event.declineCostPoints, ['очко', 'очка', 'очков'])}.`}</>
                     )}
                   </div>
+                  {/* Безопасный выход первым, необратимое действие ниже (PO 2026-09-06). */}
                   <div className="rd-org-gate-acts">
+                    <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
+                      {isRosterEvent ? 'Оставить место' : 'Остаться'}
+                    </button>
                     <button
                       type="button"
                       className="rd-btn-primary rd-btn-danger"
@@ -1817,14 +1824,51 @@ export const EventPage: FC = () => {
                     >
                       {voting ? <Spinner size="s" /> : declineOutcome.confirmLabel}
                     </button>
-                    <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
-                      {isRosterEvent ? 'Оставить место' : 'Остаться'}
-                    </button>
                   </div>
                 </div>
               </div>
             </>,
             document.body,
+          )}
+          {/* «Проводим» (V86 § 4) — создателю, над кнопкой отказа (PO 2026-09-06: решение
+              организатора важнее его же места). Инлайн-подтверждение: вложенные модалки ломают
+              оверлей. Ошибку сервера (400 с текстом) показываем как есть. */}
+          {showProceed && (
+            confirmingProceed ? (
+              <div className="rd-reject-confirm">
+                <div className="rd-reject-q">
+                  Провести встречу составом {event.confirmedCount}? Минимум и цена отказа не
+                  изменятся, участники увидят решение на странице и в закрепе.
+                </div>
+                {proceedError && <div className="rd-error">{proceedError}</div>}
+                <div className="rd-org-gate-acts">
+                  <button
+                    type="button"
+                    className="rd-btn-outline"
+                    disabled={proceedMutation.isPending}
+                    onClick={() => setConfirmingProceed(false)}
+                  >
+                    Нет
+                  </button>
+                  <button
+                    type="button"
+                    className="rd-btn-primary"
+                    disabled={proceedMutation.isPending}
+                    onClick={handleProceed}
+                  >
+                    {proceedMutation.isPending ? <Spinner size="s" /> : 'Проводим'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="rd-btn-primary"
+                onClick={() => { haptic.impact('medium'); setProceedError(null); setConfirmingProceed(true); }}
+              >
+                Проводим
+              </button>
+            )
           )}
           {confirmedCanDecline && (
             (
@@ -1873,46 +1917,7 @@ export const EventPage: FC = () => {
             провёл серию одинаковых встреч и заводит из последней заготовку на следующие. */}
       {isManager && !isCancelled && (
         <div className="rd-ev-actions" style={{ marginTop: 8 }}>
-          {/* «Проводим» (V86 § 4) — инлайн-подтверждение, как у отказа: вложенные модалки ломают
-              оверлей. Ошибку сервера (400 с текстом) показываем как есть. */}
-          {showProceed && (
-            confirmingProceed ? (
-              <div className="rd-reject-confirm">
-                <div className="rd-reject-q">
-                  Провести встречу составом {event.confirmedCount}? Минимум и цена отказа не
-                  изменятся, участники увидят решение на странице и в закрепе.
-                </div>
-                {proceedError && <div className="rd-error">{proceedError}</div>}
-                <div className="rd-org-gate-acts">
-                  <button
-                    type="button"
-                    className="rd-btn-outline"
-                    disabled={proceedMutation.isPending}
-                    onClick={() => setConfirmingProceed(false)}
-                  >
-                    Нет
-                  </button>
-                  <button
-                    type="button"
-                    className="rd-btn-primary"
-                    disabled={proceedMutation.isPending}
-                    onClick={handleProceed}
-                  >
-                    {proceedMutation.isPending ? <Spinner size="s" /> : 'Проводим'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="rd-btn-primary"
-                onClick={() => { haptic.impact('medium'); setProceedError(null); setConfirmingProceed(true); }}
-              >
-                Проводим
-              </button>
-            )
-          )}
-          {!eventHappened && (
+          {isCreator && !eventHappened && (
             <div className="rd-ev-actions-row">
               {showVoting && (
                 <button type="button" className="rd-btn-outline" onClick={openEdit}>

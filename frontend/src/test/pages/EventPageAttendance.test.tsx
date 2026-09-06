@@ -42,6 +42,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    createdBy: 'creator-1',
     title: 'Прошедшее событие',
     description: null,
     locationText: 'Бар',

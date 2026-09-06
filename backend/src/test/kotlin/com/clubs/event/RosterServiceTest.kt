@@ -54,7 +54,8 @@ class RosterServiceTest {
     ) = Event(
         id = eventId,
         clubId = UUID.randomUUID(),
-        createdBy = UUID.randomUUID(),
+        // Создатель по умолчанию — вызывающий: проводить встречу может только он (PO 2026-09-06).
+        createdBy = userId,
         title = "Настолка",
         description = null,
         locationText = "Кофейня",
@@ -360,6 +361,15 @@ class RosterServiceTest {
         stubManager(event(participantLimit = 6, status = EventStatus.stage_2))
         assertThrows<ValidationException> { service.proceed(eventId, userId) }
 
+        verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
+    }
+
+    @Test
+    fun `«Проводим» менеджером, который не создавал встречу — 403`() {
+        // PO 2026-09-06: владелец или со-организатор без авторства встречи её не проводит.
+        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2).copy(createdBy = UUID.randomUUID()))
+
+        assertThrows<ForbiddenException> { service.proceed(eventId, userId) }
         verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
     }
 

@@ -1,5 +1,7 @@
 package com.clubs.event
 
+
+import com.clubs.common.exception.ForbiddenException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonValue
@@ -109,4 +111,13 @@ data class Event(
     /** Организатор уже сказал «Проводим»: состав ниже минимума его больше не беспокоит. */
     val isRosterDecided: Boolean
         get() = rosterDecidedAt != null
+}
+
+/**
+ * Проводить, отменять и править встречу может только её создатель (решение PO 2026-09-06):
+ * права менеджера клуба (владелец, со-организатор) для этих действий недостаточно.
+ * Вызывается ПОСЛЕ гейта MANAGE_EVENTS — создатель, потерявший роль, тоже теряет право.
+ */
+fun Event.requireCreatedBy(userId: java.util.UUID) {
+    if (createdBy != userId) throw ForbiddenException("Only the event creator can do this")
 }
