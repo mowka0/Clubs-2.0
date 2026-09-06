@@ -233,10 +233,11 @@ class ClubsBot(
                 parseCallbackId(data, RosterCallbackService.PROCEED_CALLBACK_PREFIX)
                     ?.let { rosterCallbackService.handleProceed(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(RosterCallbackService.REMIND_CALLBACK_PREFIX) ->
-                parseCallbackId(data, RosterCallbackService.REMIND_CALLBACK_PREFIX)
-                    ?.let { rosterCallbackService.handleRemind(query.from.id, it) }
-                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(RosterCallbackService.REMIND_CALLBACK_PREFIX) -> {
+                val id = parseCallbackId(data, RosterCallbackService.REMIND_CALLBACK_PREFIX)
+                // null от сервиса — «отчёт ушёл отдельным DM», алерт не нужен.
+                if (id == null) RosterCallbackService.INVALID_REQUEST else rosterCallbackService.handleRemind(query.from.id, id)
+            }
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null

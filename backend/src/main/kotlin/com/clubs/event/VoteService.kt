@@ -178,9 +178,11 @@ class VoteService(
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")
 
         // Цели пересекаем с серверным набором: чужой userId не должен попасть в рассылку.
-        val pending = eventResponseRepository.findStage2PendingMembers(eventId).map { it.userId }
+        val pendingMembers = eventResponseRepository.findStage2PendingMembers(eventId)
+        val pending = pendingMembers.map { it.userId }
         val targets = targetUserId?.let { target -> pending.filter { it == target } } ?: pending
-        val telegramIds = eventResponseRepository.markStage2Reminded(eventId, targets)
+        val reminded = eventResponseRepository.markStage2Reminded(eventId, targets)
+        val telegramIds = reminded.map { it.telegramId }
 
         // DM — на AFTER_COMMIT: уведомление без закоммиченной отметки означало бы повторную отправку.
         // Текст зависит от этапа: на наборе зовём проголосовать до дедлайна, после — подтвердить.
@@ -189,7 +191,11 @@ class VoteService(
             eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds, rosterDeadline))
         }
         log.info("Stage 2 reminder: eventId={} userId={} reminded={}", eventId, userId, telegramIds.size)
-        return RemindResultDto(remindedCount = telegramIds.size)
+        // Кому именно напомнили — для тоста на странице и DM-отчёта организатору (PO 2026-09-06).
+        val remindedIds = reminded.map { it.userId }.toSet()
+        val people = pendingMembers.filter { it.userId in remindedIds }
+            .map { RemindedPersonDto(userId = it.userId, firstName = it.firstName, lastName = it.lastName) }
+        return RemindResultDto(remindedCount = telegramIds.size, reminded = people)
     }
 
     /** Событие + гейт «владелец или активный со-организатор клуба события». */

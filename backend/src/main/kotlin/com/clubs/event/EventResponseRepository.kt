@@ -173,7 +173,7 @@ interface EventResponseRepository {
      *   - ещё не получал напоминания по этому событию (`stage2_reminded_at IS NULL`).
      * Пустой ввод → пустой результат без запроса.
      */
-    fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long>
+    fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<RemindedRecipient>
 
     /**
      * Сбрасывает отметки ручного напоминания всем участникам встречи (V86): напоминание — одно на
@@ -254,6 +254,9 @@ data class EventObligation(
 )
 
 /** Строка репозитория: данные пользователя-респондента + сырые enum'ы голоса/финального статуса/посещаемости. */
+/** Кому реально ушло напоминание: telegram id для DM и user id для имени в отчёте организатору. */
+data class RemindedRecipient(val userId: UUID, val telegramId: Long)
+
 data class EventResponderInfo(
     val userId: UUID,
     val firstName: String,

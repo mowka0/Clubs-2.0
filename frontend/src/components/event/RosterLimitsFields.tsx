@@ -5,8 +5,11 @@ import { useHaptic } from '../../hooks/useHaptic';
 // Границы максимума участников — зеркалят валидацию бэкенда на participantLimit.
 export const PARTICIPANT_MIN = 1;
 export const PARTICIPANT_MAX = 1000;
+// Нижняя граница минимума (PO 2026-09-06): двое — уже встреча, «минимум 1» — это «при любом
+// составе», для него минимум выключают. Зеркалит валидацию бэкенда (MIN_PARTICIPANTS_FLOOR).
+export const MIN_PARTICIPANTS_FLOOR = 2;
 // Минимум при включении переключателя (решение PO, event-formats.md § 9.2): двое — уже встреча.
-const MIN_PARTICIPANTS_DEFAULT = 2;
+const MIN_PARTICIPANTS_DEFAULT = MIN_PARTICIPANTS_FLOOR;
 
 /** Максимум и минимум участников обычной встречи; minParticipants = null — минимум выключен. */
 export interface RosterLimits {
@@ -26,19 +29,22 @@ export function useRosterLimits(initial: RosterLimits) {
   const setParticipantLimit = (participantLimit: number) =>
     setLimits((l) => ({
       participantLimit,
-      minParticipants: l.minParticipants === null ? null : Math.min(l.minParticipants, participantLimit),
+      // Максимум упал ниже нижней границы минимума — минимум выключается, а не «становится 1».
+      minParticipants: l.minParticipants === null || participantLimit < MIN_PARTICIPANTS_FLOOR
+        ? null
+        : Math.min(l.minParticipants, participantLimit),
     }));
 
   const setMinEnabled = (enabled: boolean) =>
     setLimits((l) => ({
       ...l,
-      minParticipants: enabled ? Math.min(MIN_PARTICIPANTS_DEFAULT, l.participantLimit) : null,
+      minParticipants: enabled && l.participantLimit >= MIN_PARTICIPANTS_FLOOR ? MIN_PARTICIPANTS_DEFAULT : null,
     }));
 
   const setMinParticipants = (minParticipants: number) =>
     setLimits((l) => ({
       ...l,
-      minParticipants: Math.min(Math.max(minParticipants, PARTICIPANT_MIN), l.participantLimit),
+      minParticipants: Math.min(Math.max(minParticipants, MIN_PARTICIPANTS_FLOOR), l.participantLimit),
     }));
 
   return { limits, setLimits, setParticipantLimit, setMinEnabled, setMinParticipants };
@@ -59,6 +65,8 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state }) => {
   const haptic = useHaptic();
   const { limits, setParticipantLimit, setMinEnabled, setMinParticipants } = state;
   const minEnabled = limits.minParticipants !== null;
+  // При одном месте минимум не имеет смысла (он не ниже 2) — переключатель гаснет.
+  const minAvailable = limits.participantLimit >= MIN_PARTICIPANTS_FLOOR;
 
   return (
     <>
@@ -84,14 +92,15 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state }) => {
             role="switch"
             aria-checked={minEnabled}
             aria-label="Минимум участников"
+            disabled={!minAvailable}
             onClick={() => { haptic.select(); setMinEnabled(!minEnabled); }}
           />
         </div>
         {minEnabled && (
           <BrandStepper
-            value={limits.minParticipants ?? PARTICIPANT_MIN}
+            value={limits.minParticipants ?? MIN_PARTICIPANTS_FLOOR}
             onChange={setMinParticipants}
-            min={PARTICIPANT_MIN}
+            min={MIN_PARTICIPANTS_FLOOR}
             max={limits.participantLimit}
             ariaLabel="Значение минимума"
           />
@@ -99,7 +108,9 @@ export const RosterLimitsFields: FC<RosterLimitsFieldsProps> = ({ state }) => {
         <span className="rd-hint">
           {minEnabled
             ? `Собираемся, если будет минимум ${limits.minParticipants}. Не наберётся вовремя — встреча отменится`
-            : 'Выключен — встреча состоится при любом составе'}
+            : minAvailable
+              ? 'Выключен — встреча состоится при любом составе'
+              : 'Минимум доступен, когда мест хотя бы 2'}
         </span>
       </div>
     </>

@@ -186,11 +186,11 @@ class LivePinRendererTest {
 
         val short = renderer.rosterText(withMin, confirmed = 3, deadline = deadline)
         assertTrue(short.contains("<b>Встреча: 4–15 человек</b>"))
-        assertTrue(short.contains("👥 Собрались 3 из 4–15 — нужно ещё 1."))
-        assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию. Не наберём к этому моменту — встреча отменится."))
+        assertTrue(short.contains("👥 Максимум мест — 15, минимум 4. Нужно ещё 1 — иначе встреча отменится."))
+        assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
 
         val reached = renderer.rosterText(withMin, confirmed = 5, deadline = deadline)
-        assertTrue(reached.contains("👥 Собрались 5 из 4–15 — минимум набран, свободно 10."))
+        assertTrue(reached.contains("👥 Максимум мест — 15, минимум 4. Минимум набран, свободно 10."))
         assertTrue(reached.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
         assertTrue(!reached.contains("встреча отменится"))
 

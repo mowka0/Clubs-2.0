@@ -90,17 +90,17 @@ object EventMessageTemplate {
         val min = event.minParticipants
         val free = (limit - confirmed).coerceAtLeast(0)
         val left = min?.let { (it - confirmed).coerceAtLeast(0) } ?: 0
+        // Формулировки PO 2026-09-06: сначала правила встречи (максимум, минимум), потом что
+        // нужно; отмена по недобору названа прямо в этой строке, чтобы не повторять её ниже.
         val counts = when {
-            min != null && left > 0 -> "👥 Собрались $confirmed из $min–$limit — нужно ещё $left."
-            min != null && free > 0 -> "👥 Собрались $confirmed из $min–$limit — минимум набран, свободно $free."
+            min != null && left > 0 -> "👥 Максимум мест — $limit, минимум $min. Нужно ещё $left — иначе встреча отменится."
+            min != null && free > 0 -> "👥 Максимум мест — $limit, минимум $min. Минимум набран, свободно $free."
             free > 0 -> "👥 Заняты $confirmed из $limit мест — свободно $free."
             else -> "👥 Мест нет: $confirmed из $limit. Дальше — очередь на замену."
         }
         // Дедлайн ничего не «закрывает» — место можно занять и после него, меняется цена
-        // передумать (PO 2026-09-05). Правило ① при недоборе всё равно называем: молчать о нём
-        // значило бы сделать отмену неожиданной.
-        val outcome = if (left > 0) " Не наберём к этому моменту — встреча отменится." else ""
-        return "$counts\n⏳ До ${deadline.format(fmt)} передумать можно без влияния на репутацию.$outcome"
+        // передумать (PO 2026-09-05).
+        return "$counts\n⏳ До ${deadline.format(fmt)} передумать можно без влияния на репутацию."
     }
 
     /**

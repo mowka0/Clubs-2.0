@@ -61,9 +61,17 @@ data class EventResponderDto(
     val remindedAt: OffsetDateTime? = null
 )
 
-/** Итог нажатия «Напомнить» / «Напомнить всем»: сколько напоминаний реально ушло. */
+/** Итог нажатия «Напомнить» / «Напомнить всем»: сколько напоминаний реально ушло и кому. */
 data class RemindResultDto(
-    val remindedCount: Int
+    val remindedCount: Int,
+    val reminded: List<RemindedPersonDto> = emptyList()
+)
+
+/** Кому ушло напоминание — для тоста «Напомнили: …» и DM-отчёта организатору (PO 2026-09-06). */
+data class RemindedPersonDto(
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?
 )
 
 /** Тело запроса напоминания: конкретный участник либо `null` — «все, кому ещё можно». */

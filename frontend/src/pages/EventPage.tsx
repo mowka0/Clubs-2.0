@@ -446,12 +446,16 @@ export const EventPage: FC = () => {
     remindMutation.mutate(
       { eventId: id, userId: targetUserId },
       {
-        onSuccess: ({ remindedCount }) => {
+        onSuccess: ({ remindedCount, reminded }) => {
           haptic.notify(remindedCount > 0 ? 'success' : 'warning');
+          // Кому напомнили — по именам (PO 2026-09-06); число — только если сервер имён не дал.
+          const names = (reminded ?? []).map((p) => [p.firstName, p.lastName].filter(Boolean).join(' ')).join(', ');
           setToastMessage(
-            remindedCount > 0
-              ? `Напоминание отправлено · ${remindedCount}`
-              : 'Всем, кому можно, уже напомнили',
+            remindedCount === 0
+              ? 'Всем, кому можно, уже напомнили'
+              : names
+                ? `Напомнили: ${names}`
+                : `Напоминание отправлено · ${remindedCount}`,
           );
         },
         onError: (e) => {
@@ -1313,7 +1317,9 @@ export const EventPage: FC = () => {
         <>
           <div className="rd-section-sub-h">Кто откликнулся</div>
           <div className="rd-seg rd-seg-flush" style={{ marginBottom: 10 }}>
-            {RESPONDER_TABS.map((tab) => (
+            {/* Менеджеру «Возможно» не показываем (PO 2026-09-06): те же люди уже в «Без ответа»
+                с фиолетовой точкой, а место в ряду табов дороже дубля. */}
+            {RESPONDER_TABS.filter((tab) => !(showRosterPendingTab && tab.key === 'maybe')).map((tab) => (
               <button
                 key={tab.key}
                 type="button"

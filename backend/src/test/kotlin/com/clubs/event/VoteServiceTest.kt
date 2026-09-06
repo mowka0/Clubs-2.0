@@ -273,9 +273,13 @@ class VoteServiceTest {
         val b = UUID.randomUUID()
         every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
             listOf(pendingMember(Stage_1Vote.going, id = a), pendingMember(null, id = b))
-        every { eventResponseRepository.markStage2Reminded(eventId, listOf(a, b)) } returns listOf(1L, 2L)
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(a, b)) } returns
+            listOf(RemindedRecipient(a, 1L), RemindedRecipient(b, 2L))
 
-        assertEquals(2, service.remind(eventId, userId, null).remindedCount)
+        val result = service.remind(eventId, userId, null)
+        assertEquals(2, result.remindedCount)
+        // Кому напомнили — имена из pending по фактически отмеченным строкам (PO 2026-09-06).
+        assertEquals(listOf(a, b), result.reminded.map { it.userId })
     }
 
     /** Чужой userId не должен попасть в рассылку и создать строку-заглушку постороннему. */
@@ -334,7 +338,7 @@ class VoteServiceTest {
         val target = UUID.randomUUID()
         every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
             listOf(pendingMember(Stage_1Vote.going, id = target))
-        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns listOf(7L)
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns listOf(RemindedRecipient(target, 7L))
 
         assertEquals(1, service.remind(eventId, userId, target).remindedCount)
     }

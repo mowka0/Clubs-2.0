@@ -3070,14 +3070,18 @@
 @keyframes rd-s2-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .rd-s2-track {
   position: relative; height: 4px; border-radius: 2px;
-  background: var(--hairline-2); margin: 18px 10px 0;
+  background: var(--hairline-2); margin: 18px 7px 0;
 }
 .rd-s2-fill {
   position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
   background: var(--accent-grad); box-shadow: 0 0 10px var(--accent-glow);
   transition: width .25s ease;
 }
-.rd-s2-ticks { display: flex; justify-content: space-between; margin: 0 -2px; }
+.rd-s2-ticks { display: flex; justify-content: space-between; }
+/* Крайние насечки прижаты к краям блока, чтобы «6 ч» начинался там же, где текст подсказки, а
+   дорожка шла от центра первой кнопки до центра последней (PO 2026-09-06). */
+.rd-s2-tick:first-child { align-items: flex-start; padding-left: 0; }
+.rd-s2-tick:last-child { align-items: flex-end; padding-right: 0; }
 .rd-s2-tick {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   min-width: 52px; padding: 0 2px 2px; border: none; background: none; cursor: pointer;

@@ -123,6 +123,9 @@ data class MyEventListItemDto(
     val isHistory: Boolean
 )
 
+// Нижняя граница минимума участников: двое — уже встреча, «минимум 1» смысла не имеет (PO 2026-09-06).
+const val MIN_PARTICIPANTS_FLOOR = 2
+
 data class CreateEventRequest(
     @field:NotBlank(message = "Title is required")
     @field:Size(max = 255, message = "Title must be at most 255 characters")
@@ -203,9 +206,11 @@ data class CreateEventRequest(
 
     // Порог не выше потолка (зеркалит CHECK chk_events_min_participants). Заодно закрывает
     // «минимум у открытой»: у неё нет лимита, значит, и минимума быть не может.
-    @get:AssertTrue(message = "Minimum participants must not exceed the participant limit")
+    @get:AssertTrue(message = "Minimum participants must be at least 2 and not exceed the participant limit")
     val isMinParticipantsConsistent: Boolean
-        get() = minParticipants == null || (participantLimit != null && minParticipants <= participantLimit)
+        // Минимум от 2 (PO 2026-09-06): «минимум 1» — это встреча при любом составе, для неё минимум выключают.
+        get() = minParticipants == null ||
+            (participantLimit != null && minParticipants >= MIN_PARTICIPANTS_FLOOR && minParticipants <= participantLimit)
 
     // У открытой набора нет — свой интервал для неё бессмысленен и почти наверняка
     // означает ошибку клиента, а не намерение.
@@ -326,7 +331,9 @@ data class UpdateEventRequest(
     val isSomeLocationProvided: Boolean
         get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
 
-    @get:AssertTrue(message = "Minimum participants must not exceed the participant limit")
+    @get:AssertTrue(message = "Minimum participants must be at least 2 and not exceed the participant limit")
     val isMinParticipantsConsistent: Boolean
-        get() = minParticipants == null || (participantLimit != null && minParticipants <= participantLimit)
+        // Минимум от 2 (PO 2026-09-06): «минимум 1» — это встреча при любом составе, для неё минимум выключают.
+        get() = minParticipants == null ||
+            (participantLimit != null && minParticipants >= MIN_PARTICIPANTS_FLOOR && minParticipants <= participantLimit)
 }

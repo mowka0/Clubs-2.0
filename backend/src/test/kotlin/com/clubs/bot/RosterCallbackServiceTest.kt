@@ -5,6 +5,7 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.ProceedResult
 import com.clubs.event.RemindResultDto
+import com.clubs.event.RemindedPersonDto
 import com.clubs.event.RosterService
 import com.clubs.event.VoteService
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -25,7 +26,8 @@ class RosterCallbackServiceTest {
     private val userRepository = mockk<UserRepository>()
     private val rosterService = mockk<RosterService>()
     private val voteService = mockk<VoteService>()
-    private val service = RosterCallbackService(userRepository, rosterService, voteService)
+    private val notificationService = mockk<NotificationService>(relaxed = true)
+    private val service = RosterCallbackService(userRepository, rosterService, voteService, notificationService)
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -63,10 +65,18 @@ class RosterCallbackServiceTest {
     }
 
     @Test
-    fun `«Напомнить» — счётчик или «напоминать некому», права те же`() {
+    fun `«Напомнить» — отчёт DM с именами, алерт только для «некому» и ошибок`() {
         stubCaller()
-        every { voteService.remind(eventId, userId, null) } returns RemindResultDto(remindedCount = 2)
-        assertEquals("Напомнили 2", service.handleRemind(42L, eventId))
+        every { voteService.remind(eventId, userId, null) } returns RemindResultDto(
+            remindedCount = 2,
+            reminded = listOf(
+                RemindedPersonDto(UUID.randomUUID(), "Иван", "П."),
+                RemindedPersonDto(UUID.randomUUID(), "Маша", null)
+            )
+        )
+        // Успех: алерта нет (null), организатору ушёл DM «Напомнили: …» с кнопкой на встречу.
+        assertEquals(null, service.handleRemind(42L, eventId))
+        verify(exactly = 1) { notificationService.sendRemindReport(42L, eventId, listOf("Иван П.", "Маша")) }
 
         every { voteService.remind(eventId, userId, null) } returns RemindResultDto(remindedCount = 0)
         assertEquals("Напоминать некому", service.handleRemind(42L, eventId))

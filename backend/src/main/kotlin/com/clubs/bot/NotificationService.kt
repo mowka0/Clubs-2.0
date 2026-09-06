@@ -655,6 +655,16 @@ class NotificationService(
         sendDm(telegramId.toString(), text, webAppPath, buttonText)
     }
 
+    /** Отчёт организатору после «Напомнить» из DM ②: кому ушло напоминание, с кнопкой на встречу (PO 2026-09-06). */
+    fun sendRemindReport(organizerTelegramId: Long, eventId: UUID, names: List<String>) {
+        sendDm(
+            organizerTelegramId.toString(),
+            "🔔 Напомнили: ${names.joinToString(", ")}",
+            webAppPath = "/events/$eventId",
+            buttonText = "📅 Открыть событие"
+        )
+    }
+
     private fun sendDm(
         chatId: String,
         text: String,

@@ -298,7 +298,7 @@ class JooqEventResponseRepository(
                 )
             }
 
-    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long> {
+    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<RemindedRecipient> {
         if (userIds.isEmpty()) return emptyList()
         // Промолчавшему отмечать напоминание негде — строки ответа у него нет. Создаём заглушку
         // (оба голоса NULL); ON CONFLICT DO NOTHING делает вставку безопасной для тех, у кого
@@ -321,11 +321,14 @@ class JooqEventResponseRepository(
             .fetch()
             .mapNotNull { it.get(EVENT_RESPONSES.USER_ID) }
         if (remindedUserIds.isEmpty()) return emptyList()
-        return dsl.select(USERS.TELEGRAM_ID)
+        return dsl.select(USERS.ID, USERS.TELEGRAM_ID)
             .from(USERS)
             .where(USERS.ID.`in`(remindedUserIds))
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
+            .fetch()
+            .mapNotNull { r ->
+                val telegramId = r.get(USERS.TELEGRAM_ID) ?: return@mapNotNull null
+                RemindedRecipient(r.get(USERS.ID)!!, telegramId)
+            }
     }
 
     override fun clearStage2Reminders(eventId: UUID): Int =

@@ -151,7 +151,11 @@ export function getEventPendingMembers(eventId: string): Promise<EventResponderD
  * `userId` — конкретный молчун; без него напоминание уходит всем, кому ещё можно.
  * Возвращает число реально отправленных: повторное напоминание тому же участнику даёт 0.
  */
-export function remindToConfirm(eventId: string, userId?: string): Promise<{ remindedCount: number }> {
+export interface RemindedPerson { userId: string; firstName: string; lastName: string | null }
+export function remindToConfirm(
+  eventId: string,
+  userId?: string,
+): Promise<{ remindedCount: number; reminded?: RemindedPerson[] }> {
   return apiClient.post(`/api/events/${eventId}/remind`, userId ? { userId } : {});
 }
 

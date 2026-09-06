@@ -25,7 +25,8 @@ import java.util.UUID
 class RosterCallbackService(
     private val userRepository: UserRepository,
     private val rosterService: RosterService,
-    private val voteService: VoteService
+    private val voteService: VoteService,
+    private val notificationService: NotificationService
 ) {
 
     private val log = LoggerFactory.getLogger(RosterCallbackService::class.java)
@@ -53,11 +54,21 @@ class RosterCallbackService(
         }
     }
 
-    fun handleRemind(fromTelegramId: Long, eventId: UUID): String {
+    /**
+     * Успех отвечает не алертом, а отдельным DM «Напомнили: …» с кнопкой «Открыть событие»
+     * (PO 2026-09-06): в алерт Telegram кнопку не положить, а список имён там не читается.
+     * `null` = алерт не нужен.
+     */
+    fun handleRemind(fromTelegramId: Long, eventId: UUID): String? {
         val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return INVALID_REQUEST
         return try {
-            val reminded = voteService.remind(eventId, callerId, targetUserId = null).remindedCount
-            if (reminded > 0) "Напомнили $reminded" else "Напоминать некому"
+            val result = voteService.remind(eventId, callerId, targetUserId = null)
+            if (result.remindedCount == 0) return "Напоминать некому"
+            notificationService.sendRemindReport(
+                fromTelegramId, eventId,
+                result.reminded.map { listOfNotNull(it.firstName, it.lastName).joinToString(" ") }
+            )
+            null
         } catch (e: ForbiddenException) {
             log.warn("Roster remind callback denied: telegramId={} eventId={}", fromTelegramId, eventId)
             "Нет прав"

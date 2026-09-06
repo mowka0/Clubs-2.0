@@ -280,7 +280,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   — на `RosterWarningEvent` (правило ②, за `events.roster-warning-minutes-before-deadline` до
   дедлайна при недоборе): «⏳ Минимум пока не набран … Набрано 2 из 4. Если к {дедлайн} не наберём —
   встреча отменится.» Кнопка одна, callback `roster:remind:<eventId>` →
-  `VoteService.remind` (все, кто без ответа); ответы «Напомнили N» / «Напоминать некому» /
+  `VoteService.remind` (все, кто без ответа); успех — DM «🔔 Напомнили: имена» с кнопкой «📅 Открыть событие», без алерта (PO 2026-09-06);
+  алерты «Напоминать некому» /
   «Нет прав». Отправляется через `ChatTelegramGateway.sendDmWithCallbackButton`.
 - **`sendRosterBroken(event, organizerTelegramId, confirmedCount, minParticipants)`** — на
   `RosterBrokenEvent` (правило ③, отказ/кик/выход увёл закрытый состав ниже минимума, «Проводим»

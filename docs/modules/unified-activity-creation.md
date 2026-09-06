@@ -581,7 +581,7 @@ interface CreateActivityPickerProps {
   **Правило (V58): точка ИЛИ непустое уточнение обязательны** — сабмит без обоих
   блокируется. Спека: [`event-geo.md`](./event-geo.md)
 - `eventDatetime` (datetime-local, required, future) — `<input type="datetime-local">` обёрнут в `.brand-datetime` (стилизованный wrapper + brass calendar icon; нативный picker сохранён)
-- `participantLimit` (int, required, > 0) — `BrandStepper` (`[− N +]`), не `<input type="number">` (итерация 2); `minParticipants` — переключатель «Минимум участников» + степпер, по умолчанию выключен, не выше максимума (V86, `event-formats.md` § 9.2)
+- `participantLimit` (int, required, > 0) — `BrandStepper` (`[− N +]`), не `<input type="number">` (итерация 2); `minParticipants` — переключатель «Минимум участников» + степпер, по умолчанию выключен, не ниже 2 и не выше максимума (V86, `event-formats.md` § 9.2)
 - «Подтверждение мест» (V67/V68, дизайн PO 2026-07-23) — свёрнутая строка-факт под полем даты
   («🎟 Подтверждение мест / за 18 часов · Изменить», текст в две строки, полные слова);
   по «Изменить» раскрывается шкала-таймлайн с насечками-пресетами 18 ч → 36 ч → 3 дня →
