@@ -102,9 +102,19 @@ af9c784b… / Club not found` — сирота от 05.06, её клуб уда�
 | `docs/modules/event-formats.md` | **действующая спека v2** (модель, три правила, «Проводим», цена отказа, API, экран, V86, AC) |
 | `docs/design/event-formats/scenarios.html` | **схема сценариев для PO** (05.09): набор → закрытие → состав → явка, цена отказа, где репутация; открыть файлом в браузере |
 | `docs/backlog/event-formats-v2-staging-testplan.md` | **план прогона** с тремя людьми «Партии» и расчётом репутации |
-| `docs/backlog/event-formats-v85.md` | архив спеки V85 |
-| `docs/backlog/event-formats-session-handoff.md` § 7 | доступ к БД staging; § 6 (env) устарел — см. план § 0 |
 | `docs/modules/reputation-v2.md` § P1b | формула надёжности с весами (в проде) |
 | `docs/modules/telegram-bot.md` § «набор состава» | DM ②/③, callback-кнопки, ответы |
+
+**Доступ к БД staging** без туннеля (имя контейнера меняется при каждом редеплое — всегда
+добывать подстановкой):
+
+```
+PG=$(ssh root@77.42.23.177 "docker ps --format '{{.Names}}' | grep '^postgres-u91a5392'")
+ssh root@77.42.23.177 "docker exec -i $PG psql -U clubs -d clubs" < запрос.sql
+```
+
+Через туннель — `~/clubs-db.sh staging` (localhost:15433). Промежуточные документы V83/V85
+(спека V85, старые хэндоффы и тест-кейсы) удалены из ветки 2026-09-05 по решению PO — только
+git-история.
 
 Память проекта: `project_event_formats_restructure`, `project_reputation_severity_weight`.
