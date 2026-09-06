@@ -233,20 +233,19 @@ class EventServiceTest {
     }
 
     @Test
-    fun `cancelEvent throws Forbidden for a manager who is not the creator`() {
-        // PO 2026-09-06: отменять, править и проводить встречу может только её создатель —
-        // владелец клуба (менеджер) чужую встречу не отменяет.
+    fun `cancelEvent by the club owner works for an event created by someone else`() {
+        // PO 2026-09-06: отменять, править и проводить встречу может её создатель ИЛИ владелец
+        // клуба; со-организатор без авторства — нет (см. RosterServiceTest на proceed).
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, createdBy = UUID.randomUUID())
         every { eventRepository.findById(event.id) } returns event
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, null) } returns 1
 
-        assertThrows<ForbiddenException> { eventService.cancelEvent(event.id, ownerId, null) }
-        assertThrows<ForbiddenException> { eventService.updateEvent(event.id, ownerId, editRequest(event)) }
+        eventService.cancelEvent(event.id, ownerId, null)
 
-        verify(exactly = 0) { eventRepository.cancelEvent(any(), any()) }
-        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+        verify(exactly = 1) { eventRepository.cancelEvent(event.id, null) }
     }
 
     @Test

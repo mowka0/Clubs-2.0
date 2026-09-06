@@ -171,7 +171,7 @@ class RosterService(
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
-        event.requireCreatedBy(userId)
+        event.requireCreatorOrOwner(club.ownerId, userId)
 
         val min = event.minParticipants ?: throw ValidationException("У встречи нет минимума — подтверждать нечего")
         when {

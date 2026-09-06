@@ -154,7 +154,7 @@ class EventService(
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг отменяет событие.
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
-        event.requireCreatedBy(userId)
+        event.requireCreatorOrOwner(club.ownerId, userId)
 
         val normalizedReason = reason?.trim()?.takeIf { it.isNotEmpty() }
         if (eventRepository.cancelEvent(eventId, normalizedReason) == 0) {
@@ -187,7 +187,7 @@ class EventService(
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг редактирует встречу.
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
-        event.requireCreatedBy(userId)
+        event.requireCreatorOrOwner(club.ownerId, userId)
 
         validateFormatInvariants(event, request)
 

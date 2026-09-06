@@ -365,12 +365,20 @@ class RosterServiceTest {
     }
 
     @Test
-    fun `«Проводим» менеджером, который не создавал встречу — 403`() {
-        // PO 2026-09-06: владелец или со-организатор без авторства встречи её не проводит.
-        stubManager(event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2).copy(createdBy = UUID.randomUUID()))
+    fun `«Проводим» со-организатором без авторства — 403, владельцем клуба — можно`() {
+        // PO 2026-09-06: проводит создатель встречи или владелец клуба; со-организатор без авторства — нет.
+        val foreign = event(participantLimit = 6, minParticipants = 4, status = EventStatus.stage_2).copy(createdBy = UUID.randomUUID())
+        every { eventRepository.findById(eventId) } returns foreign
+        every { clubRepository.findById(foreign.clubId) } returns mockk<Club>(relaxed = true) { every { ownerId } returns UUID.randomUUID() }
 
         assertThrows<ForbiddenException> { service.proceed(eventId, userId) }
         verify(exactly = 0) { eventRepository.markRosterDecided(any()) }
+
+        every { clubRepository.findById(foreign.clubId) } returns mockk<Club>(relaxed = true) { every { ownerId } returns userId }
+        every { eventResponseRepository.countConfirmed(eventId) } returns 3
+        every { eventRepository.markRosterDecided(eventId) } returns 1
+
+        assertEquals(ProceedResult(3, alreadyDecided = false), service.proceed(eventId, userId))
     }
 
     @Test

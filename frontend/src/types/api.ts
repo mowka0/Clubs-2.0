@@ -599,7 +599,7 @@ export type DeclineConsequence = 'open' | 'replaced' | 'roster_empty' | 'below_m
 export interface EventDetailDto {
   id: string;
   clubId: string;
-  /** Создатель встречи: только он проводит, отменяет и правит её (PO 2026-09-06). */
+  /** Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06). */
   createdBy: string;
   title: string;
   description: string | null;

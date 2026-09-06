@@ -16,7 +16,7 @@ import java.util.UUID
 data class EventDetailDto(
     val id: UUID,
     val clubId: UUID,
-    // Создатель встречи: только он проводит, отменяет и правит её (PO 2026-09-06) — фронт гейтит кнопки.
+    // Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06) — фронт гейтит кнопки.
     val createdBy: UUID,
     val title: String,
     val description: String?,

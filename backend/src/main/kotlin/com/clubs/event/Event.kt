@@ -114,10 +114,12 @@ data class Event(
 }
 
 /**
- * Проводить, отменять и править встречу может только её создатель (решение PO 2026-09-06):
- * права менеджера клуба (владелец, со-организатор) для этих действий недостаточно.
+ * Проводить, отменять и править встречу может её создатель или владелец клуба (решение PO
+ * 2026-09-06): со-организатору без авторства этих действий нет, даже с правом MANAGE_EVENTS.
  * Вызывается ПОСЛЕ гейта MANAGE_EVENTS — создатель, потерявший роль, тоже теряет право.
  */
-fun Event.requireCreatedBy(userId: java.util.UUID) {
-    if (createdBy != userId) throw ForbiddenException("Only the event creator can do this")
+fun Event.requireCreatorOrOwner(clubOwnerId: java.util.UUID, userId: java.util.UUID) {
+    if (createdBy != userId && clubOwnerId != userId) {
+        throw ForbiddenException("Only the event creator or the club owner can do this")
+    }
 }

@@ -269,9 +269,8 @@ export const EventPage: FC = () => {
   // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
   // Считается до ранних return'ов: от него зависит enabled запроса «Без ответа».
   const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === eventQuery.data?.clubId);
-  const isManager =
-    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
-    || isActiveManagerMembership(myHostMembership);
+  const isClubOwner = !!hostClubQuery.data && hostClubQuery.data.ownerId === userId;
+  const isManager = isClubOwner || isActiveManagerMembership(myHostMembership);
   // Поимённый список молчунов — менеджерский эндпоинт, участнику он вернёт 403.
   const pendingQuery = useEventPendingQuery(
     isAuthenticated ? id : undefined,
@@ -1069,13 +1068,13 @@ export const EventPage: FC = () => {
     </>
   );
 
-  // Проводить, отменять и править встречу может только её создатель (PO 2026-09-06), и только
-  // пока он остаётся менеджером клуба — зеркалит `Event.requireCreatedBy` после гейта на бэке.
-  const isCreator = isManager && event.createdBy === userId;
-  // «Проводим» (V86 § 4): только создателю, только при закрытом составе ниже минимума и без
-  // отметки; после старта решать уже нечего.
+  // Проводить, отменять и править встречу может её создатель или владелец клуба (PO 2026-09-06),
+  // со-организатор без авторства — нет; зеркалит `Event.requireCreatorOrOwner` после гейта на бэке.
+  const canManageEvent = isManager && (event.createdBy === userId || isClubOwner);
+  // «Проводим» (V86 § 4): создателю или владельцу, только при закрытом составе ниже минимума и
+  // без отметки; после старта решать уже нечего.
   const showProceed =
-    isCreator && rosterClosed && belowMinimum && !event.rosterDecided && !eventHappened;
+    canManageEvent && rosterClosed && belowMinimum && !event.rosterDecided && !eventHappened;
 
   // Формат встречи в бейдже хиро (PO 2026-08-01): вместо родового «СОБЫТИЕ» — конкретный
   // формат, тем же словарём, что на карточках лент.
@@ -1830,7 +1829,7 @@ export const EventPage: FC = () => {
             </>,
             document.body,
           )}
-          {/* «Проводим» (V86 § 4) — создателю, над кнопкой отказа (PO 2026-09-06: решение
+          {/* «Проводим» (V86 § 4) — создателю или владельцу, над кнопкой отказа (PO 2026-09-06: решение
               организатора важнее его же места). Инлайн-подтверждение: вложенные модалки ломают
               оверлей. Ошибку сервера (400 с текстом) показываем как есть. */}
           {showProceed && (
@@ -1917,7 +1916,7 @@ export const EventPage: FC = () => {
             провёл серию одинаковых встреч и заводит из последней заготовку на следующие. */}
       {isManager && !isCancelled && (
         <div className="rd-ev-actions" style={{ marginTop: 8 }}>
-          {isCreator && !eventHappened && (
+          {canManageEvent && !eventHappened && (
             <div className="rd-ev-actions-row">
               {showVoting && (
                 <button type="button" className="rd-btn-outline" onClick={openEdit}>
