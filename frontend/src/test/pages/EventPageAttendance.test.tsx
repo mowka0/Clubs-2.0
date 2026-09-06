@@ -212,11 +212,13 @@ describe('EventPage — отметка посещаемости', () => {
     mockEventEndpoints({
       ownerId: OWNER_ID,
       event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
-      responders: [
+    });
+    server.use(
+      http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
         { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent', disputeNote: null },
         { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended', disputeNote: null },
-      ],
-    });
+      ])),
+    );
     renderEventPage();
 
     expect(await screen.findByText(/Кто пришёл/)).toBeInTheDocument();
