@@ -71,7 +71,13 @@ object EventMessageTemplate {
      * поэтому «✅ Идут — 0» навсегда оставался нулём и спорил с закрепом в чате, который как раз
      * обновляется по ходу голосования.
      */
-    fun dmFacts(event: Event): String = seatsLine(event)
+    fun dmFacts(event: Event, deadline: OffsetDateTime? = null, fmt: DateTimeFormatter? = null): String {
+        val seats = seatsLine(event)
+        // Срок «передумать без влияния на репутацию» — у встречи с местами (PO 2026-09-06): в чате
+        // его показывает закреп, в личке до этого не показывал никто.
+        if (deadline == null || fmt == null) return seats
+        return "$seats\n⏳ До ${deadline.format(fmt)} передумать можно без влияния на репутацию."
+    }
 
     /**
      * Счётчики НАБОРА СОСТАВА: голос «Иду» уже кладёт в состав, поэтому в закрепе стоит не «идут»,

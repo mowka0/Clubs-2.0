@@ -190,6 +190,14 @@ describe('EventPage — набор обычной встречи (event-formats.
       myVote: 'going', seat: 'confirmed',
     });
 
+    expect(await screen.findByText('Вы в составе · мест больше нет')).toBeInTheDocument();
+  });
+
+  it('без места (голос «Пойду» без seat): общий счёт, а не «вы в составе»', async () => {
+    renderEventPageWith({
+      event: rosterEvent({ confirmedCount: 6, goingCount: 6 }), myVote: 'going',
+    });
+
     expect(await screen.findByText('Мест нет — дальше очередь на замену')).toBeInTheDocument();
   });
 
@@ -536,7 +544,10 @@ describe('EventPage — цена и последствие отказа (event-f
     });
 
     await user.click(await screen.findByRole('button', { name: 'Не смогу прийти' }));
+    // Подтверждение — шторка снизу (PO 2026-09-06), а не строка под кнопкой.
+    expect(screen.getByRole('dialog', { name: 'Отказ от участия' })).toBeInTheDocument();
     expect(screen.getByText(question)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оставить место' })).toBeInTheDocument();
     // Цена дописывается к любому тексту, если не ноль.
     expect(screen.getByText(/спишется 100 очков/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: label })).toBeInTheDocument();

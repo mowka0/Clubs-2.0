@@ -2,6 +2,7 @@ package com.clubs.bot
 
 import com.clubs.common.util.absolutePhotoUrl
 import com.clubs.event.Event
+import com.clubs.event.RosterSchedule
 import com.clubs.event.EventFormat
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
@@ -39,7 +40,10 @@ class NotificationService(
     // DM с callback-кнопками набора (V86): единственные не-WebApp кнопки в личке живут в gateway.
     private val chatTelegramGateway: ChatTelegramGateway,
     @Value("\${telegram.bot-username}") private val botUsername: String,
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    // Глобальный срок «передумать без влияния на репутацию» — для DM о создании, когда у встречи
+    // нет своего интервала (см. events.stage2-trigger-minutes-before).
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val defaultLeadMinutes: Long = 1080
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -86,7 +90,11 @@ class NotificationService(
         // и факты по формату. Счётчиков голосов в DM НЕТ (PO 2026-08-08): личное сообщение
         // не перерисовывается, и «Идут — 0» навсегда оставался нулём — живой счёт живёт в
         // закрепе чата, который бот редактирует.
-        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event)}"
+        // Срок в DM (PO 2026-09-06): участник, которого нет в чате, закрепа не видит и иначе не
+        // узнал бы, до какого момента голос ни к чему не обязывает. У открытой встречи срока нет.
+        val deadline = if (event.isOpenEvent) null
+            else RosterSchedule.deadline(event.eventDatetime, event.stage2LeadMinutes, defaultLeadMinutes)
+        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event, deadline, fmt)}"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"

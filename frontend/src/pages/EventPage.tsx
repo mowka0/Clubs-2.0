@@ -823,9 +823,15 @@ export const EventPage: FC = () => {
         // Мест уже нет: голос принят, но человек за чертой — сказать об этом важнее,
         // чем повторить общий счётчик, который он и так видит в кольце.
         if (mySeat === 'waitlisted') return 'Мест уже нет — вы в очереди';
-        if (rosterShortage > 0) {
-          return `Нужно ещё ${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`;
+        const shortage = `${rosterShortage} ${pluralRu(rosterShortage, ['человек', 'человека', 'человек'])}`;
+        // Своё место важнее общего счёта (PO 2026-09-06): «мест нет — дальше очередь» читалось
+        // как «вам места нет», хотя человек уже в составе.
+        if (mySeat === 'confirmed') {
+          if (rosterShortage > 0) return `Вы в составе · нужно ещё ${shortage}`;
+          if (rosterFull) return 'Вы в составе · мест больше нет';
+          return `Вы в составе · свободно ${seatsWord}`;
         }
+        if (rosterShortage > 0) return `Нужно ещё ${shortage}`;
         if (rosterFull) return 'Мест нет — дальше очередь на замену';
         return hasMinimum ? `Минимум набран · свободно ${seatsWord}` : `Свободно ${seatsWord}`;
       })();
@@ -842,7 +848,9 @@ export const EventPage: FC = () => {
             : 'Пока передумать можно без влияния на репутацию');
       return (
         <div className="rd-roster-note">
-          <span className="rd-roster-ico" aria-hidden="true">{mySeat === 'waitlisted' ? '🎫' : '⏳'}</span>
+          <span className="rd-roster-ico" aria-hidden="true">
+            {mySeat === 'waitlisted' ? '🎫' : mySeat === 'confirmed' ? '✅' : '⏳'}
+          </span>
           <span className="rd-roster-txt">
             <b>{headline}</b>
             <span>{detail}</span>
@@ -1769,38 +1777,51 @@ export const EventPage: FC = () => {
               )}
             </div>
           )}
-          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопка живёт до
+          {/* Подтверждённый освобождает место — с подтверждением в шторке снизу (PO 2026-09-06,
+              как шторка правки встречи; инлайн-вопрос под кнопкой терялся). Кнопка живёт до
               старта встречи; цену на текущий момент приносит declineCostPoints, и она же названа
-              подписью под кнопкой, чтобы решение принималось до открытия диалога. */}
-          {confirmedCanDecline && (
-            confirmingDecline ? (
-              <div className="rd-reject-confirm">
-                <div className="rd-reject-q">
-                  {/* Разные последствия — разный текст. Самое тяжёлое (уход последнего из состава
-                      отменяет встречу) названо первым и вслух: до правки PO 2026-09-01 человек
-                      узнавал об отмене уже постфактум. Цену считает СЕРВЕР (declineCostPoints):
-                      копия правил на клиенте разъехалась бы с рантаймом (урок V83). */}
-                  {declineOutcome.question}
-                  {event.declineCostPoints > 0 && (
-                    <> {`С вашей репутации спишется ${event.declineCostPoints} ${
-                      pluralRu(event.declineCostPoints, ['очко', 'очка', 'очков'])}.`}</>
-                  )}
+              подписью под кнопкой, чтобы решение принималось до открытия шторки. */}
+          {confirmedCanDecline && confirmingDecline && createPortal(
+            <>
+              <div className="rd-sheet-overlay" onClick={() => setConfirmingDecline(false)} aria-hidden="true" />
+              <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Отказ от участия">
+                <div className="rd-sheet-grabber" aria-hidden="true" />
+                <div className="rd-sheet-head">
+                  <h2>{isRosterEvent ? 'Не смогу прийти' : 'Отказаться от участия'}</h2>
+                  <button type="button" className="rd-sheet-close" onClick={() => setConfirmingDecline(false)}>Закрыть</button>
                 </div>
-                <div className="rd-org-gate-acts">
-                  <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
-                    Нет
-                  </button>
-                  <button
-                    type="button"
-                    className="rd-btn-primary rd-btn-danger"
-                    disabled={voting}
-                    onClick={() => { setConfirmingDecline(false); handleDecline(); }}
-                  >
-                    {voting ? <Spinner size="s" /> : declineOutcome.confirmLabel}
-                  </button>
+                <div className="rd-sheet-body">
+                  <div className="rd-body-text" style={{ marginTop: 0 }}>
+                    {/* Разные последствия — разный текст. Самое тяжёлое (уход последнего из состава
+                        отменяет встречу) названо первым и вслух: до правки PO 2026-09-01 человек
+                        узнавал об отмене уже постфактум. Цену считает СЕРВЕР (declineCostPoints):
+                        копия правил на клиенте разъехалась бы с рантаймом (урок V83). */}
+                    {declineOutcome.question}
+                    {event.declineCostPoints > 0 && (
+                      <> {`С вашей репутации спишется ${event.declineCostPoints} ${
+                        pluralRu(event.declineCostPoints, ['очко', 'очка', 'очков'])}.`}</>
+                    )}
+                  </div>
+                  <div className="rd-org-gate-acts">
+                    <button
+                      type="button"
+                      className="rd-btn-primary rd-btn-danger"
+                      disabled={voting}
+                      onClick={() => { setConfirmingDecline(false); handleDecline(); }}
+                    >
+                      {voting ? <Spinner size="s" /> : declineOutcome.confirmLabel}
+                    </button>
+                    <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
+                      {isRosterEvent ? 'Оставить место' : 'Остаться'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            ) : (
+            </>,
+            document.body,
+          )}
+          {confirmedCanDecline && (
+            (
               <div className="rd-cta-wrap">
                 <button type="button" className="rd-btn-outline" onClick={() => { setActionError(null); setConfirmingDecline(true); }}>
                   {isRosterEvent ? 'Не смогу прийти' : 'Отказаться'}
