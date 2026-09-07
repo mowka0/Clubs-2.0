@@ -49,6 +49,17 @@ class JooqSubscriptionRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
+    override fun findLatestByClub(clubId: UUID): ServiceSubscription? =
+        dsl.selectFrom(SERVICE_SUBSCRIPTION)
+            .where(
+                SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID.eq(clubId)
+                    .and(SERVICE_SUBSCRIPTION.PAYER_ROLE.eq(SubscriptionPayerRole.ORGANIZER)),
+            )
+            .orderBy(SERVICE_SUBSCRIPTION.CURRENT_PERIOD_END.desc())
+            .limit(1)
+            .fetchOne()
+            ?.let(mapper::toDomain)
+
     override fun findByProviderToken(providerToken: String): ServiceSubscription? =
         dsl.selectFrom(SERVICE_SUBSCRIPTION)
             .where(

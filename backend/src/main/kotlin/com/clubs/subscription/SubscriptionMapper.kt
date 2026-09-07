@@ -17,6 +17,10 @@ class SubscriptionMapper {
         providerToken = record.providerToken,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!,
+        autopay = record.autopay!!,
+        autopayPossible = record.autopayPossible!!,
+        chargeAttempts = record.chargeAttempts!!,
+        lastChargeAt = record.lastChargeAt,
     )
 
     fun toStatusDto(subscription: ServiceSubscription, priceKopecks: Int): SubscriptionStatusDto =
@@ -24,7 +28,6 @@ class SubscriptionMapper {
             plan = subscription.plan.literal,
             status = subscription.status.literal,
             currentPeriodEnd = subscription.currentPeriodEnd,
-            maxPaidClubs = SubscriptionPlanPolicy.displayMaxPaidClubs(subscription.plan),
             priceKopecks = priceKopecks,
         )
 }

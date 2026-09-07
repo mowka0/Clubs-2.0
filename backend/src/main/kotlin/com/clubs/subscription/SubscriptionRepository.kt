@@ -20,6 +20,12 @@ interface SubscriptionRepository {
     /** Действующий (не ENDED) платформенный план организатора, или null при неявном FREE. */
     fun findActiveOrganizerSubscription(payerUserId: UUID): ServiceSubscription?
 
+    /**
+     * Подписка клуба с самым поздним оплаченным периодом: живая, если она есть (у неё период
+     * всегда позже завершённых), иначе последняя завершённая. null = клуб ни разу не платил.
+     */
+    fun findLatestByClub(clubId: UUID): ServiceSubscription?
+
     fun findByProviderToken(providerToken: String): ServiceSubscription?
 
     fun updatePlan(id: UUID, plan: SubscriptionPlan): Int

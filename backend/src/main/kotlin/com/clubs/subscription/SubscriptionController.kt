@@ -24,10 +24,6 @@ class SubscriptionController(
     fun status(@AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<SubscriptionStatusDto> =
         ResponseEntity.ok(subscriptionService.status(user.userId))
 
-    @GetMapping("/plans")
-    fun plans(@AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<List<PlanOptionDto>> =
-        ResponseEntity.ok(subscriptionService.listPlans())
-
     @PostMapping
     fun subscribe(
         @RequestBody @Valid request: CreateSubscriptionRequest,

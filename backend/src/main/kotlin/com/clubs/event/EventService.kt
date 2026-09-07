@@ -9,6 +9,7 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.skladchina.SkladchinaRepository
+import com.clubs.subscription.BillingGate
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -25,6 +26,7 @@ class EventService(
     private val eventMapper: EventMapper,
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository,
+    private val billingGate: BillingGate,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
     // EventMapper. Нужен, чтобы проверить, помещается ли набор с минимумом до начала встречи.
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long,
@@ -60,6 +62,9 @@ class EventService(
                 minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
             )
         )
+        // Биллинг за чат — после вставки (гейту нужен id события), в той же транзакции:
+        // 402 откатывает событие, а форма на фронте остаётся заполненной (platform-billing.md § 6.4).
+        billingGate.requireBillable(club, event.id, userId)
         log.info(
             "Event created: id={} clubId={} title='{}' userId={} format={}",
             event.id, clubId, event.title, userId, normalizedRequest.format
@@ -137,6 +142,8 @@ class EventService(
             return
         }
         skladchinaRepository.cancelActiveByEventId(event.id)
+        // Отменённая до старта бесплатная встреча возвращается чату (platform-billing.md R5).
+        billingGate.releaseFreeMeeting(event.id)
         log.info("Event cancelled by system: id={} reason='{}'", event.id, reason)
         eventPublisher.publishEvent(EventCancelledEvent(event, reason))
     }
@@ -161,6 +168,8 @@ class EventService(
             throw ConflictException("Событие нельзя отменить: оно уже началось, завершено или отменено")
         }
         skladchinaRepository.cancelActiveByEventId(eventId)
+        // Отменённая до старта бесплатная встреча возвращается чату (platform-billing.md R5).
+        billingGate.releaseFreeMeeting(eventId)
 
         log.info("Event cancelled: id={} userId={} reasonGiven={}", eventId, userId, normalizedReason != null)
         eventPublisher.publishEvent(EventCancelledEvent(event, normalizedReason))

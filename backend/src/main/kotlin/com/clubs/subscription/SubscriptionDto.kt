@@ -20,15 +20,5 @@ data class SubscriptionStatusDto(
     val plan: String,
     val status: String?,
     val currentPeriodEnd: OffsetDateTime?,
-    /** null = без ограничений. */
-    val maxPaidClubs: Int?,
-    val priceKopecks: Int,
-)
-
-/** Одна строка каталога планов (для экрана управления + модалки paywall). */
-data class PlanOptionDto(
-    val plan: String,
-    /** null = без ограничений. */
-    val maxPaidClubs: Int?,
     val priceKopecks: Int,
 )

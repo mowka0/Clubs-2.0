@@ -18,7 +18,6 @@ import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestService
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
-import com.clubs.subscription.SubscriptionService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -56,7 +55,6 @@ class ClubService(
     private val eventRepository: EventRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
-    private val subscriptionService: SubscriptionService,
     private val chatLinkRepository: ChatLinkRepository,
     // Витрина чата на странице клуба (getClub) читает привязку напрямую; освобождение чата при
     // удалении клуба идёт через сервис. Цикла нет: ChatLinkService зависит от ClubRepository,
@@ -96,14 +94,6 @@ class ClubService(
 
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
-
-        // Пейволл по ёмкости плана: создание ПЛАТНОГО клуба сверх потолка плана организатора
-        // требует подписки. Бросает 402 (PaymentRequiredException) с целью для апгрейда.
-        // Бесплатные клубы (subscription_price == 0) никогда его не триггерят — они не
-        // расходуют ёмкость (payment-v2.md §3).
-        if (request.subscriptionPrice > 0) {
-            subscriptionService.requirePaidClubCapacity(ownerId, clubRepository.countPaidByOwnerId(ownerId))
-        }
 
         val inviteCode = if (request.accessType == "private") generateInviteCode() else null
         val club = clubRepository.create(request, ownerId, inviteCode, city)
@@ -297,13 +287,6 @@ class ClubService(
         val goingPaid = request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0
         if (goingPaid && club.ownerId != userId) {
             throw ForbiddenException("Перевести клуб в платный может только владелец")
-        }
-
-        // Превращение в платный расходует ёмкость плана — тот же пейволл, что и при создании,
-        // иначе редактирование обходило бы потолок (payment-v2.md §3.6). Биллинг якорится на
-        // ВЛАДЕЛЬЦА (payer = владелец): ёмкость считаем по club.ownerId, а не по вызывающему.
-        if (goingPaid) {
-            subscriptionService.requirePaidClubCapacity(club.ownerId, clubRepository.countPaidByOwnerId(club.ownerId))
         }
 
         // Инвариант: платный клуб обязан сохранять реквизиты СБП. Вычисляем итоговое состояние

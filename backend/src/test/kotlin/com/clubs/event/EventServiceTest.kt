@@ -6,8 +6,11 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.common.exception.PaymentRequiredException
+import com.clubs.common.exception.PaywallReason
 import com.clubs.common.exception.ValidationException
 import com.clubs.skladchina.SkladchinaRepository
+import com.clubs.subscription.BillingGate
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
@@ -15,6 +18,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
@@ -37,6 +41,7 @@ class EventServiceTest {
     private lateinit var eventMapper: EventMapper
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var skladchinaRepository: SkladchinaRepository
+    private lateinit var billingGate: BillingGate
     private lateinit var eventService: EventService
 
     @BeforeEach
@@ -48,11 +53,76 @@ class EventServiceTest {
         eventMapper = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
+        // Гейт биллинга по умолчанию пропускает: клуб без чата / бесплатная встреча.
+        billingGate = mockk(relaxed = true)
         eventService = EventService(
             eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
+            eventMapper, eventPublisher, skladchinaRepository, billingGate, stage2TriggerMinutesBefore = 1080L,
             rosterWarningMinutes = 180L
         )
+    }
+
+    @Test
+    fun `createEvent runs the billing gate with the persisted event id before publishing`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = club(clubId, ownerId)
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club
+        every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
+
+        eventService.createEvent(clubId, request(), ownerId)
+
+        // Гейту нужен id уже вставленного события: бесплатная встреча записывается по event_id.
+        verifyOrder {
+            eventRepository.create(any(), clubId, ownerId, any())
+            billingGate.requireBillable(club, event.id, ownerId)
+            eventPublisher.publishEvent(EventCreatedEvent(event))
+        }
+    }
+
+    @Test
+    fun `createEvent propagates the paywall and publishes nothing`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
+        every { billingGate.requireBillable(any(), any(), any()) } throws
+            PaymentRequiredException(PaywallReason.FREE_MEETING_USED, clubId, 19900)
+
+        assertThrows<PaymentRequiredException> { eventService.createEvent(clubId, request(), ownerId) }
+
+        // Транзакция откатится вместе со вставкой; слушателям сообщать не о чем.
+        verify(exactly = 0) { eventPublisher.publishEvent(any<EventCreatedEvent>()) }
+    }
+
+    @Test
+    fun `cancelEvent returns the free meeting to the chat`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, null) } returns 1
+
+        eventService.cancelEvent(event.id, ownerId, null)
+
+        verify(exactly = 1) { billingGate.releaseFreeMeeting(event.id) }
+    }
+
+    @Test
+    fun `cancelEvent that hits the guard does not touch the free meeting`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, null) } returns 0
+
+        assertThrows<ConflictException> { eventService.cancelEvent(event.id, ownerId, null) }
+
+        verify(exactly = 0) { billingGate.releaseFreeMeeting(any()) }
     }
 
     @Test
@@ -510,7 +580,7 @@ class EventServiceTest {
     // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
     private fun teaserService() = EventService(
         eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
+        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, billingGate, stage2TriggerMinutesBefore = 1080L,
         rosterWarningMinutes = 180L
     )
 

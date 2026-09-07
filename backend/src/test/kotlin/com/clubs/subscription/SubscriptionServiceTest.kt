@@ -1,10 +1,7 @@
 package com.clubs.subscription
 
-import com.clubs.club.ClubRepository
-import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
-import com.clubs.common.exception.PaymentRequiredException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.SubscriptionPayerRole
 import com.clubs.generated.jooq.enums.SubscriptionPlan
@@ -26,11 +23,10 @@ class SubscriptionServiceTest {
     private val repository = mockk<SubscriptionRepository>(relaxed = true)
     private val provider = mockk<PaymentProvider>(relaxed = true)
     private val mapper = SubscriptionMapper()
-    private val clubRepository = mockk<ClubRepository>(relaxed = true)
     private val userId: UUID = UUID.randomUUID()
 
     private fun service(memberPaysEnabled: Boolean = false) =
-        SubscriptionService(repository, provider, mapper, clubRepository, memberPaysEnabled)
+        SubscriptionService(repository, provider, mapper, memberPaysEnabled)
 
     private fun sub(
         plan: SubscriptionPlan,
@@ -55,27 +51,6 @@ class SubscriptionServiceTest {
         every { repository.currentPriceKopecks(SubscriptionPlan.FREE) } returns 0
         every { repository.currentPriceKopecks(SubscriptionPlan.TRIO) } returns 20000
         every { repository.currentPriceKopecks(SubscriptionPlan.UNLIMITED) } returns 40000
-        every { clubRepository.countPaidByOwnerId(any()) } returns 0
-    }
-
-    @Test
-    fun `FREE plan - creating a 2nd paid club is blocked with 402 pointing at TRIO`() {
-        val ex = assertThrows<PaymentRequiredException> { service().requirePaidClubCapacity(userId, 1) }
-        assertEquals("FREE", ex.currentPlan)
-        assertEquals("TRIO", ex.requiredPlan)
-        assertEquals(20000, ex.priceKopecks)
-    }
-
-    @Test
-    fun `FREE plan - first paid club is allowed`() {
-        service().requirePaidClubCapacity(userId, 0) // не должно бросить исключение
-    }
-
-    @Test
-    fun `TRIO plan - 4th paid club requires UNLIMITED`() {
-        every { repository.findActiveOrganizerSubscription(userId) } returns sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE)
-        val ex = assertThrows<PaymentRequiredException> { service().requirePaidClubCapacity(userId, 3) }
-        assertEquals("UNLIMITED", ex.requiredPlan)
     }
 
     @Test
@@ -114,29 +89,6 @@ class SubscriptionServiceTest {
                 SubscriptionStatus.CANCELLED_PENDING_END,
             )
         }
-    }
-
-    @Test
-    fun `cancel is blocked while over FREE capacity`() {
-        val existing = sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE)
-        every { repository.findActiveOrganizerSubscription(userId) } returns existing
-        every { clubRepository.countPaidByOwnerId(userId) } returns 3 // FREE допускает 1
-
-        assertThrows<ConflictException> { service().cancel(userId) }
-
-        verify(exactly = 0) { provider.cancelSubscription(any()) }
-        verify(exactly = 0) { repository.transitionStatus(any(), any(), SubscriptionStatus.CANCELLED_PENDING_END) }
-    }
-
-    @Test
-    fun `subscribe downgrade is blocked when paid clubs exceed the target plan`() {
-        every { clubRepository.countPaidByOwnerId(userId) } returns 5 // TRIO вмещает только 3
-
-        assertThrows<ConflictException> {
-            service().subscribe(userId, CreateSubscriptionRequest(plan = "TRIO"))
-        }
-
-        verify(exactly = 0) { provider.createSubscription(any()) }
     }
 
     @Test

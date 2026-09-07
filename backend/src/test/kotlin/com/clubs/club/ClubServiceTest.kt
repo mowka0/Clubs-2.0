@@ -16,7 +16,6 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
-import com.clubs.subscription.SubscriptionService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -42,7 +41,6 @@ class ClubServiceTest {
     private lateinit var eventRepository: EventRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
-    private lateinit var subscriptionService: SubscriptionService
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var chatLinkService: ChatLinkService
     private lateinit var interestService: InterestService
@@ -56,13 +54,12 @@ class ClubServiceTest {
         eventRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
-        subscriptionService = mockk(relaxed = true)
         chatLinkRepository = mockk(relaxed = true)
         chatLinkService = mockk(relaxed = true)
         mapper = ClubMapper()
         cityService = mockk(relaxed = true)
         interestService = mockk(relaxed = true)
-        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), cityService = cityService, interestService = interestService, mapper = mapper)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), cityService = cityService, interestService = interestService, mapper = mapper)
         every { chatLinkService.releaseOnClubDeleted(any()) } returns false
         every { cityService.requireCity(TEST_CITY.id) } returns TEST_CITY
     }
@@ -600,28 +597,8 @@ class ClubServiceTest {
             clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), coOrgId)
         }
 
-        // Перевод в платный — владельческое (EDIT_PAYMENT_REQUISITES). Гейт бьёт ДО пейволла и апдейта.
+        // Перевод в платный — владельческое (EDIT_PAYMENT_REQUISITES). Гейт бьёт ДО апдейта.
         assertEquals("Перевести клуб в платный может только владелец", ex.message)
-        verify(exactly = 0) { subscriptionService.requirePaidClubCapacity(any(), any()) }
-        verify(exactly = 0) { clubRepository.update(any(), any()) }
-    }
-
-    @Test
-    fun `owner flipping free-to-paid hits the plan paywall on the owner (402)`() {
-        val clubId = UUID.randomUUID()
-        val ownerId = UUID.randomUUID()
-        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0).copy(paymentLink = "sbp://x")
-        every { clubRepository.findById(clubId) } returns club
-        every { clubRepository.countPaidByOwnerId(ownerId) } returns 3
-        every { subscriptionService.requirePaidClubCapacity(ownerId, any()) } throws
-            com.clubs.common.exception.PaymentRequiredException("free", "start", 19900)
-
-        assertThrows<com.clubs.common.exception.PaymentRequiredException> {
-            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), ownerId)
-        }
-
-        // Ёмкость плана считается по владельцу клуба.
-        verify(exactly = 1) { subscriptionService.requirePaidClubCapacity(ownerId, 3) }
         verify(exactly = 0) { clubRepository.update(any(), any()) }
     }
 }

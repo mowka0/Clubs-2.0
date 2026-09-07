@@ -8,6 +8,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -29,6 +30,7 @@ class ChatLinkService(
     private val skladchinaChatStatusService: SkladchinaChatStatusService,
     private val strictModeService: StrictModeService,
     private val memberTagService: MemberTagService,
+    private val eventPublisher: ApplicationEventPublisher,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
@@ -87,6 +89,9 @@ class ChatLinkService(
             clubRepository.softDelete(occupant.clubId)
         }
         chatLinkRepository.updateChatId(link.chatId, newChatId)
+        // Синхронно, в этой же транзакции: данные, привязанные к chat_id (бесплатная встреча),
+        // переезжают вместе с привязкой или откатываются вместе с ней.
+        eventPublisher.publishEvent(ChatIdMigratedEvent(link.clubId, link.chatId, newChatId))
         log.info("Chat id migrated (group→supergroup): clubId={} {} → {}", link.clubId, link.chatId, newChatId)
         return true
     }

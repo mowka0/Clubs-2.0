@@ -149,4 +149,48 @@ open class ServiceSubscriptionDao(configuration: Configuration?) : DAOImpl<Servi
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetch(ServiceSubscription.SERVICE_SUBSCRIPTION.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>autopay BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfAutopay(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetchRange(ServiceSubscription.SERVICE_SUBSCRIPTION.AUTOPAY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>autopay IN (values)</code>
+     */
+    fun fetchByAutopay(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetch(ServiceSubscription.SERVICE_SUBSCRIPTION.AUTOPAY, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>autopay_possible BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfAutopayPossible(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetchRange(ServiceSubscription.SERVICE_SUBSCRIPTION.AUTOPAY_POSSIBLE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>autopay_possible IN (values)</code>
+     */
+    fun fetchByAutopayPossible(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetch(ServiceSubscription.SERVICE_SUBSCRIPTION.AUTOPAY_POSSIBLE, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>charge_attempts BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfChargeAttempts(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetchRange(ServiceSubscription.SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>charge_attempts IN (values)</code>
+     */
+    fun fetchByChargeAttempts(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetch(ServiceSubscription.SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>last_charge_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLastChargeAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetchRange(ServiceSubscription.SERVICE_SUBSCRIPTION.LAST_CHARGE_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>last_charge_at IN (values)</code>
+     */
+    fun fetchByLastChargeAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.ServiceSubscription> = fetch(ServiceSubscription.SERVICE_SUBSCRIPTION.LAST_CHARGE_AT, *values)
 }

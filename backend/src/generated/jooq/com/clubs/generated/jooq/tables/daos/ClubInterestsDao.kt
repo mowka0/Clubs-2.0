@@ -55,17 +55,6 @@ open class ClubInterestsDao(configuration: Configuration?) : DAOImpl<ClubInteres
     fun fetchByInterestId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetch(ClubInterests.CLUB_INTERESTS.INTEREST_ID, *values)
 
     /**
-     * Fetch records that have <code>created_at BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfCreatedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetchRange(ClubInterests.CLUB_INTERESTS.CREATED_AT, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>created_at IN (values)</code>
-     */
-    fun fetchByCreatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetch(ClubInterests.CLUB_INTERESTS.CREATED_AT, *values)
-
-    /**
      * Fetch records that have <code>position BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
@@ -75,4 +64,15 @@ open class ClubInterestsDao(configuration: Configuration?) : DAOImpl<ClubInteres
      * Fetch records that have <code>position IN (values)</code>
      */
     fun fetchByPosition(vararg values: Short): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetch(ClubInterests.CLUB_INTERESTS.POSITION, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>created_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCreatedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetchRange(ClubInterests.CLUB_INTERESTS.CREATED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>created_at IN (values)</code>
+     */
+    fun fetchByCreatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.ClubInterests> = fetch(ClubInterests.CLUB_INTERESTS.CREATED_AT, *values)
 }

@@ -32,6 +32,12 @@ PUT  /api/events/{id}               (2026-07-26; см. § «Редактиров
 - `votingOpensDaysBefore` 1-14, default = 14 → 400
 - При создании: `status = upcoming`, `stage_2_triggered = false`
 - `created_by = user.id` из JWT
+- **Гейт биллинга за чат** (2026-09-07, `platform-billing.md` § 6.4): после вставки события, в той же
+  транзакции, `BillingGate.requireBillable(club, event.id, userId)`. Клуб без привязанного чата —
+  бесплатен; первая встреча чата бесплатна (признак `chat_free_meeting` по `chat_id`); дальше нужна
+  живая подписка или грейс, иначе → **402** `PaywallResponse {reason, clubId, priceKopecks}`, событие
+  откатывается. Отмена (ручная `cancelEvent` и системная `cancelBySystem`) возвращает бесплатную
+  встречу чату. Единственная точка биллинга — всё остальное по событию работает при любом статусе.
 
 ### Валидация CreateEventRequest
 | Поле | Правило |

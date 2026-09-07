@@ -162,7 +162,8 @@ ALTER TABLE service_subscription
 CREATE SEQUENCE platform_payment_inv_seq START 100000;  -- InvId Robokassa: 1..2^63-1, уникален
 CREATE TABLE platform_payment (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subscription_id  UUID NOT NULL REFERENCES service_subscription(id),
+    club_id          UUID NOT NULL REFERENCES clubs(id),   -- счёт всегда за клуб (чат)
+    subscription_id  UUID REFERENCES service_subscription(id),  -- NULL у материнского до оплаты
     inv_id           BIGINT NOT NULL UNIQUE DEFAULT nextval('platform_payment_inv_seq'),
     kind             VARCHAR(16) NOT NULL,      -- MOTHER | RECURRING
     previous_inv_id  BIGINT,                    -- для RECURRING: InvId материнского
@@ -174,6 +175,7 @@ CREATE TABLE platform_payment (
     paid_at          TIMESTAMPTZ
 );
 CREATE INDEX idx_platform_payment_pending ON platform_payment (created_at) WHERE status = 'PENDING';
+CREATE INDEX idx_platform_payment_club ON platform_payment (club_id, created_at DESC);
 
 -- Бесплатная первая встреча — по chat_id, переживает отвязку и удаление клуба (R6).
 CREATE TABLE chat_free_meeting (
@@ -197,6 +199,17 @@ CREATE INDEX idx_funnel_event_kind_created ON funnel_event (kind, created_at);
 ```
 Все `COMMENT ON` — по-русски (конвенция). Планы `FREE/TRIO/UNLIMITED` в enum остаются (значения
 enum в PostgreSQL не удаляются), в коде не используются.
+
+Как реализовано (отличия от эскиза выше — в самой миграции `V87__platform_billing_chat.sql`):
+- легаси-строки платформенного плана ёмкости (`payer_role = 'ORGANIZER' AND subject_club_id IS NULL`)
+  переводятся в `ENDED` — в чат-модели у них нет предмета, реальных денег за ними нет
+  (стаб-провайдер); `chk_service_subscription_org_club` добавлен как `NOT VALID`, чтобы эти строки
+  под правило не подпадали, а новые вставки и обновления проверялись;
+- `platform_payment.kind` и `.status` закрыты `CHECK`-списками; `subscription_id` **nullable**, а
+  `club_id` обязателен: строка подписки появляется только с первым успешным платежом (§ 6.3), поэтому
+  до ResultURL счёт привязан к клубу, а не к подписке;
+- у `chat_free_meeting.event_id` и `funnel_event.club_id` FK нет — признак и факты воронки
+  переживают удаление клуба и его встреч.
 
 ### 5.2 `V88__platform_billing_pricing.sql`
 ```sql
@@ -264,37 +277,52 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
 ### 6.3 Сервис `BillingService` (переименованный `SubscriptionService`)
 - `status(clubId, userId)` → `BillingStatusDto` (владелец/со-организатор с `MANAGE_EVENTS`; иначе 403).
 - `checkout(clubId, userId, autopay)`: только владелец (`ClubRoleGuard`, капабилити владельца);
-  клуб обязан иметь привязку; берёт живую подписку или создаёт строку `PAST_DUE` с
-  `current_period_end = now` (ждём первый платёж — семантика «счёт выставлен»; после успеха →
-  ACTIVE); создаёт `platform_payment(MOTHER)`; `funnel_event(checkout_started)`; отдаёт URL.
-  Второй чекаут при живом PENDING < 30 мин — вернуть тот же URL (идемпотентность), не плодить InvId.
+  клуб обязан иметь привязку; создаёт `platform_payment(MOTHER, club_id, subscription_id = NULL)`;
+  **строку подписки не создаёт** — она появляется в `onResult` с первым успешным платежом (строка
+  `PAST_DUE` «в ожидании» с `current_period_end = now` дала бы через правило грейса неделю без
+  оплаты); `funnel_event(checkout_started)`; отдаёт URL. Второй чекаут при живом PENDING < 30 мин
+  по клубу — вернуть тот же URL (идемпотентность), не плодить InvId. Значение `autopay` ползунка
+  переносится на подписку при её создании/продлении в `onResult`.
 - `onResult(notification)`: транзакция; `platform_payment` по `inv_id` (нет → WARN, ответ OK, чтобы
-  Robokassa не ретраила); `recordEventIfNew("robokassa:paid:<InvId>")` (повтор → OK без действий);
-  сумма совпадает; → SUCCEEDED, `paid_at`, `payment_method`, `fee`; подписка:
-  `extendPeriod(max(now, period_end) + 30d)`, `transitionStatus(PAST_DUE|ENDED → ACTIVE)` (ENDED →
-  ACTIVE разрешён только здесь, как «переподписка»), для MOTHER — `provider_token = InvId`,
-  `autopay_possible = isCard(payment_method)`, `charge_attempts = 0`; `funnel_event(payment_succeeded)`;
-  DM владельцу.
+  Robokassa не ретраила); `recordEventIfNew("robokassa:paid:<InvId>")` (повтор → OK без действий;
+  для MOTHER без подписки ключ пишется после её создания); сумма совпадает; → SUCCEEDED, `paid_at`,
+  `payment_method`, `fee`; подписка: живая по клубу (`findLatestByClub`, статус ≠ ENDED) →
+  `extendPeriod(max(now, period_end) + 30d)`, `transitionStatus(PAST_DUE → ACTIVE)`; нет живой
+  (первая оплата или переподписка после ENDED) → новая строка `ACTIVE` с `current_period_end =
+  now + 30d`, `payer_user_id = clubs.owner_id`; `platform_payment.subscription_id` проставляется;
+  для MOTHER — `provider_token = InvId`, `autopay_possible = isCard(payment_method)`,
+  `charge_attempts = 0`; `funnel_event(payment_succeeded)`; DM владельцу.
 - `setAutopay(clubId, userId, value)`: владелец; `true` при `!autopay_possible` → 409.
 - `requireBillable(club)` — § 6.4.
 
-### 6.4 Гейт `BillingGate.requireBillable(club, eventIdSupplier)` — единственная точка
+### 6.4 Гейт `BillingGate.requireBillable(club, eventId, actorUserId)` — единственная точка ✅
 Вызывается из `EventService.createEvent` **после** `requireCapability` и **после** вставки события,
 в той же транзакции (нужен `event.id`):
 1. `club_chat_links` нет → пропустить (R2).
-2. Живая подписка `ACTIVE` → пропустить. `PAST_DUE` и `now < period_end + 7d` → пропустить (грейс).
-3. Иначе попытка взять бесплатную встречу атомарно:
+2. `findLatestByClub(clubId)` (подписка с самым поздним периодом — живая, если есть) и
+   `ServiceSubscription.allowsNewMeetings(now, graceDays)`: `ACTIVE`/`PAST_DUE` и
+   `now < period_end + grace` → пропустить. Считается от `period_end`, а не от статуса — шедулер
+   переводит `ACTIVE → PAST_DUE` раз в сутки, стена от его тика не зависит. `ENDED` → не пропускает.
+3. Иначе попытка взять бесплатную встречу атомарно (`FreeMeetingRepository.claim`):
    `INSERT INTO chat_free_meeting(chat_id, club_id, event_id) … ON CONFLICT (chat_id) DO UPDATE SET
    club_id=EXCLUDED.club_id, event_id=EXCLUDED.event_id, used_at=NOW(), released_at=NULL
    WHERE chat_free_meeting.released_at IS NOT NULL` → 1 строка = встреча бесплатна
-   (`funnel_event(free_meeting_used)`); 0 строк → `PaymentRequiredException(reason=FREE_MEETING_USED)`
-   → транзакция откатывается, событие не создаётся.
-   Для подписки `ENDED` после грейса — `reason=SUBSCRIPTION_EXPIRED`.
-4. `EventService.cancelEvent` после успешной отмены: `billingGate.releaseFreeMeeting(eventId)` —
+   (`funnel_event(free_meeting_used)`); 0 строк → `PaymentRequiredException(reason, clubId,
+   priceKopecks)` → транзакция откатывается, событие не создаётся. `reason = FREE_MEETING_USED`,
+   если подписки у клуба не было никогда; `SUBSCRIPTION_EXPIRED`, если была (любой статус).
+   `funnel_event(paywall_seen)` пишется в **отдельной** транзакции (`REQUIRES_NEW`) — основная
+   откатывается вместе со вставкой встречи.
+4. `EventService.cancelEvent` **и** `cancelBySystem` (автоотмена недобора — тоже до старта) после
+   успешной отмены: `billingGate.releaseFreeMeeting(eventId)` —
    `UPDATE chat_free_meeting SET released_at = NOW() WHERE event_id = ? AND released_at IS NULL` (R5).
+5. Переезд `chat_id` (§ 5.3): `FreeMeetingRepository.migrateChatId(old, new)`; если у нового id уже
+   есть строка (двойник успел взять бесплатную), старая отбрасывается — чат один.
 
-`PaymentRequiredException` и `PaywallResponse` получают поля `reason` и `clubId`; `currentPlan/
-requiredPlan` удаляются (фронт `paywallFromError` переписывается).
+`PaymentRequiredException(reason: PaywallReason, clubId, priceKopecks)` и `PaywallResponse
+{error, message, reason, clubId, priceKopecks}`; `currentPlan/requiredPlan` удалены (фронт
+`paywallFromError` переписывается в § 7). Вместе с гейтом удалены `SubscriptionPlanPolicy`,
+`PricingInvariant`, `requirePaidClubCapacity`, гейты ёмкости в `ClubService.createClub/updateClub`,
+`ClubRepository.countPaidByOwnerId`, `GET /api/subscriptions/plans` и тесты ёмкости.
 
 ### 6.5 Шедулер `ServiceSubscriptionScheduler` (крон `subscription.lifecycle-cron`, ежедневно; плюс
 почасовой тик для PENDING)
