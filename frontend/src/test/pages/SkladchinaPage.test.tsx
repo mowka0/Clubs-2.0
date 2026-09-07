@@ -45,6 +45,8 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     photoUrl: null,
     template: 'custom',
     eventId: null,
+    eventTitle: null,
+    eventDatetime: null,
     paymentMode: 'fixed_equal',
     totalGoalKopecks: 500000,
     collectedKopecks: 100000,
@@ -328,5 +330,53 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
     expect(confirm).toBeDisabled();
     fireEvent.change(reason, { target: { value: 'ты был на событии' } });
     expect(confirm).not.toBeDisabled();
+  });
+});
+
+describe('SkladchinaPage — шапка сбора по встрече', () => {
+  const splitDetail = (overrides: Partial<SkladchinaDetailDto> = {}) =>
+    buildDetail({
+      template: 'split_bill',
+      eventId: 'ev-1',
+      eventTitle: 'Ужин в «Веранде»',
+      eventDatetime: '2026-09-03T16:00:00Z',
+      title: 'Счёт: Ужин в «Веранде»',
+      affectsReputation: true,
+      description: 'Еда и напитки на компанию',
+      ...overrides,
+    });
+
+  it('показывает встречу отдельным блоком, без заголовка-пересказа и ряда бейджей', async () => {
+    mockDetail(splitDetail());
+    renderPage();
+
+    expect(await screen.findByText('Счёт за встречу')).toBeInTheDocument();
+    expect(screen.getByText('Ужин в «Веранде»')).toBeInTheDocument();
+    // Заголовок сбора повторял название встречи — его больше нет.
+    expect(screen.queryByText('Счёт: Ужин в «Веранде»')).not.toBeInTheDocument();
+    // Бейджи ушли: «Активен» очевиден по кнопке оплаты, «Важный сбор» — по предупреждению ниже.
+    expect(screen.queryByText('Активен')).not.toBeInTheDocument();
+    expect(screen.queryByText('⚠️ Важный сбор')).not.toBeInTheDocument();
+    // Клуб остаётся крошкой над блоком встречи.
+    expect(screen.getByLabelText('Открыть клуб Клуб')).toBeInTheDocument();
+    // Описание переехало внутрь блока сбора.
+    expect(screen.getByText('Еда и напитки на компанию')).toBeInTheDocument();
+  });
+
+  it('показывает своё название сбора, если организатор написал не «Счёт: <встреча>»', async () => {
+    mockDetail(splitDetail({ title: 'Скидываемся на Веранду' }));
+    renderPage();
+
+    expect(await screen.findByText('Скидываемся на Веранду')).toBeInTheDocument();
+  });
+
+  it('у обычного сбора шапка прежняя: плитка клуба, заголовок и бейджи', async () => {
+    mockDetail(buildDetail({ affectsReputation: true }));
+    renderPage();
+
+    expect(await screen.findByText('Сбор на баню')).toBeInTheDocument();
+    expect(screen.getByText('Сбор в клубе')).toBeInTheDocument();
+    expect(screen.getByText('⚠️ Важный сбор')).toBeInTheDocument();
+    expect(screen.queryByText('Счёт за встречу')).not.toBeInTheDocument();
   });
 });

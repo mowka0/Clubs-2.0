@@ -157,6 +157,15 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `custom skladchina detail carries no event fields`() {
+        val id = createSkladchina(listOf(memberAId))
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.eventTitle").doesNotExist())
+            .andExpect(jsonPath("$.eventDatetime").doesNotExist())
+    }
+
+    @Test
     fun `POST create as non-organizer member returns 403`() {
         val body = createBodyFor(listOf(memberAId, memberBId))
         mockMvc.perform(
@@ -823,6 +832,9 @@ class SkladchinaControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.template").value("split_bill"))
             .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+            // Экран сбора открывается блоком встречи, поэтому деталка несёт её название и дату целиком.
+            .andExpect(jsonPath("$.eventTitle").value("Game"))
+            .andExpect(jsonPath("$.eventDatetime").exists())
             .andExpect(jsonPath("$.paymentMode").value("fixed_equal"))
             .andExpect(jsonPath("$.totalGoalKopecks").value(90000))
             .andExpect(jsonPath("$.participantCount").value(2))

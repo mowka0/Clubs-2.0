@@ -5,6 +5,7 @@ import com.clubs.common.auth.ClubCapability
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
@@ -24,6 +25,7 @@ import java.util.UUID
 class SkladchinaQueryService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
+    private val eventRepository: EventRepository,
     private val clubRoleGuard: ClubRoleGuard,
     private val mapper: SkladchinaMapper,
     private val templateRegistry: SkladchinaTemplateRegistry
@@ -96,9 +98,12 @@ class SkladchinaQueryService(
         val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
         val declineRequiresApproval =
             templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL
+        // Встреча нужна экрану сбора целиком (название + дата), а не одним id: она открывает страницу
+        // блоком «за что скидываемся». Удалённой встречи быть не может — сплит живёт вместе с ней.
+        val event = skladchina.eventId?.let { eventRepository.findById(it) }
         return mapper.toDetailDto(
             skladchina, club.name, club.avatarUrl, callerId, callerIsManager, participants, collected,
-            declineRequiresApproval
+            declineRequiresApproval, event
         )
     }
 

@@ -96,6 +96,10 @@ data class SkladchinaDetailDto(
 
     val template: String,                          // custom | split_bill | gear | booking | birthday
     val eventId: UUID?,                            // split_bill: исходное событие (иначе null)
+    // Встреча, счёт которой делится: экран сбора показывает её отдельным блоком «за что скидываемся»,
+    // поэтому названия и даты недостаточно иметь по eventId — иначе фронту нужен второй запрос.
+    val eventTitle: String?,
+    val eventDatetime: OffsetDateTime?,
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,

@@ -20,6 +20,12 @@ import { OrganizerParticipantList } from '../components/skladchina/OrganizerPart
 import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
 
 // Формат отображения дедлайна сбора: «5 июля, 18:30» (день + месяц + время, ru-RU).
+// Дата встречи в блоке «за что скидываемся» — день, месяц и время, без года: сплит живёт
+// не дольше 30 дней после встречи, год в такой близи только шумит.
+const EVENT_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+});
+
 const DEADLINE_FMT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'long',
@@ -290,46 +296,74 @@ export const SkladchinaPage: FC = () => {
     : s.status === 'cancelled' ? 'rd-neutral2'
     : 'rd-going';
 
+  // Сбор по встрече открывается двумя блоками — встреча и сбор, — поэтому ни заголовка-пересказа,
+  // ни ряда бейджей у него нет: всё это раньше повторяло то, что и так написано в блоках.
+  const isSplit = s.template === 'split_bill' && Boolean(s.eventId);
+  // Название сбора у сплита по умолчанию генерируется как «Счёт: <встреча>» — показываем его,
+  // только если организатор написал своё, иначе это дубль названия встречи.
+  const customTitle = isSplit && s.title !== `Счёт: ${s.eventTitle ?? ''}` ? s.title : null;
+  const clubInitials = s.clubName.split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('');
+
   return (
     <div className="rd-page">
-      <button
-        type="button"
-        className="rd-glass rd-host-row"
-        onClick={handleBackToClub}
-        aria-label={`Открыть клуб ${s.clubName}`}
-        style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-      >
-        <span className="rd-ico">
-          {s.clubAvatarUrl
-            ? <img src={s.clubAvatarUrl} alt="" />
-            : s.clubName.split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('')}
-        </span>
-        <div className="rd-info">
-          <div className="rd-met">Сбор в клубе</div>
-          <div className="rd-ttl">{s.clubName}</div>
-        </div>
-        <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
-      </button>
-
-      <div className="rd-ft-eyebrow">Сбор</div>
-      <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
-      <div className="rd-badges-row" style={{ marginBottom: 16 }}>
-        <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
-        <span className="rd-badge rd-neutral2">{paymentModeLabel(s.paymentMode)}</span>
-        {s.affectsReputation && (
-          <span className="rd-badge rd-warn" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
-        )}
-        {s.template === 'split_bill' && s.eventId && (
+      {isSplit ? (
+        <>
           <button
             type="button"
-            className="rd-badge rd-neutral2"
-            style={{ cursor: 'pointer', border: 'none', font: 'inherit' }}
+            className="rd-sklad-crumb"
+            onClick={handleBackToClub}
+            aria-label={`Открыть клуб ${s.clubName}`}
+          >
+            <span className="rd-crumb-ava">
+              {s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}
+            </span>
+            {s.clubName}
+            <span aria-hidden="true">›</span>
+          </button>
+
+          <button
+            type="button"
+            className="rd-glass rd-sklad-ev"
             onClick={() => { haptic.impact('light'); navigate(`/events/${s.eventId}`); }}
           >
-            🧾 Счёт по событию ›
+            <span className="rd-ev-kicker">Счёт за встречу</span>
+            <span className="rd-ev-name">{s.eventTitle ?? 'Встреча'}</span>
+            <span className="rd-ev-line">
+              {s.eventDatetime && `${EVENT_FMT.format(new Date(s.eventDatetime))} · `}
+              <span style={{ color: 'var(--accent)' }}>открыть ›</span>
+            </span>
           </button>
-        )}
-      </div>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="rd-glass rd-host-row"
+            onClick={handleBackToClub}
+            aria-label={`Открыть клуб ${s.clubName}`}
+            style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+          >
+            <span className="rd-ico">
+              {s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}
+            </span>
+            <div className="rd-info">
+              <div className="rd-met">Сбор в клубе</div>
+              <div className="rd-ttl">{s.clubName}</div>
+            </div>
+            <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
+          </button>
+
+          <div className="rd-ft-eyebrow">Сбор</div>
+          <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
+          <div className="rd-badges-row" style={{ marginBottom: 16 }}>
+            <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
+            <span className="rd-badge rd-neutral2">{paymentModeLabel(s.paymentMode)}</span>
+            {s.affectsReputation && (
+              <span className="rd-badge rd-warn" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
+            )}
+          </div>
+        </>
+      )}
 
       {s.photoUrl && (
         <button
@@ -343,12 +377,6 @@ export const SkladchinaPage: FC = () => {
       )}
       <ImageLightbox src={photoZoomed ? s.photoUrl : null} onClose={() => setPhotoZoomed(false)} />
 
-      {s.description && (
-        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-          <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{s.description}</div>
-        </div>
-      )}
-
       {s.rules && (
         <>
           <div className="rd-section-sub-h">Правила</div>
@@ -359,6 +387,13 @@ export const SkladchinaPage: FC = () => {
       )}
 
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+        {/* У сбора по встрече своей шапки нет — статус и собственное название организатора живут здесь. */}
+        {isSplit && (s.status !== 'active' || customTitle) && (
+          <div className="rd-badges-row" style={{ marginBottom: 10 }}>
+            {s.status !== 'active' && <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>}
+            {customTitle && <span className="rd-badge rd-neutral2">{customTitle}</span>}
+          </div>
+        )}
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
           {useMoneyBar
             ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
@@ -373,8 +408,13 @@ export const SkladchinaPage: FC = () => {
             : hasGoal
               ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
               : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
+          {/* Режим оплаты у сплита сказан здесь: ряда бейджей, где он стоял раньше, больше нет. */}
+          {isSplit && ` · ${paymentModeLabel(s.paymentMode).toLowerCase()}`}
           {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
         </div>
+        {s.description && (
+          <div className="rd-sklad-inline-sep">{s.description}</div>
+        )}
       </div>
 
       <div className="rd-section-sub-h">Платёжная ссылка</div>

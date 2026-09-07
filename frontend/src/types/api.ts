@@ -785,6 +785,9 @@ export interface SkladchinaDetailDto {
   photoUrl: string | null;
   template: SkladchinaTemplate;
   eventId: string | null;
+  // Встреча, счёт которой делится (split_bill): открывает экран сбора блоком «за что скидываемся».
+  eventTitle: string | null;
+  eventDatetime: string | null;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
