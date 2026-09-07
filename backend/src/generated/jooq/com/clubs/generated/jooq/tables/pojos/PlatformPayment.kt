@@ -25,6 +25,7 @@ data class PlatformPayment(
     var previousInvId: Long? = null,
     var amountKopecks: Int,
     var status: String? = null,
+    var autopayRequested: Boolean? = null,
     var paymentMethod: String? = null,
     var providerFee: BigDecimal? = null,
     var createdAt: OffsetDateTime? = null,
@@ -76,6 +77,12 @@ data class PlatformPayment(
         }
         else if (this.status != o.status)
             return false
+        if (this.autopayRequested == null) {
+            if (o.autopayRequested != null)
+                return false
+        }
+        else if (this.autopayRequested != o.autopayRequested)
+            return false
         if (this.paymentMethod == null) {
             if (o.paymentMethod != null)
                 return false
@@ -114,6 +121,7 @@ data class PlatformPayment(
         result = prime * result + (if (this.previousInvId == null) 0 else this.previousInvId.hashCode())
         result = prime * result + this.amountKopecks.hashCode()
         result = prime * result + (if (this.status == null) 0 else this.status.hashCode())
+        result = prime * result + (if (this.autopayRequested == null) 0 else this.autopayRequested.hashCode())
         result = prime * result + (if (this.paymentMethod == null) 0 else this.paymentMethod.hashCode())
         result = prime * result + (if (this.providerFee == null) 0 else this.providerFee.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
@@ -132,6 +140,7 @@ data class PlatformPayment(
         sb.append(", ").append(previousInvId)
         sb.append(", ").append(amountKopecks)
         sb.append(", ").append(status)
+        sb.append(", ").append(autopayRequested)
         sb.append(", ").append(paymentMethod)
         sb.append(", ").append(providerFee)
         sb.append(", ").append(createdAt)

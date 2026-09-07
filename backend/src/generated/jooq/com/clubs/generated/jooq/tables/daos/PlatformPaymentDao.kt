@@ -131,6 +131,17 @@ open class PlatformPaymentDao(configuration: Configuration?) : DAOImpl<PlatformP
     fun fetchByStatus(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetch(PlatformPayment.PLATFORM_PAYMENT.STATUS, *values)
 
     /**
+     * Fetch records that have <code>autopay_requested BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfAutopayRequested(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetchRange(PlatformPayment.PLATFORM_PAYMENT.AUTOPAY_REQUESTED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>autopay_requested IN (values)</code>
+     */
+    fun fetchByAutopayRequested(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetch(PlatformPayment.PLATFORM_PAYMENT.AUTOPAY_REQUESTED, *values.toTypedArray())
+
+    /**
      * Fetch records that have <code>payment_method BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */

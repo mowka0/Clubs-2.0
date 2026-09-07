@@ -25,6 +25,12 @@ class JooqFreeMeetingRepository(private val dsl: DSLContext) : FreeMeetingReposi
             .where(CHAT_FREE_MEETING.RELEASED_AT.isNotNull)
             .execute() > 0
 
+    override fun isUsed(chatId: Long): Boolean =
+        dsl.fetchExists(
+            dsl.selectOne().from(CHAT_FREE_MEETING)
+                .where(CHAT_FREE_MEETING.CHAT_ID.eq(chatId).and(CHAT_FREE_MEETING.RELEASED_AT.isNull)),
+        )
+
     override fun release(eventId: UUID): Int =
         dsl.update(CHAT_FREE_MEETING)
             .set(CHAT_FREE_MEETING.RELEASED_AT, DSL.currentOffsetDateTime())

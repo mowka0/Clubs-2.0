@@ -144,6 +144,14 @@ open class PlatformPayment(
     val STATUS: TableField<PlatformPaymentRecord, String?> = createField(DSL.name("status"), SQLDataType.VARCHAR(16).nullable(false).defaultValue(DSL.field(DSL.raw("'PENDING'::character varying"), SQLDataType.VARCHAR)), this, "PENDING = счёт выставлен, подтверждения нет | SUCCEEDED = ResultURL/опрос подтвердил оплату | FAILED = провайдер отказал или счёт протух.")
 
     /**
+     * The column <code>public.platform_payment.autopay_requested</code>.
+     * Положение ползунка «Продлевать автоматически» в шите на момент чекаута
+     * (только для MOTHER). Переносится на подписку при подтверждении оплаты —
+     * строки подписки до первой оплаты ещё нет.
+     */
+    val AUTOPAY_REQUESTED: TableField<PlatformPaymentRecord, Boolean?> = createField(DSL.name("autopay_requested"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "Положение ползунка «Продлевать автоматически» в шите на момент чекаута (только для MOTHER). Переносится на подписку при подтверждении оплаты — строки подписки до первой оплаты ещё нет.")
+
+    /**
      * The column <code>public.platform_payment.payment_method</code>.
      * PaymentMethod из ResultURL (BankCard, SBP, …). Карта ⇒ autopay_possible
      * на подписке.

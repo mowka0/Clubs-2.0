@@ -1,0 +1,158 @@
+package com.clubs.subscription
+
+import com.clubs.chatlink.ChatLinkRepository
+import com.clubs.club.Club
+import com.clubs.club.ClubRepository
+import com.clubs.generated.jooq.enums.SubscriptionPlan
+import com.clubs.generated.jooq.enums.SubscriptionStatus
+import com.clubs.payment.PaymentProvider
+import com.clubs.payment.PaymentState
+import com.clubs.payment.RecurringChargeRequest
+import com.clubs.payment.ResultNotification
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
+import java.util.UUID
+
+/**
+ * Календарь подписки за чат (platform-billing.md § 6.5). Ежедневно — напоминания, дочерние
+ * списания по слотам [retryDays], PAST_DUE по концу периода, ENDED по концу грейса. Ежечасно —
+ * опрос провайдера по счетам без ответа. Клуб без чата доживает период тихо: ни списаний, ни DM.
+ */
+@Service
+class BillingLifecycleService(
+    private val subscriptionRepository: SubscriptionRepository,
+    private val paymentRepository: PlatformPaymentRepository,
+    private val chatLinkRepository: ChatLinkRepository,
+    private val clubRepository: ClubRepository,
+    private val funnelEventRepository: FunnelEventRepository,
+    private val paymentProvider: PaymentProvider,
+    private val billingService: BillingService,
+    private val notifier: BillingNotifier,
+    @Value("\${billing.grace-days:7}") private val graceDays: Long,
+    @Value("\${subscription.period-days:30}") private val periodDays: Long,
+    // Слоты дочерних списаний в днях от конца периода; четвёртой попытки нет — грейс кончился.
+    @Value("\${billing.retry-days:0,1,3}") private val retryDays: List<Long>,
+    // Через сколько часов без ответа счёт опрашивается у провайдера.
+    @Value("\${billing.pending-timeout-hours:6}") private val pendingTimeoutHours: Long,
+    // Материнский счёт без оплаты дольше этого срока считается брошенным.
+    @Value("\${billing.mother-expire-hours:24}") private val motherExpireHours: Long,
+) {
+
+    private val log = LoggerFactory.getLogger(BillingLifecycleService::class.java)
+
+    @Transactional
+    fun runDaily(now: OffsetDateTime) {
+        val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
+        for (subscription in subscriptionRepository.findLive()) {
+            val clubId = subscription.subjectClubId ?: continue
+            val club = clubRepository.findById(clubId)
+            val hasChat = club != null && chatLinkRepository.findByClubId(clubId) != null
+            val periodEnd = subscription.currentPeriodEnd
+            val graceEnd = periodEnd.plusDays(graceDays)
+
+            if (!now.isBefore(graceEnd)) {
+                endSubscription(subscription, club, hasChat)
+                continue
+            }
+            if (!hasChat || club == null) continue
+
+            val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null
+            if (now.isBefore(periodEnd)) {
+                remindBeforeEnd(subscription, club, now, price, autoCharge)
+            } else if (autoCharge) {
+                chargeIfSlotDue(subscription, club, now, price)
+            } else if (subscription.status == SubscriptionStatus.ACTIVE) {
+                subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
+                notifier.periodEnded(club, graceEnd)
+                log.info("Subscription period ended without autopay → PAST_DUE: id={} clubId={}", subscription.id, clubId)
+            }
+        }
+    }
+
+    /** Счета без ответа провайдера: дочерние — узнать судьбу, брошенные материнские — закрыть. */
+    @Transactional
+    fun reconcilePending(now: OffsetDateTime) {
+        for (payment in paymentRepository.findPendingCreatedBefore(now.minusHours(pendingTimeoutHours))) {
+            val state = paymentProvider.queryState(payment.invId)
+            when (state.state) {
+                PaymentState.SUCCEEDED ->
+                    billingService.onResult(ResultNotification(payment.invId, payment.amountKopecks, state.paymentMethod, fee = null))
+                PaymentState.FAILED -> {
+                    paymentRepository.markFailed(payment.id)
+                    if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks)
+                    log.info("Billing payment failed at provider: invId={} kind={}", payment.invId, payment.kind)
+                }
+                PaymentState.PENDING ->
+                    if (payment.kind == PaymentKind.MOTHER && payment.createdAt.isBefore(now.minusHours(motherExpireHours))) {
+                        paymentRepository.markFailed(payment.id)
+                        log.info("Abandoned checkout closed: invId={} clubId={}", payment.invId, payment.clubId)
+                    }
+            }
+        }
+    }
+
+    private fun endSubscription(subscription: ServiceSubscription, club: Club?, hasChat: Boolean) {
+        val rows = subscriptionRepository.transitionStatus(
+            subscription.id, listOf(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE), SubscriptionStatus.ENDED,
+        )
+        if (rows == 0) return
+        log.info("Subscription ended after grace: id={} clubId={} hasChat={}", subscription.id, subscription.subjectClubId, hasChat)
+        if (club != null && hasChat) {
+            funnelEventRepository.record(FunnelStep.SUBSCRIPTION_ENDED, club.ownerId, club.id)
+            notifier.graceExhausted(club)
+        }
+    }
+
+    private fun remindBeforeEnd(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int, autoCharge: Boolean) {
+        val periodEnd = subscription.currentPeriodEnd
+        if (now.isBefore(periodEnd.minusDays(3))) return
+        val daysLeft = if (now.isBefore(periodEnd.minusDays(1))) 3 else 1
+        // Дедуп по ключу события: тик может повториться, DM — нет.
+        val key = "reminder:${periodEnd.toEpochSecond()}:${if (autoCharge) "charge" else daysLeft}"
+        if (autoCharge) {
+            if (daysLeft == 1 && subscriptionRepository.recordEventIfNew(subscription.id, key, "REMINDER")) {
+                notifier.chargeTomorrow(club, price)
+            }
+        } else if (subscriptionRepository.recordEventIfNew(subscription.id, key, "REMINDER")) {
+            notifier.expiringSoon(club, periodEnd, price, daysLeft)
+        }
+    }
+
+    private fun chargeIfSlotDue(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int) {
+        val attempt = subscription.chargeAttempts
+        if (attempt >= retryDays.size) return
+        if (now.isBefore(subscription.currentPeriodEnd.plusDays(retryDays[attempt]))) return
+        if (paymentRepository.hasPendingRecurring(subscription.id)) return
+
+        val previousInvId = subscription.providerToken!!.toLong()
+        val payment = paymentRepository.create(
+            clubId = club.id, subscriptionId = subscription.id, kind = PaymentKind.RECURRING,
+            amountKopecks = price, previousInvId = previousInvId, autopayRequested = true,
+        )
+        subscriptionRepository.recordChargeAttempt(subscription.id, now)
+        val accepted = paymentProvider.charge(
+            RecurringChargeRequest(
+                invId = payment.invId, previousInvId = previousInvId, amountKopecks = price,
+                description = "Clubs: продление подписки за чат ${club.name} на $periodDays дней", clubId = club.id,
+            ),
+        )
+        log.info("Recurring charge sent: subscriptionId={} invId={} attempt={} accepted={}", subscription.id, payment.invId, attempt + 1, accepted.accepted)
+        if (!accepted.accepted) {
+            paymentRepository.markFailed(payment.id)
+            onChargeFailed(subscription.id, price)
+        }
+    }
+
+    /** Первая неудача: ACTIVE → PAST_DUE и DM; дальнейшие — молча, ретраи по слотам. */
+    private fun onChargeFailed(subscriptionId: UUID?, price: Int) {
+        val subscription = subscriptionId?.let(subscriptionRepository::findById) ?: return
+        val moved = subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
+        if (moved > 0) {
+            val club = subscription.subjectClubId?.let(clubRepository::findById) ?: return
+            notifier.chargeFailed(club, price, subscription.currentPeriodEnd.plusDays(graceDays))
+        }
+    }
+}

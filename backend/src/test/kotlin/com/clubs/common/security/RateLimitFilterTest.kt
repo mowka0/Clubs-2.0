@@ -43,6 +43,22 @@ class RateLimitFilterTest {
     }
 
     @Test
+    fun `чекаут подписки за чат ограничен пятью запросами в минуту`() {
+        val path = "/api/clubs/7c2e1d2a-0000-4000-8000-000000000001/billing/checkout"
+        val checkout = {
+            MockHttpServletRequest("POST", path).apply {
+                servletPath = path
+                remoteAddr = "10.0.1.8"
+            }
+        }
+
+        assertEquals(0, spend(5, checkout))
+        assertEquals(1, spend(1, checkout))
+        // Общий API-бакет того же ключа не тронут.
+        assertEquals(0, spend(1) { request(null) })
+    }
+
+    @Test
     fun `разные пользователи с одного адреса прокси не делят лимит`() {
         val first = UUID.randomUUID()
         val second = UUID.randomUUID()

@@ -2,39 +2,63 @@ package com.clubs.payment
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.time.OffsetDateTime
-import java.util.UUID
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * No-op провайдер для staging/dev: "активирует" синхронно и НЕ двигает реальные деньги. За ним
- * движок подписок работает целиком (subscribe → машина состояний → capacity → cancel). Подключение
- * реального эквайера = второй @Component (пометить @Primary или включить через @ConditionalOnProperty) —
- * движок менять не нужно.
+ * Провайдер-заглушка для dev/staging без ключей Robokassa: реальных денег не двигает, но весь
+ * цикл проходит. Материнский платёж «оплачивается» переходом по ссылке чекаута — она ведёт на
+ * `/api/billing/stub/pay`, который отрабатывает как ResultURL и уводит на страницу возврата.
+ * Дочернее списание принимается всегда и через [settleSeconds] отвечает SUCCEEDED на опрос,
+ * так что напоминания, PAST_DUE, грейс и ретраи шедулера проверяются на staging целиком.
  */
 @Component
+@ConditionalOnProperty(name = ["billing.provider"], havingValue = "stub", matchIfMissing = true)
 class StubPaymentProvider(
-    // Длительность одного периода подписки в днях (для расчёта currentPeriodEnd).
-    @Value("\${subscription.period-days:30}") private val periodDays: Long,
+    // Публичный базовый URL приложения: ссылка чекаута открывается во внешнем браузере.
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    // Через сколько секунд после приёма дочернее списание считается прошедшим.
+    @Value("\${billing.stub.settle-seconds:5}") private val settleSeconds: Long,
 ) : PaymentProvider {
 
     private val log = LoggerFactory.getLogger(StubPaymentProvider::class.java)
 
-    override fun createSubscription(command: CreateSubscriptionCommand): ProviderSubscription {
-        log.info(
-            "STUB createSubscription: payer={} role={} plan={} priceKopecks={} club={}",
-            command.payerUserId, command.payerRole, command.plan, command.priceKopecks, command.subjectClubId,
-        )
-        return ProviderSubscription(
-            providerToken = "stub-${UUID.randomUUID()}",
-            currentPeriodEnd = OffsetDateTime.now().plusDays(periodDays),
-        )
+    override val id = "stub"
+
+    /** Принятые дочерние списания: InvId → момент приёма (материнские подтверждаются ссылкой). */
+    private val acceptedCharges = ConcurrentHashMap<Long, Instant>()
+
+    init {
+        log.warn("STUB payment provider is active: no real money moves, /api/billing/stub/pay confirms checkouts")
     }
 
-    override fun cancelSubscription(providerToken: String?) {
-        log.info("STUB cancelSubscription: token={}", providerToken)
+    override fun createCheckout(request: CheckoutRequest): CheckoutUrl {
+        log.info("STUB checkout: invId={} amountKopecks={} clubId={}", request.invId, request.amountKopecks, request.clubId)
+        return CheckoutUrl("$webAppBaseUrl/api/billing/stub/pay?invId=${request.invId}")
     }
 
-    override fun parseWebhook(rawBody: String, signature: String?): WebhookResult =
-        WebhookResult.Ignored("stub provider receives no real webhooks")
+    override fun charge(request: RecurringChargeRequest): ChargeAccepted {
+        acceptedCharges[request.invId] = Instant.now()
+        log.info("STUB recurring charge accepted: invId={} previousInvId={}", request.invId, request.previousInvId)
+        return ChargeAccepted(accepted = true)
+    }
+
+    override fun trustsResultSource(clientIp: String): Boolean = true
+
+    override fun parseResultNotification(params: Map<String, String>): ResultNotification =
+        ResultNotification(
+            invId = params.getValue("InvId").toLong(),
+            amountKopecks = params.getValue("OutSum").toInt(),
+            paymentMethod = params["PaymentMethod"],
+            fee = null,
+        )
+
+    override fun queryState(invId: Long): PaymentStateResult {
+        val acceptedAt = acceptedCharges[invId] ?: return PaymentStateResult(PaymentState.PENDING)
+        val settled = Duration.between(acceptedAt, Instant.now()).seconds >= settleSeconds
+        return if (settled) PaymentStateResult(PaymentState.SUCCEEDED, paymentMethod = "BankCard") else PaymentStateResult(PaymentState.PENDING)
+    }
 }

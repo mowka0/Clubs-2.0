@@ -54,21 +54,25 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
         set(value): Unit = set(7, value)
         get(): String? = get(7) as String?
 
-    open var paymentMethod: String?
+    open var autopayRequested: Boolean?
         set(value): Unit = set(8, value)
-        get(): String? = get(8) as String?
+        get(): Boolean? = get(8) as Boolean?
+
+    open var paymentMethod: String?
+        set(value): Unit = set(9, value)
+        get(): String? = get(9) as String?
 
     open var providerFee: BigDecimal?
-        set(value): Unit = set(9, value)
-        get(): BigDecimal? = get(9) as BigDecimal?
+        set(value): Unit = set(10, value)
+        get(): BigDecimal? = get(10) as BigDecimal?
 
     open var createdAt: OffsetDateTime?
-        set(value): Unit = set(10, value)
-        get(): OffsetDateTime? = get(10) as OffsetDateTime?
-
-    open var paidAt: OffsetDateTime?
         set(value): Unit = set(11, value)
         get(): OffsetDateTime? = get(11) as OffsetDateTime?
+
+    open var paidAt: OffsetDateTime?
+        set(value): Unit = set(12, value)
+        get(): OffsetDateTime? = get(12) as OffsetDateTime?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -79,7 +83,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
     /**
      * Create a detached, initialised PlatformPaymentRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, subscriptionId: UUID? = null, invId: Long? = null, kind: String, previousInvId: Long? = null, amountKopecks: Int, status: String? = null, paymentMethod: String? = null, providerFee: BigDecimal? = null, createdAt: OffsetDateTime? = null, paidAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, subscriptionId: UUID? = null, invId: Long? = null, kind: String, previousInvId: Long? = null, amountKopecks: Int, status: String? = null, autopayRequested: Boolean? = null, paymentMethod: String? = null, providerFee: BigDecimal? = null, createdAt: OffsetDateTime? = null, paidAt: OffsetDateTime? = null): this() {
         this.id = id
         this.clubId = clubId
         this.subscriptionId = subscriptionId
@@ -88,6 +92,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
         this.previousInvId = previousInvId
         this.amountKopecks = amountKopecks
         this.status = status
+        this.autopayRequested = autopayRequested
         this.paymentMethod = paymentMethod
         this.providerFee = providerFee
         this.createdAt = createdAt
@@ -108,6 +113,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
             this.previousInvId = value.previousInvId
             this.amountKopecks = value.amountKopecks
             this.status = value.status
+            this.autopayRequested = value.autopayRequested
             this.paymentMethod = value.paymentMethod
             this.providerFee = value.providerFee
             this.createdAt = value.createdAt

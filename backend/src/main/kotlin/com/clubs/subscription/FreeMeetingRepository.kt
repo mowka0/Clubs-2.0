@@ -15,6 +15,9 @@ interface FreeMeetingRepository {
      */
     fun claim(chatId: Long, clubId: UUID, eventId: UUID): Boolean
 
+    /** Бесплатная встреча чата уже взята и не возвращена отменой. */
+    fun isUsed(chatId: Long): Boolean
+
     /** Отмена встречи до старта возвращает бесплатную чату (R5). Число затронутых строк: 0 = встреча не была бесплатной. */
     fun release(eventId: UUID): Int
 

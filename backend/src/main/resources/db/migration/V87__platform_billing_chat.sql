@@ -60,6 +60,7 @@ CREATE TABLE platform_payment (
     previous_inv_id  BIGINT,
     amount_kopecks   INT         NOT NULL CHECK (amount_kopecks > 0),
     status           VARCHAR(16) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SUCCEEDED', 'FAILED')),
+    autopay_requested BOOLEAN    NOT NULL DEFAULT TRUE,
     payment_method   VARCHAR(64),
     provider_fee     NUMERIC(10, 2),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -87,6 +88,8 @@ COMMENT ON COLUMN platform_payment.amount_kopecks IS
     'Сумма счёта в копейках, считается на сервере из subscription_pricing на момент выставления — клиент цену не передаёт.';
 COMMENT ON COLUMN platform_payment.status IS
     'PENDING = счёт выставлен, подтверждения нет | SUCCEEDED = ResultURL/опрос подтвердил оплату | FAILED = провайдер отказал или счёт протух.';
+COMMENT ON COLUMN platform_payment.autopay_requested IS
+    'Положение ползунка «Продлевать автоматически» в шите на момент чекаута (только для MOTHER). Переносится на подписку при подтверждении оплаты — строки подписки до первой оплаты ещё нет.';
 COMMENT ON COLUMN platform_payment.payment_method IS
     'PaymentMethod из ResultURL (BankCard, SBP, …). Карта ⇒ autopay_possible на подписке.';
 COMMENT ON COLUMN platform_payment.provider_fee IS
