@@ -8,8 +8,10 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
+import com.clubs.skladchina.template.SplitBillTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
@@ -26,6 +28,25 @@ class SkladchinaQueryService(
     private val mapper: SkladchinaMapper,
     private val templateRegistry: SkladchinaTemplateRegistry
 ) {
+
+    /**
+     * Встречи, по которым счёт ещё можно разделить — источник шага «выберите встречу» в форме сплита.
+     * Пороги берутся из `SplitBillTemplate`, чтобы список и создание судили по одним правилам.
+     */
+    @Transactional(readOnly = true)
+    fun getSplittableEvents(clubId: UUID): List<SplittableEventDto> =
+        skladchinaRepository.findSplittableEvents(
+            clubId = clubId,
+            notOlderThan = OffsetDateTime.now().minusDays(SplitBillTemplate.MAX_EVENT_AGE_DAYS),
+            minAttended = SplitBillTemplate.MIN_ATTENDED
+        ).map {
+            SplittableEventDto(
+                eventId = it.eventId,
+                title = it.title,
+                eventDatetime = it.eventDatetime,
+                attendedCount = it.attendedCount
+            )
+        }
 
     @Transactional(readOnly = true)
     fun getClubActiveSkladchinas(clubId: UUID, callerId: UUID): List<MySkladchinaListItemDto> {

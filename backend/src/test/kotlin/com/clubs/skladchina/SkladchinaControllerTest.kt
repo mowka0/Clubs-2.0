@@ -982,6 +982,50 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `splittable-events lists only the events a split can still be created from`() {
+        val good = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        createEventWithAttendance(attended = listOf(memberAId, memberBId), marked = false) // явка не отмечена
+        createEventWithAttendance(attended = listOf(memberAId))                            // пришёл один
+        createEventWithAttendance(attended = listOf(memberAId, memberBId), daysAgo = 40)   // старше 30 дней
+        createEventWithAttendance(attended = listOf(memberAId, outsiderId))                // второй — не член клуба
+        val alreadySplit = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        createFromBody(splitBody(alreadySplit, 90000))                                     // счёт уже делят
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].eventId").value(good.toString()))
+            .andExpect(jsonPath("$[0].attendedCount").value(2))
+    }
+
+    @Test
+    fun `splittable-events offers an event again after a failed split and is manager-only`() {
+        val retryable = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(retryable, 90000))
+        // Никто не заплатил, организатор закрыл вручную → cancelled: счёт можно собрать заново.
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("cancelled"))
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].eventId").value(retryable.toString()))
+
+        // Обычный участник список встреч клуба через этот эндпоинт не получает.
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $memberAToken")
+        ).andExpect(status().isForbidden)
+    }
+
+    @Test
     fun `split_bill self-paid credits the organizer and splits only the rest`() {
         // Организатор закрыл 30000 из чека 90000 → остаток 60000 делится между A и B по 30000.
         val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))

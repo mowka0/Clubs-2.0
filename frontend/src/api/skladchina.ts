@@ -6,6 +6,7 @@ import type {
   MySkladchinaListItemDto,
   PageResponse,
   SkladchinaDetailDto,
+  SplittableEventDto,
 } from '../types/api';
 
 export function getSkladchina(id: string): Promise<SkladchinaDetailDto> {
@@ -15,6 +16,11 @@ export function getSkladchina(id: string): Promise<SkladchinaDetailDto> {
 // Кнопка «Разделить счёт» на EventPage: существующий сплит события (active → open, closed_success → collected).
 export function getEventSplitState(eventId: string): Promise<EventSplitStateDto> {
   return apiClient.get<EventSplitStateDto>(`/api/events/${eventId}/skladchina`);
+}
+
+// Шаг «выберите встречу» формы сплита: бэкенд отдаёт только те встречи, по которым сбор создастся.
+export function getSplittableEvents(clubId: string): Promise<SplittableEventDto[]> {
+  return apiClient.get<SplittableEventDto[]>(`/api/clubs/${clubId}/skladchinas/splittable-events`);
 }
 
 export function getMySkladchinas(

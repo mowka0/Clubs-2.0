@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubEventsTeaserDto, EventDetailDto, EventFormat, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { ClubEventsTeaserDto, EventDetailDto, EventFormat, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -25,17 +25,6 @@ export interface CreateEventBody {
   // Не задан = дефолт сервера (18 ч). У открытой встречи не передаётся (400).
   stage2LeadMinutes?: number;
   photoUrl?: string;
-}
-
-export function getClubEvents(
-  clubId: string,
-  params?: { status?: string; page?: string; size?: string }
-): Promise<PageResponse<EventListItemDto>> {
-  const queryParams: Record<string, string> = {};
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) queryParams[k] = v; });
-  }
-  return apiClient.get<PageResponse<EventListItemDto>>(`/api/clubs/${clubId}/events`, queryParams);
 }
 
 export function getMyEvents(

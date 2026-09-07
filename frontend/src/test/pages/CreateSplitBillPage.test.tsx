@@ -54,13 +54,13 @@ function mockAttendance() {
   );
 }
 
-function renderPage() {
+function renderPage(search = `?eventId=${EVENT_ID}`) {
   const user = userEvent.setup();
   const result = renderWithProviders(
     <Routes>
       <Route path="/clubs/:id/split-bill/new" element={<CreateSplitBillPage />} />
     </Routes>,
-    { routerEntries: [`/clubs/${CLUB_ID}/split-bill/new?eventId=${EVENT_ID}`] },
+    { routerEntries: [`/clubs/${CLUB_ID}/split-bill/new${search}`] },
   );
   return { ...result, user };
 }
@@ -146,5 +146,34 @@ describe('CreateSplitBillPage — «я уже внёс» и описание', (
     expect(screen.queryByPlaceholderText('Например, 1500')).not.toBeInTheDocument();
     // Взнос сброшен: 4000 делятся на всех четверых.
     expect(screen.getByText('≈ по 1 000 ₽ с каждого (4 чел.)')).toBeInTheDocument();
+  });
+});
+
+describe('CreateSplitBillPage — выбор встречи', () => {
+  it('показывает встречи из списка пригодных с числом пришедших и открывает форму по тапу', async () => {
+    mockAttendance();
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/skladchinas/splittable-events`, () =>
+        HttpResponse.json([
+          { eventId: EVENT_ID, title: 'Ужин в «Веранде»', eventDatetime: '2026-09-01T18:00:00Z', attendedCount: 4 },
+        ])),
+    );
+    const { user } = renderPage('');
+
+    const row = await screen.findByText('Ужин в «Веранде»');
+    expect(screen.getByText(/пришли 4/)).toBeInTheDocument();
+
+    await user.click(row);
+    // Выбор встречи уводит на саму форму счёта.
+    expect(await screen.findByPlaceholderText('Например, 4000')).toBeInTheDocument();
+  });
+
+  it('объясняет пустой список вместо предложения непригодных встреч', async () => {
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/skladchinas/splittable-events`, () => HttpResponse.json([])),
+    );
+    renderPage('');
+
+    expect(await screen.findByText(/Нет встреч, по которым можно разделить счёт/)).toBeInTheDocument();
   });
 });

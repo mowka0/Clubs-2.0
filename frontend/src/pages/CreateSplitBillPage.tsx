@@ -4,8 +4,8 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { ApiError } from '../api/apiClient';
-import { useClubEventsQuery, useEventQuery, useEventRespondersQuery } from '../queries/events';
-import { useCreateSkladchinaMutation } from '../queries/skladchina';
+import { useEventQuery, useEventRespondersQuery } from '../queries/events';
+import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
 import { PhotoAttach } from '../components/PhotoAttach';
 import { useAuthStore } from '../store/useAuthStore';
 import type { CreateSkladchinaRequest } from '../types/api';
@@ -65,7 +65,8 @@ export const CreateSplitBillPage: FC = () => {
   const [deadline, setDeadline] = useState(defaultDeadlineLocal());
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const completedQuery = useClubEventsQuery(clubId, { status: 'completed' });
+  // Список отбирает бэкенд: показываем только встречи, по которым сбор реально создастся.
+  const splittableQuery = useSplittableEventsQuery(clubId);
   const eventQuery = useEventQuery(selectedEventId ?? undefined);
   const respondersQuery = useEventRespondersQuery(selectedEventId ?? undefined);
 
@@ -152,27 +153,32 @@ export const CreateSplitBillPage: FC = () => {
 
   // --- Шаг 1: выбор прошедшего события (только если оно не передано заранее) ---
   if (!selectedEventId) {
-    const events = completedQuery.data?.content ?? [];
+    const events = splittableQuery.data ?? [];
     return (
       <div className="rd-page">
         <div className="rd-ft-eyebrow">Разделить счёт</div>
-        <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Выберите событие</h1>
-        {completedQuery.isPending && <Spinner size="s" />}
-        {!completedQuery.isPending && events.length === 0 && (
-          <div className="rd-hint">Нет прошедших событий. Счёт делится по событию, на котором отмечена явка.</div>
+        <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Выберите встречу</h1>
+        {splittableQuery.isPending && <Spinner size="s" />}
+        {!splittableQuery.isPending && events.length === 0 && (
+          <div className="rd-hint">
+            Нет встреч, по которым можно разделить счёт. Нужна прошедшая встреча не старше 30 дней
+            с отмеченной явкой и минимум двумя пришедшими, по которой счёт ещё не делили.
+          </div>
         )}
         {events.length > 0 && (
           <div className="rd-pick-list">
             {events.map((ev) => (
               <button
-                key={ev.id}
+                key={ev.eventId}
                 type="button"
                 className="rd-pick-toggle"
-                onClick={() => handlePickEvent(ev.id)}
+                onClick={() => handlePickEvent(ev.eventId)}
                 style={{ width: '100%' }}
               >
                 <span className="rd-pick-name">{ev.title}</span>
-                <span className="rd-pick-note">{DATE_FMT.format(new Date(ev.eventDatetime))}</span>
+                <span className="rd-pick-note">
+                  {DATE_FMT.format(new Date(ev.eventDatetime))} · пришли {ev.attendedCount}
+                </span>
               </button>
             ))}
           </div>

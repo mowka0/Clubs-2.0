@@ -34,6 +34,15 @@ class SkladchinaController(
         return ResponseEntity.ok(list)
     }
 
+    // Шаг «выберите встречу» в форме «Разделить счёт»: только те встречи, по которым сплит
+    // реально создастся (явка отмечена, есть кому платить, счёт ещё не делили).
+    @RequiresCapability(ClubCapability.MANAGE_SKLADCHINA, clubIdParam = "clubId")
+    @GetMapping("/api/clubs/{clubId}/skladchinas/splittable-events")
+    fun getSplittableEvents(
+        @PathVariable clubId: UUID
+    ): ResponseEntity<List<SplittableEventDto>> =
+        ResponseEntity.ok(queryService.getSplittableEvents(clubId))
+
     @RequiresCapability(ClubCapability.MANAGE_SKLADCHINA, clubIdParam = "clubId")
     @PostMapping("/api/clubs/{clubId}/skladchinas")
     fun create(

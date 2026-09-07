@@ -124,6 +124,14 @@ data class SkladchinaDetailDto(
     val pendingCount: Int                          // #3: видно всем, чтобы последний pending видел, что осталось
 )
 
+/** Строка списка «по какой встрече делим счёт»: только события, которые примет создание сплита. */
+data class SplittableEventDto(
+    val eventId: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val attendedCount: Int
+)
+
 // Состояние сплита, привязанного к событию — управляет кнопкой "Разделить счёт" на EventPage.
 // Оба null = сплита ещё нет (кнопка создаёт). status active → открыть его; closed_success → уже собрано.
 data class EventSplitStateDto(

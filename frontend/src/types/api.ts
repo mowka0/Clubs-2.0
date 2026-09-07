@@ -841,6 +841,14 @@ export interface CreateSkladchinaParticipantInput {
   expectedAmountKopecks?: number | null;
 }
 
+/** Встреча, по которой счёт ещё можно разделить (шаг выбора в форме «Разделить счёт»). */
+export interface SplittableEventDto {
+  eventId: string;
+  title: string;
+  eventDatetime: string;
+  attendedCount: number;
+}
+
 export interface CreateSkladchinaRequest {
   title: string;
   description?: string | null;

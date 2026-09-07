@@ -1,7 +1,6 @@
 import type { ClubFilters } from '../api/clubs';
 import type { ActivityType } from '../api/activities';
 
-export type EventListParams = { status?: string; page?: string; size?: string };
 
 export interface ClubActivitiesFilters {
   type?: ActivityType;
@@ -42,8 +41,6 @@ export const queryKeys = {
   },
   events: {
     all: ['events'] as const,
-    byClub: (clubId: string, params?: EventListParams) =>
-      ['events', 'by-club', clubId, params ?? {}] as const,
     byClubAll: (clubId: string) => ['events', 'by-club', clubId] as const,
     /** Тизер-афиша клуба для смотрящего без доступа (гость / frozen / expired). */
     teaser: (clubId: string) => ['events', 'teaser', clubId] as const,
@@ -77,6 +74,7 @@ export const queryKeys = {
     detail: (id: string) => ['skladchinas', 'detail', id] as const,
     byClubActive: (clubId: string) => ['skladchinas', 'by-club-active', clubId] as const,
     eventState: (eventId: string) => ['skladchinas', 'event-state', eventId] as const,
+    splittableEvents: (clubId: string) => ['skladchinas', 'splittable-events', clubId] as const,
   },
   activities: {
     // Префикс для инвалидации всех фильтр-вариантов ленты клуба разом.
