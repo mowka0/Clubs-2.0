@@ -185,10 +185,13 @@ class SkladchinaLifecycleService(
         manualClose: Boolean
     ): SkladchinaStatus {
         val goal = skladchina.totalGoalKopecks
+        // Мелкий недобор — не провал: доли округляются, а люди переводят «833 вместо 833,33».
+        // Нехватку до 3 ₽ считаем целью, достигнутой (при нулевом сборе успеха нет в любом случае).
+        val goalReached = goal != null && collected > 0 && collected >= goal - GOAL_TOLERANCE_KOPECKS
         return when {
-            manualClose && (goal == null || collected < goal) -> SkladchinaStatus.cancelled
+            manualClose && !goalReached -> SkladchinaStatus.cancelled
             goal == null && collected > 0 -> SkladchinaStatus.closed_success     // добровольный сбор с любыми платежами
-            goal != null && collected >= goal -> SkladchinaStatus.closed_success
+            goalReached -> SkladchinaStatus.closed_success
             goal != null && collected.toDouble() / goal >= SUCCESS_THRESHOLD -> SkladchinaStatus.closed_success
             else -> SkladchinaStatus.closed_failed
         }
@@ -238,5 +241,6 @@ class SkladchinaLifecycleService(
 
     companion object {
         private const val SUCCESS_THRESHOLD = 0.80     // fixed-режим: собрано ≥80% цели к дедлайну → успех
+        private const val GOAL_TOLERANCE_KOPECKS = 300L // прощаемый недобор до цели (3 ₽): округление долей
     }
 }

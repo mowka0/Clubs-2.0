@@ -310,6 +310,38 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `manual close forgives a shortfall of up to 3 rubles`() {
+        // Цель 4000 ₽, внесено 3999 ₽ (округление долей), второй участник молчит → закрываем вручную.
+        val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 400000)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 399900}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("closed_success"))
+    }
+
+    @Test
+    fun `manual close with a shortfall above the tolerance stays cancelled`() {
+        // Не хватает 10 ₽ — это уже не округление, сбор закрывается отменённым.
+        val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 400000)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 399000}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("cancelled"))
+    }
+
+    @Test
     fun `GET me-skladchinas returns active skladchinas only for participant`() {
         val id1 = createSkladchina(listOf(memberAId))   // memberA участник
         createSkladchina(listOf(memberBId))             // участник memberB, memberA — нет: не должна протечь в ленту A
