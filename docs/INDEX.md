@@ -35,7 +35,7 @@
 | `club` | `clubs.md`, `club-page-unified.md`, `club-invites.md`, `club-leave.md`, `club-interests.md` |
 | `clubquality` | `club-quality.md` |
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
-| `common/security` (`SecurityConfig`, `RateLimitFilter`) | `auth.md`, `infrastructure.md` |
+| `common/security` (`SecurityConfig`, `RateLimitFilter`, `ClientIpResolver`) | `auth.md`, `infrastructure.md`; permitAll ResultURL, бакет чекаута и allowlist IP — `platform-billing.md` § 6.6, § 9 |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
 | `event` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
@@ -62,12 +62,13 @@
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
-| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md` |
+| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md`; 402 → шит оплаты — `platform-billing.md` § 7 |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
-| `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
+| `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7 |
+| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip`, `offerText.ts`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7 |
 | `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
 

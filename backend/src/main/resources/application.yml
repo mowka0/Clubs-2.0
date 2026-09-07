@@ -110,6 +110,8 @@ billing:
   checkout-reuse-minutes: ${BILLING_CHECKOUT_REUSE_MINUTES:30}
   # Почасовой тик опроса счетов без ответа (BillingLifecycleService.reconcilePending).
   reconcile-cron: ${BILLING_RECONCILE_CRON:0 15 * * * *}
+  # ФИО самозанятого-получателя целиком — показывается в шите оплаты и в оферте (PO 2026-09-07).
+  recipient-name: ${BILLING_RECIPIENT_NAME:}
   # Куда провайдер возвращает человека из браузера: обычные веб-страницы фронта вне Mini App.
   success-url: ${BILLING_SUCCESS_URL:${telegram.webapp-base-url}/pay/return}
   fail-url: ${BILLING_FAIL_URL:${telegram.webapp-base-url}/pay/fail}

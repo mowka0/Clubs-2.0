@@ -104,6 +104,8 @@ services:
       BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
       BILLING_PENDING_TIMEOUT_HOURS: ${BILLING_PENDING_TIMEOUT_HOURS:-6}
       BILLING_STUB_SETTLE_SECONDS: ${BILLING_STUB_SETTLE_SECONDS:-5}
+      # ФИО самозанятого-получателя целиком (шит оплаты, оферта).
+      BILLING_RECIPIENT_NAME: ${BILLING_RECIPIENT_NAME:-}
       # Период подписки и крон календаря — staging ужимает их для прогона цикла (тест-план § 10).
       SUBSCRIPTION_PERIOD_DAYS: ${SUBSCRIPTION_PERIOD_DAYS:-30}
       SUBSCRIPTION_LIFECYCLE_CRON: ${SUBSCRIPTION_LIFECYCLE_CRON:-0 30 9 * * *}

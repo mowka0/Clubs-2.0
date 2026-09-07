@@ -57,6 +57,10 @@ class BillingService(
     @Value("\${billing.checkout-reuse-minutes:30}") private val checkoutReuseMinutes: Long,
     @Value("\${billing.success-url}") private val successUrl: String,
     @Value("\${billing.fail-url}") private val failUrl: String,
+    // Страницы возврата живут вне Telegram и без API: бот для кнопки «назад в Clubs» — в query.
+    @Value("\${telegram.bot-username}") private val botUsername: String,
+    // ФИО самозанятого-получателя целиком — в шите и оферте (PO 2026-09-07); только из env.
+    @Value("\${billing.recipient-name:}") private val recipientName: String,
 ) {
 
     private val log = LoggerFactory.getLogger(BillingService::class.java)
@@ -97,8 +101,8 @@ class BillingService(
                 description = describe(club, link),
                 recurring = true,
                 clubId = clubId,
-                successUrl = "$successUrl?club=$clubId",
-                failUrl = "$failUrl?club=$clubId",
+                successUrl = "$successUrl?club=$clubId&bot=$botUsername",
+                failUrl = "$failUrl?club=$clubId&bot=$botUsername",
             ),
         )
         return CheckoutDto(url.value, payment.invId)
@@ -210,7 +214,7 @@ class BillingService(
     private fun buildStatus(club: Club, now: OffsetDateTime): BillingStatusDto {
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         val link = chatLinkRepository.findByClubId(club.id)
-            ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false)
+            ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false, recipientName = recipientName)
         val pending = paymentRepository.findPendingMother(club.id, now.minusMinutes(checkoutReuseMinutes)) != null
         val subscription = subscriptionRepository.findLatestByClub(club.id)
         val state = when {
@@ -221,7 +225,7 @@ class BillingService(
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
-        return mapper().toStatusDto(state, price, subscription, graceUntil, pending)
+        return mapper().toStatusDto(state, price, subscription, graceUntil, pending, recipientName)
     }
 
     private fun requireOwner(clubId: UUID, userId: UUID): Club {
@@ -233,8 +237,9 @@ class BillingService(
     private fun liveSubscription(clubId: UUID): ServiceSubscription? =
         subscriptionRepository.findLatestByClub(clubId)?.takeIf { it.status != SubscriptionStatus.ENDED }
 
+    // На странице оплаты провайдера человек читает «за клуб» (PO 2026-09-07), хотя единица счёта — чат.
     private fun describe(club: Club, link: ChatLink): String =
-        "Clubs: подписка за чат ${link.chatTitle ?: club.name} на $periodDays дней"
+        "Clubs: подписка за клуб ${link.chatTitle ?: club.name} на $periodDays дней"
 
     private fun mapper() = SubscriptionMapper()
 

@@ -44,6 +44,8 @@ class BillingServiceTest {
         freeMeetingRepository, funnelEventRepository, paymentProvider, notifier,
         graceDays = 7, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
+        botUsername = "clubs_test_bot",
+        recipientName = "Варламов Иван Иванович",
     )
 
     private val club = BillingTestFixtures.club()
@@ -79,7 +81,7 @@ class BillingServiceTest {
         val request = slot<CheckoutRequest>()
         verify { paymentProvider.createCheckout(capture(request)) }
         assertTrue(request.captured.recurring, "карта сохраняется всегда — ползунок решает, списывать ли")
-        assertEquals("https://app.example/pay/return?club=${club.id}", request.captured.successUrl)
+        assertEquals("https://app.example/pay/return?club=${club.id}&bot=clubs_test_bot", request.captured.successUrl)
         assertEquals(PRICE, request.captured.amountKopecks)
     }
 
@@ -228,7 +230,9 @@ class BillingServiceTest {
         every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
 
         every { chatLinkRepository.findByClubId(club.id) } returns null
-        assertEquals(BillingState.NO_CHAT, service.status(club.id, club.ownerId).state)
+        val noChat = service.status(club.id, club.ownerId)
+        assertEquals(BillingState.NO_CHAT, noChat.state)
+        assertEquals("Варламов Иван Иванович", noChat.recipientName)
 
         every { chatLinkRepository.findByClubId(club.id) } returns link
         every { freeMeetingRepository.isUsed(link.chatId) } returns false

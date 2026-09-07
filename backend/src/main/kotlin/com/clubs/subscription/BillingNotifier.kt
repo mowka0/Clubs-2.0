@@ -11,7 +11,8 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Личные сообщения владельцу о деньгах (platform-billing.md § 8). В чат — ничего: бюджет
- * «1 закреп + 2 поста» не тратится. Best-effort: ошибки доставки глотает NotificationService.
+ * «1 закреп + 2 поста» не тратится. По тексту платят «за клуб» (решение PO 2026-09-07), хотя
+ * единица счёта — чат. Best-effort: ошибки доставки глотает NotificationService.
  */
 @Component
 class BillingNotifier(
@@ -24,36 +25,38 @@ class BillingNotifier(
 
     fun paid(club: Club, periodEnd: OffsetDateTime, autopayOn: Boolean, priceKopecks: Int) {
         val tail = if (autopayOn) {
-            "Автопродление включено — ${dateFmt.format(periodEnd.minusDays(1))} спишем ${rubles(priceKopecks)} и напомним за день."
+            // Списание — в день окончания периода; отдельного DM «завтра спишем» нет (PO 2026-09-07).
+            "Автопродление включено — ${dateFmt.format(periodEnd)} спишем ${rubles(priceKopecks)} с этой же карты. Отключить можно на странице клуба."
         } else {
             "Автопродление выключено — напомним за 3 дня и за день до конца."
         }
-        send(club, "✅ Оплачено до ${dateFmt.format(periodEnd)}: чат «${club.name}» ведём дальше. $tail", openClub(club), "Открыть клуб")
+        send(club, "✅ Оплачено до ${dateFmt.format(periodEnd)}: клуб «${club.name}» ведём дальше. $tail", openClub(club), "Открыть клуб")
     }
 
     fun renewed(club: Club, periodEnd: OffsetDateTime) {
-        send(club, "✅ Продлено до ${dateFmt.format(periodEnd)}. Спасибо, что встречаетесь.", openClub(club), "Открыть клуб")
+        send(
+            club,
+            "✅ Продлено до ${dateFmt.format(periodEnd)}. Спасибо, что пользуетесь Clubs! Мы делаем приложение так, " +
+                "чтобы в жизни было больше живого общения и встреч офлайн — жизнь, чтобы жить, а не просиживать её в " +
+                "четырёх стенах. Поначалу друзей бывает непросто приучить к этому формату, но со временем втягиваются все :)",
+            openClub(club), "Открыть клуб",
+        )
     }
 
     /** −3 и −1 день без автосписания. */
     fun expiringSoon(club: Club, periodEnd: OffsetDateTime, priceKopecks: Int, daysLeft: Int) {
         val text = if (daysLeft <= 1) {
-            "⏳ Завтра заканчивается подписка за чат «${club.name}». После — 7 дней всё работает, потом новые встречи только после оплаты."
+            "⏳ Завтра заканчивается подписка за клуб «${club.name}». После — 7 дней всё работает, потом новые встречи только после оплаты."
         } else {
-            "⏳ Подписка за чат «${club.name}» заканчивается ${dateFmt.format(periodEnd)}. Продлить на месяц — ${rubles(priceKopecks)}."
+            "⏳ Подписка за клуб «${club.name}» заканчивается ${dateFmt.format(periodEnd)}. Продлить на месяц — ${rubles(priceKopecks)}."
         }
         send(club, text, payLink(club), "💳 Оплатить")
-    }
-
-    /** −1 день с автосписанием: прозрачность, не тёмный паттерн. */
-    fun chargeTomorrow(club: Club, priceKopecks: Int) {
-        send(club, "💳 Завтра спишем ${rubles(priceKopecks)} за чат «${club.name}». Отключить автопродление можно на странице клуба.", openClub(club), "Открыть клуб")
     }
 
     fun chargeFailed(club: Club, priceKopecks: Int, graceUntil: OffsetDateTime) {
         send(
             club,
-            "⚠️ Не удалось списать ${rubles(priceKopecks)} за чат «${club.name}». Обновите карту или оплатите вручную — до ${dateFmt.format(graceUntil)} всё работает как раньше.",
+            "⚠️ Не удалось списать ${rubles(priceKopecks)} за клуб «${club.name}». Обновите карту или оплатите вручную — до ${dateFmt.format(graceUntil)} всё работает как раньше.",
             payLink(club), "💳 Оплатить",
         )
     }
@@ -61,13 +64,13 @@ class BillingNotifier(
     fun periodEnded(club: Club, graceUntil: OffsetDateTime) {
         send(
             club,
-            "⏳ Подписка за чат «${club.name}» закончилась. До ${dateFmt.format(graceUntil)} всё работает, потом новые встречи — после оплаты.",
+            "⏳ Подписка за клуб «${club.name}» закончилась. До ${dateFmt.format(graceUntil)} всё работает, потом новые встречи — после оплаты.",
             payLink(club), "💳 Оплатить",
         )
     }
 
     fun graceExhausted(club: Club) {
-        send(club, "🚫 Новые встречи в чате «${club.name}» недоступны до оплаты. Начатое доживёт, бот из чата не уходит.", payLink(club), "💳 Оплатить")
+        send(club, "🚫 Новые встречи в клубе «${club.name}» недоступны до оплаты. Начатое доживёт, бот из чата не уходит.", payLink(club), "💳 Оплатить")
     }
 
     private fun send(club: Club, text: String, webAppPath: String, buttonText: String) {

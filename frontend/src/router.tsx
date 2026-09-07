@@ -43,6 +43,9 @@ const OrganizerClubManage = lazy(() =>
 const FeedbackPage = lazy(() =>
   import('./pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
 );
+const PayReturnPage = lazy(() =>
+  import('./pages/PayReturnPage').then((m) => ({ default: m.PayReturnPage })),
+);
 
 // Старый /clubs/:id/interior объединён в единый /clubs/:id.
 // Сохраняем :id в редиректе, чтобы старые закладки / deep-link'и не давали 404.
@@ -147,5 +150,15 @@ export const router = createBrowserRouter([
         element: <FeedbackPage />,
       },
     ],
+  },
+  // Возврат из браузера после оплаты у провайдера — ВНЕ Layout: обычный веб без Telegram,
+  // без авторизации и без API (platform-billing.md § 7).
+  {
+    path: '/pay/return',
+    element: <PayReturnPage kind="success" />,
+  },
+  {
+    path: '/pay/fail',
+    element: <PayReturnPage kind="fail" />,
   },
 ]);

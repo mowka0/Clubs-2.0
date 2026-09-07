@@ -1,4 +1,21 @@
-import { openTelegramLink } from '@telegram-apps/sdk-react';
+import { openLink, openTelegramLink } from '@telegram-apps/sdk-react';
+
+/**
+ * Открывает внешнюю https-ссылку (страница оплаты провайдера) во внешнем браузере или
+ * in-app browser Telegram. Именно `openLink`, а не `window.open`: в Mini App на iOS
+ * `window.open` ведёт себя иначе и может ничего не открыть. Вне Telegram — новая вкладка.
+ */
+export function openExternalLink(url: string): void {
+  try {
+    if (openLink.isAvailable()) {
+      openLink(url, { tryInstantView: false });
+      return;
+    }
+  } catch (_e) {
+    // Не в среде Telegram — падаем на window.open
+  }
+  window.open(url, '_blank', 'noopener');
+}
 
 /**
  * Открывает t.me-ссылку (deep link бота, invite link чата) внутри Telegram.

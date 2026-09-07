@@ -72,20 +72,19 @@ class BillingLifecycleServiceTest {
         every { subscriptionRepository.recordEventIfNew(any(), any(), any()) } returns true
         service.runDaily(now.plusDays(2))
         verify(exactly = 1) { notifier.expiringSoon(club, sub.currentPeriodEnd, PRICE, 1) }
-        verify(exactly = 0) { notifier.chargeTomorrow(any(), any()) }
     }
 
     @Test
-    fun `with autopay the owner is told a day before the charge and nothing 3 days before`() {
+    fun `with autopay there are no reminders before the charge`() {
+        // Дата списания названа в DM об оплате; отдельное «завтра спишем» PO снял (2026-09-07).
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(2).plusHours(1))
         live(sub)
 
         service.runDaily(now)
-        verify(exactly = 0) { notifier.chargeTomorrow(any(), any()) }
-        verify(exactly = 0) { notifier.expiringSoon(any(), any(), any(), any()) }
-
         service.runDaily(now.plusDays(2))
-        verify(exactly = 1) { notifier.chargeTomorrow(club, PRICE) }
+
+        verify(exactly = 0) { notifier.expiringSoon(any(), any(), any(), any()) }
+        verify(exactly = 0) { subscriptionRepository.recordEventIfNew(any(), any(), any()) }
     }
 
     // ---------- конец периода ----------

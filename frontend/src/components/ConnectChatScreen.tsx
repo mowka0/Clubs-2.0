@@ -3,6 +3,7 @@ import { FoxEmpty } from './feed/FoxEmpty';
 import foxChatArt from '../assets/mascot/fox-chat.png';
 import { useHaptic } from '../hooks/useHaptic';
 import { useNewClubChatLinkQuery, useStartChatLinkingMutation } from '../queries/chatLink';
+import { CHAT_PRICE_LINE } from '../api/billing';
 
 /**
  * Первый экран человека без клубов в чат-модели: предложение подключить свой телеграм-чат.
@@ -48,7 +49,8 @@ export const ConnectChatEmpty: FC = () => {
       title="Бот ведёт встречи в вашем чате"
       description={
         'Опрос «когда удобно», сбор «иду / не иду», напоминания и итог явки — ' +
-        'прямо в чате. Клуб создастся сам из выбранной группы, заполнять ничего не нужно.'
+        'прямо в чате. Клуб создастся сам из выбранной группы, заполнять ничего не нужно. ' +
+        CHAT_PRICE_LINE
       }
       primary={primary}
     />

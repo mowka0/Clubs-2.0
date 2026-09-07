@@ -61,7 +61,8 @@ class BillingLifecycleService(
 
             val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null
             if (now.isBefore(periodEnd)) {
-                remindBeforeEnd(subscription, club, now, price, autoCharge)
+                // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
+                if (!autoCharge) remindBeforeEnd(subscription, club, now, price)
             } else if (autoCharge) {
                 chargeIfSlotDue(subscription, club, now, price)
             } else if (subscription.status == SubscriptionStatus.ACTIVE) {
@@ -106,17 +107,12 @@ class BillingLifecycleService(
         }
     }
 
-    private fun remindBeforeEnd(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int, autoCharge: Boolean) {
+    private fun remindBeforeEnd(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int) {
         val periodEnd = subscription.currentPeriodEnd
         if (now.isBefore(periodEnd.minusDays(3))) return
         val daysLeft = if (now.isBefore(periodEnd.minusDays(1))) 3 else 1
         // Дедуп по ключу события: тик может повториться, DM — нет.
-        val key = "reminder:${periodEnd.toEpochSecond()}:${if (autoCharge) "charge" else daysLeft}"
-        if (autoCharge) {
-            if (daysLeft == 1 && subscriptionRepository.recordEventIfNew(subscription.id, key, "REMINDER")) {
-                notifier.chargeTomorrow(club, price)
-            }
-        } else if (subscriptionRepository.recordEventIfNew(subscription.id, key, "REMINDER")) {
+        if (subscriptionRepository.recordEventIfNew(subscription.id, "reminder:${periodEnd.toEpochSecond()}:$daysLeft", "REMINDER")) {
             notifier.expiringSoon(club, periodEnd, price, daysLeft)
         }
     }

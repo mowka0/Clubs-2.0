@@ -160,7 +160,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
 .hero .ttl { position: absolute; left: 16px; bottom: 30px; font-size: 20px; font-weight: 800; }
 .hero .eb { position: absolute; left: 16px; bottom: 12px; font-size: 11.5px; color: var(--text-dim); }
 .strip { display: flex; align-items: flex-start; gap: 11px; border-radius: 14px; padding: 11px 13px; margin-bottom: 12px; border: 1px solid transparent; }
-.strip .ic { font-size: 18px; line-height: 1.2; flex: none; }
+.strip .ic { font-size: 18px; line-height: 1.2; flex: none; align-self: center; } /* эмодзи по центру блока (PO 2026-09-07) */
 .strip .tx { flex: 1; min-width: 0; }
 .strip .t { font-size: 13px; font-weight: 700; line-height: 1.35; }
 .strip .d { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
@@ -217,7 +217,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
   <div class="topbar">
     <div>
       <h1>Биллинг за чат — экраны</h1>
-      <p class="lead">Спека <b>docs/modules/platform-billing.md</b> § 7–8. Модель: первая встреча бесплатно, дальше <b>199 ₽ в месяц за чат</b>, оплата через Robokassa самозанятому, ползунок автопродления. Ниже — всё, что человек увидит глазами; бэкенд-часть на экранах не показана.</p>
+      <p class="lead">Спека <b>docs/modules/platform-billing.md</b> § 7–8. Модель: первая встреча бесплатно, дальше <b>199 ₽ в месяц за клуб</b> (по логике единица счёта — чат, по тексту — клуб), оплата через Robokassa самозанятому, ползунок автопродления. Ниже — всё, что человек увидит глазами; бэкенд-часть на экранах не показана. <b>Версия после правок PO 2026-09-07</b>: «за клуб», списание в день окончания периода, ФИО целиком, оферта текстом, без кнопки «Закрыть» в состоянии ②, без DM «завтра спишем».</p>
     </div>
     <button class="theme-btn" onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">Тема: тёмная / светлая</button>
   </div>
@@ -242,15 +242,15 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
           <div class="overlay"></div>
           <div class="sheet">
             <div class="grab"></div>
-            <div class="sh"><h3>Оплата за чат</h3><span class="close">Закрыть</span></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
             <div class="body">
-              <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес</span></div>
-              <div class="forchat">за чат <b>«Бег по средам»</b> · первая встреча была бесплатной</div>
+              <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес · 30 дней с момента оплаты</span></div>
+              <div class="forchat">за клуб <b>«Бег по средам»</b> · первая встреча была бесплатной</div>
 
               <div class="feat" style="padding-top:2px">
                 <div class="fi">
                   <div class="ft">Продлевать автоматически</div>
-                  <div class="fd">Спишем 199 ₽ с этой же карты 6 октября. Отключить можно в любой момент на странице клуба.</div>
+                  <div class="fd">Спишем 199 ₽ с этой же карты в день окончания оплаченного периода. Отключить можно в любой момент на странице клуба.</div>
                 </div>
                 <span class="tgl on"></span>
               </div>
@@ -258,12 +258,12 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
               <div class="prov">
                 <div class="cap">Как проходит оплата</div>
                 <div class="l"><span class="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП. Реквизиты карты мы не видим.</span></div>
-                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Иван Варламов</b>, чек придёт на e-mail или в Telegram.</span></div>
-                <div class="l"><span class="ic">📄</span><span><a href="#">Оферта</a> · 30 дней с момента оплаты, без скрытых доплат.</span></div>
+                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Варламов Иван Иванович</b>, чек придёт на e-mail или в Telegram.</span></div>
+                <div class="l" style="margin-top:10px"><span class="ic"></span><span style="color:var(--accent);font-weight:600">Условия (публичная оферта) ▾</span></div>
               </div>
 
               <button class="btn p">Оплатить 199 ₽</button>
-              <div class="hint">Откроется страница оплаты в браузере. После оплаты вернитесь в Telegram — кнопка будет на странице.</div>
+              <div class="hint">Оплачивая, вы принимаете условия оферты. Откроется страница оплаты в браузере; после оплаты вернитесь в Telegram — кнопка будет на странице.</div>
             </div>
           </div>
         </div>
@@ -273,7 +273,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
     <!-- ② ждём подтверждения -->
     <div class="col">
       <div class="vh">② Ждём подтверждения <span class="chip">опрос 3 с × 20</span></div>
-      <div class="vd">Человек вернулся из браузера (<code>startapp=billing_&lt;clubId&gt;</code> или <code>?billing=done</code>). Возврат <b>не</b> подтверждает оплату — только ResultURL. Опрашиваем статус до 60 с, дальше честно: «сообщим в личку».</div>
+      <div class="vd">Человек вернулся из браузера (<code>startapp=billing_&lt;clubId&gt;</code> или <code>?billing=done</code>). Возврат <b>не</b> подтверждает оплату — только ResultURL. Опрашиваем статус до 60 с, дальше честно: «сообщим в личку». Кнопки «подожду в личке» нет (PO): закрыть можно только шапкой.</div>
       <div class="phone">
         <div class="screen">
           <div class="form-h">Новая встреча</div>
@@ -284,12 +284,11 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
           <div class="overlay"></div>
           <div class="sheet">
             <div class="grab"></div>
-            <div class="sh"><h3>Оплата за чат</h3><span class="close">Закрыть</span></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
             <div class="body center">
               <div class="spin"></div>
               <p class="st-t">Проверяем оплату…</p>
               <p class="st-d">Обычно это несколько секунд. Если оплата прошла, а мы всё ещё проверяем — не волнуйтесь: подтверждение придёт в личку от бота, встречу можно будет создать оттуда.</p>
-              <button class="btn o" style="margin-top:6px">Закрыть, подожду в личке</button>
             </div>
           </div>
         </div>
@@ -310,11 +309,11 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
           <div class="overlay"></div>
           <div class="sheet">
             <div class="grab"></div>
-            <div class="sh"><h3>Оплата за чат</h3><span class="close">Закрыть</span></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
             <div class="body center">
               <div class="big-ic">✅</div>
               <p class="st-t">Оплачено до 7 октября</p>
-              <p class="st-d">Автопродление включено: 6 октября спишем 199 ₽ и напомним за день. Управлять — на странице клуба.</p>
+              <p class="st-d">Автопродление включено: 7 октября спишем 199 ₽ с этой же карты. Отключить можно на странице клуба.</p>
               <button class="btn p" style="margin-top:6px">Вернуться к встрече</button>
             </div>
           </div>
@@ -338,7 +337,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
             <div class="grab"></div>
             <div class="sh"><h3>Продлить подписку</h3><span class="close">Закрыть</span></div>
             <div class="body">
-              <div class="note bad">Подписка за чат <b>«Бег по средам»</b> закончилась 3 сентября. Начатые встречи доживут, новые — после оплаты.</div>
+              <div class="note bad">Подписка за клуб <b>«Бег по средам»</b> закончилась 3 сентября. Начатые встречи доживут, новые — после оплаты.</div>
               <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес · 30 дней с момента оплаты</span></div>
               <div class="feat" style="padding-top:2px">
                 <div class="fi">
@@ -350,7 +349,8 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
               <div class="prov">
                 <div class="cap">Как проходит оплата</div>
                 <div class="l"><span class="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП.</span></div>
-                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Иван Варламов</b>, чек придёт на e-mail или в Telegram.</span></div>
+                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Варламов Иван Иванович</b>, чек придёт на e-mail или в Telegram.</span></div>
+                <div class="l" style="margin-top:10px"><span class="ic"></span><span style="color:var(--accent);font-weight:600">Условия (публичная оферта) ▾</span></div>
               </div>
               <button class="btn p">Продлить на месяц — 199 ₽</button>
             </div>
@@ -360,7 +360,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
     </div>
   </div>
 
-  <div class="q"><b>Вопросы к PO по шиту:</b> (1) ФИО самозанятого показываем целиком или «ИП/самозанятый + имя»? (2) Оферта — ссылка на страницу сайта или текст внутри шита? (3) Кнопка «Закрыть» на состоянии ② — оставить или прятать, чтобы не бросали проверку?</div>
+  <div class="q"><b>Решения PO 2026-09-07 по шиту:</b> ФИО самозанятого целиком; оферта — текстом внутри шита (свёрнутый блок «Условия (публичная оферта)»); кнопку «Закрыть, подожду в личке» на состоянии ② спрятать; списание — в день окончания оплаченного периода («оплачено до 7 октября» = спишем 7-го).</div>
 
   <!-- ====================== 2. ПОЛОСКА СТАТУСА ====================== -->
   <h2><span class="num">2</span> Полоска статуса на странице управления клубом (<code>BillingStatusStrip</code>)</h2>
@@ -373,7 +373,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip free"><span class="ic">🎁</span><div class="tx"><div class="t">Первая встреча — бесплатно</div><div class="d">Дальше 199 ₽ в месяц за чат. Счёт появится при создании второй встречи.</div></div></div>
+          <div class="strip free"><span class="ic">🎁</span><div class="tx"><div class="t">Первая встреча — бесплатно</div><div class="d">Дальше 199 ₽ в месяц за клуб. Счёт появится при создании второй встречи.</div></div></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
           <div class="subh">Аватар</div>
           <div class="field">…</div>
@@ -387,7 +387,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip pay"><span class="ic">💬</span><div class="tx"><div class="t">Бесплатная встреча использована</div><div class="d">Следующая — по подписке 199 ₽ в месяц за чат. Отмените первую до старта — бесплатная вернётся.</div></div><span class="act">Оплатить</span></div>
+          <div class="strip pay"><span class="ic">💬</span><div class="tx"><div class="t">Бесплатная встреча использована</div><div class="d">Следующая — по подписке 199 ₽ в месяц за клуб. Отмените первую до старта — бесплатная вернётся.</div></div><span class="act">Оплатить</span></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
           <div class="subh">Аватар</div>
           <div class="field">…</div>
@@ -401,8 +401,8 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за чат · Robokassa</div>
-            <div class="sub"><div class="fi"><div class="ft">Продлевать автоматически</div><div class="fd">6 октября спишем 199 ₽ с карты ···4242 и напомним за день.</div></div><span class="tgl on"></span></div>
+          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за клуб · Robokassa</div>
+            <div class="sub"><div class="fi"><div class="ft">Продлевать автоматически</div><div class="fd">7 октября спишем 199 ₽ с карты ···4242.</div></div><span class="tgl on"></span></div>
           </div></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
           <div class="subh">Аватар</div>
@@ -417,7 +417,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за чат · Robokassa</div>
+          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за клуб · Robokassa</div>
             <div class="sub"><div class="fi"><div class="ft">Продлевать автоматически</div><div class="fd">Недоступно для СБП — напомним в личке за 3 дня и за день. Оплатите картой в следующий раз, и ползунок включится.</div></div><span class="tgl dis"></span></div>
           </div></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
@@ -492,12 +492,12 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
     <div class="entry">
       <h4>Экран «Выбрать чат» (<code>ConnectChatScreen</code>)</h4>
       <p>Заголовок «Бот ведёт встречи в вашем чате», под описанием — строка цены. Человек ещё ничего не подключил: цена не должна пугать, но и не должна быть сюрпризом.</p>
-      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за чат.</div>
+      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
     </div>
     <div class="entry">
       <h4>Мастер наполнения клуба (<code>ClubSetupWizard</code>)</h4>
       <p>Последний шаг, перед «Пригласить»: та же строка мелким текстом под кнопкой. Ничего не собираем и не спрашиваем — просто напоминаем правило.</p>
-      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за чат.</div>
+      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
     </div>
     <div class="entry">
       <h4>Страница управления клубом</h4>
@@ -508,16 +508,15 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
 
   <!-- ====================== 5. DM ====================== -->
   <h2><span class="num">5</span> Личные сообщения владельцу (в чат — ничего)</h2>
-  <p class="lead">Бюджет «1 закреп + 2 поста» в чате не тратится. Все деньги — только в личке владельца. Кнопки ведут на страницу клуба, где полоска и шит.</p>
+  <p class="lead">Бюджет «1 закреп + 2 поста» в чате не тратится. Все деньги — только в личке владельца. Кнопки ведут на страницу клуба, где полоска и шит. DM «завтра спишем» нет (PO 2026-09-07): дата списания названа в DM об оплате.</p>
   <div class="dms">
-    <div class="bub"><div class="from">Clubs</div><div class="when">оплата прошла (MOTHER)</div>Оплачено до 7 октября: чат «Бег по средам» ведём дальше. Автопродление включено — 6 октября спишем 199 ₽ и напомним за день.<div class="btns"><span class="b">Открыть клуб</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">−3 дня, без автосписания</div>Подписка за чат «Бег по средам» заканчивается 7 октября. Продлить на месяц — 199 ₽.<div class="btns"><span class="b">Оплатить</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">−1 день, без автосписания</div>Завтра заканчивается подписка за чат «Бег по средам». После — 7 дней всё работает, потом новые встречи только после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">−1 день, с автосписанием</div>Завтра спишем 199 ₽ за чат «Бег по средам» с карты ···4242. Отключить автопродление можно на странице клуба.<div class="btns"><span class="b">Открыть клуб</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">дочернее списание прошло</div>Продлено до 6 ноября. Спасибо, что встречаетесь.</div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">списание не прошло (первый фейл)</div>Не удалось списать 199 ₽ за чат «Бег по средам». Обновите карту или оплатите вручную — 7 дней всё работает как раньше.<div class="btns"><span class="b">Оплатить</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">период кончился без оплаты</div>Подписка за чат «Бег по средам» закончилась. 7 дней всё работает, потом новые встречи — после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
-    <div class="bub"><div class="from">Clubs</div><div class="when">грейс исчерпан</div>Новые встречи в чате «Бег по средам» недоступны до оплаты. Начатое доживёт, бот из чата не уходит.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">оплата прошла (MOTHER)</div>Оплачено до 7 октября: клуб «Бег по средам» ведём дальше. Автопродление включено — 7 октября спишем 199 ₽ с этой же карты. Отключить можно на странице клуба.<div class="btns"><span class="b">Открыть клуб</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">−3 дня, без автосписания</div>Подписка за клуб «Бег по средам» заканчивается 7 октября. Продлить на месяц — 199 ₽.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">−1 день, без автосписания</div>Завтра заканчивается подписка за клуб «Бег по средам». После — 7 дней всё работает, потом новые встречи только после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">дочернее списание прошло</div>Продлено до 6 ноября. Спасибо, что пользуетесь Clubs! Мы делаем приложение так, чтобы в жизни было больше живого общения и встреч офлайн — жизнь, чтобы жить, а не просиживать её в четырёх стенах. Поначалу друзей бывает непросто приучить к этому формату, но со временем втягиваются все :)</div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">списание не прошло (первый фейл)</div>Не удалось списать 199 ₽ за клуб «Бег по средам». Обновите карту или оплатите вручную — 7 дней всё работает как раньше.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">период кончился без оплаты</div>Подписка за клуб «Бег по средам» закончилась. 7 дней всё работает, потом новые встречи — после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">грейс исчерпан</div>Новые встречи в клубе «Бег по средам» недоступны до оплаты. Начатое доживёт, бот из чата не уходит.<div class="btns"><span class="b">Оплатить</span></div></div>
   </div>
 </div>
 </body>

@@ -17,6 +17,8 @@ import foxFinancesArt from '../assets/mascot/fox-finances.png';
 import { Toast } from '../components/Toast';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { ManageHeader } from '../components/manage/ManageHeader';
+import { BillingStatusStrip } from '../components/billing/BillingStatusStrip';
+import { BillingSheet } from '../components/billing/BillingSheet';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { ClubChatTab } from '../components/manage/ClubChatTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
@@ -566,6 +568,20 @@ export const OrganizerClubManage: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Шит оплаты за чат: `?billing=1` — кнопка «Оплатить» из DM, `?billing=done` — возврат из
+  // браузера после оплаты (сразу «проверяем оплату»). Параметр гасим, как `?pay=1` на ClubPage,
+  // иначе он снова сработает при возврате назад.
+  const [billingSheet, setBillingSheet] = useState<'pay' | 'waiting' | null>(null);
+  useEffect(() => {
+    const raw = searchParams.get('billing');
+    if (raw !== '1' && raw !== 'done') return;
+    setBillingSheet(raw === 'done' ? 'waiting' : 'pay');
+    const next = new URLSearchParams(searchParams);
+    next.delete('billing');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
@@ -633,6 +649,10 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader club={club} />
 
+      {/* Полоска биллинга за чат — под шапкой, над сегментами: касается всех вкладок.
+          Только владелец: платит он, ползунок автопродления — его (platform-billing.md § 7). */}
+      {isOwner && <BillingStatusStrip clubId={clubId} onPay={() => setBillingSheet('pay')} />}
+
       {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
           переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
           в 390px без переноса; у со-организатора их и вовсе три. */}
@@ -654,6 +674,15 @@ export const OrganizerClubManage: FC = () => {
       {renderTab()}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+      {billingSheet && isOwner && (
+        <BillingSheet
+          clubId={clubId}
+          reason={null}
+          initialMode={billingSheet}
+          onClose={() => setBillingSheet(null)}
+        />
+      )}
 
       {/* Настройки клуба — продолжение владельческого погружения: сюда его приводит
           последний шаг тура CLUB_OWNER. */}

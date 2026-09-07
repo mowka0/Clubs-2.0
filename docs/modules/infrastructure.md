@@ -380,6 +380,22 @@ volumes:
   postgres_data:
 ```
 
+### Биллинг за клуб — env и открытые пути (2026-09-07)
+
+Переменные `BILLING_*` и `ROBOKASSA_*` прокинуты через `docker-compose.prod.yml` (дефолты
+дублируют `application.yml`, секреты — только из env Coolify): `BILLING_PROVIDER` (`stub` |
+`robokassa`), `BILLING_GRACE_DAYS`, `BILLING_PENDING_TIMEOUT_HOURS`, `BILLING_STUB_SETTLE_SECONDS`,
+`BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
+`SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
+`ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.
+Staging без ключей работает на `stub` (счёт «оплачивается» переходом по ссылке
+`/api/billing/stub/pay`); Robokassa на staging — тестовые пароли и `ROBOKASSA_TEST_MODE=true`.
+
+`SecurityConfig`: `permitAll` для `/api/billing/robokassa/result` (подпись Password#2 + allowlist
+IP 185.59.216.65 / 185.59.217.65 через `ClientIpResolver` — тот же разбор `X-Forwarded-For`, что
+у `RateLimitFilter`) и `/api/billing/stub/**` (бин есть только при `stub`). `RateLimitFilter`:
+бакет `billing` 5/мин на `/api/clubs/*/billing/checkout`. Спека — `platform-billing.md` § 6, § 9.
+
 ### nginx.conf (SPA routing)
 
 ```nginx
