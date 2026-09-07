@@ -1,11 +1,15 @@
 package com.clubs.skladchina
 
 import com.clubs.common.dto.PageResponse
+import com.clubs.generated.jooq.enums.AttendanceStatus
+import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.references.CLUBS
+import com.clubs.generated.jooq.tables.references.EVENTS
+import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import com.clubs.generated.jooq.tables.references.SKLADCHINA_PARTICIPANTS
@@ -79,6 +83,49 @@ class JooqSkladchinaRepository(
             )
             .limit(1)
             .fetchOne()?.let(mapper::toDomain)
+
+    override fun findSplittableEvents(
+        clubId: UUID,
+        notOlderThan: OffsetDateTime,
+        minAttended: Int
+    ): List<SplittableEvent> {
+        val attendedCount = DSL.count()
+        return dsl.select(EVENTS.ID, EVENTS.TITLE, EVENTS.EVENT_DATETIME, attendedCount)
+            .from(EVENTS)
+            .join(EVENT_RESPONSES).on(EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID))
+            // Пришедший, успевший покинуть клуб, не считается: его долю в сборе всё равно не собрать.
+            .join(MEMBERSHIPS).on(
+                MEMBERSHIPS.USER_ID.eq(EVENT_RESPONSES.USER_ID)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID))
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+            )
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.eq(EventStatus.completed))
+                    .and(EVENTS.ATTENDANCE_MARKED.isTrue)
+                    .and(EVENTS.EVENT_DATETIME.ge(notOlderThan))
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended))
+                    // Тот же блокирующий предикат, что и findBlockingByEventId: активный сплит
+                    // ведёт на себя, успешно закрытый значит «уже собрано». Провалившийся не мешает.
+                    .andNotExists(
+                        DSL.selectOne().from(SKLADCHINAS).where(
+                            SKLADCHINAS.EVENT_ID.eq(EVENTS.ID)
+                                .and(SKLADCHINAS.STATUS.`in`(SkladchinaStatus.active, SkladchinaStatus.closed_success))
+                        )
+                    )
+            )
+            .groupBy(EVENTS.ID, EVENTS.TITLE, EVENTS.EVENT_DATETIME)
+            .having(attendedCount.ge(minAttended))
+            .orderBy(EVENTS.EVENT_DATETIME.desc())
+            .fetch {
+                SplittableEvent(
+                    eventId = it.value1()!!,
+                    title = it.value2()!!,
+                    eventDatetime = it.value3()!!,
+                    attendedCount = it.value4()
+                )
+            }
+    }
 
     override fun findActiveByClub(clubId: UUID): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)

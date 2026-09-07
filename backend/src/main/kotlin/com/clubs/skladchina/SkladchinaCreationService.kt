@@ -92,8 +92,14 @@ class SkladchinaCreationService(
         )
 
         val created = skladchinaRepository.create(domain, resolution.participants)
-        log.info("Skladchina created: id={} clubId={} creatorId={} template={} mode={} participants={}",
-            created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size)
+        // Организатор, закрывший часть счёта своими деньгами, стартует уже оплатившим: его взнос
+        // сразу в собранной сумме и в прогрессе, платёжная панель ему не показывается (split_bill).
+        resolution.prepaidByCreatorKopecks?.let { prepaid ->
+            skladchinaRepository.setParticipantPaid(created.id, creatorId, prepaid, now)
+        }
+        log.info("Skladchina created: id={} clubId={} creatorId={} template={} mode={} participants={} prepaidByCreator={}",
+            created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size,
+            resolution.prepaidByCreatorKopecks != null)
 
         // DM-рассылка идёт через @TransactionalEventListener в SkladchinaBotNotifier —
         // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что SkladchinaBotNotifier).
@@ -109,7 +115,9 @@ class SkladchinaCreationService(
                 totalGoalKopecks = created.totalGoalKopecks,
                 deadline = created.deadline,
                 affectsReputation = created.affectsReputation,
+                // Предоплативший организатор из рассылки выпадает — он уже оплатил, звать его платить незачем.
                 participantUserIds = resolution.participants.map { it.first }
+                    .filterNot { it == creatorId && resolution.prepaidByCreatorKopecks != null }
             )
         )
 

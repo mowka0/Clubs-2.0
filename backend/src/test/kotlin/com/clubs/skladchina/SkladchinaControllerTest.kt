@@ -157,6 +157,15 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `custom skladchina detail carries no event fields`() {
+        val id = createSkladchina(listOf(memberAId))
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.eventTitle").doesNotExist())
+            .andExpect(jsonPath("$.eventDatetime").doesNotExist())
+    }
+
+    @Test
     fun `POST create as non-organizer member returns 403`() {
         val body = createBodyFor(listOf(memberAId, memberBId))
         mockMvc.perform(
@@ -305,6 +314,38 @@ class SkladchinaControllerTest {
             post("/api/skladchinas/$id/close")
                 .header("Authorization", "Bearer $organizerToken")
         )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("cancelled"))
+    }
+
+    @Test
+    fun `manual close forgives a shortfall of up to 3 rubles`() {
+        // Цель 4000 ₽, внесено 3999 ₽ (округление долей), второй участник молчит → закрываем вручную.
+        val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 400000)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 399900}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("closed_success"))
+    }
+
+    @Test
+    fun `manual close with a shortfall above the tolerance stays cancelled`() {
+        // Не хватает 10 ₽ — это уже не округление, сбор закрывается отменённым.
+        val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 400000)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 399000}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("cancelled"))
     }
@@ -791,6 +832,9 @@ class SkladchinaControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.template").value("split_bill"))
             .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+            // Экран сбора открывается блоком встречи, поэтому деталка несёт её название и дату целиком.
+            .andExpect(jsonPath("$.eventTitle").value("Game"))
+            .andExpect(jsonPath("$.eventDatetime").exists())
             .andExpect(jsonPath("$.paymentMode").value("fixed_equal"))
             .andExpect(jsonPath("$.totalGoalKopecks").value(90000))
             .andExpect(jsonPath("$.participantCount").value(2))
@@ -947,6 +991,174 @@ class SkladchinaControllerTest {
         assertEquals(40000L, participantExpected(id, memberAId))
         assertEquals(40000L, participantExpected(id, memberBId))
         assertEquals(null, participantExpected(id, organizerId), "organizer excluded from the split")
+    }
+
+    @Test
+    fun `splittable-events lists only the events a split can still be created from`() {
+        val good = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        createEventWithAttendance(attended = listOf(memberAId, memberBId), marked = false) // явка не отмечена
+        createEventWithAttendance(attended = listOf(memberAId))                            // пришёл один
+        createEventWithAttendance(attended = listOf(memberAId, memberBId), daysAgo = 40)   // старше 30 дней
+        createEventWithAttendance(attended = listOf(memberAId, outsiderId))                // второй — не член клуба
+        val alreadySplit = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        createFromBody(splitBody(alreadySplit, 90000))                                     // счёт уже делят
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].eventId").value(good.toString()))
+            .andExpect(jsonPath("$[0].attendedCount").value(2))
+    }
+
+    @Test
+    fun `splittable-events offers an event again after a failed split and is manager-only`() {
+        val retryable = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(retryable, 90000))
+        // Никто не заплатил, организатор закрыл вручную → cancelled: счёт можно собрать заново.
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("cancelled"))
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].eventId").value(retryable.toString()))
+
+        // Обычный участник список встреч клуба через этот эндпоинт не получает.
+        mockMvc.perform(
+            get("/api/clubs/$clubId/skladchinas/splittable-events")
+                .header("Authorization", "Bearer $memberAToken")
+        ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `split_bill self-paid credits the organizer and splits only the rest`() {
+        // Организатор закрыл 30000 из чека 90000 → остаток 60000 делится между A и B по 30000.
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(3))   // организатор вернулся в состав
+            .andExpect(jsonPath("$.paidCount").value(1))          // и сразу оплатившим
+            .andExpect(jsonPath("$.collectedKopecks").value(30000))
+            .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // цель — полный чек
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+            .andExpect(jsonPath("$.myDeclaredAmountKopecks").value(30000))
+        assertEquals(30000L, participantExpected(id, memberAId))
+        assertEquals(30000L, participantExpected(id, memberBId))
+        assertEquals(30000L, participantExpected(id, organizerId))
+        assertEquals("paid", participantStatus(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid in voluntary mode credits the sum but assigns no share`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "voluntary"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.collectedKopecks").value(30000))
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+        assertEquals(null, participantExpected(id, memberAId))
+        assertEquals(null, participantExpected(id, organizerId), "voluntary не назначает долю даже предоплатившему")
+        assertEquals(30000L, participantDeclared(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid allows a single payer`() {
+        // «Я заплатил 60000, ты должен 30000» — сбор на двоих, где один уже оплачен.
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 60000, "fixed_equal"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(2))
+        assertEquals(30000L, participantExpected(id, memberAId))
+        assertEquals("paid", participantStatus(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid follows the usual reputation rules (owner farms nothing, payers get +10)`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal"))
+        // Оба должника платят → pending не осталось → автозакрытие с репутацией (сплит всегда важный).
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        ).andExpect(status().isOk)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberBToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("closed_success"))
+        assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberBId, id))
+        // Предоплата не даёт организатору обходного пути к очкам: владелец клуба не набирает
+        // репутацию в собственном клубе (анти-фарм правило 1), даже будучи отмеченным оплатившим.
+        assertEquals(0, ledgerRows(organizerId, id))
+    }
+
+    @Test
+    fun `split_bill rejects a bill that cannot give every payer at least a kopeck`() {
+        // Нулевая доля нарушила бы CHECK в БД — форма должна получить 400, а не 500.
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 1))
+        ).andExpect(status().isBadRequest)
+
+        // То же самое, когда почти весь счёт закрыл организатор: остаток 1 копейка на двоих.
+        val withOrganizer = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(withOrganizer, 90000, 89999, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill self-paid validation - needs excludeSelf, must be under the bill, organizer must have attended`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        // без excludeSelf доля организатора посчиталась бы дважды
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal", excludeSelf = false))
+        ).andExpect(status().isBadRequest)
+
+        // взнос равен чеку — собирать нечего
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(eventId, 90000, 90000, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
+
+        // организатора нет среди пришедших — засчитывать взнос некуда
+        val withoutOrganizer = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(withoutOrganizer, 90000, 30000, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
     }
 
     @Test
@@ -1191,6 +1403,27 @@ class SkladchinaControllerTest {
         }
         return eventId
     }
+
+    private fun splitBodyPrepaid(
+        eventId: UUID,
+        billKopecks: Long,
+        selfPaidKopecks: Long,
+        mode: String,
+        excludeSelf: Boolean = true
+    ): String = """
+        {
+          "title": "Счёт за корт",
+          "template": "split_bill",
+          "eventId": "$eventId",
+          "excludeSelf": $excludeSelf,
+          "selfPaidKopecks": $selfPaidKopecks,
+          "paymentMode": "$mode",
+          "totalGoalKopecks": $billKopecks,
+          "paymentLink": "https://pay.me",
+          "deadline": "${OffsetDateTime.now().plusDays(2)}",
+          "participants": []
+        }
+    """.trimIndent()
 
     private fun splitBody(eventId: UUID, billKopecks: Long): String =
         splitBodyMode(eventId, billKopecks, "fixed_equal")

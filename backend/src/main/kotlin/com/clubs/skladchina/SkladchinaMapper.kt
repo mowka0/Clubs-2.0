@@ -1,5 +1,6 @@
 package com.clubs.skladchina
 
+import com.clubs.event.Event
 import com.clubs.generated.jooq.tables.records.SkladchinaParticipantsRecord
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
 import org.springframework.stereotype.Component
@@ -56,7 +57,9 @@ class SkladchinaMapper {
         callerIsManager: Boolean,
         participants: List<SkladchinaParticipantInfo>,
         collectedKopecks: Long,
-        declineRequiresApproval: Boolean
+        declineRequiresApproval: Boolean,
+        // Встреча-источник счёта; null у сборов без события (custom) — тогда блока встречи нет.
+        event: Event? = null
     ): SkladchinaDetailDto {
         // У-7: имя поля isOrganizerView сохранено при расширении семантики (creator ИЛИ manager) —
         // минимизация фронт-диффа; гейтит орг-действия и список участников в DTO.
@@ -77,6 +80,8 @@ class SkladchinaMapper {
             photoUrl = skladchina.photoUrl,
             template = skladchina.template.literal,
             eventId = skladchina.eventId,
+            eventTitle = event?.title,
+            eventDatetime = event?.eventDatetime,
             paymentMode = skladchina.paymentMode.literal,
             totalGoalKopecks = skladchina.totalGoalKopecks,
             collectedKopecks = collectedKopecks,

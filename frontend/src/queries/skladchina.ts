@@ -7,6 +7,7 @@ import {
   getMySkladchinas,
   getSkladchina,
   getSkladchinaActionRequiredCount,
+  getSplittableEvents,
   markPaidSkladchina,
   organizerMarkPaidParticipant,
   organizerUnmarkParticipant,
@@ -39,6 +40,18 @@ export function useSkladchinaActionRequiredCountQuery() {
     queryFn: getSkladchinaActionRequiredCount,
     select: (data) => data.count,
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Встречи, по которым счёт ещё можно разделить. Фильтры (явка отмечена, минимум двое пришедших,
+ * не старше 30 дней, счёт ещё не делили) живут на бэкенде — фронт не дублирует правила сплита.
+ */
+export function useSplittableEventsQuery(clubId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.skladchinas.splittableEvents(clubId ?? ''),
+    queryFn: () => getSplittableEvents(clubId!),
+    enabled: Boolean(clubId),
   });
 }
 

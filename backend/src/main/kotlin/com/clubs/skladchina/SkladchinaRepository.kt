@@ -26,6 +26,19 @@ interface SkladchinaRepository {
     fun findActiveByClub(clubId: UUID): List<Skladchina>
 
     /**
+     * События клуба, по которым счёт ещё можно разделить: завершённые, с отмеченной явкой,
+     * не старше [notOlderThan], без блокирующего сплита (активного или успешно закрытого) и
+     * минимум с [minAttended] пришедшими, всё ещё активными участниками клуба. Ровно те условия,
+     * что проверяет `SplitBillTemplate` при создании — список не должен предлагать то, что потом
+     * отвергнет форма. Сортировка: свежие события первыми.
+     */
+    fun findSplittableEvents(
+        clubId: UUID,
+        notOlderThan: OffsetDateTime,
+        minAttended: Int
+    ): List<SplittableEvent>
+
+    /**
      * Возвращает ВСЕ складчины указанного клуба (любой статус при [includeCompleted] = true,
      * иначе только активные) с батчево подгруженными агрегатами (собранная сумма, количество
      * участников). Отсортировано по `created_at DESC, id ASC` для стабильного слияния с лентой событий.
@@ -194,6 +207,14 @@ interface SkladchinaRepository {
 data class SkladchinaObligation(
     val skladchinaId: UUID,
     val deadline: OffsetDateTime
+)
+
+/** Прошедшее событие, по которому счёт ещё можно разделить, плюс число пришедших (подсказка в списке). */
+data class SplittableEvent(
+    val eventId: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val attendedCount: Int
 )
 
 /**

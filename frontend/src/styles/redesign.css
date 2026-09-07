@@ -3479,3 +3479,37 @@
 /* Строки отметки явки: у `.rd-pick-row` есть поздняя версия для пикера активностей с padding
    12px 16px — на странице встречи она раздувала зазор между участниками (PO 2026-09-06). */
 .rd-att-row { padding: 0; gap: 8px; }
+
+/* ---------- Экран сбора: шапка «встреча + сбор» ---------- */
+/* Сбор по встрече открывается двумя блоками: «за что» (встреча) и «сколько собрали» (сбор).
+   Клуб при этом сжат до строки-крошки: он контекст, а не главный объект экрана. */
+.rd-sklad-crumb {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-bottom: 10px; padding: 0; border: none; background: none;
+  font: inherit; font-size: 11.5px; color: var(--text-dim); cursor: pointer;
+}
+.rd-sklad-crumb .rd-crumb-ava {
+  width: 16px; height: 16px; border-radius: 5px; overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #ff7b4a, #c43a2a);
+}
+.rd-sklad-crumb .rd-crumb-ava img { width: 100%; height: 100%; object-fit: cover; }
+
+.rd-sklad-ev {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; padding: 14px 15px; margin-bottom: 12px;
+}
+.rd-sklad-ev .rd-ev-kicker {
+  display: block; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
+}
+.rd-sklad-ev .rd-ev-name { display: block; font-size: 16px; font-weight: 650; color: var(--text); margin-top: 3px; }
+.rd-sklad-ev .rd-ev-line { display: block; font-size: 12px; color: var(--text-dim); margin-top: 5px; }
+
+/* Описание и название живут внутри блока сбора, отделённые волоском, — чтобы «что за сбор»
+   и «сколько собрали» читались одним блоком, а не тремя карточками подряд. */
+.rd-sklad-inline-sep {
+  border-top: 1px solid var(--hairline);
+  margin: 11px -16px 0; padding: 11px 16px 0;
+  font-size: 12.5px; color: var(--text-dim);
+}

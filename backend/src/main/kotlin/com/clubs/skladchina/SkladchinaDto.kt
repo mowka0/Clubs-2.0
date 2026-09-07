@@ -24,6 +24,11 @@ data class CreateSkladchinaRequest(
     // split_bill: исключить организатора из числа участников, с которых берут деньги (он не должен долю).
     // Режим "поровну" затем делит счёт между оставшимися участниками. Игнорируется другими шаблонами.
     val excludeSelf: Boolean = false,
+    // split_bill: сколько организатор уже внёс сам (копейки) — работает только вместе с excludeSelf.
+    // Сумма зачитывается в сбор, организатор сразу помечается оплатившим, остальные делят остаток чека.
+    // null = ничего не вносил (прежнее поведение: весь чек делится на остальных).
+    @field:Positive
+    val selfPaidKopecks: Long? = null,
 
     @field:NotNull
     val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"
@@ -91,6 +96,10 @@ data class SkladchinaDetailDto(
 
     val template: String,                          // custom | split_bill | gear | booking | birthday
     val eventId: UUID?,                            // split_bill: исходное событие (иначе null)
+    // Встреча, счёт которой делится: экран сбора показывает её отдельным блоком «за что скидываемся»,
+    // поэтому названия и даты недостаточно иметь по eventId — иначе фронту нужен второй запрос.
+    val eventTitle: String?,
+    val eventDatetime: OffsetDateTime?,
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,
@@ -117,6 +126,14 @@ data class SkladchinaDetailDto(
     val participantCount: Int,
     val paidCount: Int,
     val pendingCount: Int                          // #3: видно всем, чтобы последний pending видел, что осталось
+)
+
+/** Строка списка «по какой встрече делим счёт»: только события, которые примет создание сплита. */
+data class SplittableEventDto(
+    val eventId: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val attendedCount: Int
 )
 
 // Состояние сплита, привязанного к событию — управляет кнопкой "Разделить счёт" на EventPage.

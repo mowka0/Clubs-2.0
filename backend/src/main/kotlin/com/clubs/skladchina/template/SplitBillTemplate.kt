@@ -82,27 +82,78 @@ class SplitBillTemplate(
         // В складчине могут участвовать только всё ещё активные участники (доступ к странице + DM).
         // Тот, кто был на событии, но с тех пор покинул клуб, тихо отбрасывается (его долю здесь не собрать).
         val notActive = skladchinaRepository.findNonActiveMembers(clubId, attendedAll)
-        val attended = attendedAll
-            .filter { it !in notActive }
-            // "Исключить себя": организатор был на событии, но с него денег не берут — убрать его,
-            // чтобы равная доля делилась между остальными и ему не показывалась панель оплаты (не участник).
-            .filter { !request.excludeSelf || it != creatorId }
-        if (attended.size < MIN_ATTENDED) {
-            throw ValidationException("Нужно минимум $MIN_ATTENDED пришедших участника для разделения счёта")
+        val attended = attendedAll.filter { it !in notActive }
+
+        val prepaid = resolvePrepaid(request, creatorId, attended, bill)
+        // "Исключить себя": организатор был на событии, но с него денег не берут — убрать его,
+        // чтобы равная доля делилась между остальными и ему не показывалась панель оплаты.
+        val payers = attended.filter { !request.excludeSelf || it != creatorId }
+        // С предоплатой сбор осмыслен и с одним должником («я заплатил 2000, ты должен 1000»):
+        // участников всё равно двое, просто один уже отмечен оплатившим.
+        val minPayers = if (prepaid != null) MIN_PAYERS_WITH_PREPAY else MIN_ATTENDED
+        if (payers.size < minPayers) {
+            throw ValidationException(
+                if (minPayers == MIN_PAYERS_WITH_PREPAY) {
+                    "Нужен хотя бы один участник к оплате — отметьте, кто пришёл на событие"
+                } else {
+                    "Нужно минимум $MIN_ATTENDED пришедших участника для разделения счёта"
+                }
+            )
         }
 
+        // Часть счёта, закрытая организатором из своего кармана, до остальных не доезжает — делим остаток.
         // fixed_equal: назначенная сервером равная доля. voluntary: доля не назначается — каждый
         // вводит свою сумму при оплате; счёт остаётся целью, к которой заполняется бар.
-        val participants: List<Pair<UUID, Long?>> =
-            if (mode == SkladchinaMode.voluntary) attended.map { it to null }
-            else SkladchinaShares.equal(bill, attended).map { it.first to (it.second as Long?) }
-        return TemplateResolution(mode, bill, participants, eventId)
+        val toSplit = bill - (prepaid ?: 0L)
+        // Каждому должнику должна достаться хотя бы копейка: нулевую долю отвергает CHECK в БД,
+        // и вместо понятной ошибки формы пользователь получил бы 500.
+        if (mode != SkladchinaMode.voluntary && toSplit < payers.size) {
+            throw ValidationException("Сумма к разделу слишком мала — на каждого не выходит и копейки")
+        }
+        val payerShares: List<Pair<UUID, Long?>> =
+            if (mode == SkladchinaMode.voluntary) payers.map { it to null }
+            else SkladchinaShares.equal(toSplit, payers).map { it.first to (it.second as Long?) }
+        // Предоплативший организатор возвращается в состав — движок сразу пометит его оплатившим,
+        // чтобы взнос был виден и в прогрессе («скинулись N из M»), и в собранной сумме.
+        val participants =
+            if (prepaid == null) payerShares
+            else payerShares + (creatorId to prepaid.takeIf { mode != SkladchinaMode.voluntary })
+        return TemplateResolution(mode, bill, participants, eventId, prepaid)
+    }
+
+    /**
+     * Проверяет «я уже внёс N» организатора. Поле имеет смысл только вместе с "исключить себя":
+     * иначе доля организатора посчиталась бы дважды — и в его взносе, и в назначенной ему доле.
+     * Величина взноса меньше счёта строго: равный счёту взнос не оставляет остальным что собирать.
+     */
+    private fun resolvePrepaid(
+        request: CreateSkladchinaRequest,
+        creatorId: UUID,
+        attended: List<UUID>,
+        bill: Long,
+    ): Long? {
+        val prepaid = request.selfPaidKopecks ?: return null
+        if (!request.excludeSelf) {
+            throw ValidationException("Сумму «я уже внёс» можно указать, только исключив себя из счёта")
+        }
+        if (creatorId !in attended) {
+            throw ValidationException("Вас нет среди пришедших на событие — засчитывать взнос некуда")
+        }
+        if (prepaid >= bill) {
+            throw ValidationException("Ваша сумма должна быть меньше суммы чека — иначе собирать нечего")
+        }
+        return prepaid
     }
 
     companion object {
         // Максимальный возраст события, за которое ещё можно разделить счёт.
-        private const val MAX_EVENT_AGE_DAYS = 30L
+        // Не private: тот же порог отбирает события в списке «по чему можно разделить счёт»,
+        // и разъезд правил дал бы событие, которое видно в списке, но не принимается при создании.
+        const val MAX_EVENT_AGE_DAYS = 30L
         // Минимальное число пришедших участников для разделения счёта.
-        private const val MIN_ATTENDED = 2
+        const val MIN_ATTENDED = 2
+        // Минимум должников, когда часть счёта организатор уже закрыл сам: сбор «я заплатил, ты должен»
+        // осмыслен и вдвоём — второй участник (сам организатор) в сборе уже есть, только оплаченный.
+        private const val MIN_PAYERS_WITH_PREPAY = 1
     }
 }

@@ -785,6 +785,9 @@ export interface SkladchinaDetailDto {
   photoUrl: string | null;
   template: SkladchinaTemplate;
   eventId: string | null;
+  // Встреча, счёт которой делится (split_bill): открывает экран сбора блоком «за что скидываемся».
+  eventTitle: string | null;
+  eventDatetime: string | null;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
@@ -841,6 +844,14 @@ export interface CreateSkladchinaParticipantInput {
   expectedAmountKopecks?: number | null;
 }
 
+/** Встреча, по которой счёт ещё можно разделить (шаг выбора в форме «Разделить счёт»). */
+export interface SplittableEventDto {
+  eventId: string;
+  title: string;
+  eventDatetime: string;
+  attendedCount: number;
+}
+
 export interface CreateSkladchinaRequest {
   title: string;
   description?: string | null;
@@ -849,6 +860,7 @@ export interface CreateSkladchinaRequest {
   template?: SkladchinaTemplate;          // по умолчанию "custom" на сервере
   eventId?: string | null;                // split_bill: исходное событие
   excludeSelf?: boolean;                  // split_bill: исключить организатора из тех, с кого берут деньги
+  selfPaidKopecks?: number | null;        // split_bill + excludeSelf: сколько организатор внёс сам (зачтётся в сбор)
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;
