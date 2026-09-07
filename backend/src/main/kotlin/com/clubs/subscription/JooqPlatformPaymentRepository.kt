@@ -49,6 +49,21 @@ class JooqPlatformPaymentRepository(
             .fetchOne()
             ?.let(mapper::toPayment)
 
+    override fun hasPendingMother(clubId: UUID): Boolean =
+        dsl.fetchExists(
+            dsl.selectOne().from(PLATFORM_PAYMENT).where(
+                PLATFORM_PAYMENT.CLUB_ID.eq(clubId)
+                    .and(PLATFORM_PAYMENT.KIND.eq(PaymentKind.MOTHER.name))
+                    .and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.PENDING.name)),
+            ),
+        )
+
+    override fun updateAutopayRequested(id: UUID, autopayRequested: Boolean): Int =
+        dsl.update(PLATFORM_PAYMENT)
+            .set(PLATFORM_PAYMENT.AUTOPAY_REQUESTED, autopayRequested)
+            .where(PLATFORM_PAYMENT.ID.eq(id).and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.PENDING.name)))
+            .execute()
+
     override fun hasPendingRecurring(subscriptionId: UUID): Boolean =
         dsl.fetchExists(
             dsl.selectOne().from(PLATFORM_PAYMENT).where(
@@ -64,7 +79,9 @@ class JooqPlatformPaymentRepository(
             .set(PLATFORM_PAYMENT.PAYMENT_METHOD, paymentMethod)
             .set(PLATFORM_PAYMENT.PROVIDER_FEE, providerFee)
             .set(PLATFORM_PAYMENT.PAID_AT, paidAt)
-            .where(PLATFORM_PAYMENT.ID.eq(id).and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.PENDING.name)))
+            // Не `= PENDING`, а `<> SUCCEEDED`: счёт, закрытый по таймауту (FAILED), обязан принять
+            // позднюю оплату — иначе деньги списаны, а подписки нет (ревью 2026-09-07).
+            .where(PLATFORM_PAYMENT.ID.eq(id).and(PLATFORM_PAYMENT.STATUS.ne(PlatformPaymentStatus.SUCCEEDED.name)))
             .execute()
 
     override fun attachSubscription(id: UUID, subscriptionId: UUID): Int =

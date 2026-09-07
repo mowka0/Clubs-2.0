@@ -12,7 +12,6 @@ import com.clubs.payment.ResultNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -43,55 +42,85 @@ class BillingLifecycleService(
 
     private val log = LoggerFactory.getLogger(BillingLifecycleService::class.java)
 
-    @Transactional
+    /**
+     * Общей транзакции у тика намеренно нет: внутри идут внешние списания (HTTP к провайдеру), и
+     * одна транзакция на весь обход означала бы, что ошибка на последней подписке откатывает
+     * записи об уже отправленных списаниях — следующий тик списал бы те же деньги повторно
+     * (ревью 2026-09-07). Каждый шаг коммитится сам по себе, а сбой на одной подписке не
+     * останавливает остальные.
+     */
     fun runDaily(now: OffsetDateTime) {
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         for (subscription in subscriptionRepository.findLive()) {
-            val clubId = subscription.subjectClubId ?: continue
-            val club = clubRepository.findById(clubId)
-            val hasChat = club != null && chatLinkRepository.findByClubId(clubId) != null
-            val periodEnd = subscription.currentPeriodEnd
-            val graceEnd = periodEnd.plusDays(graceDays)
-
-            if (!now.isBefore(graceEnd)) {
-                endSubscription(subscription, club, hasChat)
-                continue
-            }
-            if (!hasChat || club == null) continue
-
-            val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null
-            if (now.isBefore(periodEnd)) {
-                // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
-                if (!autoCharge) remindBeforeEnd(subscription, club, now, price)
-            } else if (autoCharge) {
-                chargeIfSlotDue(subscription, club, now, price)
-            } else if (subscription.status == SubscriptionStatus.ACTIVE) {
-                subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
-                notifier.periodEnded(club, graceEnd)
-                log.info("Subscription period ended without autopay → PAST_DUE: id={} clubId={}", subscription.id, clubId)
+            try {
+                processSubscription(subscription, now, price)
+            } catch (e: RuntimeException) {
+                log.error("Billing daily tick failed for subscription {}: {}", subscription.id, e.message, e)
             }
         }
     }
 
-    /** Счета без ответа провайдера: дочерние — узнать судьбу, брошенные материнские — закрыть. */
-    @Transactional
+    private fun processSubscription(subscription: ServiceSubscription, now: OffsetDateTime, price: Int) {
+        val clubId = subscription.subjectClubId ?: return
+        val club = clubRepository.findById(clubId)
+        val hasChat = club != null && chatLinkRepository.findByClubId(clubId) != null
+        val periodEnd = subscription.currentPeriodEnd
+        val graceEnd = periodEnd.plusDays(graceDays)
+
+        if (!now.isBefore(graceEnd)) {
+            endSubscription(subscription, club, hasChat)
+            return
+        }
+        if (!hasChat || club == null) return
+
+        val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null
+        if (now.isBefore(periodEnd)) {
+            // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
+            if (!autoCharge) remindBeforeEnd(subscription, club, now, price)
+        } else if (autoCharge) {
+            chargeIfSlotDue(subscription, club, now, price)
+        } else if (subscription.status == SubscriptionStatus.ACTIVE) {
+            subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
+            notifier.periodEnded(club, graceEnd)
+            log.info("Subscription period ended without autopay → PAST_DUE: id={} clubId={}", subscription.id, clubId)
+        }
+    }
+
+    /**
+     * Счета без ответа провайдера: узнать судьбу, зависшие — закрыть. Общей транзакции нет по той
+     * же причине, что и у [runDaily]: опрос состояния — сетевой вызов, и сбой на одном счёте не
+     * должен откатывать уже применённые оплаты (ревью 2026-09-07). Каждую оплату применяет
+     * `billingService.onResult` в своей транзакции.
+     */
     fun reconcilePending(now: OffsetDateTime) {
         for (payment in paymentRepository.findPendingCreatedBefore(now.minusHours(pendingTimeoutHours))) {
-            val state = paymentProvider.queryState(payment.invId)
-            when (state.state) {
-                PaymentState.SUCCEEDED ->
-                    billingService.onResult(ResultNotification(payment.invId, payment.amountKopecks, state.paymentMethod, fee = null))
-                PaymentState.FAILED -> {
+            try {
+                reconcileOne(payment, now)
+            } catch (e: RuntimeException) {
+                log.error("Billing reconcile failed for invId {}: {}", payment.invId, e.message, e)
+            }
+        }
+    }
+
+    private fun reconcileOne(payment: PlatformPayment, now: OffsetDateTime) {
+        val state = paymentProvider.queryState(payment.invId)
+        when (state.state) {
+            PaymentState.SUCCEEDED ->
+                billingService.onResult(ResultNotification(payment.invId, payment.amountKopecks, state.paymentMethod, fee = null))
+            PaymentState.FAILED -> {
+                paymentRepository.markFailed(payment.id)
+                if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks)
+                log.info("Billing payment failed at provider: invId={} kind={}", payment.invId, payment.kind)
+            }
+            // Провайдер молчит слишком долго. Закрываем счёт ЛЮБОГО вида: зависший дочерний иначе
+            // навсегда блокировал бы ретраи и владелец не узнал бы о неудачном списании
+            // (ревью 2026-09-07). Поздняя оплата закрытый счёт всё равно оживит — см. markSucceeded.
+            PaymentState.PENDING ->
+                if (payment.createdAt.isBefore(now.minusHours(motherExpireHours))) {
                     paymentRepository.markFailed(payment.id)
                     if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks)
-                    log.info("Billing payment failed at provider: invId={} kind={}", payment.invId, payment.kind)
+                    log.info("Stale payment closed: invId={} kind={} clubId={}", payment.invId, payment.kind, payment.clubId)
                 }
-                PaymentState.PENDING ->
-                    if (payment.kind == PaymentKind.MOTHER && payment.createdAt.isBefore(now.minusHours(motherExpireHours))) {
-                        paymentRepository.markFailed(payment.id)
-                        log.info("Abandoned checkout closed: invId={} clubId={}", payment.invId, payment.clubId)
-                    }
-            }
         }
     }
 

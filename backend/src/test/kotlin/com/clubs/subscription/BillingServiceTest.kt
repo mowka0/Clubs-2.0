@@ -98,6 +98,17 @@ class BillingServiceTest {
     }
 
     @Test
+    fun `reusing an invoice carries the autopay choice made on the second attempt`() {
+        // Ползунок выключили при повторном заходе — счёт тот же, решение владельца новое.
+        val pending = BillingTestFixtures.payment(club, autopayRequested = true)
+        every { paymentRepository.findPendingMother(club.id, any()) } returns pending
+
+        service.checkout(club.id, club.ownerId, autopay = false)
+
+        verify(exactly = 1) { paymentRepository.updateAutopayRequested(pending.id, false) }
+    }
+
+    @Test
     fun `checkout is owner-only and needs a linked chat`() {
         assertThrows<ForbiddenException> { service.checkout(club.id, UUID.randomUUID(), autopay = true) }
 
@@ -152,6 +163,46 @@ class BillingServiceTest {
         verify(exactly = 0) { subscriptionRepository.createChatSubscription(any(), any(), any(), any(), any(), any()) }
         verify(exactly = 0) { subscriptionRepository.extendPeriod(any(), any()) }
         verify(exactly = 0) { notifier.paid(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `payment for a deleted club is recorded but never silently creates a subscription`() {
+        val payment = BillingTestFixtures.payment(club)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { clubRepository.findById(club.id) } returns null
+
+        assertEquals(ResultOutcome.UNKNOWN_INVOICE, service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null)))
+
+        // Деньги пришли — счёт фиксируем (аудит), но подписки у удалённого клуба быть не может.
+        verify(exactly = 1) { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) }
+        verify(exactly = 0) { subscriptionRepository.createChatSubscription(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { notifier.paid(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a recurring payment confirmed after the grace ended revives the subscription`() {
+        // Списание подтвердилось позже, чем шедулер закрыл подписку: без перехода ENDED → ACTIVE
+        // владелец заплатил бы и всё равно упирался в 402.
+        val ended = BillingTestFixtures.subscription(
+            club, status = SubscriptionStatus.ENDED, periodEnd = OffsetDateTime.now().minusDays(8),
+        )
+        every { subscriptionRepository.findById(ended.id) } returns ended
+        val payment = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = ended.id, invId = 100901)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, any(), any(), any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify {
+            subscriptionRepository.transitionStatus(
+                ended.id,
+                match { it.contains(SubscriptionStatus.ENDED) && it.contains(SubscriptionStatus.PAST_DUE) },
+                SubscriptionStatus.ACTIVE,
+            )
+        }
+        val newEnd = slot<OffsetDateTime>()
+        verify { subscriptionRepository.extendPeriod(ended.id, capture(newEnd)) }
+        assertClose(OffsetDateTime.now().plusDays(30), newEnd.captured)
     }
 
     @Test
@@ -256,7 +307,7 @@ class BillingServiceTest {
             BillingTestFixtures.subscription(club, status = SubscriptionStatus.ENDED, periodEnd = OffsetDateTime.now().minusDays(20))
         assertEquals(BillingState.ENDED, service.status(club.id, club.ownerId).state)
 
-        every { paymentRepository.findPendingMother(club.id, any()) } returns BillingTestFixtures.payment(club)
+        every { paymentRepository.hasPendingMother(club.id) } returns true
         assertTrue(service.status(club.id, club.ownerId).pendingCheckout)
     }
 }

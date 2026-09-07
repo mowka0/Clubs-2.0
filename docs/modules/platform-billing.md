@@ -288,17 +288,32 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
   **строку подписки не создаёт** — она появляется в `onResult` с первым успешным платежом (строка
   `PAST_DUE` «в ожидании» с `current_period_end = now` дала бы через правило грейса неделю без
   оплаты); `funnel_event(checkout_started)`; отдаёт URL. Второй чекаут при живом PENDING < 30 мин
-  по клубу — вернуть тот же URL (идемпотентность), не плодить InvId. Значение `autopay` ползунка
+  по клубу — вернуть тот же URL (идемпотентность), не плодить InvId, **но `autopay_requested` на
+  счёте перезаписывается**: между попытками ползунок мог переключиться, и списывать надо по
+  последнему решению владельца (ревью 2026-09-07). Значение `autopay` ползунка
   переносится на подписку при её создании/продлении в `onResult`.
+- `status(...).pendingCheckout` считается по неоплаченному материнскому счёту **любого возраста**
+  (`hasPendingMother`), а не по окну переиспользования: иначе шит после долгой оплаты видел бы
+  «счетов нет» и поздравлял с несостоявшимся продлением.
 - `onResult(notification)`: транзакция; `platform_payment` по `inv_id` (нет → WARN, ответ OK, чтобы
-  Robokassa не ретраила); `recordEventIfNew("robokassa:paid:<InvId>")` (повтор → OK без действий;
-  для MOTHER без подписки ключ пишется после её создания); сумма совпадает; → SUCCEEDED, `paid_at`,
+  Robokassa не ретраила); сумма совпадает; **клуб ищется до отметки об оплате** — удалённый клуб даёт
+  `ERROR` «нужен возврат вручную» и счёт всё равно фиксируется SUCCEEDED (аудит денег), но подписка
+  не создаётся; `recordEventIfNew("robokassa:paid:<InvId>")` (повтор → OK без действий;
+  для MOTHER без подписки ключ пишется после её создания); → SUCCEEDED, `paid_at`,
   `payment_method`, `fee`; подписка: живая по клубу (`findLatestByClub`, статус ≠ ENDED) →
   `extendPeriod(max(now, period_end) + 30d)`, `transitionStatus(PAST_DUE → ACTIVE)`; нет живой
   (первая оплата или переподписка после ENDED) → новая строка `ACTIVE` с `current_period_end =
   now + 30d`, `payer_user_id = clubs.owner_id`; `platform_payment.subscription_id` проставляется;
   для MOTHER — `provider_token = InvId`, `autopay_possible = isCard(payment_method)`,
   `charge_attempts = 0`; `funnel_event(payment_succeeded)`; DM владельцу.
+  Дочернее списание оживляет и **ENDED**-подписку (`PAST_DUE, ENDED → ACTIVE`): провайдер может
+  подтвердить его уже после конца грейса, и без этого владелец платил бы, читал «Продлено» и
+  продолжал получать 402 (ревью 2026-09-07).
+
+**Идемпотентность и поздние оплаты (ревью 2026-09-07).** `markSucceeded` переводит счёт в
+SUCCEEDED из любого статуса, кроме самого SUCCEEDED. Повтор ResultURL по-прежнему даёт 0 строк и
+ничего не меняет, а счёт, закрытый шедулером по таймауту (FAILED), принимает позднюю оплату: ссылка
+оплаты у Robokassa не истекает, и иначе деньги списывались бы без подписки и без следа.
 - `setAutopay(clubId, userId, value)`: владелец; `true` при `!autopay_possible` → 409.
 - `requireBillable(club)` — § 6.4.
 
@@ -342,8 +357,17 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
 - `period_end ≤ now` без автосписания → `ACTIVE → PAST_DUE` + DM «7 дней грейса».
 - `period_end + 7d ≤ now` и статус `PAST_DUE` → `ENDED` + DM + `funnel_event(subscription_ended)`.
 Ежечасно: `platform_payment` PENDING старше 6 ч → `provider.queryState` → SUCCEEDED (обработать как
-ResultURL) / FAILED (`charge_attempts++`, DM при первом фейле).
+ResultURL) / FAILED (`charge_attempts++`, DM при первом фейле). Счёт **любого вида**, зависший
+дольше `mother-expire-hours`, закрывается как FAILED, а дочерний дополнительно даёт `PAST_DUE` + DM:
+иначе непрерывное «в обработке» у провайдера навсегда блокировало бы ретраи через
+`hasPendingRecurring`, и владелец не узнал бы о неудачном списании (ревью 2026-09-07).
 Клуб без чата (отвязали) — подписка доживает период, списаний нет, по истечении → ENDED тихо.
+
+**Транзакции тика.** Ни `runDaily`, ни `reconcilePending` не оборачиваются в одну транзакцию:
+внутри идут внешние вызовы к провайдеру, и общая транзакция означала бы, что ошибка на последней
+подписке откатывает записи об уже отправленных списаниях — следующий тик списал бы те же деньги
+повторно. Каждая подписка и каждый счёт обрабатываются отдельно, сбой одного логируется как ERROR
+и не останавливает остальные; оплату применяет `BillingService.onResult` в своей транзакции.
 
 ### 6.6 API
 | Метод | Путь | Кто | Что |
@@ -377,7 +401,7 @@ data class BillingStatusDto(
 ### 6.7 Конфиг (`application.yml` + **оба** compose-файла, правило CLAUDE.md п. 3)
 ```yaml
 billing:
-  provider: ${BILLING_PROVIDER:stub}             # stub | robokassa
+  provider: ${BILLING_PROVIDER:stub}             # stub | robokassa; в prod-compose — БЕЗ дефолта (`:?`)
   grace-days: ${BILLING_GRACE_DAYS:7}
   retry-days: ${BILLING_RETRY_DAYS:0,1,3}         # слоты дочерних списаний от period_end
   pending-timeout-hours: ${BILLING_PENDING_TIMEOUT_HOURS:6}   # PENDING старше → опрос OpStateExt
@@ -457,6 +481,14 @@ DM «завтра спишем» перед автосписанием **нет*
 5. Bypass `POST /api/subscriptions` исчезает вместе с контроллером.
 6. `/pay/return` и `/pay/fail` не делают ничего, кроме показа текста, — статус оплаты по ним не
    меняется.
+7. **Стаб не включается молча (ревью 2026-09-07).** `@ConditionalOnProperty` у `StubPaymentProvider`
+   и `StubCheckoutController` — без `matchIfMissing`: пустое или незнакомое `billing.provider` не
+   даёт бина провайдера вовсе, и приложение падает на старте вместо тихой раздачи подписок.
+   В `docker-compose.prod.yml` переменная объявлена как `${BILLING_PROVIDER:?…}` — незаданная роняет
+   деплой. Публичный ResultURL под стабом закрыт: `trustsResultSource` = false,
+   `parseResultNotification` бросает 403, счёт подтверждается только своей страницей
+   `/api/billing/stub/pay`. Иначе угаданный `InvId` (последовательность от 100000) выдавал бы
+   тридцать дней подписки без денег.
 
 ## 10. Критерии приёмки
 1. Клуб из чата: первая встреча создаётся без оплаты; полоска «Первая встреча бесплатно».

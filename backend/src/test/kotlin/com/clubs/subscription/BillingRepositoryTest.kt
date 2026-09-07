@@ -90,6 +90,11 @@ class BillingRepositoryTest {
         assertEquals(1, payments.markSucceeded(first.id, "BankCard", BigDecimal("6.77"), paidAt))
         assertEquals(0, payments.markSucceeded(first.id, "BankCard", null, paidAt), "повтор ResultURL — no-op")
         assertEquals(0, payments.markFailed(first.id), "подтверждённый счёт не проваливается")
+
+        // Счёт, закрытый по таймауту, обязан принять позднюю оплату: ссылка у провайдера не истекает.
+        assertEquals(1, payments.markFailed(second.id))
+        assertEquals(1, payments.markSucceeded(second.id, "SBP", null, paidAt), "поздняя оплата оживляет закрытый счёт")
+        assertEquals(PlatformPaymentStatus.SUCCEEDED, payments.findByInvId(second.invId)!!.status)
         val settled = payments.findByInvId(first.invId)!!
         assertEquals(PlatformPaymentStatus.SUCCEEDED, settled.status)
         assertEquals("BankCard", settled.paymentMethod)
@@ -105,9 +110,16 @@ class BillingRepositoryTest {
         val pending = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
         assertEquals(pending.id, payments.findPendingMother(clubId, now.minusMinutes(30))?.id)
         assertNull(payments.findPendingMother(clubId, now.plusMinutes(1)), "счёт старше окна не переиспользуется")
+        // Статус для шита смотрит на счета ЛЮБОГО возраста, иначе «проверяем оплату» превращается
+        // в ложное «оплачено» при долгой оплате.
+        assertTrue(payments.hasPendingMother(clubId))
+
+        assertEquals(1, payments.updateAutopayRequested(pending.id, false))
+        assertEquals(false, payments.findByInvId(pending.invId)!!.autopayRequested)
 
         payments.markFailed(pending.id)
         assertNull(payments.findPendingMother(clubId, now.minusMinutes(30)))
+        assertFalse(payments.hasPendingMother(clubId))
 
         assertTrue(payments.findPendingCreatedBefore(now.plusMinutes(1)).none { it.id == pending.id })
     }

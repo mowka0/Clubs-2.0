@@ -100,7 +100,9 @@ services:
       # Биллинг платформы за чат (platform-billing.md § 6.7). Провайдер: stub — staging без
       # ключей, счёт «оплачивается» ссылкой; robokassa — прод и staging с тестовыми паролями.
       # Дефолты совпадают с application.yml — здесь только прокидывание из env Coolify.
-      BILLING_PROVIDER: ${BILLING_PROVIDER:-stub}
+      # Без дефолта намеренно: незаданная переменная роняет деплой, а не запускает прод со стабом,
+      # у которого страница оплаты открыта без авторизации (ревью 2026-09-07).
+      BILLING_PROVIDER: ${BILLING_PROVIDER:?set BILLING_PROVIDER=stub for staging or robokassa for prod}
       BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
       BILLING_PENDING_TIMEOUT_HOURS: ${BILLING_PENDING_TIMEOUT_HOURS:-6}
       BILLING_STUB_SETTLE_SECONDS: ${BILLING_STUB_SETTLE_SECONDS:-5}

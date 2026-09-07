@@ -120,6 +120,15 @@ describe('BillingSheet', () => {
     expect(screen.getByText(/автопродление работает только для карт/)).toBeInTheDocument();
   });
 
+  it('возврат из браузера с неоплаченным счётом не выдаёт «оплачено» за старый период', async () => {
+    // Раннее продление: подписка ACTIVE со СТАРОЙ датой, счёт ещё висит → ждём, а не поздравляем.
+    mockBilling(status({ state: 'ACTIVE', currentPeriodEnd: '2026-09-20T10:00:00Z', autopayPossible: true, pendingCheckout: true }));
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason={null} initialMode="waiting" onClose={() => {}} />);
+
+    expect(await screen.findByText('Проверяем оплату…')).toBeInTheDocument();
+    expect(screen.queryByText(/Оплачено до/)).toBeNull();
+  });
+
   it('возврат из браузера: уже погашенный счёт сразу показывает «оплачено»', async () => {
     mockBilling(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, pendingCheckout: false }));
     renderWithProviders(<BillingSheet clubId={CLUB_ID} reason={null} initialMode="waiting" onClose={() => {}} />);

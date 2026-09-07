@@ -1,5 +1,6 @@
 package com.clubs.payment
 
+import com.clubs.common.exception.ForbiddenException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -15,8 +16,11 @@ import java.util.concurrent.ConcurrentHashMap
  * Дочернее списание принимается всегда и через [settleSeconds] отвечает SUCCEEDED на опрос,
  * так что напоминания, PAST_DUE, грейс и ретраи шедулера проверяются на staging целиком.
  */
+// Без matchIfMissing: пустое или незнакомое значение billing.provider НЕ включает стаб молча —
+// бина провайдера не будет вовсе, и приложение упадёт на старте, а не начнёт раздавать подписки
+// бесплатно (ревью 2026-09-07).
 @Component
-@ConditionalOnProperty(name = ["billing.provider"], havingValue = "stub", matchIfMissing = true)
+@ConditionalOnProperty(name = ["billing.provider"], havingValue = "stub")
 class StubPaymentProvider(
     // Публичный базовый URL приложения: ссылка чекаута открывается во внешнем браузере.
     @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
@@ -46,15 +50,15 @@ class StubPaymentProvider(
         return ChargeAccepted(accepted = true)
     }
 
-    override fun trustsResultSource(clientIp: String): Boolean = true
+    /**
+     * Стаб не имеет подписи, которой можно доверять, поэтому публичный ResultURL для него закрыт:
+     * счёт подтверждается только своей страницей `/api/billing/stub/pay`. Иначе (ревью 2026-09-07)
+     * любой запрос с угаданным InvId выдавал бы подписку без денег.
+     */
+    override fun trustsResultSource(clientIp: String): Boolean = false
 
     override fun parseResultNotification(params: Map<String, String>): ResultNotification =
-        ResultNotification(
-            invId = params.getValue("InvId").toLong(),
-            amountKopecks = params.getValue("OutSum").toInt(),
-            paymentMethod = params["PaymentMethod"],
-            fee = null,
-        )
+        throw ForbiddenException("Stub provider does not accept ResultURL notifications")
 
     override fun queryState(invId: Long): PaymentStateResult {
         val acceptedAt = acceptedCharges[invId] ?: return PaymentStateResult(PaymentState.PENDING)

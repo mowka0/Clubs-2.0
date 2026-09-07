@@ -80,6 +80,10 @@ class BillingService(
         val now = OffsetDateTime.now()
 
         val payment = paymentRepository.findPendingMother(clubId, now.minusMinutes(checkoutReuseMinutes))
+            // Тот же счёт, но ползунок мог переключиться между попытками: решение владельца
+            // всегда берётся из последнего чекаута (ревью 2026-09-07).
+            ?.also { paymentRepository.updateAutopayRequested(it.id, autopay) }
+            ?.copy(autopayRequested = autopay)
             ?: paymentRepository.create(
                 clubId = clubId,
                 subscriptionId = liveSubscription(clubId)?.id,
@@ -128,13 +132,19 @@ class BillingService(
             return ResultOutcome.AMOUNT_MISMATCH
         }
         val now = OffsetDateTime.now()
-        if (paymentRepository.markSucceeded(payment.id, notification.paymentMethod, notification.fee, now) == 0) {
-            return ResultOutcome.ALREADY_SETTLED
-        }
+        // Клуб ищем ДО отметки об оплате: иначе у удалённого клуба счёт оставался бы SUCCEEDED без
+        // подписки и без единого громкого сигнала (ревью 2026-09-07).
         val club = clubRepository.findById(payment.clubId)
         if (club == null) {
-            log.warn("Billing result for a missing club: invId={} clubId={}", notification.invId, payment.clubId)
+            log.error(
+                "Оплата за удалённый клуб — нужен возврат вручную: invId={} clubId={} amountKopecks={}",
+                notification.invId, payment.clubId, payment.amountKopecks,
+            )
+            paymentRepository.markSucceeded(payment.id, notification.paymentMethod, notification.fee, now)
             return ResultOutcome.UNKNOWN_INVOICE
+        }
+        if (paymentRepository.markSucceeded(payment.id, notification.paymentMethod, notification.fee, now) == 0) {
+            return ResultOutcome.ALREADY_SETTLED
         }
 
         val subscription = when (payment.kind) {
@@ -205,7 +215,13 @@ class BillingService(
         }
         val newEnd = maxOf(now, subscription.currentPeriodEnd).plusDays(periodDays)
         subscriptionRepository.extendPeriod(subscription.id, newEnd)
-        subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.PAST_DUE), SubscriptionStatus.ACTIVE)
+        // ENDED тоже оживает: списание могло подтвердиться уже после конца грейса, и без этого
+        // перехода владелец платил бы, читал «Продлено» и продолжал получать 402 (ревью 2026-09-07).
+        subscriptionRepository.transitionStatus(
+            subscription.id,
+            listOf(SubscriptionStatus.PAST_DUE, SubscriptionStatus.ENDED),
+            SubscriptionStatus.ACTIVE,
+        )
         subscriptionRepository.resetChargeAttempts(subscription.id)
         notifier.renewed(club, newEnd)
         return subscription.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
@@ -215,7 +231,7 @@ class BillingService(
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         val link = chatLinkRepository.findByClubId(club.id)
             ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false, recipientName = recipientName)
-        val pending = paymentRepository.findPendingMother(club.id, now.minusMinutes(checkoutReuseMinutes)) != null
+        val pending = paymentRepository.hasPendingMother(club.id)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
         val state = when {
             subscription == null ->

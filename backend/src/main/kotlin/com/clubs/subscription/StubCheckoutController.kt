@@ -14,8 +14,10 @@ import java.net.URI
  * ResultURL, человек уходит на `/pay/return`. Существует только при `billing.provider=stub`
  * (dev/staging) — на проде с Robokassa бина нет, маршрут отвечает 404.
  */
+// Без matchIfMissing — см. StubPaymentProvider: неизвестное значение не должно молча открывать
+// бесплатную оплату.
 @RestController
-@ConditionalOnProperty(name = ["billing.provider"], havingValue = "stub", matchIfMissing = true)
+@ConditionalOnProperty(name = ["billing.provider"], havingValue = "stub")
 class StubCheckoutController(
     private val billingService: BillingService,
     @Value("\${billing.success-url}") private val successUrl: String,

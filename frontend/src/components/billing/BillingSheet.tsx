@@ -70,7 +70,10 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   useEffect(() => {
     if (mode !== 'waiting' || !data) return;
     if (periodEndAtStart.current === undefined) {
-      // Возврат из браузера без снимка: если счёт уже погашен и период идёт — оплата прошла.
+      // Возврат из браузера без снимка: оплата прошла, если неоплаченных счетов у клуба не
+      // осталось и период идёт. `pendingCheckout` считается по счетам ЛЮБОГО возраста (иначе
+      // раннее продление с долгой оплатой показывало бы «Оплачено» со старой датой — ревью
+      // 2026-09-07); пока счёт висит, ждём дальше.
       if (!data.pendingCheckout && data.state === 'ACTIVE') { setMode('paid'); haptic.notify('success'); }
       else periodEndAtStart.current = data.currentPeriodEnd;
       return;
