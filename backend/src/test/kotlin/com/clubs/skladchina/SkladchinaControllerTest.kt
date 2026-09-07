@@ -950,6 +950,130 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `split_bill self-paid credits the organizer and splits only the rest`() {
+        // Организатор закрыл 30000 из чека 90000 → остаток 60000 делится между A и B по 30000.
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(3))   // организатор вернулся в состав
+            .andExpect(jsonPath("$.paidCount").value(1))          // и сразу оплатившим
+            .andExpect(jsonPath("$.collectedKopecks").value(30000))
+            .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // цель — полный чек
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+            .andExpect(jsonPath("$.myDeclaredAmountKopecks").value(30000))
+        assertEquals(30000L, participantExpected(id, memberAId))
+        assertEquals(30000L, participantExpected(id, memberBId))
+        assertEquals(30000L, participantExpected(id, organizerId))
+        assertEquals("paid", participantStatus(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid in voluntary mode credits the sum but assigns no share`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "voluntary"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.collectedKopecks").value(30000))
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+        assertEquals(null, participantExpected(id, memberAId))
+        assertEquals(null, participantExpected(id, organizerId), "voluntary не назначает долю даже предоплатившему")
+        assertEquals(30000L, participantDeclared(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid allows a single payer`() {
+        // «Я заплатил 60000, ты должен 30000» — сбор на двоих, где один уже оплачен.
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 60000, "fixed_equal"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(2))
+        assertEquals(30000L, participantExpected(id, memberAId))
+        assertEquals("paid", participantStatus(id, organizerId))
+    }
+
+    @Test
+    fun `split_bill self-paid follows the usual reputation rules (owner farms nothing, payers get +10)`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal"))
+        // Оба должника платят → pending не осталось → автозакрытие с репутацией (сплит всегда важный).
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        ).andExpect(status().isOk)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberBToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("closed_success"))
+        assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberBId, id))
+        // Предоплата не даёт организатору обходного пути к очкам: владелец клуба не набирает
+        // репутацию в собственном клубе (анти-фарм правило 1), даже будучи отмеченным оплатившим.
+        assertEquals(0, ledgerRows(organizerId, id))
+    }
+
+    @Test
+    fun `split_bill rejects a bill that cannot give every payer at least a kopeck`() {
+        // Нулевая доля нарушила бы CHECK в БД — форма должна получить 400, а не 500.
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 1))
+        ).andExpect(status().isBadRequest)
+
+        // То же самое, когда почти весь счёт закрыл организатор: остаток 1 копейка на двоих.
+        val withOrganizer = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(withOrganizer, 90000, 89999, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill self-paid validation - needs excludeSelf, must be under the bill, organizer must have attended`() {
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        // без excludeSelf доля организатора посчиталась бы дважды
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal", excludeSelf = false))
+        ).andExpect(status().isBadRequest)
+
+        // взнос равен чеку — собирать нечего
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(eventId, 90000, 90000, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
+
+        // организатора нет среди пришедших — засчитывать взнос некуда
+        val withoutOrganizer = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyPrepaid(withoutOrganizer, 90000, 30000, "fixed_equal"))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     fun `split_bill always affects reputation, both modes, bypassing the important-sbor gates`() {
         // В теле нет affectsReputation, режим voluntary, дедлайн всего +2ч (для кастомного важного
         // сбора провалил бы гейт 24ч) — верифицированный якорь сплита полностью обходит гейты.
@@ -1191,6 +1315,27 @@ class SkladchinaControllerTest {
         }
         return eventId
     }
+
+    private fun splitBodyPrepaid(
+        eventId: UUID,
+        billKopecks: Long,
+        selfPaidKopecks: Long,
+        mode: String,
+        excludeSelf: Boolean = true
+    ): String = """
+        {
+          "title": "Счёт за корт",
+          "template": "split_bill",
+          "eventId": "$eventId",
+          "excludeSelf": $excludeSelf,
+          "selfPaidKopecks": $selfPaidKopecks,
+          "paymentMode": "$mode",
+          "totalGoalKopecks": $billKopecks,
+          "paymentLink": "https://pay.me",
+          "deadline": "${OffsetDateTime.now().plusDays(2)}",
+          "participants": []
+        }
+    """.trimIndent()
 
     private fun splitBody(eventId: UUID, billKopecks: Long): String =
         splitBodyMode(eventId, billKopecks, "fixed_equal")

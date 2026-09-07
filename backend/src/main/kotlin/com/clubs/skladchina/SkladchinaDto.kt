@@ -24,6 +24,11 @@ data class CreateSkladchinaRequest(
     // split_bill: исключить организатора из числа участников, с которых берут деньги (он не должен долю).
     // Режим "поровну" затем делит счёт между оставшимися участниками. Игнорируется другими шаблонами.
     val excludeSelf: Boolean = false,
+    // split_bill: сколько организатор уже внёс сам (копейки) — работает только вместе с excludeSelf.
+    // Сумма зачитывается в сбор, организатор сразу помечается оплатившим, остальные делят остаток чека.
+    // null = ничего не вносил (прежнее поведение: весь чек делится на остальных).
+    @field:Positive
+    val selfPaidKopecks: Long? = null,
 
     @field:NotNull
     val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"

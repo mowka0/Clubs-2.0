@@ -54,7 +54,10 @@ export const CreateSplitBillPage: FC = () => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(searchParams.get('eventId'));
   const [mode, setMode] = useState<'fixed_equal' | 'voluntary'>('fixed_equal');
   const [excludeSelf, setExcludeSelf] = useState(false);
+  // Сколько организатор уже закрыл своими деньгами — работает только вместе с "исключить себя".
+  const [selfPaidRub, setSelfPaidRub] = useState('');
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [billRub, setBillRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
@@ -80,9 +83,14 @@ export const CreateSplitBillPage: FC = () => {
   const organizerAttended = myId != null && attended.some((r) => r.userId === myId);
   const chargedCount = attendedCount - (excludeSelf && organizerAttended ? 1 : 0);
   const billKopecks = rubToKopecks(billRub);
-  const perPersonRub = billKopecks != null && chargedCount > 0
-    ? Math.round(billKopecks / chargedCount / 100)
+  const selfPaidKopecks = excludeSelf && organizerAttended ? rubToKopecks(selfPaidRub) : null;
+  // Взнос организатора до остальных не доезжает — поровну делится остаток чека.
+  const toSplitKopecks = billKopecks != null ? billKopecks - (selfPaidKopecks ?? 0) : null;
+  const perPersonRub = toSplitKopecks != null && toSplitKopecks > 0 && chargedCount > 0
+    ? Math.round(toSplitKopecks / chargedCount / 100)
     : null;
+  // С предоплатой сбор осмыслен и с одним должником: «я заплатил 2000, ты должен 1000».
+  const minPayers = selfPaidKopecks != null ? 1 : 2;
   const eventTitle = eventQuery.data?.title ?? '';
   const defaultTitle = eventTitle ? `Счёт: ${eventTitle}` : 'Счёт за событие';
 
@@ -100,16 +108,25 @@ export const CreateSplitBillPage: FC = () => {
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!selectedEventId) return fail('Выберите событие');
-    if (chargedCount < 2) return fail('Нужно минимум 2 участника к оплате. Отметьте явку на событии.');
+    if (chargedCount < minPayers) {
+      return fail(minPayers === 1
+        ? 'Нужен хотя бы один участник к оплате. Отметьте явку на событии.'
+        : 'Нужно минимум 2 участника к оплате. Отметьте явку на событии.');
+    }
     if (!paymentLink.trim()) return fail('Укажите платёжную ссылку');
     const total = rubToKopecks(billRub);
     if (total === null) return fail('Укажите сумму чека (₽)');
+    if (selfPaidKopecks !== null && selfPaidKopecks >= total) {
+      return fail('Ваша сумма должна быть меньше суммы чека — иначе собирать нечего');
+    }
 
     const body: CreateSkladchinaRequest = {
       title: (title.trim() || defaultTitle).slice(0, 255),
+      description: description.trim() || null,
       template: 'split_bill',
       eventId: selectedEventId,
       excludeSelf,
+      selfPaidKopecks,
       paymentMode: mode,
       totalGoalKopecks: total,
       paymentLink: paymentLink.trim(),
@@ -166,7 +183,7 @@ export const CreateSplitBillPage: FC = () => {
 
   // --- Шаг 2: форма счёта для выбранного события ---
   const attendanceLoading = eventQuery.isPending || respondersQuery.isPending;
-  const notEnoughAttended = !attendanceLoading && chargedCount < 2;
+  const notEnoughAttended = !attendanceLoading && chargedCount < minPayers;
 
   return (
     <div className="rd-page">
@@ -187,14 +204,38 @@ export const CreateSplitBillPage: FC = () => {
                 <input
                   type="checkbox"
                   checked={excludeSelf}
-                  onChange={(e) => { haptic.select(); setExcludeSelf(e.target.checked); }}
+                  onChange={(e) => {
+                    haptic.select();
+                    setExcludeSelf(e.target.checked);
+                    if (!e.target.checked) setSelfPaidRub('');
+                  }}
                 />
                 <span>Исключить себя из счёта</span>
               </label>
             )}
+            {excludeSelf && organizerAttended && (
+              <label className="rd-field" style={{ marginTop: 10 }}>
+                <span className="rd-label">Я уже внёс (₽)</span>
+                <input
+                  className="rd-input"
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  value={selfPaidRub}
+                  onChange={(e) => setSelfPaidRub(e.target.value)}
+                  placeholder="Например, 1500"
+                />
+                <span className="rd-hint">
+                  Сумма зачтётся в сбор, вас сразу отметим оплатившим, остальные разделят остаток.
+                  Можно не заполнять.
+                </span>
+              </label>
+            )}
             {notEnoughAttended && (
               <div className="rd-warn-block" style={{ marginTop: 8 }}>
-                Нужно минимум 2 участника к оплате. Отметьте явку на событии, потом делите счёт.
+                {minPayers === 1
+                  ? 'Нужен хотя бы один участник к оплате. Отметьте явку на событии, потом делите счёт.'
+                  : 'Нужно минимум 2 участника к оплате. Отметьте явку на событии, потом делите счёт.'}
               </div>
             )}
           </div>
@@ -246,6 +287,18 @@ export const CreateSplitBillPage: FC = () => {
           </label>
 
           <label className="rd-field">
+            <span className="rd-label">За что скидываемся (опц.)</span>
+            <textarea
+              className="rd-textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Например: еда и напитки на компанию, кальян не входит"
+            />
+            <span className="rd-hint">Участники увидят это в сборе и в сообщении от бота</span>
+          </label>
+
+          <label className="rd-field">
             <span className="rd-label">
               {mode === 'voluntary' ? 'Сумма чека — цель (₽)' : 'Сумма чека (₽)'} <span className="rd-req">*</span>
             </span>
@@ -258,8 +311,12 @@ export const CreateSplitBillPage: FC = () => {
               onChange={(e) => setBillRub(e.target.value)}
               placeholder="Например, 4000"
             />
-            {mode === 'fixed_equal' && perPersonRub != null && chargedCount >= 2 && (
-              <span className="rd-hint">≈ по {perPersonRub.toLocaleString('ru-RU')} ₽ с каждого ({chargedCount} чел.)</span>
+            {mode === 'fixed_equal' && perPersonRub != null && chargedCount >= minPayers && (
+              <span className="rd-hint">
+                {selfPaidKopecks != null
+                  ? `Ваши ${(selfPaidKopecks / 100).toLocaleString('ru-RU')} ₽ зачтены · остальные ≈ по ${perPersonRub.toLocaleString('ru-RU')} ₽ (${chargedCount} чел.)`
+                  : `≈ по ${perPersonRub.toLocaleString('ru-RU')} ₽ с каждого (${chargedCount} чел.)`}
+              </span>
             )}
             {mode === 'voluntary' && (
               <span className="rd-hint">Прогресс-бар заполняется до этой суммы; каждый вносит свою часть сам</span>

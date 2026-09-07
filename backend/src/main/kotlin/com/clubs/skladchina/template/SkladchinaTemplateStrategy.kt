@@ -57,4 +57,7 @@ data class TemplateResolution(
     val totalGoalKopecks: Long?,
     val participants: List<Pair<UUID, Long?>>,   // (userId, expectedAmountKopecks)
     val eventId: UUID? = null,
+    // Часть суммы, которую организатор закрыл своими деньгами ещё до сбора (split_bill + excludeSelf).
+    // Движок сразу помечает его оплатившим на эту сумму; null = обычный сбор, все стартуют pending.
+    val prepaidByCreatorKopecks: Long? = null,
 )

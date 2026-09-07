@@ -849,6 +849,7 @@ export interface CreateSkladchinaRequest {
   template?: SkladchinaTemplate;          // по умолчанию "custom" на сервере
   eventId?: string | null;                // split_bill: исходное событие
   excludeSelf?: boolean;                  // split_bill: исключить организатора из тех, с кого берут деньги
+  selfPaidKopecks?: number | null;        // split_bill + excludeSelf: сколько организатор внёс сам (зачтётся в сбор)
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;
