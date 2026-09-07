@@ -43,11 +43,11 @@
 | `geo` (`SuggestService`, `CityCenterRepository` → подсказки; `GeocoderService` → гео события) | `venue-search.md`, `event-geo.md` |
 | `interest` | `club-interests.md` |
 | `membership` | `membership.md`, `membership-lifecycle.md` |
-| `payment` | `payment.md`, `payment-v2.md` |
+| `payment` | `payment.md`, `platform-billing.md` (сеам `PaymentProvider`, адаптер Robokassa); `payment-v2.md` — superseded |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
 | `skladchina` | `skladchina.md` |
 | `storage` | `infrastructure.md` |
-| `subscription` | `payment-v2.md`, `membership-lifecycle.md` |
+| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи), `membership-lifecycle.md`; `payment-v2.md` — superseded |
 | `user` | `profile.md`, `profile-quest.md` |
 
 **Миграции** `backend/src/main/resources/db/migration/` → спека модуля, чью таблицу трогает,
@@ -142,7 +142,8 @@
 | Файл | О чём | Правлен |
 |---|---|---|
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
-| `payment-v2.md` | монетизация v2, подписка организатора | 2026-07-07 |
+| `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
+| `platform-billing.md` | **биллинг платформы за чат**: первая встреча бесплатно, 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания (спека Дня 4) | 2026-09-07 |
 
 ### Пользователь и вход
 | Файл | О чём | Правлен |
@@ -185,7 +186,8 @@
 | `sprint-1.0-chat-pivot.md` | **действующий план**: разворот на плагин к чату, гейты, финмодель |
 | `market-analysis-and-product-strategy-2026-07.md` | анализ рынка, конкуренты (в силе) |
 | `strategy-simple-summary-2026-07.md` | краткая версия стратегии (в силе) |
-| `payment-monetization-v2.md` | модель монетизации |
+| `monetization-v3-research-2026-09.md` | **финмодель, действующая** (2026-09-07): исследование 24 моделей + решения PO § 8 — первая встреча бесплатно, дальше 199 ₽/мес за чат, провайдер на самозанятого, ползунок автосписания; заменяет `payment-v2.md` |
+| `payment-monetization-v2.md` | модель монетизации (июнь 2026; юр-факты частично устарели — см. v3 § 2.2) |
 | `telegram-constraints.md` | ограничения платформы Telegram — **читать перед любой чат-фичей** |
 | `stack.md` | технологический стек, справочник |
 
