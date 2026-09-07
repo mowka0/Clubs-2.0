@@ -18,7 +18,29 @@ data class SkladchinaParticipant(
     val declineNote: String?,
     val declineRequestedAt: OffsetDateTime?,
     val declineRejected: Boolean,
+    // V89: сверка оплаты организатором. `paid` = «заявил», дальше организатор при закрытии
+    // засчитывает (payment_confirmed) или не находит платёж (payment_rejected). У отклонённого
+    // есть окно на чек: приложил (payment_disputed) — списание ждёт решения организатора.
+    val paymentConfirmedAt: OffsetDateTime? = null,
+    val paymentRejectedAt: OffsetDateTime? = null,
+    val paymentRejectNote: String? = null,
+    val receiptUrl: String? = null,
+    val receiptNote: String? = null,
+    val disputedAt: OffsetDateTime? = null,
+    val disputeTerminal: Boolean = false,
     val createdAt: OffsetDateTime
+)
+
+/**
+ * «Деньги за участника засчитаны». До закрытия под предикат попадают заявленные оплаты, после
+ * закрытия — только подтверждённые организатором: `paid` живёт лишь пока сбор идёт, при закрытии
+ * каждая заявка становится `payment_confirmed` либо `payment_rejected`. Один и тот же предикат
+ * поэтому даёт и «сколько заявлено» по ходу сбора, и «сколько реально дошло» после него —
+ * прогресс-бар, собранная сумма, статистика клуба и живой статус в чате считают по нему.
+ */
+val PAID_LIKE_STATUSES: Set<SkladchinaParticipantStatus> = setOf(
+    SkladchinaParticipantStatus.paid,
+    SkladchinaParticipantStatus.payment_confirmed
 )
 
 /**
@@ -30,6 +52,8 @@ data class MySkladchinaFeedItem(
     val clubName: String,
     val clubAvatarUrl: String?,
     val myStatus: SkladchinaParticipantStatus?,    // null, если пользователь создатель, но не участник
+    // V89: когда организатор не нашёл мой платёж — по нему считается окно на чек в ленте.
+    val myPaymentRejectedAt: OffsetDateTime? = null,
     val collectedKopecks: Long,
     val participantCount: Int,
     val paidCount: Int
@@ -50,5 +74,12 @@ data class SkladchinaParticipantInfo(
     val declineNote: String?,
     val declineRequestedAt: OffsetDateTime?,
     val declineRejected: Boolean,
-    val declineRejectNote: String?
+    val declineRejectNote: String?,
+    // V89: сверка оплат — организатор видит, кого он отклонил и что тот прислал в ответ.
+    val paymentRejectedAt: OffsetDateTime? = null,
+    val paymentRejectNote: String? = null,
+    val receiptUrl: String? = null,
+    val receiptNote: String? = null,
+    val disputedAt: OffsetDateTime? = null,
+    val disputeTerminal: Boolean = false
 )

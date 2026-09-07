@@ -82,6 +82,29 @@ data class ResolveDeclineRequest(
     val rejectReason: String? = null
 )
 
+// V89: сверка оплат при закрытии. Присылаем ОТКЛОНЁННЫХ, а не подтверждённых: если участник
+// заявит оплату между загрузкой списка и отправкой, он попадёт в подтверждённые — ошибка в
+// пользу участника там, где на другой чаше −40. rejectNotes — необязательные причины по каждому.
+data class ConfirmPaymentsRequest(
+    val rejectedUserIds: List<UUID> = emptyList(),
+    val rejectNotes: Map<UUID, String> = emptyMap()
+)
+
+// V89: участник оспаривает отклонение чеком. Спорить «на словах» нельзя — фото или скриншот
+// обязателен и обязан быть ссылкой нашего загрузчика (проверяется в сервисе).
+data class DisputePaymentRequest(
+    @field:NotBlank @field:Size(max = 500)
+    val receiptUrl: String,
+    @field:Size(max = 500)
+    val note: String? = null
+)
+
+// V89: организатор решает спор по чеку. true — деньги сошлись (+10), false — платежа нет (−40).
+data class ResolvePaymentRequest(
+    @field:NotNull
+    val accept: Boolean
+)
+
 data class SkladchinaDetailDto(
     val id: UUID,
     val clubId: UUID,
@@ -112,7 +135,8 @@ data class SkladchinaDetailDto(
     val closedAt: OffsetDateTime?,
 
     val isOrganizerView: Boolean,                  // вызывающий == создатель
-    val myStatus: String?,                         // pending|paid|declined|expired_no_response|released или null
+    // pending|paid|declined|expired_no_response|released|payment_confirmed|payment_rejected|payment_disputed
+    val myStatus: String?,
     val myExpectedAmountKopecks: Long?,
     val myDeclaredAmountKopecks: Long?,
 
@@ -121,6 +145,13 @@ data class SkladchinaDetailDto(
     val myDeclineRequested: Boolean,               // у вызывающего открытый запрос на отказ, ждёт организатора
     val myDeclineRejected: Boolean,                // отказ вызывающего отклонён — должен заплатить
     val myDeclineRejectNote: String?,              // V29: причина организатора для отклонения отказа
+
+    // V89 сверка оплат
+    val awaitingConfirmation: Boolean,             // сбор дождался всех/срока и ждёт сверки организатором
+    val myPaymentRejectNote: String?,              // почему организатор не засчитал платёж вызывающего
+    val myReceiptUrl: String?,                     // чек, который вызывающий приложил к спору
+    val myDisputeDeadline: OffsetDateTime?,        // до какого момента можно прислать чек (48 ч)
+    val myDisputeTerminal: Boolean,                // организатор рассмотрел чек и отказал — спорить больше нельзя
 
     val participants: List<SkladchinaParticipantDto>?,   // не-null ТОЛЬКО для организатора
     val participantCount: Int,
@@ -156,7 +187,13 @@ data class SkladchinaParticipantDto(
     val declineRequested: Boolean,
     val declineNote: String?,
     val declineRejected: Boolean,
-    val declineRejectNote: String?                 // V29: причина организатора, если отказ отклонён
+    val declineRejectNote: String?,                // V29: причина организатора, если отказ отклонён
+    // V89: что видит организатор про сверку по этому участнику.
+    val paymentRejectNote: String?,
+    val receiptUrl: String?,
+    val receiptNote: String?,
+    val disputedAt: OffsetDateTime?,
+    val disputeTerminal: Boolean
 )
 
 data class MySkladchinaListItemDto(

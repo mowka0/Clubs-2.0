@@ -755,7 +755,13 @@ export type SkladchinaParticipantStatus =
   | 'expired_no_response'
   // Складчина закрыта до дедлайна, пока участник ещё был в статусе pending:
   // обязательство не было нарушено, запись в репутацию не создаётся.
-  | 'released';
+  | 'released'
+  // V89: организатор сверил деньги при закрытии — платёж дошёл (+10).
+  | 'payment_confirmed'
+  // V89: организатор платежа не нашёл. −40 ждёт: у участника 48 часов, чтобы прислать чек.
+  | 'payment_rejected'
+  // V89: чек отправлен, решение за организатором — списание заморожено.
+  | 'payment_disputed';
 
 export interface SkladchinaParticipantDto {
   userId: string;
@@ -771,6 +777,12 @@ export interface SkladchinaParticipantDto {
   declineNote: string | null;
   declineRejected: boolean;
   declineRejectNote: string | null;       // V29: причина организатора, если отказ был отклонён
+  // V89: сверка оплат (вид организатора)
+  paymentRejectNote: string | null;
+  receiptUrl: string | null;
+  receiptNote: string | null;
+  disputedAt: string | null;
+  disputeTerminal: boolean;
 }
 
 export interface SkladchinaDetailDto {
@@ -806,6 +818,12 @@ export interface SkladchinaDetailDto {
   myDeclineRequested: boolean;
   myDeclineRejected: boolean;
   myDeclineRejectNote: string | null;     // V29: причина организатора, почему отклонил мой отказ
+  // V89: сверка оплат организатором
+  awaitingConfirmation: boolean;          // сбор дождался всех/срока и ждёт сверки — платить уже поздно
+  myPaymentRejectNote: string | null;     // почему организатор не засчитал мой платёж
+  myReceiptUrl: string | null;            // мой чек, приложенный к спору
+  myDisputeDeadline: string | null;       // до какого момента можно прислать чек (48 ч)
+  myDisputeTerminal: boolean;             // организатор рассмотрел чек и отказал — спорить больше нельзя
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;

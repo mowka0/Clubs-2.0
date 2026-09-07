@@ -29,13 +29,13 @@ open class ClubInterestsRecord private constructor() : UpdatableRecordImpl<ClubI
         set(value): Unit = set(1, value)
         get(): UUID = get(1) as UUID
 
-    open var createdAt: OffsetDateTime?
-        set(value): Unit = set(2, value)
-        get(): OffsetDateTime? = get(2) as OffsetDateTime?
-
     open var position: Short
+        set(value): Unit = set(2, value)
+        get(): Short = get(2) as Short
+
+    open var createdAt: OffsetDateTime?
         set(value): Unit = set(3, value)
-        get(): Short = get(3) as Short
+        get(): OffsetDateTime? = get(3) as OffsetDateTime?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -46,11 +46,11 @@ open class ClubInterestsRecord private constructor() : UpdatableRecordImpl<ClubI
     /**
      * Create a detached, initialised ClubInterestsRecord
      */
-    constructor(clubId: UUID, interestId: UUID, createdAt: OffsetDateTime? = null, position: Short): this() {
+    constructor(clubId: UUID, interestId: UUID, position: Short, createdAt: OffsetDateTime? = null): this() {
         this.clubId = clubId
         this.interestId = interestId
-        this.createdAt = createdAt
         this.position = position
+        this.createdAt = createdAt
         resetChangedOnNotNull()
     }
 
@@ -61,8 +61,8 @@ open class ClubInterestsRecord private constructor() : UpdatableRecordImpl<ClubI
         if (value != null) {
             this.clubId = value.clubId
             this.interestId = value.interestId
-            this.createdAt = value.createdAt
             this.position = value.position
+            this.createdAt = value.createdAt
             resetChangedOnNotNull()
         }
     }

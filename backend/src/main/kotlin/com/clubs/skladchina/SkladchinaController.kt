@@ -134,6 +134,53 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.organizerUnmarkPaid(id, user.userId, userId))
     }
 
+    // V89: участник снимает СВОЮ отметку об оплате (ошибочный тап), пока сбор идёт.
+    @PostMapping("/api/skladchinas/{id}/unmark-paid")
+    fun unmarkOwnPayment(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina self-unmark: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(paymentService.unmarkOwnPayment(id, user.userId))
+    }
+
+    // V89: организатор сверил деньги списком и закрывает сбор. rejectedUserIds — те, от кого платёж
+    // не дошёл; у них будет окно на чек.
+    @PostMapping("/api/skladchinas/{id}/confirm-payments")
+    fun confirmPayments(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: ConfirmPaymentsRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina confirm-payments: id={} by={} rejected={}", id, user.userId, request.rejectedUserIds.size)
+        return ResponseEntity.ok(
+            lifecycleService.confirmAndClose(id, user.userId, request.rejectedUserIds.toSet(), request.rejectNotes)
+        )
+    }
+
+    // V89: участник оспаривает отклонение оплаты, приложив фото или скриншот чека.
+    @PostMapping("/api/skladchinas/{id}/dispute-payment")
+    fun disputePayment(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: DisputePaymentRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina dispute-payment: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(paymentService.disputePayment(id, user.userId, request.receiptUrl, request.note))
+    }
+
+    // V89: организатор разбирает присланный чек — засчитать оплату или отказать окончательно.
+    @PostMapping("/api/skladchinas/{id}/participants/{userId}/resolve-payment")
+    fun resolvePaymentDispute(
+        @PathVariable id: UUID,
+        @PathVariable userId: UUID,
+        @RequestBody @Valid request: ResolvePaymentRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina resolve-payment: id={} target={} by={} accept={}", id, userId, user.userId, request.accept)
+        return ResponseEntity.ok(paymentService.resolvePaymentDispute(id, user.userId, userId, request.accept))
+    }
+
     @PostMapping("/api/skladchinas/{id}/close")
     fun close(
         @PathVariable id: UUID,

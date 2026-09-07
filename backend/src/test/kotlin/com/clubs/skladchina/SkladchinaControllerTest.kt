@@ -26,6 +26,8 @@ import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -66,6 +68,7 @@ class SkladchinaControllerTest {
     @Autowired lateinit var objectMapper: ObjectMapper
     @Autowired lateinit var lifecycleService: SkladchinaLifecycleService
     @Autowired lateinit var skladchinaRepository: SkladchinaRepository
+    @Autowired lateinit var scheduler: SkladchinaScheduler
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
     private lateinit var organizerId: UUID
@@ -260,9 +263,9 @@ class SkladchinaControllerTest {
     }
 
     @Test
-    fun `all-answered triggers auto-close to closed_success`() {
-        // Цель = 100, два участника fixed_equal → по 50. Оба платят → pending не осталось → закрыт.
-        // (Phase A: закрытие по «все ответили», а не по достижению цели — см. тест ниже.)
+    fun `all-answered waits for the organizer to confirm the money, then closes`() {
+        // V89: «все ответили» больше НЕ закрывает сбор — деньги сверяет организатор.
+        // Цель = 100, два участника fixed_equal → по 50. Оба платят → сбор ждёт сверки.
         val id = createSkladchina(listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -278,7 +281,12 @@ class SkladchinaControllerTest {
                 .content("{}")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value("closed_success"))
+            .andExpect(jsonPath("$.status").value("active"))
+            .andExpect(jsonPath("$.awaitingConfirmation").value(true))
+
+        confirmAndClose(id)
+        assertEquals("closed_success", skladchinaStatus(id))
+        assertEquals("payment_confirmed", participantStatus(id, memberAId))
     }
 
     @Test
@@ -748,7 +756,7 @@ class SkladchinaControllerTest {
     @Test
     fun `organizer mark-paid in an important skladchina accrues +10 at close (org vouches)`() {
         val id = createRepSkladchina(listOf(memberAId, memberBId)) // fixed_equal, affectsReputation
-        // Организатор отмечает ОБОИХ оплатившими (наличные) → pending не осталось → раннее автозакрытие → +10 каждому.
+        // Организатор отмечает ОБОИХ оплатившими (наличные), затем сверяет деньги и закрывает → +10 каждому.
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
                 .header("Authorization", "Bearer $organizerToken")
@@ -756,9 +764,9 @@ class SkladchinaControllerTest {
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberBId/mark-paid")
                 .header("Authorization", "Bearer $organizerToken")
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value("closed_success"))
+        ).andExpect(status().isOk)
+        confirmAndClose(id)
+        assertEquals("closed_success", skladchinaStatus(id))
         assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
         assertEquals(10, soleLedgerPoints(memberAId, id))
         assertEquals(10, soleLedgerPoints(memberBId, id))
@@ -1088,7 +1096,7 @@ class SkladchinaControllerTest {
     fun `split_bill self-paid follows the usual reputation rules (owner farms nothing, payers get +10)`() {
         val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
         val id = createFromBody(splitBodyPrepaid(eventId, 90000, 30000, "fixed_equal"))
-        // Оба должника платят → pending не осталось → автозакрытие с репутацией (сплит всегда важный).
+        // Оба должника платят, организатор сверяет деньги и закрывает → репутация (сплит всегда важный).
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -1100,9 +1108,9 @@ class SkladchinaControllerTest {
                 .header("Authorization", "Bearer $memberBToken")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}")
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value("closed_success"))
+        ).andExpect(status().isOk)
+        confirmAndClose(id)
+        assertEquals("closed_success", skladchinaStatus(id))
         assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
         assertEquals(10, soleLedgerPoints(memberAId, id))
         assertEquals(10, soleLedgerPoints(memberBId, id))
@@ -1219,11 +1227,12 @@ class SkladchinaControllerTest {
     fun `split_bill blocks a new collection after a successful close`() {
         val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
         val id = createFromBody(splitBody(eventId, 90000))
-        // Оба платят → все ответили → автозакрытие в closed_success.
+        // Оба платят, организатор сверяет деньги и закрывает сбор.
         mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberAToken")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk)
         mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberBToken")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk)
+        confirmAndClose(id)
         assertEquals("closed_success", skladchinaStatus(id))
 
         mockMvc.perform(
@@ -1561,6 +1570,222 @@ class SkladchinaControllerTest {
         dsl.select(REPUTATION_LEDGER.POINTS).from(REPUTATION_LEDGER)
             .where(REPUTATION_LEDGER.USER_ID.eq(userId).and(REPUTATION_LEDGER.SOURCE_ID.eq(sourceId)))
             .fetchOne(REPUTATION_LEDGER.POINTS)!!
+
+    // --- V89: сверка оплат организатором (docs/modules/skladchina.md) ---
+
+    @Test
+    fun `organizer rejects one payment at close — that participant gets no plus and no penalty yet`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        markPaidBy(id, memberBToken)
+
+        confirmAndClose(id, rejected = listOf(memberBId))
+
+        assertEquals("payment_confirmed", participantStatus(id, memberAId))
+        assertEquals("payment_rejected", participantStatus(id, memberBId))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+        // Минус ждёт: у отклонённого есть 48 часов на чек.
+        assertEquals(0, ledgerRows(memberBId, id))
+        // Деньги отклонённого не считаются собранными.
+        assertEquals(50000L, collectedKopecks(id))
+    }
+
+    @Test
+    fun `rejected participant disputes with a receipt and the organizer accepts it`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        markPaidBy(id, memberBToken)
+        confirmAndClose(id, rejected = listOf(memberBId))
+
+        disputeBy(id, memberBToken).andExpect(status().isOk)
+        assertEquals("payment_disputed", participantStatus(id, memberBId))
+        assertEquals(0, ledgerRows(memberBId, id))
+
+        resolvePayment(id, memberBId, accept = true).andExpect(status().isOk)
+        assertEquals("payment_confirmed", participantStatus(id, memberBId))
+        assertEquals(10, soleLedgerPoints(memberBId, id))
+    }
+
+    @Test
+    fun `organizer rejects the receipt — penalty applies and a second dispute is refused`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        markPaidBy(id, memberBToken)
+        confirmAndClose(id, rejected = listOf(memberBId))
+        disputeBy(id, memberBToken).andExpect(status().isOk)
+
+        resolvePayment(id, memberBId, accept = false).andExpect(status().isOk)
+        assertEquals("payment_rejected", participantStatus(id, memberBId))
+        assertEquals(ReputationKind.skladchina_expired, soleLedgerKind(memberBId, id))
+        assertEquals(-40, soleLedgerPoints(memberBId, id))
+
+        // Точка поставлена — пинг-понг спорами невозможен.
+        disputeBy(id, memberBToken).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `a dispute needs a receipt from our own uploader`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberBToken)
+        confirmAndClose(id, rejected = listOf(memberBId))
+
+        // Чужой хост и javascript: одинаково отвергаются — чек открывается организатором как ссылка.
+        disputeBy(id, memberBToken, receiptUrl = "https://evil.example/uploads/x.jpg")
+            .andExpect(status().isBadRequest)
+        disputeBy(id, memberBToken, receiptUrl = "javascript:alert(1)")
+            .andExpect(status().isBadRequest)
+        assertEquals("payment_rejected", participantStatus(id, memberBId))
+    }
+
+    @Test
+    fun `an unchallenged rejection turns into the penalty once the receipt window closes`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberBToken)
+        confirmAndClose(id, rejected = listOf(memberBId))
+
+        // Окно на чек истекло.
+        dsl.execute(
+            "UPDATE skladchina_participants SET payment_rejected_at = NOW() - INTERVAL '49 hours' " +
+                "WHERE skladchina_id = ? AND user_id = ?", id, memberBId
+        )
+        scheduler.finalizeOverduePaymentOutcomes()
+        assertEquals(-40, soleLedgerPoints(memberBId, id))
+
+        // Повторный проход не удваивает штраф.
+        scheduler.finalizeOverduePaymentOutcomes()
+        assertEquals(1, ledgerRows(memberBId, id))
+    }
+
+    @Test
+    fun `a dispute the organizer never resolves expires neutrally`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberBToken)
+        confirmAndClose(id, rejected = listOf(memberBId))
+        disputeBy(id, memberBToken).andExpect(status().isOk)
+
+        dsl.execute(
+            "UPDATE skladchina_participants SET disputed_at = NOW() - INTERVAL '8 days' " +
+                "WHERE skladchina_id = ? AND user_id = ?", id, memberBId
+        )
+        scheduler.finalizeOverduePaymentOutcomes()
+
+        // Участник прислал доказательство — вины за ним нет, наказывать не за что.
+        assertEquals("released", participantStatus(id, memberBId))
+        assertEquals(0, ledgerRows(memberBId, id))
+    }
+
+    @Test
+    fun `a collection the organizer never confirms closes neutrally for everyone`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)   // memberB молчит
+
+        dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '8 days' WHERE id = ?", id)
+        scheduler.closeAbandoned()
+
+        assertNotEquals("active", skladchinaStatus(id))
+        // Ни плюсов заплатившему, ни минуса промолчавшему: цена отсутствия организатора не
+        // перекладывается на участников.
+        assertEquals(0, ledgerRows(memberAId, id))
+        assertEquals(0, ledgerRows(memberBId, id))
+        assertEquals("released", participantStatus(id, memberBId))
+    }
+
+    @Test
+    fun `the organizer is invited to confirm exactly once`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        markPaidBy(id, memberBToken)
+
+        scheduler.requestPaymentConfirmations()
+        val firstStamp = confirmationRequestedAt(id)
+        assertNotNull(firstStamp)
+
+        scheduler.requestPaymentConfirmations()
+        assertEquals(firstStamp, confirmationRequestedAt(id))
+    }
+
+    @Test
+    fun `a participant can unmark their own payment before the deadline but not after`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/unmark-paid").header("Authorization", "Bearer $memberAToken")
+        ).andExpect(status().isOk)
+        assertEquals("pending", participantStatus(id, memberAId))
+
+        markPaidBy(id, memberAToken)
+        dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '1 hour' WHERE id = ?", id)
+        // После срока состав заявок должен быть стабильным — иначе организатор сверяет один
+        // список, а закрывает другой.
+        mockMvc.perform(
+            post("/api/skladchinas/$id/unmark-paid").header("Authorization", "Bearer $memberAToken")
+        ).andExpect(status().isBadRequest)
+        assertEquals("paid", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `only the organizer or a club manager can confirm payments`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/confirm-payments")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"rejectedUserIds": []}""")
+        ).andExpect(status().isForbidden)
+        assertEquals("active", skladchinaStatus(id))
+    }
+
+    private fun markPaidBy(skladchinaId: UUID, token: String) {
+        mockMvc.perform(
+            post("/api/skladchinas/$skladchinaId/mark-paid")
+                .header("Authorization", "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        ).andExpect(status().isOk)
+    }
+
+    /** Чек участника: ссылка нашего загрузчика (в тестовом профиле s3.base-url непустой). */
+    private fun disputeBy(
+        skladchinaId: UUID,
+        token: String,
+        receiptUrl: String = "http://localhost:9000/test-bucket/uploads/receipt.jpg"
+    ) = mockMvc.perform(
+        post("/api/skladchinas/$skladchinaId/dispute-payment")
+            .header("Authorization", "Bearer $token")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""{"receiptUrl": "$receiptUrl"}""")
+    )
+
+    private fun resolvePayment(skladchinaId: UUID, targetUserId: UUID, accept: Boolean) =
+        mockMvc.perform(
+            post("/api/skladchinas/$skladchinaId/participants/$targetUserId/resolve-payment")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"accept": $accept}""")
+        )
+
+    private fun collectedKopecks(skladchinaId: UUID): Long =
+        skladchinaRepository.sumCollectedKopecks(skladchinaId)
+
+    private fun confirmationRequestedAt(skladchinaId: UUID): java.time.OffsetDateTime? =
+        skladchinaRepository.findById(skladchinaId)?.confirmationRequestedAt
+
+    /**
+     * V89: организатор сверяет деньги и закрывает сбор. [rejected] — те, чей платёж он не нашёл;
+     * пустой список = подтвердить всех заявивших.
+     */
+    private fun confirmAndClose(skladchinaId: UUID, rejected: List<UUID> = emptyList()) {
+        val ids = rejected.joinToString(", ") { "\"$it\"" }
+        mockMvc.perform(
+            post("/api/skladchinas/$skladchinaId/confirm-payments")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"rejectedUserIds": [$ids]}""")
+        ).andExpect(status().isOk)
+    }
 
     private fun createSkladchina(participantIds: List<UUID>): UUID =
         createFromBody(createBodyFor(participantIds))

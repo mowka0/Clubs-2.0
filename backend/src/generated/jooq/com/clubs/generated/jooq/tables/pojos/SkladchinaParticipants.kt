@@ -29,7 +29,14 @@ data class SkladchinaParticipants(
     var declineNote: String? = null,
     var declineRequestedAt: OffsetDateTime? = null,
     var declineRejected: Boolean? = null,
-    var declineRejectNote: String? = null
+    var declineRejectNote: String? = null,
+    var paymentConfirmedAt: OffsetDateTime? = null,
+    var paymentRejectedAt: OffsetDateTime? = null,
+    var paymentRejectNote: String? = null,
+    var receiptUrl: String? = null,
+    var receiptNote: String? = null,
+    var disputedAt: OffsetDateTime? = null,
+    var disputeTerminal: Boolean? = null
 ): Serializable {
 
 
@@ -111,6 +118,48 @@ data class SkladchinaParticipants(
         }
         else if (this.declineRejectNote != o.declineRejectNote)
             return false
+        if (this.paymentConfirmedAt == null) {
+            if (o.paymentConfirmedAt != null)
+                return false
+        }
+        else if (this.paymentConfirmedAt != o.paymentConfirmedAt)
+            return false
+        if (this.paymentRejectedAt == null) {
+            if (o.paymentRejectedAt != null)
+                return false
+        }
+        else if (this.paymentRejectedAt != o.paymentRejectedAt)
+            return false
+        if (this.paymentRejectNote == null) {
+            if (o.paymentRejectNote != null)
+                return false
+        }
+        else if (this.paymentRejectNote != o.paymentRejectNote)
+            return false
+        if (this.receiptUrl == null) {
+            if (o.receiptUrl != null)
+                return false
+        }
+        else if (this.receiptUrl != o.receiptUrl)
+            return false
+        if (this.receiptNote == null) {
+            if (o.receiptNote != null)
+                return false
+        }
+        else if (this.receiptNote != o.receiptNote)
+            return false
+        if (this.disputedAt == null) {
+            if (o.disputedAt != null)
+                return false
+        }
+        else if (this.disputedAt != o.disputedAt)
+            return false
+        if (this.disputeTerminal == null) {
+            if (o.disputeTerminal != null)
+                return false
+        }
+        else if (this.disputeTerminal != o.disputeTerminal)
+            return false
         return true
     }
 
@@ -130,6 +179,13 @@ data class SkladchinaParticipants(
         result = prime * result + (if (this.declineRequestedAt == null) 0 else this.declineRequestedAt.hashCode())
         result = prime * result + (if (this.declineRejected == null) 0 else this.declineRejected.hashCode())
         result = prime * result + (if (this.declineRejectNote == null) 0 else this.declineRejectNote.hashCode())
+        result = prime * result + (if (this.paymentConfirmedAt == null) 0 else this.paymentConfirmedAt.hashCode())
+        result = prime * result + (if (this.paymentRejectedAt == null) 0 else this.paymentRejectedAt.hashCode())
+        result = prime * result + (if (this.paymentRejectNote == null) 0 else this.paymentRejectNote.hashCode())
+        result = prime * result + (if (this.receiptUrl == null) 0 else this.receiptUrl.hashCode())
+        result = prime * result + (if (this.receiptNote == null) 0 else this.receiptNote.hashCode())
+        result = prime * result + (if (this.disputedAt == null) 0 else this.disputedAt.hashCode())
+        result = prime * result + (if (this.disputeTerminal == null) 0 else this.disputeTerminal.hashCode())
         return result
     }
 
@@ -149,6 +205,13 @@ data class SkladchinaParticipants(
         sb.append(", ").append(declineRequestedAt)
         sb.append(", ").append(declineRejected)
         sb.append(", ").append(declineRejectNote)
+        sb.append(", ").append(paymentConfirmedAt)
+        sb.append(", ").append(paymentRejectedAt)
+        sb.append(", ").append(paymentRejectNote)
+        sb.append(", ").append(receiptUrl)
+        sb.append(", ").append(receiptNote)
+        sb.append(", ").append(disputedAt)
+        sb.append(", ").append(disputeTerminal)
 
         sb.append(")")
         return sb.toString()

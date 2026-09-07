@@ -6,6 +6,8 @@ package com.clubs.generated.jooq.tables
 
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
+import com.clubs.generated.jooq.indexes.IDX_SKLADCHINA_PARTICIPANTS_DISPUTED_AT
+import com.clubs.generated.jooq.indexes.IDX_SKLADCHINA_PARTICIPANTS_PAYMENT_REJECTED_AT
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINA_PARTICIPANTS_USER_ID
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS_PKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY
@@ -181,6 +183,58 @@ open class SkladchinaParticipants(
      */
     val DECLINE_REJECT_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("decline_reject_note"), SQLDataType.CLOB, this, "Обоснование организатора при отклонении запроса на отказ; участник видит его на странице сбора и в DM (NULL = нет).")
 
+    /**
+     * The column
+     * <code>public.skladchina_participants.payment_confirmed_at</code>. Когда
+     * организатор сверил платёж с выпиской и засчитал его (статус
+     * payment_confirmed).
+     */
+    val PAYMENT_CONFIRMED_AT: TableField<SkladchinaParticipantsRecord, OffsetDateTime?> = createField(DSL.name("payment_confirmed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор сверил платёж с выпиской и засчитал его (статус payment_confirmed).")
+
+    /**
+     * The column
+     * <code>public.skladchina_participants.payment_rejected_at</code>. Когда
+     * организатор не нашёл платёж (статус payment_rejected). Начало 48-часового
+     * окна на чек: молчание после него = −40.
+     */
+    val PAYMENT_REJECTED_AT: TableField<SkladchinaParticipantsRecord, OffsetDateTime?> = createField(DSL.name("payment_rejected_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор не нашёл платёж (статус payment_rejected). Начало 48-часового окна на чек: молчание после него = −40.")
+
+    /**
+     * The column
+     * <code>public.skladchina_participants.payment_reject_note</code>.
+     * Необязательная причина организатора, почему платёж не засчитан («в
+     * выписке 833 ₽ от вас нет»). Видна отклонённому участнику.
+     */
+    val PAYMENT_REJECT_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("payment_reject_note"), SQLDataType.CLOB, this, "Необязательная причина организатора, почему платёж не засчитан («в выписке 833 ₽ от вас нет»). Видна отклонённому участнику.")
+
+    /**
+     * The column <code>public.skladchina_participants.receipt_url</code>. Чек
+     * участника (фото или скриншот из банка) — обязателен для спора: спорить
+     * без чека нельзя.
+     */
+    val RECEIPT_URL: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("receipt_url"), SQLDataType.VARCHAR(500), this, "Чек участника (фото или скриншот из банка) — обязателен для спора: спорить без чека нельзя.")
+
+    /**
+     * The column <code>public.skladchina_participants.receipt_note</code>.
+     * Необязательный комментарий участника к чеку («перевела 833 ₽ 3 сентября в
+     * 21:10»).
+     */
+    val RECEIPT_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("receipt_note"), SQLDataType.CLOB, this, "Необязательный комментарий участника к чеку («перевела 833 ₽ 3 сентября в 21:10»).")
+
+    /**
+     * The column <code>public.skladchina_participants.disputed_at</code>. Когда
+     * участник приложил чек (статус payment_disputed). Списание заморожено,
+     * пока спор открыт; неразобранный неделю спор закрывается нейтрально.
+     */
+    val DISPUTED_AT: TableField<SkladchinaParticipantsRecord, OffsetDateTime?> = createField(DSL.name("disputed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда участник приложил чек (статус payment_disputed). Списание заморожено, пока спор открыт; неразобранный неделю спор закрывается нейтрально.")
+
+    /**
+     * The column <code>public.skladchina_participants.dispute_terminal</code>.
+     * Организатор рассмотрел чек и платёж не подтвердил — повторно оспорить
+     * нельзя.
+     */
+    val DISPUTE_TERMINAL: TableField<SkladchinaParticipantsRecord, Boolean?> = createField(DSL.name("dispute_terminal"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Организатор рассмотрел чек и платёж не подтвердил — повторно оспорить нельзя.")
+
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -215,7 +269,7 @@ open class SkladchinaParticipants(
         override fun `as`(alias: Table<*>): SkladchinaParticipantsPath = SkladchinaParticipantsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_SKLADCHINA_PARTICIPANTS_USER_ID)
+    override fun getIndexes(): List<Index> = listOf(IDX_SKLADCHINA_PARTICIPANTS_DISPUTED_AT, IDX_SKLADCHINA_PARTICIPANTS_PAYMENT_REJECTED_AT, IDX_SKLADCHINA_PARTICIPANTS_USER_ID)
     override fun getPrimaryKey(): UniqueKey<SkladchinaParticipantsRecord> = SKLADCHINA_PARTICIPANTS_PKEY
     override fun getReferences(): List<ForeignKey<SkladchinaParticipantsRecord, *>> = listOf(SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY, SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_USER_ID_FKEY)
 

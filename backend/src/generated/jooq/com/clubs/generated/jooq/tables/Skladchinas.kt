@@ -238,6 +238,13 @@ open class Skladchinas(
      */
     val EVENT_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("event_id"), SQLDataType.UUID, this, "Событие-источник для template = split_bill — чей счёт делим (FK events.id). NULL для остальных шаблонов.")
 
+    /**
+     * The column <code>public.skladchinas.confirmation_requested_at</code>.
+     * Когда организатору ушёл DM «сбор завершён, сверьте деньги». Штамп
+     * дедупликации: зовём сверять один раз.
+     */
+    val CONFIRMATION_REQUESTED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("confirmation_requested_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатору ушёл DM «сбор завершён, сверьте деньги». Штамп дедупликации: зовём сверять один раз.")
+
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

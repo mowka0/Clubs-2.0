@@ -29,6 +29,9 @@ data class Skladchina(
     val status: SkladchinaStatus,
     val closedAt: OffsetDateTime?,
     val closedBy: UUID?,
+    // V89: когда организатора позвали сверить деньги («сбор завершён, подтвердите»). Штамп
+    // дедупликации — DM уходит один раз, дальше сбор просто ждёт сверки.
+    val confirmationRequestedAt: OffsetDateTime? = null,
 
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime

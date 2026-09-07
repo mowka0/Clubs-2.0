@@ -197,7 +197,7 @@ class SkladchinaChatStatusService(
     private fun closeFromDb(post: SkladchinaChatPost) {
         val skladchina = skladchinaRepository.findById(post.skladchinaId)
         if (skladchina != null) {
-            val paid = skladchinaRepository.countParticipantsByStatus(post.skladchinaId, SkladchinaParticipantStatus.paid)
+            val paid = skladchinaRepository.countPaidLike(post.skladchinaId)
             val total = skladchinaRepository.countParticipants(post.skladchinaId)
             val text = renderer.closedText(skladchina.title, skladchina.status, paid, total)
             gateway.editGroupMessage(post.chatId, post.messageId, text, null, null, PARSE_MODE_HTML)
@@ -209,7 +209,7 @@ class SkladchinaChatStatusService(
     }
 
     private fun renderStatus(skladchina: Skladchina): String {
-        val paid = skladchinaRepository.countParticipantsByStatus(skladchina.id, SkladchinaParticipantStatus.paid)
+        val paid = skladchinaRepository.countPaidLike(skladchina.id)
         val total = skladchinaRepository.countParticipants(skladchina.id)
         val pendingIds = skladchinaRepository.findParticipants(skladchina.id)
             .filter { it.status == SkladchinaParticipantStatus.pending }

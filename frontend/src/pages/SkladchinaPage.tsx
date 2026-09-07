@@ -5,18 +5,22 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSetClubContext } from '../store/useClubContextStore';
 import {
-  useCloseSkladchinaMutation,
+  useConfirmPaymentsMutation,
   useDeclineSkladchinaMutation,
+  useDisputePaymentMutation,
   useMarkPaidMutation,
   useOrganizerMarkPaidMutation,
   useOrganizerUnmarkMutation,
   useRequestDeclineMutation,
   useResolveDeclineMutation,
+  useResolvePaymentMutation,
   useSkladchinaQuery,
+  useUnmarkOwnPaymentMutation,
 } from '../queries/skladchina';
 import { Toast } from '../components/Toast';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
+import { AvatarUpload } from '../components/AvatarUpload';
 import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
 
 // Формат отображения дедлайна сбора: «5 июля, 18:30» (день + месяц + время, ru-RU).
@@ -65,11 +69,14 @@ export const SkladchinaPage: FC = () => {
   useSetClubContext(query.data?.clubId);
   const markPaidMut = useMarkPaidMutation();
   const declineMut = useDeclineSkladchinaMutation();
-  const closeMut = useCloseSkladchinaMutation();
   const orgMarkMut = useOrganizerMarkPaidMutation();
   const orgUnmarkMut = useOrganizerUnmarkMutation();
   const requestDeclineMut = useRequestDeclineMutation();
   const resolveDeclineMut = useResolveDeclineMutation();
+  const unmarkOwnMut = useUnmarkOwnPaymentMutation();
+  const confirmPaymentsMut = useConfirmPaymentsMutation();
+  const disputeMut = useDisputePaymentMutation();
+  const resolvePaymentMut = useResolvePaymentMutation();
 
   const [amountInput, setAmountInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -77,6 +84,12 @@ export const SkladchinaPage: FC = () => {
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [photoZoomed, setPhotoZoomed] = useState(false);
+  // V89 сверка: организатор открыл список с галками; снятая галка = платёж не дошёл.
+  const [confirmMode, setConfirmMode] = useState(false);
+  const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
+  // V89 спор: чек участника, который он прикладывает к неподтверждённой оплате.
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptNote, setReceiptNote] = useState('');
 
   if (query.isPending) {
     return (
@@ -132,7 +145,12 @@ export const SkladchinaPage: FC = () => {
     : resolveDeclineMut.isPending ? resolveDeclineMut.variables?.userId
     : undefined
   ) ?? null;
-  const canManagePayments = isActive && isCreator && isFixed;
+  const canManagePayments = isActive && isCreator && isFixed && !s.awaitingConfirmation;
+  // Сбор дождался всех ответов или своего срока: платить уже поздно, дальше слово за организатором.
+  const awaitingConfirmation = s.awaitingConfirmation;
+  // Список сверки открывается сам, когда сбор ждёт сверки, и вручную кнопкой «Закрыть сбор».
+  const showConfirmList = isCreator && isActive && (confirmMode || awaitingConfirmation);
+  const claimedParticipants = s.participants?.filter((p) => p.status === 'paid') ?? [];
 
   const handleOpenPaymentLink = () => {
     haptic.impact('light');
@@ -271,18 +289,87 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  const handleClose = async () => {
-    if (!window.confirm('Закрыть сбор? Дальнейшие оплаты будут невозможны.')) return;
+  const handleUnmarkOwn = async () => {
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await unmarkOwnMut.mutateAsync(s.id);
+      haptic.notify('success');
+      setToastMessage('Отметка снята.');
+    } catch (e) {
+      console.error('unmark own failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось снять отметку. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleDispute = async () => {
+    if (!receiptUrl) {
+      setActionError('Приложите фото или скриншот чека');
+      haptic.notify('error');
+      return;
+    }
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await disputeMut.mutateAsync({ id: s.id, receiptUrl, note: receiptNote.trim() || undefined });
+      haptic.notify('success');
+      setReceiptUrl(null);
+      setReceiptNote('');
+      setToastMessage('Чек отправлен организатору.');
+    } catch (e) {
+      console.error('dispute failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось отправить чек. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleResolvePayment = async (p: SkladchinaParticipantDto, accept: boolean) => {
+    const who = participantName(p);
+    const question = accept
+      ? `Засчитать оплату ${who}? Деньги считаются полученными.`
+      : `Платежа от ${who} нет? Решение окончательное${s.affectsReputation ? ', спишется 40 очков надёжности' : ''}.`;
+    if (!window.confirm(question)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await resolvePaymentMut.mutateAsync({ id: s.id, userId: p.userId, accept });
+      haptic.notify('success');
+      setToastMessage(accept ? 'Оплата засчитана.' : 'Платёж не подтверждён.');
+    } catch (e) {
+      console.error('resolvePayment failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось обработать чек. Попробуйте ещё раз.');
+    }
+  };
+
+  const toggleRejected = (userId: string) => {
+    haptic.impact('light');
+    setRejectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+
+  const handleConfirmAndClose = async () => {
+    const rejected = claimedParticipants.filter((p) => rejectedIds.has(p.userId));
+    const question = rejected.length > 0
+      ? `Закрыть сбор? У ${rejected.length} участник(ов) платёж не найден — им придёт запрос прислать чек.`
+      : 'Подтвердить все оплаты и закрыть сбор?';
+    if (!window.confirm(question)) return;
     setActionError(null);
     try {
       haptic.impact('heavy');
-      await closeMut.mutateAsync(s.id);
+      await confirmPaymentsMut.mutateAsync({ id: s.id, rejectedUserIds: rejected.map((p) => p.userId) });
       haptic.notify('success');
+      setConfirmMode(false);
+      setRejectedIds(new Set());
       setToastMessage('Сбор закрыт.');
     } catch (e) {
-      console.error('close failed', e);
+      console.error('confirm payments failed', e);
       haptic.notify('error');
-      setActionError('Не удалось закрыть сбор.');
+      setActionError('Не удалось закрыть сбор. Попробуйте ещё раз.');
     }
   };
 
@@ -428,7 +515,18 @@ export const SkladchinaPage: FC = () => {
         <div className="rd-payment-link-text">{s.paymentLink}</div>
       </div>
 
-      {isActive && isMemberParticipant && s.myStatus === 'pending' && (
+      {isActive && isMemberParticipant && s.myStatus === 'pending' && awaitingConfirmation && (
+        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            Сбор завершён — ждём сверки организатора
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+            Отметить оплату уже нельзя. Организатор сведёт деньги и закроет сбор.
+          </div>
+        </div>
+      )}
+
+      {isActive && isMemberParticipant && s.myStatus === 'pending' && !awaitingConfirmation && (
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
           <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Подтвердите оплату</div>
 
@@ -531,18 +629,106 @@ export const SkladchinaPage: FC = () => {
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
           {s.myStatus === 'paid' && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success, #22a06b)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span aria-hidden>✅</span> Вы оплатили
+              {/* До сверки оплата — заявка: деньги засчитаны, но организатор их ещё не видел. */}
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                ⏳ Вы отметили оплату
+                {s.myDeclaredAmountKopecks != null && ` — ${formatRubles(s.myDeclaredAmountKopecks)} ₽`}
               </div>
-              {s.myDeclaredAmountKopecks != null && (
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
-                  {formatRubles(s.myDeclaredAmountKopecks)} ₽
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+                {isActive
+                  ? 'Организатор сверит с выпиской и подтвердит, когда сбор закроется.'
+                  : 'Организатор не сверил оплаты — сбор закрыт без последствий, репутация не изменилась.'}
+              </div>
+              {isActive && !awaitingConfirmation && (
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  style={{ marginTop: 10 }}
+                  onClick={handleUnmarkOwn}
+                  disabled={unmarkOwnMut.isPending}
+                >
+                  {unmarkOwnMut.isPending ? 'Снимаем…' : 'Отменить отметку'}
+                </button>
+              )}
+            </>
+          )}
+          {s.myStatus === 'payment_confirmed' && (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success, #22a06b)' }}>
+                ✅ Оплата подтверждена
+                {s.myDeclaredAmountKopecks != null && ` — ${formatRubles(s.myDeclaredAmountKopecks)} ₽`}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+                Организатор получил деньги.
+                {s.affectsReputation && ` +10 к надёжности в клубе «${s.clubName}».`}
+              </div>
+            </>
+          )}
+          {s.myStatus === 'payment_rejected' && (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--danger)' }}>
+                Организатор не нашёл ваш платёж
+              </div>
+              {s.myPaymentRejectNote && (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+                  «{s.myPaymentRejectNote}»
                 </div>
               )}
-              {s.affectsReputation && (
-                <div style={{ fontSize: 12, color: 'var(--success, #22a06b)', marginTop: 4 }}>
-                  + к репутации — засчитается при закрытии сбора
+              {s.myDisputeTerminal ? (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>
+                  Чек рассмотрен, платёж не подтверждён — решение окончательное.
                 </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>
+                    Если деньги ушли — приложите фото или скриншот чека
+                    {s.myDisputeDeadline && ` до ${DEADLINE_FMT.format(new Date(s.myDisputeDeadline))}`}
+                    {s.affectsReputation && ', иначе спишется 40 очков надёжности'}.
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <AvatarUpload value={receiptUrl} onChange={setReceiptUrl} />
+                  </div>
+                  <textarea
+                    className="rd-textarea"
+                    rows={2}
+                    style={{ marginTop: 10 }}
+                    placeholder="Комментарий к чеку (по желанию)"
+                    value={receiptNote}
+                    onChange={(e) => setReceiptNote(e.target.value)}
+                    maxLength={500}
+                  />
+                  {actionError && <div className="rd-error">{actionError}</div>}
+                  <button
+                    type="button"
+                    className="rd-btn-primary"
+                    style={{ marginTop: 10 }}
+                    onClick={handleDispute}
+                    disabled={disputeMut.isPending}
+                  >
+                    {disputeMut.isPending ? 'Отправляем…' : 'Приложить чек и оспорить'}
+                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>
+                    Без чека оспорить нельзя — организатор сверяет с выпиской.
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          {s.myStatus === 'payment_disputed' && (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>
+                ⏳ Чек отправлен организатору
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+                Пока идёт разбор, {s.affectsReputation ? '40 очков не списываются' : 'решение не принято'}.
+                Ответ придёт в личные сообщения.
+              </div>
+              {s.myReceiptUrl && (
+                <img
+                  src={s.myReceiptUrl}
+                  alt="Ваш чек"
+                  style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 10, marginTop: 10, display: 'block' }}
+                />
               )}
             </>
           )}
@@ -574,22 +760,56 @@ export const SkladchinaPage: FC = () => {
           onMarkPaid={handleOrgMarkPaid}
           onUnmark={handleOrgUnmark}
           onResolveDecline={handleResolveDecline}
+          confirmMode={showConfirmList}
+          rejectedUserIds={rejectedIds}
+          onToggleRejected={toggleRejected}
+          onResolvePayment={handleResolvePayment}
         />
       )}
 
       {isActive && isCreator && (
-        <div style={{ marginTop: 4 }}>
-          <button
-            type="button"
-            className="rd-btn-outline"
-            onClick={handleClose}
-            disabled={closeMut.isPending}
-            style={{ color: 'var(--danger)' }}
-          >
-            {closeMut.isPending ? 'Закрываем…' : 'Закрыть сбор'}
-          </button>
-          {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
-        </div>
+        showConfirmList ? (
+          <div>
+            <div className="rd-warn-block" style={{ marginBottom: 10 }}>
+              {awaitingConfirmation ? 'Сбор завершён — сверьте деньги. ' : ''}
+              Снимите галку с тех, от кого платёж не дошёл. После подтверждения сбор закроется.
+            </div>
+            <button
+              type="button"
+              className="rd-btn-primary"
+              onClick={handleConfirmAndClose}
+              disabled={confirmPaymentsMut.isPending}
+            >
+              {confirmPaymentsMut.isPending ? 'Закрываем…' : 'Подтвердить и закрыть сбор'}
+            </button>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>
+              Снятая галка = платёж не дошёл: у человека будет 48 часов прислать чек.
+            </div>
+            {!awaitingConfirmation && (
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ marginTop: 8 }}
+                onClick={() => { setConfirmMode(false); setRejectedIds(new Set()); }}
+              >
+                Отмена
+              </button>
+            )}
+            {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
+          </div>
+        ) : (
+          <div style={{ marginTop: 4 }}>
+            <button
+              type="button"
+              className="rd-btn-outline"
+              onClick={() => { haptic.impact('light'); setConfirmMode(true); }}
+              style={{ color: 'var(--danger)' }}
+            >
+              Закрыть сбор
+            </button>
+            {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
+          </div>
+        )
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

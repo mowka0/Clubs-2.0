@@ -5,7 +5,11 @@ import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
 import com.clubs.skladchina.SkladchinaDeclineRejectedEvent
+import com.clubs.skladchina.SkladchinaConfirmationRequestedEvent
 import com.clubs.skladchina.SkladchinaDeclineRequestedEvent
+import com.clubs.skladchina.SkladchinaPaymentDisputeResolvedEvent
+import com.clubs.skladchina.SkladchinaPaymentDisputedEvent
+import com.clubs.skladchina.SkladchinaPaymentRejectedEvent
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -143,6 +147,113 @@ class SkladchinaBotNotifier(
         log.info("Skladchina decline-rejected DM sent: id={} participant={}", event.skladchinaId, participantTelegramId)
     }
 
+    /**
+     * V89: сбор дождался всех ответов или своего срока — зовём организатора сверить деньги.
+     * Это единственный сигнал, что пора закрывать сбор: сам он больше не закроется.
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onConfirmationRequested(event: SkladchinaConfirmationRequestedEvent) {
+        val organizerTelegramId = userRepository.findById(event.creatorId)?.telegramId
+        if (organizerTelegramId == null) {
+            log.warn("Skladchina confirmation-request DM SKIPPED — organizer telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val text = buildString {
+            append("💰 Сбор «${event.title}» завершён — сверьте деньги")
+            if (event.clubName.isNotBlank()) append("\nКлуб «${event.clubName}»")
+            append("\n\nОплату заявили ${event.claimedCount} из ${event.participantCount}.")
+            append("\nСнимите галку с тех, от кого платёж не дошёл, и закройте сбор.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = organizerTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "💰 Сверить оплаты"
+        )
+        log.info("Skladchina confirmation-request DM sent: id={} organizer={}", event.skladchinaId, organizerTelegramId)
+    }
+
+    /**
+     * V89: организатор не нашёл платёж участника. У человека есть окно на чек, поэтому DM обязан
+     * назвать и причину, и срок — иначе он узнает о минусе, когда тот уже списан.
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onPaymentRejected(event: SkladchinaPaymentRejectedEvent) {
+        val participantTelegramId = userRepository.findById(event.participantUserId)?.telegramId
+        if (participantTelegramId == null) {
+            log.warn("Skladchina payment-rejected DM SKIPPED — participant telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val text = buildString {
+            append("❗️ Организатор не нашёл вашу оплату")
+            append("\nСбор «${event.title}»")
+            if (event.clubName.isNotBlank()) append(" · клуб «${event.clubName}»")
+            event.reason?.let { append("\n\nПричина: «$it»") }
+            append("\n\nЕсли деньги ушли — приложите фото или скриншот чека до ")
+            append(event.receiptDeadline.format(fmt)).append(".")
+            if (event.affectsReputation) append("\nБез чека спишется 40 очков надёжности.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = participantTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "🧾 Приложить чек"
+        )
+        log.info("Skladchina payment-rejected DM sent: id={} participant={}", event.skladchinaId, participantTelegramId)
+    }
+
+    /** V89: участник прислал чек — организатору нужно его посмотреть и принять решение. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onPaymentDisputed(event: SkladchinaPaymentDisputedEvent) {
+        val organizerTelegramId = userRepository.findById(event.creatorId)?.telegramId
+        if (organizerTelegramId == null) {
+            log.warn("Skladchina payment-disputed DM SKIPPED — organizer telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val disputerName = userRepository.findById(event.disputerUserId)?.firstName ?: "Участник"
+        val text = buildString {
+            append("🧾 $disputerName прислал чек по сбору «${event.title}»")
+            if (event.clubName.isNotBlank()) append("\nКлуб «${event.clubName}»")
+            event.note?.let { append("\n\nКомментарий: «$it»") }
+            append("\n\nПосмотрите чек и решите: засчитать оплату или платежа нет.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = organizerTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "🧾 Посмотреть чек"
+        )
+        log.info("Skladchina payment-disputed DM sent: id={} organizer={}", event.skladchinaId, organizerTelegramId)
+    }
+
+    /** V89: организатор разобрал чек — участник узнаёт исход из ЛС, а не из своего профиля. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onPaymentDisputeResolved(event: SkladchinaPaymentDisputeResolvedEvent) {
+        val participantTelegramId = userRepository.findById(event.participantUserId)?.telegramId
+        if (participantTelegramId == null) {
+            log.warn("Skladchina dispute-resolved DM SKIPPED — participant telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val text = buildString {
+            if (event.accepted) {
+                append("✅ Оплата подтверждена — сбор «${event.title}»")
+                if (event.affectsReputation) append("\n\n+10 к надёжности в клубе «${event.clubName}».")
+            } else {
+                append("❌ Организатор не подтвердил оплату — сбор «${event.title}»")
+                append("\n\nЧек не сошёлся с выпиской.")
+                if (event.affectsReputation) append(" Списано 40 очков надёжности.")
+            }
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = participantTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "💰 Открыть сбор"
+        )
+        log.info("Skladchina dispute-resolved DM sent: id={} participant={} accepted={}",
+            event.skladchinaId, participantTelegramId, event.accepted)
+    }
+
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaClosed(event: SkladchinaClosedEvent) {
         notifyExpiredParticipants(event)
@@ -164,7 +275,10 @@ class SkladchinaBotNotifier(
             append("$statusEmoji Сбор закрыт: «${event.title}»")
             append("\n\nСобрано: $collectedRub ₽$goalLine")
             append("\nОплатили: ${event.paidCount} из ${event.participantCount}")
-            if (event.affectsReputation) {
+            if (event.closedWithoutConfirmation) {
+                append("\n\nВы не сверили оплаты, поэтому сбор закрыт без последствий: ")
+                append("репутация никому не начислена и не снижена.")
+            } else if (event.affectsReputation) {
                 append("\n⚠️ Репутация участников пересчитана.")
             }
         }

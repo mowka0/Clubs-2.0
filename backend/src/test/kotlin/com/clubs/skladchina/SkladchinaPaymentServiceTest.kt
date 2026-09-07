@@ -81,6 +81,9 @@ class SkladchinaPaymentServiceTest {
         createdAt = OffsetDateTime.now()
     )
 
+    // Пустой base-url = прод-конфигурация: ссылки на загруженные картинки root-relative.
+    private val STORAGE_BASE_URL = ""
+
     @BeforeEach
     fun setUp() {
         skladchinaRepository = mockk(relaxed = true)
@@ -95,7 +98,7 @@ class SkladchinaPaymentServiceTest {
         every { clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) } returns false
         service = SkladchinaPaymentService(
             skladchinaRepository, clubRepository, clubRoleGuard, templateRegistry, queryService,
-            lifecycleService, eventPublisher
+            lifecycleService, eventPublisher, STORAGE_BASE_URL
         )
         every { queryService.getDetail(any(), any()) } returns mockk()
         every { templateRegistry.forType(any()) } returns mockk {

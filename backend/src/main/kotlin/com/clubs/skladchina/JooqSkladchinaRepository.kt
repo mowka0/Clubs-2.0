@@ -164,7 +164,7 @@ class JooqSkladchinaRepository(
             .from(SKLADCHINA_PARTICIPANTS)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids)
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES))
             )
             .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
             .fetch()
@@ -177,7 +177,7 @@ class JooqSkladchinaRepository(
             .from(SKLADCHINA_PARTICIPANTS)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids)
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES))
             )
             .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
             .fetch()
@@ -275,7 +275,7 @@ class JooqSkladchinaRepository(
         val paidCounts = dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, DSL.count())
             .from(SKLADCHINA_PARTICIPANTS)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(skladchinaIds)
-                .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid)))
+                .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES)))
             .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
             .fetch()
             .associate { it.value1()!! to it.value2() }
@@ -293,17 +293,22 @@ class JooqSkladchinaRepository(
         )
             .from(SKLADCHINA_PARTICIPANTS)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(skladchinaIds)
-                .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid)))
+                .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES)))
             .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
             .fetch()
             .associate { it.value1()!! to (it.value2()?.toLong() ?: 0L) }
 
-        val myStatuses = dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, SKLADCHINA_PARTICIPANTS.STATUS)
+        val myRows = dsl.select(
+            SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID,
+            SKLADCHINA_PARTICIPANTS.STATUS,
+            SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT
+        )
             .from(SKLADCHINA_PARTICIPANTS)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(skladchinaIds)
                 .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)))
             .fetch()
-            .associate { it.value1()!! to it.value2()!! }
+        val myStatuses = myRows.associate { it.value1()!! to it.value2()!! }
+        val myRejectedAt = myRows.mapNotNull { r -> r.value3()?.let { r.value1()!! to it } }.toMap()
 
         // Собираем items, сохраняя порядок страницы
         val skladchinaById = skladchinaRows.associateBy { it.get(SKLADCHINAS.ID)!! }
@@ -316,6 +321,7 @@ class JooqSkladchinaRepository(
                 clubName = row.get("club_name", String::class.java),
                 clubAvatarUrl = row.get("club_avatar_url", String::class.java),
                 myStatus = myStatuses[id],
+                myPaymentRejectedAt = myRejectedAt[id],
                 collectedKopecks = collectedSums[id] ?: 0L,
                 participantCount = participantCounts[id] ?: 0,
                 paidCount = paidCounts[id] ?: 0
@@ -325,24 +331,26 @@ class JooqSkladchinaRepository(
         return PageResponse(items, total, computeTotalPages(total, size), page, size)
     }
 
-    override fun countActionRequired(userId: UUID): Int =
-        dsl.selectCount()
+    override fun countActionRequired(userId: UUID, receiptWindowStart: OffsetDateTime): Int {
+        // Ждём оплаты в идущем сборе.
+        val owesPayment = SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending)
+            .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+        // V89: организатор не нашёл платёж, и окно на чек ещё открыто — молчание здесь стоит −40,
+        // поэтому это такое же «нужно действие», как неоплаченный сбор (сам сбор уже закрыт).
+        val owesReceipt = SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_rejected)
+            .and(SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL.isFalse)
+            .and(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT.greaterThan(receiptWindowStart))
+        return dsl.selectCount()
             .from(SKLADCHINA_PARTICIPANTS)
             .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
             .where(
                 SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
-                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+                    .and(owesPayment.or(owesReceipt))
                     .and(CLUBS.IS_ACTIVE.eq(true))
             )
             .fetchOne(0, Int::class.java) ?: 0
-
-    override fun findExpiredActive(now: OffsetDateTime): List<Skladchina> =
-        dsl.selectFrom(SKLADCHINAS)
-            .where(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active).and(SKLADCHINAS.DEADLINE.lessOrEqual(now)))
-            .fetch()
-            .map(mapper::toDomain)
+    }
 
     override fun claimClose(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime): Boolean =
         dsl.update(SKLADCHINAS)
@@ -370,7 +378,13 @@ class JooqSkladchinaRepository(
             SKLADCHINA_PARTICIPANTS.DECLINE_NOTE,
             SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT,
             SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED,
-            SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE,
+            SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT,
+            SKLADCHINA_PARTICIPANTS.PAYMENT_REJECT_NOTE,
+            SKLADCHINA_PARTICIPANTS.RECEIPT_URL,
+            SKLADCHINA_PARTICIPANTS.RECEIPT_NOTE,
+            SKLADCHINA_PARTICIPANTS.DISPUTED_AT,
+            SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL
         )
             .from(SKLADCHINA_PARTICIPANTS)
             .join(USERS).on(USERS.ID.eq(SKLADCHINA_PARTICIPANTS.USER_ID))
@@ -389,7 +403,13 @@ class JooqSkladchinaRepository(
                     declineNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE),
                     declineRequestedAt = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT),
                     declineRejected = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED) ?: false,
-                    declineRejectNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE)
+                    declineRejectNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE),
+                    paymentRejectedAt = r.get(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT),
+                    paymentRejectNote = r.get(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECT_NOTE),
+                    receiptUrl = r.get(SKLADCHINA_PARTICIPANTS.RECEIPT_URL),
+                    receiptNote = r.get(SKLADCHINA_PARTICIPANTS.RECEIPT_NOTE),
+                    disputedAt = r.get(SKLADCHINA_PARTICIPANTS.DISPUTED_AT),
+                    disputeTerminal = r.get(SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL) ?: false
                 )
             }
 
@@ -501,6 +521,154 @@ class JooqSkladchinaRepository(
             )
             .execute()
 
+    // --- V89: сверка оплат организатором ---
+
+    override fun confirmParticipantPayment(skladchinaId: UUID, userId: UUID, at: OffsetDateTime): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.payment_confirmed)
+            .set(SKLADCHINA_PARTICIPANTS.PAYMENT_CONFIRMED_AT, at)
+            .setNull(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // Засчитать можно заявленную оплату (сверка при закрытии) или оспоренную
+                    // (организатор посмотрел чек). Терминальные статусы не переписываем.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(
+                        SkladchinaParticipantStatus.paid,
+                        SkladchinaParticipantStatus.payment_rejected,
+                        SkladchinaParticipantStatus.payment_disputed
+                    ))
+            )
+            .execute()
+
+    override fun rejectParticipantPayment(
+        skladchinaId: UUID,
+        userId: UUID,
+        at: OffsetDateTime,
+        note: String?,
+        terminal: Boolean
+    ): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.payment_rejected)
+            .set(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT, at)
+            .set(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECT_NOTE, note)
+            .set(SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL, terminal)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // Отклоняют либо заявку при сверке, либо спор после чека.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(
+                        SkladchinaParticipantStatus.paid,
+                        SkladchinaParticipantStatus.payment_disputed
+                    ))
+            )
+            .execute()
+
+    override fun attachPaymentReceipt(
+        skladchinaId: UUID,
+        userId: UUID,
+        receiptUrl: String,
+        note: String?,
+        at: OffsetDateTime
+    ): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.payment_disputed)
+            .set(SKLADCHINA_PARTICIPANTS.RECEIPT_URL, receiptUrl)
+            .set(SKLADCHINA_PARTICIPANTS.RECEIPT_NOTE, note)
+            .set(SKLADCHINA_PARTICIPANTS.DISPUTED_AT, at)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // Оспорить можно только собственное отклонение, и только пока организатор
+                    // не поставил точку (dispute_terminal) и минус ещё не списан.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_rejected))
+                    .and(SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL.isFalse)
+                    .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
+            )
+            .execute()
+
+    override fun releaseParticipant(skladchinaId: UUID, userId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // Освобождаем только незакрытый спор — уже решённые исходы неприкосновенны.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_disputed))
+                    .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
+            )
+            .execute()
+
+    override fun markReputationAppliedForAll(skladchinaId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED, true)
+            .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId))
+            .execute()
+
+    override fun countPaidLike(skladchinaId: UUID): Int =
+        dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun findNeedingConfirmationRequest(now: OffsetDateTime): List<Skladchina> {
+        val stillWaitingForSomeone = DSL.exists(
+            DSL.selectOne().from(SKLADCHINA_PARTICIPANTS)
+                .where(
+                    SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID)
+                        .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                )
+        )
+        return dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
+                    .and(SKLADCHINAS.CONFIRMATION_REQUESTED_AT.isNull)
+                    // Сверять есть что, когда все ответили ИЛИ вышел срок.
+                    .and(SKLADCHINAS.DEADLINE.lessOrEqual(now).or(DSL.not(stillWaitingForSomeone)))
+            )
+            .fetch()
+            .map(mapper::toDomain)
+    }
+
+    override fun markConfirmationRequested(id: UUID, at: OffsetDateTime): Int =
+        dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.CONFIRMATION_REQUESTED_AT, at)
+            .set(SKLADCHINAS.UPDATED_AT, OffsetDateTime.now())
+            // Штамп ставится один раз — второй DM «сверьте деньги» уже не уйдёт.
+            .where(SKLADCHINAS.ID.eq(id).and(SKLADCHINAS.CONFIRMATION_REQUESTED_AT.isNull))
+            .execute()
+
+    override fun findAbandonedActive(deadlineBefore: OffsetDateTime): List<Skladchina> =
+        dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
+                    .and(SKLADCHINAS.DEADLINE.lessThan(deadlineBefore))
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun findRejectedPaymentsDueForPenalty(rejectedBefore: OffsetDateTime): List<SkladchinaParticipantKey> =
+        dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, SKLADCHINA_PARTICIPANTS.USER_ID)
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_rejected)
+                    .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
+                    .and(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT.lessThan(rejectedBefore))
+            )
+            .fetch { r -> SkladchinaParticipantKey(r.value1()!!, r.value2()!!) }
+
+    override fun findStaleDisputes(disputedBefore: OffsetDateTime): List<SkladchinaParticipantKey> =
+        dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, SKLADCHINA_PARTICIPANTS.USER_ID)
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_disputed)
+                    .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
+                    .and(SKLADCHINA_PARTICIPANTS.DISPUTED_AT.lessThan(disputedBefore))
+            )
+            .fetch { r -> SkladchinaParticipantKey(r.value1()!!, r.value2()!!) }
+
     override fun markReputationApplied(skladchinaId: UUID, userId: UUID) {
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED, true)
@@ -516,7 +684,7 @@ class JooqSkladchinaRepository(
             .from(SKLADCHINA_PARTICIPANTS)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES))
             )
             .fetchOne(0, java.math.BigDecimal::class.java) ?: java.math.BigDecimal.ZERO
         return sum.toLong()
@@ -569,14 +737,6 @@ class JooqSkladchinaRepository(
             .where(SKLADCHINAS.ID.eq(skladchinaId))
             .execute()
     }
-
-    override fun countParticipantsByStatus(skladchinaId: UUID, status: SkladchinaParticipantStatus): Int =
-        dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
-            .where(
-                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(status))
-            )
-            .fetchOne(0, Int::class.java) ?: 0
 
     private fun computeTotalPages(total: Long, size: Int): Int =
         if (size == 0) 0 else ((total + size - 1) / size).toInt()

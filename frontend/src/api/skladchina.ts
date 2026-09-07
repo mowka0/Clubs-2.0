@@ -75,8 +75,43 @@ export function resolveDeclineSkladchina(
   );
 }
 
-export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
+// V89: участник снимает СВОЮ отметку об оплате, пока сбор идёт («ошибся, платил не по этому сбору»).
+export function unmarkOwnPayment(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/unmark-paid`);
+}
+
+// V89: организатор сверил деньги и закрывает сбор. rejectedUserIds — те, от кого платёж не дошёл;
+// им откроется окно на чек. Пустой список = подтвердить всех заявивших.
+export function confirmSkladchinaPayments(
+  id: string,
+  rejectedUserIds: string[],
+  rejectNotes: Record<string, string> = {},
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/confirm-payments`, {
+    rejectedUserIds,
+    rejectNotes,
+  });
+}
+
+// V89: участник оспаривает отклонение, приложив фото или скриншот чека.
+export function disputeSkladchinaPayment(
+  id: string,
+  receiptUrl: string,
+  note?: string,
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/dispute-payment`, { receiptUrl, note });
+}
+
+// V89: организатор разбирает чек — засчитать оплату или отказать окончательно.
+export function resolveSkladchinaPayment(
+  id: string,
+  userId: string,
+  accept: boolean,
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(
+    `/api/skladchinas/${id}/participants/${userId}/resolve-payment`,
+    { accept },
+  );
 }
 
 // A-2: организатор отмечает участника оплатившим («получил наличкой») — только fixed-режимы.

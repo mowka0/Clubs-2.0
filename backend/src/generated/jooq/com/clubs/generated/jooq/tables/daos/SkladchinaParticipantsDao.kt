@@ -174,4 +174,81 @@ open class SkladchinaParticipantsDao(configuration: Configuration?) : DAOImpl<Sk
      * Fetch records that have <code>decline_reject_note IN (values)</code>
      */
     fun fetchByDeclineRejectNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>payment_confirmed_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfPaymentConfirmedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_CONFIRMED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payment_confirmed_at IN (values)</code>
+     */
+    fun fetchByPaymentConfirmedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_CONFIRMED_AT, *values)
+
+    /**
+     * Fetch records that have <code>payment_rejected_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfPaymentRejectedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payment_rejected_at IN (values)</code>
+     */
+    fun fetchByPaymentRejectedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT, *values)
+
+    /**
+     * Fetch records that have <code>payment_reject_note BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfPaymentRejectNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_REJECT_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payment_reject_note IN (values)</code>
+     */
+    fun fetchByPaymentRejectNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.PAYMENT_REJECT_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>receipt_url BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfReceiptUrl(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.RECEIPT_URL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>receipt_url IN (values)</code>
+     */
+    fun fetchByReceiptUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.RECEIPT_URL, *values)
+
+    /**
+     * Fetch records that have <code>receipt_note BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfReceiptNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.RECEIPT_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>receipt_note IN (values)</code>
+     */
+    fun fetchByReceiptNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.RECEIPT_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>disputed_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDisputedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DISPUTED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>disputed_at IN (values)</code>
+     */
+    fun fetchByDisputedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DISPUTED_AT, *values)
+
+    /**
+     * Fetch records that have <code>dispute_terminal BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDisputeTerminal(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dispute_terminal IN (values)</code>
+     */
+    fun fetchByDisputeTerminal(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DISPUTE_TERMINAL, *values.toTypedArray())
 }

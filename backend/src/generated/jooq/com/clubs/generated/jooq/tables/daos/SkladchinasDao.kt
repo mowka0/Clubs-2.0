@@ -269,4 +269,16 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>event_id IN (values)</code>
      */
     fun fetchByEventId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.EVENT_ID, *values)
+
+    /**
+     * Fetch records that have <code>confirmation_requested_at BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfConfirmationRequestedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.CONFIRMATION_REQUESTED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>confirmation_requested_at IN
+     * (values)</code>
+     */
+    fun fetchByConfirmationRequestedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.CONFIRMATION_REQUESTED_AT, *values)
 }

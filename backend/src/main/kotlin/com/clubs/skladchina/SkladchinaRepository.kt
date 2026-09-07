@@ -51,14 +51,12 @@ interface SkladchinaRepository {
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem>
 
     /**
-     * Количество активных складчин, где пользователь — участник, всё ещё ожидающий
-     * оплаты (status='pending'). Отражает флаг `actionRequired`, который лента
-     * вычисляет для каждого элемента — используется для бейджа таба "Сборы", чтобы
-     * неоплаченные обязательства не терялись из виду.
+     * Сколько дел висит на пользователе по сборам: неоплаченное участие в идущем сборе
+     * (`pending`) плюс отклонённая организатором оплата, у которой ещё открыто окно на чек
+     * (`payment_rejected` начиная с [receiptWindowStart], без поставленной организатором точки).
+     * Питает бейдж таба «Сборы»: и то и другое стоит −40, если промолчать.
      */
-    fun countActionRequired(userId: UUID): Int
-
-    fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
+    fun countActionRequired(userId: UUID, receiptWindowStart: OffsetDateTime): Int
 
     /**
      * Атомарная заявка на закрытие (F5-12): выставляет финальный status/closed_at/closed_by ТОЛЬКО
@@ -134,14 +132,76 @@ interface SkladchinaRepository {
      */
     fun releasePendingParticipants(skladchinaId: UUID): Int
 
+    // --- V89: сверка оплат организатором (docs/modules/skladchina.md) ---
+
+    /**
+     * Засчитывает платёж участника: `paid` (сверка при закрытии) либо `payment_rejected` /
+     * `payment_disputed` (организатор посмотрел чек) → `payment_confirmed`. Возвращает число
+     * затронутых строк — 0 означает, что участник уже в другом статусе.
+     */
+    fun confirmParticipantPayment(skladchinaId: UUID, userId: UUID, at: OffsetDateTime): Int
+
+    /**
+     * Отклоняет платёж: `paid` (сверка при закрытии) или `payment_disputed` (чек не убедил) →
+     * `payment_rejected`. [terminal] = true ставит точку — оспорить повторно нельзя (решение
+     * организатора по чеку). Репутация при этом НЕ применяется: у участника есть окно на чек.
+     */
+    fun rejectParticipantPayment(
+        skladchinaId: UUID,
+        userId: UUID,
+        at: OffsetDateTime,
+        note: String?,
+        terminal: Boolean
+    ): Int
+
+    /**
+     * Участник прикладывает чек к отклонённой оплате → `payment_disputed`. Защищено: статус
+     * `payment_rejected`, точка не поставлена, минус ещё не списан.
+     */
+    fun attachPaymentReceipt(
+        skladchinaId: UUID,
+        userId: UUID,
+        receiptUrl: String,
+        note: String?,
+        at: OffsetDateTime
+    ): Int
+
+    /** Переводит участника с зависшим спором в `released` — нейтральный исход, строки в леджере нет. */
+    fun releaseParticipant(skladchinaId: UUID, userId: UUID): Int
+
+    /**
+     * Помечает репутационное решение принятым по ВСЕМ участникам сбора, не создавая строк леджера —
+     * нейтральное закрытие брошенного сбора (организатор не пришёл сверять деньги).
+     */
+    fun markReputationAppliedForAll(skladchinaId: UUID): Int
+
+    /** Сколько участников «занесли деньги» — заявили оплату до закрытия или подтверждены после. */
+    fun countPaidLike(skladchinaId: UUID): Int
+
+    /**
+     * Сборы, по которым пора звать организатора сверить деньги: активные, ещё не позванные
+     * (`confirmation_requested_at IS NULL`), у которых наступил дедлайн ИЛИ не осталось `pending`.
+     */
+    fun findNeedingConfirmationRequest(now: OffsetDateTime): List<Skladchina>
+
+    /** Штамп «организатора позвали сверять» — защищён от повторной установки (второго DM не будет). */
+    fun markConfirmationRequested(id: UUID, at: OffsetDateTime): Int
+
+    /** Активные сборы с дедлайном раньше [deadlineBefore] — организатор так и не пришёл сверять. */
+    fun findAbandonedActive(deadlineBefore: OffsetDateTime): List<Skladchina>
+
+    /** Отклонённые оплаты без спора, у которых окно на чек истекло — пора применять −40. */
+    fun findRejectedPaymentsDueForPenalty(rejectedBefore: OffsetDateTime): List<SkladchinaParticipantKey>
+
+    /** Споры, которые организатор не разобрал в срок — закрываются нейтрально. */
+    fun findStaleDisputes(disputedBefore: OffsetDateTime): List<SkladchinaParticipantKey>
+
     fun markReputationApplied(skladchinaId: UUID, userId: UUID)
 
     /** Сумма declared_amount по участникам со статусом 'paid'. */
     fun sumCollectedKopecks(skladchinaId: UUID): Long
 
     fun countParticipants(skladchinaId: UUID): Int
-
-    fun countParticipantsByStatus(skladchinaId: UUID, status: SkladchinaParticipantStatus): Int
 
     /** Возвращает подмножество указанных userIds, которые НЕ являются активными участниками указанного клуба. */
     fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
@@ -199,6 +259,12 @@ interface SkladchinaRepository {
      */
     fun cancelActiveByEventId(eventId: UUID): Int
 }
+
+/** Адрес строки участника — фид шедулера отдаёт ровно его, детали читает сервис. */
+data class SkladchinaParticipantKey(
+    val skladchinaId: UUID,
+    val userId: UUID
+)
 
 /**
  * Ожидающее влияющее на репутацию участие, которое покидающий пользователь бросает: id складчины

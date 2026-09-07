@@ -5,6 +5,7 @@ import com.clubs.common.dto.PageResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
@@ -36,5 +37,10 @@ class UserSkladchinasService(
 
     @Transactional(readOnly = true)
     fun countActionRequired(userId: UUID): ActionRequiredCountDto =
-        ActionRequiredCountDto(skladchinaRepository.countActionRequired(userId))
+        ActionRequiredCountDto(
+            skladchinaRepository.countActionRequired(
+                userId,
+                OffsetDateTime.now().minusHours(SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS)
+            )
+        )
 }

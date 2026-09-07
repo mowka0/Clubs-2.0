@@ -60,6 +60,53 @@ data class SkladchinaDeclineRejectedEvent(
 )
 
 /**
+ * V89: сбор дождался всех ответов или своего срока — организатора зовут сверить деньги.
+ * Публикуется шедулером после коммита штампа `confirmation_requested_at` (зовём один раз).
+ */
+data class SkladchinaConfirmationRequestedEvent(
+    val skladchinaId: UUID,
+    val creatorId: UUID,
+    val clubName: String,
+    val title: String,
+    val claimedCount: Int,
+    val participantCount: Int
+)
+
+/**
+ * V89: организатор не нашёл платёж участника при сверке. Слушатель шлёт участнику ЛС с причиной,
+ * сроком на чек и кнопкой на сбор — это единственный способ узнать об отклонении вовремя.
+ */
+data class SkladchinaPaymentRejectedEvent(
+    val skladchinaId: UUID,
+    val participantUserId: UUID,
+    val clubName: String,
+    val title: String,
+    val reason: String?,
+    val receiptDeadline: java.time.OffsetDateTime,
+    val affectsReputation: Boolean
+)
+
+/** V89: участник приложил чек к отклонённой оплате — организатору уходит ЛС с кнопкой на разбор. */
+data class SkladchinaPaymentDisputedEvent(
+    val skladchinaId: UUID,
+    val creatorId: UUID,
+    val disputerUserId: UUID,
+    val clubName: String,
+    val title: String,
+    val note: String?
+)
+
+/** V89: организатор разобрал чек. Слушатель сообщает участнику исход (засчитано / платежа нет). */
+data class SkladchinaPaymentDisputeResolvedEvent(
+    val skladchinaId: UUID,
+    val participantUserId: UUID,
+    val clubName: String,
+    val title: String,
+    val accepted: Boolean,
+    val affectsReputation: Boolean
+)
+
+/**
  * Публикуется после закрытия складчины (вручную, цель достигнута, все ответили или
  * авто-закрытие шедулером) и коммита транзакции. Слушатель уведомляет
  * создателя итоговой сводкой.
@@ -81,5 +128,11 @@ data class SkladchinaClosedEvent(
      * или после — уведомитель шлёт каждому из них личное сообщение о штрафе (блокер запуска,
      * уведомление #3 редизайна).
      */
-    val expiredParticipantUserIds: List<UUID> = emptyList()
+    val expiredParticipantUserIds: List<UUID> = emptyList(),
+    /**
+     * V89: сбор закрыт нейтрально, потому что организатор так и не пришёл сверять деньги —
+     * репутация не начислена никому, и сводка обязана это сказать, иначе организатор решит,
+     * что участникам всё зачлось.
+     */
+    val closedWithoutConfirmation: Boolean = false
 )

@@ -1,8 +1,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  closeSkladchina,
+  confirmSkladchinaPayments,
   createSkladchina,
   declineSkladchina,
+  disputeSkladchinaPayment,
   getEventSplitState,
   getMySkladchinas,
   getSkladchina,
@@ -13,6 +14,8 @@ import {
   organizerUnmarkParticipant,
   requestDeclineSkladchina,
   resolveDeclineSkladchina,
+  resolveSkladchinaPayment,
+  unmarkOwnPayment,
 } from '../api/skladchina';
 import type { CreateSkladchinaRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -178,14 +181,60 @@ export function useDeclineSkladchinaMutation() {
   });
 }
 
-export function useCloseSkladchinaMutation() {
+/** V89: участник снимает свою отметку об оплате, пока сбор идёт. */
+export function useUnmarkOwnPaymentMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => closeSkladchina(id),
+    mutationFn: (id: string) => unmarkOwnPayment(id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
+  });
+}
+
+/** V89: организатор сверил деньги списком и закрыл сбор — меняются и статусы, и итог. */
+export function useConfirmPaymentsMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rejectedUserIds, rejectNotes }: {
+      id: string;
+      rejectedUserIds: string[];
+      rejectNotes?: Record<string, string>;
+    }) => confirmSkladchinaPayments(id, rejectedUserIds, rejectNotes),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
+  });
+}
+
+/** V89: участник прикладывает чек к неподтверждённой оплате. */
+export function useDisputePaymentMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, receiptUrl, note }: { id: string; receiptUrl: string; note?: string }) =>
+      disputeSkladchinaPayment(id, receiptUrl, note),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
+  });
+}
+
+/** V89: организатор разбирает присланный чек. */
+export function useResolvePaymentMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId, accept }: { id: string; userId: string; accept: boolean }) =>
+      resolveSkladchinaPayment(id, userId, accept),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
     },
   });
 }

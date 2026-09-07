@@ -64,6 +64,11 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     myDeclineRequested: false,
     myDeclineRejected: false,
     myDeclineRejectNote: null,
+    awaitingConfirmation: false,
+    myPaymentRejectNote: null,
+    myReceiptUrl: null,
+    myDisputeDeadline: null,
+    myDisputeTerminal: false,
     participants: null,
     participantCount: 5,
     paidCount: 1,
@@ -156,12 +161,16 @@ describe('SkladchinaPage — reputation redesign UI', () => {
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'released', paidAt: null,
         declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
       {
         userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'expired_no_response', paidAt: null,
         declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
     ];
     mockDetail(buildDetail({
@@ -209,12 +218,16 @@ describe('SkladchinaPage — Phase A', () => {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
         declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
       {
         userId: 'u-paid', firstName: 'Пётр', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: 100000, status: 'paid',
         paidAt: new Date().toISOString(),
         declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
     ];
     mockDetail(buildDetail({
@@ -240,6 +253,8 @@ describe('SkladchinaPage — Phase A', () => {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: null, declaredAmountKopecks: null, status: 'pending', paidAt: null,
         declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
     ];
     mockDetail(buildDetail({
@@ -291,6 +306,8 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
         userId: 'u-1', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
         declineRequested: true, declineNote: 'не ел, только смотрел', declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
     ];
     mockDetail(buildDetail({
@@ -314,6 +331,8 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
         userId: 'u-1', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
         declineRequested: true, declineNote: 'не хочу', declineRejected: false, declineRejectNote: null,
+        paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+        disputedAt: null, disputeTerminal: false,
       },
     ];
     mockDetail(buildDetail({
@@ -378,5 +397,115 @@ describe('SkladchinaPage — шапка сбора по встрече', () => {
     expect(screen.getByText('Сбор в клубе')).toBeInTheDocument();
     expect(screen.getByText('⚠️ Важный сбор')).toBeInTheDocument();
     expect(screen.queryByText('Счёт за встречу')).not.toBeInTheDocument();
+  });
+});
+
+describe('SkladchinaPage — сверка оплат организатором (V89)', () => {
+  it('заявивший оплату видит «ждём сверки» и может снять свою отметку', async () => {
+    mockDetail(buildDetail({ myStatus: 'paid', myDeclaredAmountKopecks: 100000 }));
+    renderPage();
+
+    expect(await screen.findByText(/Вы отметили оплату/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Организатор сверит с выпиской и подтвердит, когда сбор закроется.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отменить отметку' })).toBeInTheDocument();
+  });
+
+  it('после начала сверки отметку снять уже нельзя', async () => {
+    mockDetail(buildDetail({ myStatus: 'paid', awaitingConfirmation: true }));
+    renderPage();
+
+    expect(await screen.findByText(/Вы отметили оплату/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отменить отметку' })).not.toBeInTheDocument();
+  });
+
+  it('подтверждённая оплата показывает плюс к надёжности в важном сборе', async () => {
+    mockDetail(buildDetail({
+      status: 'closed_success',
+      affectsReputation: true,
+      myStatus: 'payment_confirmed',
+      myDeclaredAmountKopecks: 100000,
+      closedAt: new Date().toISOString(),
+    }));
+    renderPage();
+
+    expect(await screen.findByText(/Оплата подтверждена/)).toBeInTheDocument();
+    expect(screen.getByText(/\+10 к надёжности/)).toBeInTheDocument();
+  });
+
+  it('отклонённая оплата показывает причину, срок и форму чека', async () => {
+    const deadline = new Date(Date.now() + 40 * 3_600_000).toISOString();
+    mockDetail(buildDetail({
+      status: 'closed_failed',
+      affectsReputation: true,
+      myStatus: 'payment_rejected',
+      myPaymentRejectNote: 'В выписке 833 ₽ от вас нет',
+      myDisputeDeadline: deadline,
+      closedAt: new Date().toISOString(),
+    }));
+    renderPage();
+
+    expect(await screen.findByText('Организатор не нашёл ваш платёж')).toBeInTheDocument();
+    expect(screen.getByText('«В выписке 833 ₽ от вас нет»')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Приложить чек и оспорить' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Без чека оспорить нельзя — организатор сверяет с выпиской.'),
+    ).toBeInTheDocument();
+  });
+
+  it('после окончательного отказа организатора форма чека не показывается', async () => {
+    mockDetail(buildDetail({
+      status: 'closed_failed',
+      myStatus: 'payment_rejected',
+      myDisputeTerminal: true,
+      closedAt: new Date().toISOString(),
+    }));
+    renderPage();
+
+    expect(await screen.findByText('Организатор не нашёл ваш платёж')).toBeInTheDocument();
+    expect(
+      screen.getByText('Чек рассмотрен, платёж не подтверждён — решение окончательное.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Приложить чек и оспорить' })).not.toBeInTheDocument();
+  });
+
+  it('во время спора списание заморожено', async () => {
+    mockDetail(buildDetail({
+      status: 'closed_failed',
+      affectsReputation: true,
+      myStatus: 'payment_disputed',
+      myReceiptUrl: '/uploads/receipt.jpg',
+      closedAt: new Date().toISOString(),
+    }));
+    renderPage();
+
+    expect(await screen.findByText(/Чек отправлен организатору/)).toBeInTheDocument();
+    expect(screen.getByText(/40 очков не списываются/)).toBeInTheDocument();
+  });
+
+  it('организатор завершённого сбора сразу попадает на список сверки', async () => {
+    mockDetail(buildDetail({
+      isOrganizerView: true,
+      awaitingConfirmation: true,
+      myStatus: null,
+      participants: [
+        {
+          userId: 'u-1', firstName: 'Анна', lastName: null, avatarUrl: null,
+          expectedAmountKopecks: 100000, declaredAmountKopecks: 100000,
+          status: 'paid', paidAt: new Date().toISOString(),
+          declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+          paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+          disputedAt: null, disputeTerminal: false,
+        },
+      ],
+    }));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Подтвердить и закрыть сбор' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Снять отметку оплаты: Анна' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Снятая галка = платёж не дошёл: у человека будет 48 часов прислать чек.'),
+    ).toBeInTheDocument();
   });
 });

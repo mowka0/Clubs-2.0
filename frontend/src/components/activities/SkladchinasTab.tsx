@@ -25,12 +25,13 @@ function groupSkladchinas(list: readonly MySkladchinaListItemDto[]): Group[] {
   const active: MySkladchinaListItemDto[] = [];
   const history: MySkladchinaListItemDto[] = [];
   for (const s of list) {
-    if (s.status !== 'active') history.push(s);
-    else if (s.actionRequired) action.push(s);
+    // V89: просьба прислать чек приходит уже по закрытому сбору — она всё равно дело участника.
+    if (s.actionRequired) action.push(s);
+    else if (s.status !== 'active') history.push(s);
     else active.push(s);
   }
   const result: Group[] = [];
-  if (action.length > 0) result.push({ key: 'action_required', title: 'Требует оплаты', items: action });
+  if (action.length > 0) result.push({ key: 'action_required', title: 'Требует действия', items: action });
   if (active.length > 0) result.push({ key: 'active', title: 'Активные сборы', items: active });
   if (history.length > 0) result.push({ key: 'history', title: 'История', items: history });
   return result;

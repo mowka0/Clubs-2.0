@@ -7,6 +7,7 @@ import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.isUploadedImageUrl
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.RosterService
 import com.clubs.generated.jooq.enums.MembershipStatus
@@ -206,7 +207,7 @@ class AccessGateService(
             // Доказательство должно быть изображением от нашего собственного загрузчика — иначе клиент мог бы
             // подсунуть произвольный/внешний/`javascript:` URL, который при проверке организатором рендерится
             // как кликабельная ссылка.
-            if (!isUploadedImageUrl(cleanProof)) throw ValidationException("Некорректная ссылка на скриншот")
+            if (!isUploadedImageUrl(cleanProof, storageBaseUrl)) throw ValidationException("Некорректная ссылка на скриншот")
         }
         // У cash никогда нет скриншота, даже если клиент его прислал.
         val proof = if (normalizedMethod == CLAIM_SBP) cleanProof else null
@@ -343,23 +344,6 @@ class AccessGateService(
         if (rowsAffected == 0) throw ConflictException("Статус участника изменился — обновите экран")
     }
 
-    /**
-     * True только для URL скриншота, произведённого НАШИМ загрузчиком: "{s3.base-url}/uploads/{uuid}.{ext}" —
-     * base-url в проде пуст, поэтому URL root-relative "/uploads/...". Отрезает ровно настроенный origin,
-     * затем проверяет, что остаток — путь вида "uploads/<name>.<imgext>". Это блокирует javascript:/data:
-     * URL И произвольные внешние хосты (например, evil.com/uploads/x.png) от попадания в кликабельную
-     * ссылку организатора — доказательство должно приходить из нашего собственного хранилища.
-     */
-    private fun isUploadedImageUrl(url: String): Boolean {
-        val prefix = storageBaseUrl.trimEnd('/')
-        val relative = when {
-            prefix.isNotEmpty() && url.startsWith("$prefix/") -> url.removePrefix("$prefix/")
-            prefix.isEmpty() && url.startsWith("/") -> url.removePrefix("/")
-            else -> return false
-        }
-        return UPLOADS_PATH.matches(relative)
-    }
-
     companion object {
         // Статусы «без доступа», из которых участник может заявить об оплате взноса в любой момент:
         // frozen = ждёт первого взноса, expired = просрочил продление. active обрабатывается отдельно
@@ -380,6 +364,5 @@ class AccessGateService(
         // Отражает RemoveMemberRequest @Size(min=5); перепроверяется после trim в removeMember.
         private const val MIN_REASON_LENGTH = 5
         // Путь внутри хранилища, куда пишет наш загрузчик: "uploads/{uuid}.{ext}" (StorageController).
-        private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png)$", RegexOption.IGNORE_CASE)
     }
 }

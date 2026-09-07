@@ -20,7 +20,10 @@ enum class SkladchinaParticipantStatus(@get:JvmName("literal") public val litera
     paid("paid"),
     declined("declined"),
     expired_no_response("expired_no_response"),
-    released("released");
+    released("released"),
+    payment_confirmed("payment_confirmed"),
+    payment_rejected("payment_rejected"),
+    payment_disputed("payment_disputed");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "skladchina_participant_status"

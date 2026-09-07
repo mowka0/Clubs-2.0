@@ -58,6 +58,14 @@ object ReputationPolicy {
      */
     fun financeKind(status: SkladchinaParticipantStatus): ReputationKind? = when (status) {
         SkladchinaParticipantStatus.paid -> ReputationKind.skladchina_paid
+        // V89: оплату сверяет организатор. Подтверждённая стоит столько же, сколько заявленная
+        // раньше (+10), а окончательно отклонённая — столько же, сколько молчание (−40): в обоих
+        // случаях финансовое обязательство не исполнено. Отличается ПРИЧИНА, и она видна в статусе
+        // участника, поэтому отдельный kind не заводим — леджеру хватает одной строки на сбор.
+        SkladchinaParticipantStatus.payment_confirmed -> ReputationKind.skladchina_paid
+        SkladchinaParticipantStatus.payment_rejected -> ReputationKind.skladchina_expired
+        // Спор открыт — решения ещё нет: списание ждёт, пока организатор посмотрит чек.
+        SkladchinaParticipantStatus.payment_disputed -> null
         SkladchinaParticipantStatus.expired_no_response -> ReputationKind.skladchina_expired
         SkladchinaParticipantStatus.declined -> null
         SkladchinaParticipantStatus.released -> null

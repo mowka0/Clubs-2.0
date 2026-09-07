@@ -13,6 +13,8 @@ import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import org.slf4j.LoggerFactory
+import com.clubs.common.util.isUploadedImageUrl
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,11 +22,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Действия участника + организатора над активной складчиной: отметка оплаты, отказ (и флоу
- * заявки/резолюции REQUIRES_APPROVAL), пометка/снятие пометки организатором, перераспределение
- * дефицита. Каждая мутация выполняется в своей @Transactional и просит [SkladchinaLifecycleService]
- * автозакрыть складчину, когда не остаётся ни одного `pending`-участника. Выделено из бывшего
+ * Действия участника + организатора над активной складчиной: отметка оплаты и её снятие, отказ
+ * (и флоу заявки/резолюции REQUIRES_APPROVAL), пометка/снятие пометки организатором, спор о
+ * неподтверждённой оплате. Каждая мутация выполняется в своей @Transactional. Выделено из бывшего
  * god-`SkladchinaService` по зоне ответственности.
+ *
+ * V89: закрытие сбора сюда не входит — деньги сводит организатор списком
+ * ([SkladchinaLifecycleService.confirmAndClose]), поэтому действие участника больше не может
+ * закрыть сбор как побочный эффект.
  */
 @Service
 class SkladchinaPaymentService(
@@ -34,7 +39,8 @@ class SkladchinaPaymentService(
     private val templateRegistry: SkladchinaTemplateRegistry,
     private val queryService: SkladchinaQueryService,
     private val lifecycleService: SkladchinaLifecycleService,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    @Value("\${s3.base-url:}") private val storageBaseUrl: String
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaPaymentService::class.java)
 
@@ -45,6 +51,7 @@ class SkladchinaPaymentService(
         if (skladchina.status != SkladchinaStatus.active) {
             throw ValidationException("Skladchina is not active")
         }
+        requireBeforeDeadline(skladchina)
         val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
             ?: throw ForbiddenException("Not a participant of this skladchina")
 
@@ -72,7 +79,6 @@ class SkladchinaPaymentService(
         log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, effectiveAmountKopecks)
 
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
 
         return queryService.getDetail(skladchinaId, callerId)
     }
@@ -84,6 +90,7 @@ class SkladchinaPaymentService(
         if (skladchina.status != SkladchinaStatus.active) {
             throw ValidationException("Skladchina is not active")
         }
+        requireBeforeDeadline(skladchina)
         // V28: шаблоны REQUIRES_APPROVAL (split_bill) не допускают мгновенный свободный отказ —
         // участник должен подать заявку, которую резолвит организатор (см. requestDecline).
         if (templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL) {
@@ -104,7 +111,6 @@ class SkladchinaPaymentService(
         }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -118,6 +124,7 @@ class SkladchinaPaymentService(
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
         if (skladchina.status != SkladchinaStatus.active) throw ValidationException("Skladchina is not active")
+        requireBeforeDeadline(skladchina)
         if (templateRegistry.forType(skladchina.template).declinePolicy != DeclinePolicy.REQUIRES_APPROVAL) {
             throw ValidationException("Этот сбор не поддерживает заявки на отказ")
         }
@@ -197,7 +204,6 @@ class SkladchinaPaymentService(
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
             eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-            lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         } else {
             // #7: отклонение должно быть обосновано — без причины организатор не может отказать.
             val reason = rejectReason?.trim().orEmpty()
@@ -253,7 +259,6 @@ class SkladchinaPaymentService(
         log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
             skladchinaId, targetUserId, callerId, share)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -286,6 +291,163 @@ class SkladchinaPaymentService(
         log.info("Skladchina organizer-unmark: id={} target={} by={}", skladchinaId, targetUserId, callerId)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V89: участник снимает СВОЮ отметку оплаты («ошибся, платил не по этому сбору»). Разрешено,
+     * пока сбор идёт и срок не наступил: после дедлайна начинается сверка, и состав заявок должен
+     * быть стабильным, иначе организатор сверяет один список, а закрывает другой.
+     * Идемпотентно, если участник уже `pending`.
+     */
+    @Transactional
+    fun unmarkOwnPayment(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        if (skladchina.status != SkladchinaStatus.active) {
+            throw ValidationException("Сбор уже закрыт — отметку не изменить")
+        }
+        if (!skladchina.deadline.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Срок сбора истёк — отметку снимает организатор")
+        }
+        val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
+            ?: throw ForbiddenException("Not a participant of this skladchina")
+        if (participant.status == SkladchinaParticipantStatus.pending) {
+            return queryService.getDetail(skladchinaId, callerId) // идемпотентно
+        }
+        if (participant.status != SkladchinaParticipantStatus.paid) {
+            throw ValidationException("Снять можно только собственную отметку об оплате")
+        }
+
+        val updated = skladchinaRepository.revertParticipantToPending(skladchinaId, callerId)
+        if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
+        log.info("Skladchina self-unmark: id={} userId={}", skladchinaId, callerId)
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V89: участник оспаривает отклонение оплаты, приложив чек. Спорить можно ТОЛЬКО с чеком —
+     * фото или скриншот из банка: организатор сверяет с выпиской, а слово против слова разбирать
+     * нечем. Окно — [SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS] от момента отклонения;
+     * пока спор открыт, −40 не списывается. Повторно приложить чек можно, пока организатор не решил.
+     */
+    @Transactional
+    fun disputePayment(
+        skladchinaId: UUID,
+        callerId: UUID,
+        receiptUrl: String,
+        note: String?
+    ): SkladchinaDetailDto {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
+            ?: throw ForbiddenException("Not a participant of this skladchina")
+
+        if (participant.status != SkladchinaParticipantStatus.payment_rejected) {
+            throw ValidationException("Оспорить можно только неподтверждённую оплату")
+        }
+        if (participant.disputeTerminal) {
+            throw ValidationException("Организатор уже рассмотрел ваш чек — решение окончательное")
+        }
+        val rejectedAt = participant.paymentRejectedAt
+            ?: throw ValidationException("Оспорить можно только неподтверждённую оплату")
+        val deadline = rejectedAt.plusHours(SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS)
+        if (OffsetDateTime.now().isAfter(deadline)) {
+            throw ValidationException("Срок на чек истёк")
+        }
+
+        val cleanUrl = receiptUrl.trim()
+        // Чек открывается организатором как ссылка, поэтому принимаем только картинку из нашего
+        // загрузчика: иначе сюда подставился бы javascript:/data:-URL или чужой хост.
+        if (!isUploadedImageUrl(cleanUrl, storageBaseUrl)) {
+            throw ValidationException("Приложите фото или скриншот чека")
+        }
+        val cleanNote = note?.trim()?.takeIf { it.isNotEmpty() }?.take(RECEIPT_NOTE_MAX)
+
+        val updated = skladchinaRepository.attachPaymentReceipt(
+            skladchinaId, callerId, cleanUrl, cleanNote, OffsetDateTime.now()
+        )
+        if (updated == 0) throw ConflictException("Решение по вашей оплате изменилось — обновите экран")
+        log.info("Skladchina payment disputed: id={} userId={}", skladchinaId, callerId)
+
+        val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
+        eventPublisher.publishEvent(
+            SkladchinaPaymentDisputedEvent(
+                skladchinaId = skladchinaId,
+                creatorId = skladchina.creatorId,
+                disputerUserId = callerId,
+                clubName = clubName,
+                title = skladchina.title,
+                note = cleanNote
+            )
+        )
+        return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V89: организатор разбирает чек. Засчитал → `payment_confirmed` (+10), не засчитал →
+     * отклонение становится окончательным (`dispute_terminal`) и −40 применяется сразу.
+     * Арбитра над организатором нет — так же, как в спорах о явке. Репутация применяется тут же,
+     * а не ждёт шедулера: решение принято, тянуть незачем.
+     */
+    @Transactional
+    fun resolvePaymentDispute(
+        skladchinaId: UUID,
+        callerId: UUID,
+        targetUserId: UUID,
+        accept: Boolean
+    ): SkladchinaDetailDto {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        if (skladchina.creatorId != callerId &&
+            !clubRoleGuard.hasCapability(skladchina.clubId, callerId, ClubCapability.MANAGE_SKLADCHINA)
+        ) {
+            throw ForbiddenException("Only the creator or a club manager can manage this skladchina")
+        }
+        val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
+            ?: throw NotFoundException("Participant not found in this skladchina")
+        if (participant.status != SkladchinaParticipantStatus.payment_disputed) {
+            throw ValidationException("У этого участника нет открытого спора об оплате")
+        }
+
+        val now = OffsetDateTime.now()
+        val updated = if (accept) {
+            skladchinaRepository.confirmParticipantPayment(skladchinaId, targetUserId, now)
+        } else {
+            skladchinaRepository.rejectParticipantPayment(
+                skladchinaId, targetUserId, now, participant.paymentRejectNote, terminal = true
+            )
+        }
+        if (updated == 0) throw ConflictException("Спор уже разобран — обновите экран")
+        log.info("Skladchina payment dispute resolved: id={} target={} by={} accepted={}",
+            skladchinaId, targetUserId, callerId, accept)
+
+        lifecycleService.applyDeferredReputation(skladchinaId, targetUserId)
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+
+        val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
+        eventPublisher.publishEvent(
+            SkladchinaPaymentDisputeResolvedEvent(
+                skladchinaId = skladchinaId,
+                participantUserId = targetUserId,
+                clubName = clubName,
+                title = skladchina.title,
+                accepted = accept,
+                affectsReputation = skladchina.affectsReputation
+            )
+        )
+        return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V89: после дедлайна ответы участников закрыты. Раньше это обеспечивал шедулер — он закрывал
+     * сбор ровно в срок; теперь сбор живёт до сверки организатором, и без этой проверки можно было
+     * бы «оплатить» через неделю после срока и уйти от −40, пока организатор не смотрит.
+     */
+    private fun requireBeforeDeadline(skladchina: Skladchina) {
+        if (!skladchina.deadline.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Срок сбора истёк — ответ принимает организатор")
+        }
     }
 
     /** Загружает складчину для орг-мутации (resolve-decline / mark-paid / unmark): должна существовать,
@@ -343,5 +505,7 @@ class SkladchinaPaymentService(
         private const val DECLINE_NOTE_MAX = 500
         // #5: гарантированное число часов организатору на резолюцию заявки на отказ.
         private const val DECLINE_RESOLUTION_WINDOW_HOURS = 48L
+        // Максимальная длина комментария участника к чеку (символов).
+        private const val RECEIPT_NOTE_MAX = 500
     }
 }

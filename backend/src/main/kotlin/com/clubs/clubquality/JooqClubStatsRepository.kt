@@ -7,6 +7,7 @@ import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.MembershipEvent
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
+import com.clubs.skladchina.PAID_LIKE_STATUSES
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.generated.jooq.tables.references.APPLICATIONS
@@ -265,17 +266,24 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
 
     /**
      * Доля оплативших среди «решённых» участников складчин, закрытых в [start, end). Решённые =
-     * {paid, declined, expired_no_response}; `pending` (не определился) и `released` (отпущен
-     * организатором) исключаются. hasBase = есть хотя бы один решённый участник.
+     * {оплатил, отказался, промолчал, оплату не подтвердили}; `pending` (не определился),
+     * `released` (отпущен организатором) и `payment_disputed` (спор ещё идёт) исключаются.
+     * hasBase = есть хотя бы один решённый участник.
+     *
+     * V89: у закрытого сбора оплата хранится как `payment_confirmed`, а `paid` остаётся только там,
+     * где организатор так и не сверил деньги — оба считаются оплатой, отклонённая (`payment_rejected`)
+     * идёт в знаменатель наравне с молчанием.
      */
     private fun skladchinaWindow(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): WindowValue {
         val settled = listOf(
             SkladchinaParticipantStatus.paid,
+            SkladchinaParticipantStatus.payment_confirmed,
+            SkladchinaParticipantStatus.payment_rejected,
             SkladchinaParticipantStatus.declined,
             SkladchinaParticipantStatus.expired_no_response,
         )
         val record = dsl.select(
-            DSL.count().filterWhere(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid)),
+            DSL.count().filterWhere(SKLADCHINA_PARTICIPANTS.STATUS.`in`(PAID_LIKE_STATUSES)),
             DSL.count().filterWhere(SKLADCHINA_PARTICIPANTS.STATUS.`in`(settled)),
         )
             .from(SKLADCHINA_PARTICIPANTS)

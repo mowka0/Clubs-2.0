@@ -103,7 +103,7 @@ class SkladchinaChatStatusServiceTest {
 
     private fun stubCounts(skladchina: Skladchina, paid: Int, total: Int, pending: List<SkladchinaParticipant>) {
         every { skladchinaRepository.findById(skladchina.id) } returns skladchina
-        every { skladchinaRepository.countParticipantsByStatus(skladchina.id, SkladchinaParticipantStatus.paid) } returns paid
+        every { skladchinaRepository.countPaidLike(skladchina.id) } returns paid
         every { skladchinaRepository.countParticipants(skladchina.id) } returns total
         every { skladchinaRepository.findParticipants(skladchina.id) } returns pending
         every { userRepository.findByIds(pending.map { it.userId }) } returns
@@ -250,7 +250,7 @@ class SkladchinaChatStatusServiceTest {
     fun `flush close-проход закрывает пост НЕактивной складчины (каскад без доменного события)`() {
         val skladchina = chatStatusSkladchina(clubId = clubId, status = SkladchinaStatus.cancelled)
         every { skladchinaRepository.findById(skladchina.id) } returns skladchina
-        every { skladchinaRepository.countParticipantsByStatus(skladchina.id, SkladchinaParticipantStatus.paid) } returns 1
+        every { skladchinaRepository.countPaidLike(skladchina.id) } returns 1
         every { skladchinaRepository.countParticipants(skladchina.id) } returns 3
         every { postRepository.findOpenPostsOfInactiveSkladchinas() } returns
             listOf(SkladchinaChatPost(skladchina.id, chatId, 777L, closedAt = null))

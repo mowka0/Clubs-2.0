@@ -40,7 +40,8 @@ data class Skladchinas(
     var updatedAt: OffsetDateTime? = null,
     var reminderSentAt: OffsetDateTime? = null,
     var template: SkladchinaTemplate? = null,
-    var eventId: UUID? = null
+    var eventId: UUID? = null,
+    var confirmationRequestedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -154,6 +155,12 @@ data class Skladchinas(
         }
         else if (this.eventId != o.eventId)
             return false
+        if (this.confirmationRequestedAt == null) {
+            if (o.confirmationRequestedAt != null)
+                return false
+        }
+        else if (this.confirmationRequestedAt != o.confirmationRequestedAt)
+            return false
         return true
     }
 
@@ -181,6 +188,7 @@ data class Skladchinas(
         result = prime * result + (if (this.reminderSentAt == null) 0 else this.reminderSentAt.hashCode())
         result = prime * result + (if (this.template == null) 0 else this.template.hashCode())
         result = prime * result + (if (this.eventId == null) 0 else this.eventId.hashCode())
+        result = prime * result + (if (this.confirmationRequestedAt == null) 0 else this.confirmationRequestedAt.hashCode())
         return result
     }
 
@@ -208,6 +216,7 @@ data class Skladchinas(
         sb.append(", ").append(reminderSentAt)
         sb.append(", ").append(template)
         sb.append(", ").append(eventId)
+        sb.append(", ").append(confirmationRequestedAt)
 
         sb.append(")")
         return sb.toString()

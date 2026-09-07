@@ -6,7 +6,6 @@ import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.event.EventRepository
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import com.clubs.skladchina.template.SplitBillTemplate
@@ -60,7 +59,7 @@ class SkladchinaQueryService(
         return skladchinas.map { s ->
             val collected = skladchinaRepository.sumCollectedKopecks(s.id)
             val totalParticipants = skladchinaRepository.countParticipants(s.id)
-            val paid = skladchinaRepository.countParticipantsByStatus(s.id, SkladchinaParticipantStatus.paid)
+            val paid = skladchinaRepository.countPaidLike(s.id)
             val callerParticipant = skladchinaRepository.findParticipant(s.id, callerId)
             mapper.toMyFeedItemDto(
                 MySkladchinaFeedItem(

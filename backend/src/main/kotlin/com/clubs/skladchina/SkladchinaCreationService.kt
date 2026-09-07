@@ -87,6 +87,7 @@ class SkladchinaCreationService(
             status = SkladchinaStatus.active,
             closedAt = null,
             closedBy = null,
+            confirmationRequestedAt = null,
             createdAt = now,
             updatedAt = now
         )

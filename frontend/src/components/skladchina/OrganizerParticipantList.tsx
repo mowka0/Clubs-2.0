@@ -12,6 +12,12 @@ interface OrganizerParticipantListProps {
   // V28/V29: организатор разрешает запрос участника на отказ. Отклонение (approve=false) несёт
   // обязательную причину — почему участник всё же должен заплатить.
   onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => void;
+  // V89 сверка: вместо кнопок в строках — галки у заявивших оплату. Снятая галка = платёж не дошёл.
+  confirmMode?: boolean;
+  rejectedUserIds?: ReadonlySet<string>;
+  onToggleRejected?: (userId: string) => void;
+  // V89: организатор разбирает присланный чек — засчитать оплату или отказать окончательно.
+  onResolvePayment?: (p: SkladchinaParticipantDto, accept: boolean) => void;
 }
 
 const rowActionStyle: CSSProperties = {
@@ -37,7 +43,11 @@ function formatRubles(kopecks: number): string {
 
 function statusBadge(status: string): { text: string; cls: string } {
   switch (status) {
-    case 'paid':                 return { text: 'Оплатил',        cls: 'rd-going' };
+    // До сверки «оплатил» — это заявка участника, а не подтверждённые деньги.
+    case 'paid':                 return { text: 'Заявил оплату',  cls: 'rd-going' };
+    case 'payment_confirmed':    return { text: 'Оплата сошлась', cls: 'rd-going' };
+    case 'payment_rejected':     return { text: 'Платёж не дошёл', cls: 'rd-decline' };
+    case 'payment_disputed':     return { text: 'Прислал чек',    cls: 'rd-warn' };
     case 'declined':             return { text: 'Отказался',      cls: 'rd-decline' };
     case 'expired_no_response':  return { text: 'Не ответил',     cls: 'rd-neutral2' };
     // Закрыто до дедлайна, пока участник ещё в статусе pending — нейтрально, без штрафа.
@@ -54,13 +64,20 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   onMarkPaid,
   onUnmark,
   onResolveDecline,
+  confirmMode = false,
+  rejectedUserIds,
+  onToggleRejected,
+  onResolvePayment,
 }) => {
   // V29: какая строка сейчас в режиме «отклонить с причиной» и её черновик причины.
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectText, setRejectText] = useState('');
 
   const sorted = [...participants].sort((a, b) => {
-    const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
+    const order: Record<string, number> = {
+      payment_disputed: 0, paid: 1, payment_confirmed: 2, pending: 3,
+      payment_rejected: 4, declined: 5, released: 6, expired_no_response: 7,
+    };
     return (order[a.status] ?? 99) - (order[b.status] ?? 99);
   });
 
@@ -82,9 +99,32 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
           ].filter(Boolean).join(' · ');
           const busy = busyUserId === p.userId;
           const showDeclineRequest = !!onResolveDecline && p.declineRequested;
+          // В режиме сверки заявившие оплату получают галку вместо кнопок: снятая = платёж не дошёл.
+          const inConfirmList = confirmMode && p.status === 'paid';
+          const checked = inConfirmList && !rejectedUserIds?.has(p.userId);
+          // Спор с чеком разбирается прямо в строке — карточка ниже.
+          const showDispute = !!onResolvePayment && p.status === 'payment_disputed';
           // A-2: pending → «Отметить оплату»; paid → «Отменить». Если у участника открыт запрос
           // на отказ, вместо кнопки отметки показываются элементы управления запросом ниже.
-          const action = !canManagePayments || showDeclineRequest ? null
+          const action = inConfirmList ? (
+            <button
+              type="button"
+              aria-label={checked ? `Снять отметку оплаты: ${p.firstName}` : `Отметить оплату: ${p.firstName}`}
+              aria-pressed={checked}
+              onClick={() => onToggleRejected?.(p.userId)}
+              style={{
+                ...rowActionStyle,
+                width: 30,
+                padding: '4px 0',
+                textAlign: 'center',
+                background: checked ? 'var(--success, #22a06b)' : 'transparent',
+                color: checked ? '#08130d' : 'var(--text-faint)',
+                borderColor: checked ? 'var(--success, #22a06b)' : 'var(--text-faint)',
+              }}
+            >
+              ✓
+            </button>
+          ) : !canManagePayments || showDeclineRequest ? null
             : p.status === 'pending' ? (
               <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>
                 {busy ? '…' : 'Отметить оплату'}
@@ -118,12 +158,46 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
-                    {showDeclineRequest ? 'Просит отказаться' : badge.text}
-                  </span>
+                  {!inConfirmList && (
+                    <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
+                      {showDeclineRequest ? 'Просит отказаться' : badge.text}
+                    </span>
+                  )}
                   {action}
                 </div>
               </div>
+              {showDispute && (
+                <div style={{ padding: '0 0 12px 46px' }}>
+                  {p.receiptNote && (
+                    <div className="rd-met" style={{ marginBottom: 8 }}>«{p.receiptNote}»</div>
+                  )}
+                  {p.receiptUrl && (
+                    <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={p.receiptUrl}
+                        alt={`Чек от ${p.firstName}`}
+                        style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 10, display: 'block' }}
+                      />
+                    </a>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onResolvePayment!(p, true)}>
+                      {busy ? '…' : 'Всё сошлось — засчитать'}
+                    </button>
+                    <button
+                      type="button"
+                      style={{ ...rowActionStyle, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                      disabled={busy}
+                      onClick={() => onResolvePayment!(p, false)}
+                    >
+                      {busy ? '…' : 'Платежа нет'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {p.status === 'payment_rejected' && p.paymentRejectNote && (
+                <div className="rd-met" style={{ padding: '0 0 10px 46px' }}>«{p.paymentRejectNote}»</div>
+              )}
               {showDeclineRequest && (
                 <div style={{ padding: '0 0 10px 46px' }}>
                   {p.declineNote && (

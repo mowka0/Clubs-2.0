@@ -34,6 +34,9 @@ function formatRubles(kopecks: number): string {
 }
 
 function pickBadge(s: MySkladchinaListItemDto): Badge | null {
+  // V89: сбор уже закрыт, но организатор не нашёл платёж и окно на чек ещё открыто — это
+  // срочнее любого итога сбора, поэтому проверяется до финального статуса.
+  if (s.myStatus === 'payment_rejected' && s.actionRequired) return { text: 'Нужен чек', accent: true };
   // Для закрытых складчин показываем финальный статус, а не персональный myStatus
   if (s.status !== 'active') {
     switch (s.status) {
@@ -45,6 +48,8 @@ function pickBadge(s: MySkladchinaListItemDto): Badge | null {
   if (s.actionRequired) return { text: 'Требует оплаты', accent: true };
   switch (s.myStatus) {
     case 'paid':                 return { text: 'Оплачено', accent: false };
+    case 'payment_confirmed':    return { text: 'Оплата сошлась', accent: false };
+    case 'payment_disputed':     return { text: 'Чек на проверке', accent: false };
     case 'declined':             return { text: 'Отказался', accent: false };
     case 'expired_no_response':  return { text: 'Не успел', accent: false };
     default:                     break;

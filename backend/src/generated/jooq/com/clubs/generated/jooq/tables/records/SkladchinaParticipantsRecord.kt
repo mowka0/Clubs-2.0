@@ -73,6 +73,34 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         set(value): Unit = set(12, value)
         get(): String? = get(12) as String?
 
+    open var paymentConfirmedAt: OffsetDateTime?
+        set(value): Unit = set(13, value)
+        get(): OffsetDateTime? = get(13) as OffsetDateTime?
+
+    open var paymentRejectedAt: OffsetDateTime?
+        set(value): Unit = set(14, value)
+        get(): OffsetDateTime? = get(14) as OffsetDateTime?
+
+    open var paymentRejectNote: String?
+        set(value): Unit = set(15, value)
+        get(): String? = get(15) as String?
+
+    open var receiptUrl: String?
+        set(value): Unit = set(16, value)
+        get(): String? = get(16) as String?
+
+    open var receiptNote: String?
+        set(value): Unit = set(17, value)
+        get(): String? = get(17) as String?
+
+    open var disputedAt: OffsetDateTime?
+        set(value): Unit = set(18, value)
+        get(): OffsetDateTime? = get(18) as OffsetDateTime?
+
+    open var disputeTerminal: Boolean?
+        set(value): Unit = set(19, value)
+        get(): Boolean? = get(19) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -82,7 +110,7 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
     /**
      * Create a detached, initialised SkladchinaParticipantsRecord
      */
-    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null, declineNote: String? = null, declineRequestedAt: OffsetDateTime? = null, declineRejected: Boolean? = null, declineRejectNote: String? = null): this() {
+    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null, declineNote: String? = null, declineRequestedAt: OffsetDateTime? = null, declineRejected: Boolean? = null, declineRejectNote: String? = null, paymentConfirmedAt: OffsetDateTime? = null, paymentRejectedAt: OffsetDateTime? = null, paymentRejectNote: String? = null, receiptUrl: String? = null, receiptNote: String? = null, disputedAt: OffsetDateTime? = null, disputeTerminal: Boolean? = null): this() {
         this.skladchinaId = skladchinaId
         this.userId = userId
         this.expectedAmountKopecks = expectedAmountKopecks
@@ -96,6 +124,13 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         this.declineRequestedAt = declineRequestedAt
         this.declineRejected = declineRejected
         this.declineRejectNote = declineRejectNote
+        this.paymentConfirmedAt = paymentConfirmedAt
+        this.paymentRejectedAt = paymentRejectedAt
+        this.paymentRejectNote = paymentRejectNote
+        this.receiptUrl = receiptUrl
+        this.receiptNote = receiptNote
+        this.disputedAt = disputedAt
+        this.disputeTerminal = disputeTerminal
         resetChangedOnNotNull()
     }
 
@@ -117,6 +152,13 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
             this.declineRequestedAt = value.declineRequestedAt
             this.declineRejected = value.declineRejected
             this.declineRejectNote = value.declineRejectNote
+            this.paymentConfirmedAt = value.paymentConfirmedAt
+            this.paymentRejectedAt = value.paymentRejectedAt
+            this.paymentRejectNote = value.paymentRejectNote
+            this.receiptUrl = value.receiptUrl
+            this.receiptNote = value.receiptNote
+            this.disputedAt = value.disputedAt
+            this.disputeTerminal = value.disputeTerminal
             resetChangedOnNotNull()
         }
     }

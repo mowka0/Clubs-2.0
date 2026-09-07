@@ -108,6 +108,10 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         set(value): Unit = set(20, value)
         get(): UUID? = get(20) as UUID?
 
+    open var confirmationRequestedAt: OffsetDateTime?
+        set(value): Unit = set(21, value)
+        get(): OffsetDateTime? = get(21) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -117,7 +121,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
     /**
      * Create a detached, initialised SkladchinasRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null, template: SkladchinaTemplate? = null, eventId: UUID? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null, template: SkladchinaTemplate? = null, eventId: UUID? = null, confirmationRequestedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.clubId = clubId
         this.creatorId = creatorId
@@ -139,6 +143,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         this.reminderSentAt = reminderSentAt
         this.template = template
         this.eventId = eventId
+        this.confirmationRequestedAt = confirmationRequestedAt
         resetChangedOnNotNull()
     }
 
@@ -168,6 +173,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
             this.reminderSentAt = value.reminderSentAt
             this.template = value.template
             this.eventId = value.eventId
+            this.confirmationRequestedAt = value.confirmationRequestedAt
             resetChangedOnNotNull()
         }
     }
