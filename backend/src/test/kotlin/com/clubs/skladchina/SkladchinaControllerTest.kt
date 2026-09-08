@@ -327,8 +327,9 @@ class SkladchinaControllerTest {
     }
 
     @Test
-    fun `manual close forgives a shortfall of up to 3 rubles`() {
-        // Цель 4000 ₽, внесено 3999 ₽ (округление долей), второй участник молчит → закрываем вручную.
+    fun `a shortfall of up to 3 rubles still counts as the goal reached`() {
+        // Цель 4000 ₽, подтверждено 3999 ₽ (округление долей) — этого достаточно, чтобы сбор
+        // закрылся сам: допуск тот же, что и у итогового статуса.
         val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 400000)
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -337,11 +338,11 @@ class SkladchinaControllerTest {
                 .content("""{"declaredAmountKopecks": 399900}""")
         ).andExpect(status().isOk)
 
-        // Итог считается по деньгам, которые организатор сверил, поэтому сперва решение по заявке.
-        resolvePayment(id, memberAId, accept = true).andExpect(status().isOk)
-        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+        // Организатор сверил платёж — недобора в 1 ₽ не хватает, чтобы держать сбор открытым.
+        resolvePayment(id, memberAId, accept = true)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("closed_success"))
+        assertEquals("closed_success", skladchinaStatus(id))
     }
 
     @Test
@@ -1796,20 +1797,37 @@ class SkladchinaControllerTest {
     }
 
     @Test
-    fun `the collection closes itself once the last claim is settled`() {
-        val id = createRepSkladchina(listOf(memberAId, memberBId))
+    fun `the collection closes itself once confirmed money reaches the goal`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId)) // цель 1000 ₽, по 500 ₽ с каждого
         markPaidBy(id, memberAToken)
         markPaidBy(id, memberBToken)
 
-        // Первое решение сбор не закрывает — вторая заявка ещё висит.
+        // Половина цели — сбор идёт дальше.
         resolvePayment(id, memberAId, accept = true).andExpect(status().isOk)
         assertEquals("active", skladchinaStatus(id))
 
-        // А после последнего решения закрывать нечего: отдельного шага «закрыть» не нужно.
+        // Подтверждённые деньги добили цель — сбор закрылся сам, без отдельного действия.
         resolvePayment(id, memberBId, accept = true).andExpect(status().isOk)
         assertEquals("closed_success", skladchinaStatus(id))
         assertEquals(10, soleLedgerPoints(memberAId, id))
         assertEquals(10, soleLedgerPoints(memberBId, id))
+    }
+
+    @Test
+    fun `settled claims alone do not close the collection — only the goal or the organizer do`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        // Второй участник отказался: отвечать больше некому, но денег на цель не хватает.
+        mockMvc.perform(post("/api/skladchinas/$id/decline").header("Authorization", "Bearer $memberBToken"))
+            .andExpect(status().isOk)
+        resolvePayment(id, memberAId, accept = true).andExpect(status().isOk)
+
+        // Раньше «все ответили» закрывало сбор — теперь нет: решение за организатором.
+        assertEquals("active", skladchinaStatus(id))
+
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+        assertNotEquals("active", skladchinaStatus(id))
     }
 
     @Test
@@ -1867,8 +1885,8 @@ class SkladchinaControllerTest {
 
     /**
      * V89: организатор разбирает оплаты. Перечисленных отклоняет точечно, остальных засчитывает
-     * массовой кнопкой — и сбор закрывается сам. Если кто-то так и не ответил, финал наступает по
-     * дедлайну (в проде это делает тик шедулера).
+     * массовой кнопкой. Если после этого цель набрана, сбор закрывается сам; иначе организатор
+     * закрывает его рукой — других способов закрыть сбор нет (решение PO 2026-09-08).
      */
     private fun confirmAndClose(skladchinaId: UUID, rejected: List<UUID> = emptyList()) {
         rejected.forEach { resolvePayment(skladchinaId, it, accept = false).andExpect(status().isOk) }
@@ -1879,8 +1897,13 @@ class SkladchinaControllerTest {
             ).andExpect(status().isOk)
         }
         if (skladchinaStatus(skladchinaId) == "active") {
+            // Цель не набрана — закрываем рукой организатора, уже после срока (иначе недобор
+            // означал бы «сбор отменён»).
             dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '1 minute' WHERE id = ?", skladchinaId)
-            scheduler.closeSettledAfterDeadline()
+            mockMvc.perform(
+                post("/api/skladchinas/$skladchinaId/close")
+                    .header("Authorization", "Bearer $organizerToken")
+            ).andExpect(status().isOk)
         }
     }
 

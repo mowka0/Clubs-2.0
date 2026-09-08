@@ -627,25 +627,6 @@ class JooqSkladchinaRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    override fun findSettledAfterDeadline(now: OffsetDateTime): List<Skladchina> {
-        val hasUnsettledClaim = DSL.exists(
-            DSL.selectOne().from(SKLADCHINA_PARTICIPANTS)
-                .where(
-                    SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID)
-                        .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
-                )
-        )
-        return dsl.selectFrom(SKLADCHINAS)
-            .where(
-                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
-                    .and(SKLADCHINAS.DEADLINE.lessOrEqual(now))
-                    // Организатор разобрал все заявки — ждать больше нечего, молчуны получают своё.
-                    .and(DSL.not(hasUnsettledClaim))
-            )
-            .fetch()
-            .map(mapper::toDomain)
-    }
-
     override fun releaseParticipant(skladchinaId: UUID, userId: UUID): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)

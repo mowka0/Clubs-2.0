@@ -507,7 +507,7 @@ describe('SkladchinaPage — сверка оплат организатором 
 
     expect(await screen.findByRole('button', { name: 'Засчитать всех (1)' })).toBeInTheDocument();
     expect(
-      screen.getByText(/Сбор завершён — разберите оплаты/),
+      screen.getByText(/Срок вышел — разберите оплаты и закройте сбор/),
     ).toBeInTheDocument();
     // Отдельного экрана сверки с галками больше нет — решают кнопки в строке участника.
     expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();

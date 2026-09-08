@@ -25,9 +25,10 @@ import java.util.UUID
  * финального статуса и репутационные дельты, применяемые при закрытии. Выделено из бывшего
  * god-`SkladchinaService` по ответственности.
  *
- * V89: действия участника больше НИКОГДА не закрывают сбор — ни «все ответили», ни наступивший
- * дедлайн. Закрытие всегда проходит через сверку денег организатором ([confirmAndClose]), а сбор,
- * до которого организатор не дошёл, шедулер закрывает нейтрально ([neutrallyCloseAbandoned]).
+ * V89: сбор закрывается ровно двумя способами — набранная подтверждёнными деньгами цель
+ * ([maybeCloseWhenGoalReached]) и рука организатора ([closeManually]). Ни отметка участника, ни
+ * «все ответили», ни наступивший срок закрытием не считаются; сбор, до которого организатор так и
+ * не дошёл, шедулер закрывает нейтрально ([neutrallyCloseAbandoned]).
  */
 @Service
 class SkladchinaLifecycleService(
@@ -46,8 +47,8 @@ class SkladchinaLifecycleService(
      * каждому участнику принимается кнопками в его строке, а это — массовый вариант того же
      * действия, чтобы сбор на десять человек не требовал десяти тапов.
      *
-     * Закрытие отдельным шагом не нужно: как только не остаётся ни одной неразобранной заявки и
-     * ни одного молчуна, сбор закрывается сам ([maybeCloseWhenSettled]).
+     * Если подтверждённых денег после этого хватает на цель, сбор закрывается сам
+     * ([maybeCloseWhenGoalReached]); иначе он ждёт руки организатора.
      */
     @Transactional
     fun confirmAllClaimed(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
@@ -61,37 +62,44 @@ class SkladchinaLifecycleService(
         claimed.forEach { p -> skladchinaRepository.confirmParticipantPayment(skladchinaId, p.userId, now) }
         log.info("Skladchina confirm-all: id={} by={} confirmed={}", skladchinaId, callerId, claimed.size)
 
-        maybeCloseWhenSettled(skladchinaId)
+        maybeCloseWhenGoalReached(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
     /**
-     * Сбор закрывается сам, когда решать больше нечего: не осталось ни заявок без ответа
-     * организатора, ни участников, которые ещё не ответили. Отсюда инвариант, ради которого
-     * убрали финальный экран (решение PO 2026-09-08): **сбор закрыт ⇒ все платежи разобраны**.
+     * Сбор закрывается сам ровно в одном случае — **цель набрана подтверждёнными деньгами**
+     * (решение PO 2026-09-08). Второй и последний способ закрыть сбор — рука организатора
+     * ([closeManually]); «все ответили» и наступивший срок закрытием больше не считаются, они лишь
+     * зовут организатора разобрать оплаты.
      *
-     * Спор с чеком считается разобранным: он живёт своей веткой (окно на чек, решение организатора,
-     * протухание) и не должен держать сбор открытым.
+     * Фаза A когда-то убрала автозакрытие по цели из-за усилителя F5-02 («заяви сумму больше цели
+     * — и сбор захлопнется»). Сейчас его нет: цель набирается только теми деньгами, которые
+     * организатор сверил, поэтому решение всё равно принимает он.
+     *
+     * Допуск тот же, что и у итогового статуса ([GOAL_TOLERANCE_KOPECKS]): доли округляются, и
+     * недобор до 3 ₽ не должен держать сбор открытым.
      */
-    fun maybeCloseWhenSettled(skladchinaId: UUID) {
+    fun maybeCloseWhenGoalReached(skladchinaId: UUID) {
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
         if (skladchina.status != SkladchinaStatus.active) return
-        if (skladchinaRepository.countClaimedUnsettled(skladchinaId) > 0) return
-        if (skladchinaRepository.countParticipantsPending(skladchinaId) > 0) return
+        val goal = skladchina.totalGoalKopecks ?: return
+        val confirmed = skladchinaRepository.sumConfirmedKopecks(skladchinaId)
+        if (confirmed <= 0 || confirmed < goal - GOAL_TOLERANCE_KOPECKS) return
 
         try {
             closeInternal(skladchinaId, closedBy = null, manualClose = false)
         } catch (e: Exception) {
             // Сбой закрытия не должен рушить действие, которое его вызвало: сбор останется
-            // активным, а следующий тик шедулера попробует снова.
-            log.error("Close-when-settled failed for skladchina {}", skladchinaId, e)
+            // активным, а следующее решение организатора попробует снова.
+            log.error("Close-on-goal failed for skladchina {}", skladchinaId, e)
         }
     }
 
     /**
      * V89: зовём организатора разобрать оплаты — сбор дождался всех ответов или своего срока,
-     * но заявки ещё висят. Штамп `confirmation_requested_at` ставится атомарно и только один раз:
-     * проигравший гонку (или повторный проход шедулера) молча ничего не делает, второго DM не будет.
+     * но заявки ещё висят. Сам по себе этот момент сбор НЕ закрывает (решение PO 2026-09-08):
+     * закрытие — либо набранная цель, либо рука организатора. Штамп `confirmation_requested_at`
+     * ставится атомарно и только один раз, поэтому второго DM не будет.
      */
     @Transactional
     fun requestConfirmation(skladchinaId: UUID) {

@@ -182,12 +182,6 @@ interface SkladchinaRepository {
     fun countClaimedUnsettled(skladchinaId: UUID): Int
 
     /**
-     * Активные сборы, у которых наступил дедлайн И организатор уже разобрал все заявки —
-     * их пора закрывать: ждать больше нечего, а молчуны получают `expired_no_response`.
-     */
-    fun findSettledAfterDeadline(now: OffsetDateTime): List<Skladchina>
-
-    /**
      * Помечает репутационное решение принятым по ВСЕМ участникам сбора, не создавая строк леджера —
      * нейтральное закрытие брошенного сбора (организатор не пришёл сверять деньги).
      */

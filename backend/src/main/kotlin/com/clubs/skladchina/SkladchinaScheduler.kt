@@ -29,24 +29,6 @@ class SkladchinaScheduler(
     }
 
     /**
-     * Срок вышел, а все заявки организатор разобрал — закрываем: ждать больше нечего, молчуны
-     * получают своё. Обычно сбор закрывается сам в момент последнего решения организатора
-     * ([SkladchinaLifecycleService.maybeCloseWhenSettled]); этот тик добирает случай, когда
-     * последними остались не ответившие.
-     */
-    @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
-    fun closeSettledAfterDeadline() {
-        val settled = skladchinaRepository.findSettledAfterDeadline(OffsetDateTime.now())
-        if (settled.isEmpty()) return
-        log.info("Closing {} skladchinas whose claims are all settled", settled.size)
-        settled.forEach { s ->
-            runSafely("close settled", s.id) {
-                lifecycleService.closeInternal(s.id, closedBy = null, manualClose = false)
-            }
-        }
-    }
-
-    /**
      * Организатор не пришёл сверять деньги за
      * [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней после дедлайна — закрываем
      * нейтрально: ни плюсов, ни минусов никому.

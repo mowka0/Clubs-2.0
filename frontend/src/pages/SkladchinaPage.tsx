@@ -797,7 +797,7 @@ export const SkladchinaPage: FC = () => {
         <div style={{ marginTop: 4 }}>
           {awaitingConfirmation && unsettledClaims.length > 0 && (
             <div className="rd-warn-block" style={{ marginBottom: 10 }}>
-              Сбор завершён — разберите оплаты. Сбор закроется сам, как только по каждой будет решение.
+              Срок вышел — разберите оплаты и закройте сбор.
             </div>
           )}
           {unsettledClaims.length > 0 && (
@@ -813,6 +813,7 @@ export const SkladchinaPage: FC = () => {
               <div style={{ fontSize: 11, color: 'var(--text-faint)', margin: '8px 0 12px' }}>
                 Если чей-то платёж не дошёл — нажмите «Не дошёл» в его строке: у человека будет
                 48 часов прислать чек.
+                {hasGoal && ' Когда подтверждённых денег хватит на цель, сбор закроется сам.'}
               </div>
             </>
           )}
