@@ -61,7 +61,6 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     myStatus: 'pending',
     myExpectedAmountKopecks: 100000,
     myDeclaredAmountKopecks: null,
-    declineRequiresApproval: false,
     myDeclineRequested: false,
     myDeclineRejected: false,
     myDeclineRejectNote: null,
@@ -276,29 +275,22 @@ describe('SkladchinaPage — Phase A', () => {
 });
 
 describe('SkladchinaPage — decline-with-approval (V28)', () => {
-  it('approval-сбор: pending → кнопка «Запросить отказ», не «Отказаться»', async () => {
-    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending' }));
+  it('pending → «Отказаться» открывает форму причины, мгновенного отказа нет', async () => {
+    mockDetail(buildDetail({ myStatus: 'pending' }));
     renderPage();
-    expect(await screen.findByText('Запросить отказ')).toBeInTheDocument();
-    expect(screen.queryByText('Отказаться')).not.toBeInTheDocument();
-  });
-
-  it('FREE-сбор: pending → обычная «Отказаться»', async () => {
-    mockDetail(buildDetail({ declineRequiresApproval: false, myStatus: 'pending' }));
-    renderPage();
-    expect(await screen.findByText('Отказаться')).toBeInTheDocument();
-    expect(screen.queryByText('Запросить отказ')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByText('Отказаться'));
+    expect(screen.getByText('Отправить запрос')).toBeInTheDocument();
   });
 
   it('запрос на отказ отправлен → плашка ожидания, без кнопки отказа', async () => {
-    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending', myDeclineRequested: true }));
+    mockDetail(buildDetail({ myStatus: 'pending', myDeclineRequested: true }));
     renderPage();
     expect(await screen.findByText(/Запрос на отказ отправлен/)).toBeInTheDocument();
-    expect(screen.queryByText('Запросить отказ')).not.toBeInTheDocument();
+    expect(screen.queryByText('Отказаться')).not.toBeInTheDocument();
   });
 
   it('отказ отклонён → плашка «нужно оплатить»', async () => {
-    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending', myDeclineRejected: true }));
+    mockDetail(buildDetail({ myStatus: 'pending', myDeclineRejected: true }));
     renderPage();
     expect(await screen.findByText(/Запрос на отказ отклонён/)).toBeInTheDocument();
   });
@@ -314,7 +306,6 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
       },
     ];
     mockDetail(buildDetail({
-      declineRequiresApproval: true,
       paymentMode: 'fixed_equal',
       isOrganizerView: true,
       myStatus: null,
@@ -339,7 +330,7 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
       },
     ];
     mockDetail(buildDetail({
-      declineRequiresApproval: true, paymentMode: 'fixed_equal', isOrganizerView: true,
+      paymentMode: 'fixed_equal', isOrganizerView: true,
       myStatus: null, participants,
     }));
     renderPage();
@@ -507,10 +498,37 @@ describe('SkladchinaPage — сверка оплат организатором 
 
     expect(await screen.findByRole('button', { name: 'Засчитать всех (1)' })).toBeInTheDocument();
     expect(
-      screen.getByText(/Срок вышел — разберите оплаты и закройте сбор/),
+      screen.getByText(/Срок вышел — сведите сбор/),
     ).toBeInTheDocument();
     // Отдельного экрана сверки с галками больше нет — решают кнопки в строке участника.
     expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();
+  });
+
+  it('после срока кнопка закрытия называется «Свести сбор», до срока — «Закрыть сбор»', async () => {
+    const silent = {
+      userId: 'u-1', firstName: 'Пётр', lastName: null, avatarUrl: null,
+      expectedAmountKopecks: 100000, declaredAmountKopecks: null,
+      status: 'pending' as const, paidAt: null,
+      declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+      paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+      disputedAt: null, disputeTerminal: false,
+    };
+    mockDetail(buildDetail({
+      isOrganizerView: true, awaitingConfirmation: true, myStatus: null,
+      deadline: new Date(Date.now() - 3_600_000).toISOString(),
+      participants: [silent],
+    }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('Свести сбор')).toBeInTheDocument();
+    // Молчун виден в призыве: организатору решать, сдал он или нет.
+    expect(screen.getByText(/Не ответили: 1/)).toBeInTheDocument();
+    unmount();
+
+    mockDetail(buildDetail({
+      isOrganizerView: true, myStatus: null, participants: [silent],
+    }));
+    renderPage();
+    expect(await screen.findByText('Закрыть сбор')).toBeInTheDocument();
   });
 });
 

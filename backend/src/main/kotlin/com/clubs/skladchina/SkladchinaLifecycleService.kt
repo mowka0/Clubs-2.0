@@ -25,10 +25,10 @@ import java.util.UUID
  * финального статуса и репутационные дельты, применяемые при закрытии. Выделено из бывшего
  * god-`SkladchinaService` по ответственности.
  *
- * V89: сбор закрывается ровно двумя способами — набранная подтверждёнными деньгами цель
- * ([maybeCloseWhenGoalReached]) и рука организатора ([closeManually]). Ни отметка участника, ни
- * «все ответили», ни наступивший срок закрытием не считаются; сбор, до которого организатор так и
- * не дошёл, шедулер закрывает нейтрально ([neutrallyCloseAbandoned]).
+ * V89 (редакция PO 2026-09-09): сбор закрывается, когда по каждому участнику есть решение
+ * ([maybeCloseWhenSettled]) — либо рукой организатора ([closeManually]), если сбор потерял смысл.
+ * Наступивший срок закрытием не считается: он лишь закрывает ответы участников и зовёт
+ * организатора свести сбор. Не свёл за неделю — [autoSettleAbandoned] сводит за него.
  */
 @Service
 class SkladchinaLifecycleService(
@@ -47,8 +47,8 @@ class SkladchinaLifecycleService(
      * каждому участнику принимается кнопками в его строке, а это — массовый вариант того же
      * действия, чтобы сбор на десять человек не требовал десяти тапов.
      *
-     * Если подтверждённых денег после этого хватает на цель, сбор закрывается сам
-     * ([maybeCloseWhenGoalReached]); иначе он ждёт руки организатора.
+     * Если после этого нерешённых участников не осталось, сбор закрывается сам
+     * ([maybeCloseWhenSettled]).
      */
     @Transactional
     fun confirmAllClaimed(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
@@ -62,44 +62,40 @@ class SkladchinaLifecycleService(
         claimed.forEach { p -> skladchinaRepository.confirmParticipantPayment(skladchinaId, p.userId, now) }
         log.info("Skladchina confirm-all: id={} by={} confirmed={}", skladchinaId, callerId, claimed.size)
 
-        maybeCloseWhenGoalReached(skladchinaId)
+        maybeCloseWhenSettled(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
     /**
-     * Сбор закрывается сам ровно в одном случае — **цель набрана подтверждёнными деньгами**
-     * (решение PO 2026-09-08). Второй и последний способ закрыть сбор — рука организатора
-     * ([closeManually]); «все ответили» и наступивший срок закрытием больше не считаются, они лишь
-     * зовут организатора разобрать оплаты.
+     * Сбор закрывается сам, когда **не осталось участников без решения** (редакция PO 2026-09-09):
+     * все либо оплатили и сверены, либо отказались, либо получили «не дошёл». Вызывается после
+     * каждой мутации статуса участника — двумя счётчиками, поэтому дёшево.
      *
-     * Фаза A когда-то убрала автозакрытие по цели из-за усилителя F5-02 («заяви сумму больше цели
-     * — и сбор захлопнется»). Сейчас его нет: цель набирается только теми деньгами, которые
-     * организатор сверил, поэтому решение всё равно принимает он.
-     *
-     * Допуск тот же, что и у итогового статуса ([GOAL_TOLERANCE_KOPECKS]): доли округляются, и
-     * недобор до 3 ₽ не должен держать сбор открытым.
+     * Набранная цель отдельным поводом для закрытия быть перестала: сбор, где деньги собраны, а
+     * половина участников не разобрана, закрывать рано — организатору ещё выносить по ним решение.
+     * Спор (`payment_disputed`) закрытию не мешает: у него свой таймер, и исход добивается
+     * шедулером уже по закрытому сбору.
      */
-    fun maybeCloseWhenGoalReached(skladchinaId: UUID) {
+    fun maybeCloseWhenSettled(skladchinaId: UUID) {
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
         if (skladchina.status != SkladchinaStatus.active) return
-        val goal = skladchina.totalGoalKopecks ?: return
-        val confirmed = skladchinaRepository.sumConfirmedKopecks(skladchinaId)
-        if (confirmed <= 0 || confirmed < goal - GOAL_TOLERANCE_KOPECKS) return
+        if (skladchinaRepository.countParticipantsPending(skladchinaId) > 0) return
+        if (skladchinaRepository.countClaimedUnsettled(skladchinaId) > 0) return
 
         try {
             closeInternal(skladchinaId, closedBy = null, manualClose = false)
         } catch (e: Exception) {
             // Сбой закрытия не должен рушить действие, которое его вызвало: сбор останется
             // активным, а следующее решение организатора попробует снова.
-            log.error("Close-on-goal failed for skladchina {}", skladchinaId, e)
+            log.error("Close-when-settled failed for skladchina {}", skladchinaId, e)
         }
     }
 
     /**
-     * V89: зовём организатора разобрать оплаты — сбор дождался всех ответов или своего срока,
-     * но заявки ещё висят. Сам по себе этот момент сбор НЕ закрывает (решение PO 2026-09-08):
-     * закрытие — либо набранная цель, либо рука организатора. Штамп `confirmation_requested_at`
-     * ставится атомарно и только один раз, поэтому второго DM не будет.
+     * V89: зовём организатора свести сбор — срок вышел (или все уже ответили), а решения по
+     * участникам ещё не по всем. Сам по себе этот момент сбор НЕ закрывает: закрытие наступит,
+     * когда организатор разберёт последнего. Штамп `confirmation_requested_at` ставится атомарно
+     * и только один раз, поэтому второго DM не будет.
      */
     @Transactional
     fun requestConfirmation(skladchinaId: UUID) {
@@ -111,6 +107,9 @@ class SkladchinaLifecycleService(
         val claimedCount = skladchinaRepository.countPaidLike(skladchinaId)
         val participantCount = skladchinaRepository.countParticipants(skladchinaId)
         log.info("Skladchina confirmation requested: id={} claimed={}/{}", skladchinaId, claimedCount, participantCount)
+        // Пост в чате клуба показывает «⏳ До <срок>» — в этот момент строка должна смениться на
+        // «срок вышел», иначе она провисит прошедшей датой до первого действия организатора.
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         eventPublisher.publishEvent(
             SkladchinaConfirmationRequestedEvent(
                 skladchinaId = skladchinaId,
@@ -136,10 +135,13 @@ class SkladchinaLifecycleService(
     }
 
     /**
-     * `POST /close` — «закрыть сбор сейчас, как есть». Заявки, которые организатор так и не
-     * разобрал, закрываются нейтрально (`released`): в итог они не идут, но и наказывать за них
-     * некого — решения по ним нет. Кнопка нужна для «сбор больше не актуален», обычный финал
-     * наступает сам, когда разобрана последняя заявка.
+     * `POST /close` — одна кнопка с двумя смыслами, по обе стороны от срока:
+     *
+     * - **до срока** это «сбор больше не актуален»: недобор делает сбор отменённым, а всё
+     *   нерешённое закрывается нейтрально — обещание было «ответить до срока», и срок не наступил;
+     * - **после срока** это «свести сбор» — тот же итог, к которому через неделю пришёл бы
+     *   [autoSettleAbandoned]: заявкам верим, молчание стоит −40. Организатор, считающий заявку
+     *   пустой, говорит это явно кнопкой «Не дошёл» в строке участника.
      */
     @Transactional
     fun closeManually(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
@@ -148,22 +150,48 @@ class SkladchinaLifecycleService(
             throw ValidationException("Skladchina is already closed")
         }
         val now = OffsetDateTime.now()
-        // Ручное закрытие ДО дедлайна отменяет сбор при недоборе — прежнее поведение; после
-        // дедлайна это обычный финал, и итог считается по собранному.
-        closeInternal(skladchinaId, closedBy = callerId, manualClose = now.isBefore(skladchina.deadline))
+        val beforeDeadline = now.isBefore(skladchina.deadline)
+        if (!beforeDeadline) settleUnresolvedAnswers(skladchinaId, now)
+        closeInternal(skladchinaId, closedBy = callerId, manualClose = beforeDeadline)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
     /**
-     * Организатор так и не пришёл разбирать оплаты (прошло
-     * [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней после дедлайна) — сбор
-     * закрывается НЕЙТРАЛЬНО: молчуны и неразобранные заявки уходят в `released` без строк в
-     * леджере. То, что организатор успел подтвердить, своё получает: он прямо сказал «деньги
-     * дошли», отнимать за это очки не за что (правка PO 2026-09-08).
+     * Организатор так и не свёл сбор (прошло
+     * [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней после дедлайна) — сводим за
+     * него по правилу «кто ответил, тому верим» (решение PO 2026-09-09):
+     *
+     * - заявленная оплата засчитывается (`payment_confirmed`, +10) — у организатора были неделя и
+     *   DM, чтобы сказать «не дошло»;
+     * - неразобранная заявка на отказ считается одобренной (`declined`, ноль) — человек ответил,
+     *   дальше был не его ход;
+     * - молчание остаётся молчанием: [closeInternal] переведёт его в `expired_no_response` (−40).
+     *
+     * Так цена −40 за неответ перестала зависеть от расторопности организатора — она наступает
+     * максимум через неделю после срока в любом случае.
      */
     @Transactional
-    fun neutrallyCloseAbandoned(skladchinaId: UUID) {
-        closeInternal(skladchinaId, closedBy = null, manualClose = false, neutral = true)
+    fun autoSettleAbandoned(skladchinaId: UUID) {
+        val now = OffsetDateTime.now()
+        settleUnresolvedAnswers(skladchinaId, now)
+        closeInternal(skladchinaId, closedBy = null, manualClose = false, autoSettled = true)
+    }
+
+    /**
+     * Сведение ответов, по которым организатор решения не принял: «кто ответил, тому верим».
+     * Заявленная оплата становится подтверждённой, неразобранная заявка на отказ — одобренной.
+     * Молчунов не трогает: их переводит [closeInternal] — в `expired_no_response`, если срок
+     * наступил. Общее для руки организатора после срока и для [autoSettleAbandoned].
+     */
+    private fun settleUnresolvedAnswers(skladchinaId: UUID, now: OffsetDateTime) {
+        skladchinaRepository.findParticipants(skladchinaId).forEach { p ->
+            when {
+                p.status == SkladchinaParticipantStatus.paid ->
+                    skladchinaRepository.confirmParticipantPayment(skladchinaId, p.userId, now)
+                p.status == SkladchinaParticipantStatus.pending && p.declineRequestedAt != null ->
+                    skladchinaRepository.setParticipantDeclined(skladchinaId, p.userId, now)
+            }
+        }
     }
 
     /**
@@ -219,12 +247,14 @@ class SkladchinaLifecycleService(
      * переводит их в `released` — обещание было «ответить до дедлайна», а дедлайн так и не наступил,
      * поэтому строка в ledger не создаётся (financeKind(released) = null).
      *
+     * [autoSettled] — сбор свёл шедулер, а не человек: влияет только на текст DM организатору.
+     *
      * @Transactional: closeInternal вызывается из [confirmAndClose] (self-вызов внутри уже открытой
      * транзакции сверки) и из каскадов. Атомарность гарантирует, что сбой записи в ledger откатывает
      * и claim, и отметки reputation_applied — ретрай может восстановиться (нет осиротевших участников).
      */
     @Transactional
-    fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean, neutral: Boolean = false) {
+    fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean, autoSettled: Boolean = false) {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
         if (skladchina.status != SkladchinaStatus.active) {
@@ -235,13 +265,10 @@ class SkladchinaLifecycleService(
             ?: throw NotFoundException("Club not found")
 
         // Итог считается по деньгам, которые организатор СВЕРИЛ: заявка без его решения — это
-        // обещание, а не деньги (решение PO 2026-09-08). Исключение — нейтральное закрытие
-        // брошенного сбора: там решений нет вовсе, и итог честнее считать по заявленному.
-        val collected = if (neutral) {
-            skladchinaRepository.sumCollectedKopecks(skladchinaId)
-        } else {
-            skladchinaRepository.sumConfirmedKopecks(skladchinaId)
-        }
+        // обещание, а не деньги (решение PO 2026-09-08). Брошенный сбор к этому моменту уже сведён
+        // ([autoSettleAbandoned] засчитал заявки), поэтому отдельной ветки «считать по заявленному»
+        // здесь больше нет.
+        val collected = skladchinaRepository.sumConfirmedKopecks(skladchinaId)
         val finalStatus = computeFinalStatus(skladchina, collected, manualClose)
         val closedAt = OffsetDateTime.now()
 
@@ -251,11 +278,9 @@ class SkladchinaLifecycleService(
         }
 
         val deadlineReached = !closedAt.isBefore(skladchina.deadline)
-        if (deadlineReached && !neutral) {
+        if (deadlineReached) {
             skladchinaRepository.expirePendingParticipants(skladchinaId)
         } else {
-            // Нейтральное закрытие не наказывает даже молчунов: организатор не пришёл разбирать,
-            // и цена его отсутствия не перекладывается на участников.
             skladchinaRepository.releasePendingParticipants(skladchinaId)
         }
         // Заявки, до которых организатор не дошёл, закрываются нейтрально — ни очков, ни денег в итог.
@@ -295,7 +320,7 @@ class SkladchinaLifecycleService(
                 participantCount = totalParticipants,
                 affectsReputation = skladchina.affectsReputation,
                 expiredParticipantUserIds = expiredUserIds,
-                closedWithoutConfirmation = neutral
+                autoSettled = autoSettled
             )
         )
     }

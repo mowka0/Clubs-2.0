@@ -69,9 +69,11 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectText, setRejectText] = useState('');
 
+  // Сверху те, по кому организатору ещё принимать решение (спор → заявка → молчун), ниже —
+  // уже решённые: после срока список читается как список дел, а не как алфавит статусов.
   const sorted = [...participants].sort((a, b) => {
     const order: Record<string, number> = {
-      payment_disputed: 0, paid: 1, payment_confirmed: 2, pending: 3,
+      payment_disputed: 0, paid: 1, pending: 2, payment_confirmed: 3,
       payment_rejected: 4, declined: 5, released: 6, expired_no_response: 7,
     };
     return (order[a.status] ?? 99) - (order[b.status] ?? 99);

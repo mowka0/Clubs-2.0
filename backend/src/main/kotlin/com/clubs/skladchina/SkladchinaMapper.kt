@@ -68,7 +68,6 @@ class SkladchinaMapper {
         callerIsManager: Boolean,
         participants: List<SkladchinaParticipantInfo>,
         collectedKopecks: Long,
-        declineRequiresApproval: Boolean,
         // Встреча-источник счёта; null у сборов без события (custom) — тогда блока встречи нет.
         event: Event? = null
     ): SkladchinaDetailDto {
@@ -115,7 +114,6 @@ class SkladchinaMapper {
             myStatus = myParticipant?.status?.literal,
             myExpectedAmountKopecks = myParticipant?.expectedAmountKopecks,
             myDeclaredAmountKopecks = myParticipant?.declaredAmountKopecks,
-            declineRequiresApproval = declineRequiresApproval,
             myDeclineRequested = myParticipant?.declineRequestedAt != null,
             myDeclineRejected = myParticipant?.declineRejected ?: false,
             myDeclineRejectNote = myParticipant?.declineRejectNote,

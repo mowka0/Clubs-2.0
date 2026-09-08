@@ -148,8 +148,9 @@ class SkladchinaBotNotifier(
     }
 
     /**
-     * V89: сбор дождался всех ответов или своего срока — зовём организатора сверить деньги.
-     * Это единственный сигнал, что пора закрывать сбор: сам он больше не закроется.
+     * V89: сбор дождался всех ответов или своего срока, а решения есть не по всем — зовём
+     * организатора свести сбор. DM называет и срок, после которого сведение произойдёт без него:
+     * иначе автосведение через неделю выглядело бы как произвол.
      */
     @TransactionalEventListener(fallbackExecution = true)
     fun onConfirmationRequested(event: SkladchinaConfirmationRequestedEvent) {
@@ -159,16 +160,18 @@ class SkladchinaBotNotifier(
             return
         }
         val text = buildString {
-            append("💰 Сбор «${event.title}» завершён — сверьте деньги")
+            append("💰 Сбор «${event.title}» завершён — сведите его")
             if (event.clubName.isNotBlank()) append("\nКлуб «${event.clubName}»")
             append("\n\nОплату заявили ${event.claimedCount} из ${event.participantCount}.")
-            append("\nСнимите галку с тех, от кого платёж не дошёл, и закройте сбор.")
+            append("\nЗасчитайте платежи, которые дошли, а по остальным нажмите «Не дошёл».")
+            append("\n\nЕсли не свести за неделю, мы сведём сбор сами: заявленные оплаты будут ")
+            append("засчитаны, а тем, кто не ответил, снизится надёжность.")
         }
         notificationService.sendDirectMessageWithDeepLink(
             telegramId = organizerTelegramId,
             text = text,
             webAppPath = "/skladchina/${event.skladchinaId}",
-            buttonText = "💰 Сверить оплаты"
+            buttonText = "💰 Свести сбор"
         )
         log.info("Skladchina confirmation-request DM sent: id={} organizer={}", event.skladchinaId, organizerTelegramId)
     }
@@ -275,9 +278,10 @@ class SkladchinaBotNotifier(
             append("$statusEmoji Сбор закрыт: «${event.title}»")
             append("\n\nСобрано: $collectedRub ₽$goalLine")
             append("\nОплатили: ${event.paidCount} из ${event.participantCount}")
-            if (event.closedWithoutConfirmation) {
-                append("\n\nВы не сверили оплаты, поэтому сбор закрыт без последствий: ")
-                append("репутация никому не начислена и не снижена.")
+            if (event.autoSettled) {
+                append("\n\nВы не свели сбор, поэтому мы свели его сами: заявленные оплаты засчитаны")
+                if (event.affectsReputation) append(", а тем, кто не ответил, снижена репутация")
+                append(".")
             } else if (event.affectsReputation) {
                 append("\n⚠️ Репутация участников пересчитана.")
             }

@@ -7,7 +7,6 @@ import { useSetClubContext } from '../store/useClubContextStore';
 import {
   useCloseSkladchinaMutation,
   useConfirmAllPaymentsMutation,
-  useDeclineSkladchinaMutation,
   useDisputePaymentMutation,
   useMarkPaidMutation,
   useOrganizerMarkPaidMutation,
@@ -69,7 +68,6 @@ export const SkladchinaPage: FC = () => {
   const query = useSkladchinaQuery(id);
   useSetClubContext(query.data?.clubId);
   const markPaidMut = useMarkPaidMutation();
-  const declineMut = useDeclineSkladchinaMutation();
   const orgMarkMut = useOrganizerMarkPaidMutation();
   const orgUnmarkMut = useOrganizerUnmarkMutation();
   const requestDeclineMut = useRequestDeclineMutation();
@@ -158,6 +156,10 @@ export const SkladchinaPage: FC = () => {
   // Сбор дождался всех ответов или своего срока: платить уже поздно, дальше слово за организатором.
   const awaitingConfirmation = s.awaitingConfirmation;
   const unsettledClaims = s.participants?.filter((p) => p.status === 'paid') ?? [];
+  const silentCount = s.participants?.filter((p) => p.status === 'pending').length ?? 0;
+  // После срока «Закрыть сбор» превращается в «Свести сбор»: заявки засчитываются, молчание
+  // стоит −40 — то же, к чему через неделю пришёл бы шедулер.
+  const deadlinePassed = new Date(s.deadline).getTime() <= Date.now();
 
   const handleOpenPaymentLink = () => {
     haptic.impact('light');
@@ -226,29 +228,10 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  // V28: шаблоны с одобрением отказа (split_bill) открывают форму причины вместо мгновенного отказа.
+  // Отказ всегда обосновывается и решается организатором (PO 2026-09-09).
   const handleDeclineClick = () => {
     setActionError(null);
-    if (s.declineRequiresApproval) {
-      setShowDeclineForm(true);
-      return;
-    }
-    void handleInstantDecline();
-  };
-
-  const handleInstantDecline = async () => {
-    if (!window.confirm('Отказаться от участия в сборе?')) return;
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await declineMut.mutateAsync(s.id);
-      haptic.notify('success');
-      setToastMessage('Вы отказались от участия.');
-    } catch (e) {
-      console.error('decline failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось отказаться. Попробуйте ещё раз.');
-    }
+    setShowDeclineForm(true);
   };
 
   const handleRequestDecline = async () => {
@@ -369,16 +352,28 @@ export const SkladchinaPage: FC = () => {
   };
 
   const handleClose = async () => {
-    const warn = unsettledClaims.length > 0
-      ? `Закрыть сбор? ${unsettledClaims.length} неразобранных оплат останутся незасчитанными — ни плюсов, ни минусов по ним.`
-      : 'Закрыть сбор? Дальнейшие оплаты будут невозможны.';
+    const warn = deadlinePassed
+      ? [
+          'Свести сбор?',
+          unsettledClaims.length > 0
+            ? `Заявленные оплаты (${unsettledClaims.length}) будут засчитаны.`
+            : null,
+          silentCount > 0
+            ? s.affectsReputation
+              ? `${silentCount} не ответили — им спишется 40 очков надёжности.`
+              : `${silentCount} не ответили.`
+            : null,
+        ].filter(Boolean).join(' ')
+      : unsettledClaims.length > 0
+        ? `Закрыть сбор? ${unsettledClaims.length} неразобранных оплат останутся незасчитанными — ни плюсов, ни минусов по ним.`
+        : 'Закрыть сбор? Дальнейшие оплаты будут невозможны.';
     if (!window.confirm(warn)) return;
     setActionError(null);
     try {
       haptic.impact('heavy');
       await closeMut.mutateAsync(s.id);
       haptic.notify('success');
-      setToastMessage('Сбор закрыт.');
+      setToastMessage(deadlinePassed ? 'Сбор сведён и закрыт.' : 'Сбор закрыт.');
     } catch (e) {
       console.error('close failed', e);
       haptic.notify('error');
@@ -525,7 +520,10 @@ export const SkladchinaPage: FC = () => {
           {/* Режим оплаты у сплита сказан здесь: ряда бейджей, где он стоял раньше, больше нет. */}
           {isSplit && ` · ${paymentModeLabel(s.paymentMode).toLowerCase()}`}
           {s.confirmedCount > 0 && s.confirmedCount < s.paidCount && ` · сверено ${s.confirmedCount}`}
-          {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
+          {/* После срока «до 8 сентября» врало бы: сбор живёт, пока организатор его не сведёт. */}
+          {isActive && deadlinePassed
+            ? ' · срок вышел'
+            : <>{' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}</>}
         </div>
         {s.description && (
           <div className="rd-sklad-inline-sep">{s.description}</div>
@@ -549,7 +547,10 @@ export const SkladchinaPage: FC = () => {
             Сбор завершён — ждём сверки организатора
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
-            Отметить оплату уже нельзя. Организатор сведёт деньги и закроет сбор.
+            Отметить оплату уже нельзя — сбор сводит организатор.
+            {s.affectsReputation
+              ? ' Вы не ответили до срока: при закрытии это снизит надёжность на 40. Если вы отдавали деньги наличными, попросите организатора отметить вашу оплату.'
+              : ' Если вы отдавали деньги наличными, попросите организатора отметить вашу оплату.'}
           </div>
         </div>
       )}
@@ -643,9 +644,9 @@ export const SkladchinaPage: FC = () => {
                   type="button"
                   className="rd-btn-outline"
                   onClick={handleDeclineClick}
-                  disabled={declineMut.isPending}
+                  disabled={requestDeclineMut.isPending}
                 >
-                  {s.declineRequiresApproval ? 'Запросить отказ' : 'Отказаться'}
+                  Отказаться
                 </button>
               )}
             </div>
@@ -665,7 +666,7 @@ export const SkladchinaPage: FC = () => {
               <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
                 {isActive
                   ? 'Организатор сверит с выпиской и подтвердит, когда сбор закроется.'
-                  : 'Организатор не сверил оплаты — сбор закрыт без последствий, репутация не изменилась.'}
+                  : 'Сбор закрыли до сверки — эта оплата в итог не вошла, репутация не изменилась.'}
               </div>
               {isActive && !awaitingConfirmation && (
                 <button
@@ -795,9 +796,10 @@ export const SkladchinaPage: FC = () => {
 
       {isActive && isCreator && (
         <div style={{ marginTop: 4 }}>
-          {awaitingConfirmation && unsettledClaims.length > 0 && (
+          {awaitingConfirmation && unsettledClaims.length + silentCount > 0 && (
             <div className="rd-warn-block" style={{ marginBottom: 10 }}>
-              Срок вышел — разберите оплаты и закройте сбор.
+              Срок вышел — сведите сбор: засчитайте оплаты, которые дошли.
+              {silentCount > 0 && ` Не ответили: ${silentCount}.`}
             </div>
           )}
           {unsettledClaims.length > 0 && (
@@ -812,8 +814,7 @@ export const SkladchinaPage: FC = () => {
               </button>
               <div style={{ fontSize: 11, color: 'var(--text-faint)', margin: '8px 0 12px' }}>
                 Если чей-то платёж не дошёл — нажмите «Не дошёл» в его строке: у человека будет
-                48 часов прислать чек.
-                {hasGoal && ' Когда подтверждённых денег хватит на цель, сбор закроется сам.'}
+                48 часов прислать чек. Когда по каждому участнику будет решение, сбор закроется сам.
               </div>
             </>
           )}
@@ -824,7 +825,9 @@ export const SkladchinaPage: FC = () => {
             disabled={closeMut.isPending}
             style={{ color: 'var(--danger)' }}
           >
-            {closeMut.isPending ? 'Закрываем…' : 'Закрыть сбор'}
+            {closeMut.isPending
+              ? deadlinePassed ? 'Сводим…' : 'Закрываем…'
+              : deadlinePassed ? 'Свести сбор' : 'Закрыть сбор'}
           </button>
           {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
         </div>

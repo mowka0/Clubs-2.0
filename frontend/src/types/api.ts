@@ -816,7 +816,6 @@ export interface SkladchinaDetailDto {
   myExpectedAmountKopecks: number | null;
   myDeclaredAmountKopecks: number | null;
   // V28: отказ-с-подтверждением
-  declineRequiresApproval: boolean;
   myDeclineRequested: boolean;
   myDeclineRejected: boolean;
   myDeclineRejectNote: string | null;     // V29: причина организатора, почему отклонил мой отказ

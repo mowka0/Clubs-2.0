@@ -19,14 +19,6 @@ interface SkladchinaTemplateStrategy {
     val type: SkladchinaTemplate
 
     /**
-     * Как участник может отказаться. FREE = мгновенный, бесплатный `decline` (custom/voluntary —
-     * отказ здесь желаемое поведение). REQUIRES_APPROVAL = обоснованный запрос, который организатор
-     * одобряет/отклоняет (split_bill — благо уже потреблено, поэтому бесплатный отказ был бы
-     * безбилетничеством). V28.
-     */
-    val declinePolicy: DeclinePolicy
-
-    /**
      * Верифицированы ли исходы репутации от этого шаблона организатором/рельсой (в противовес
      * honor-system самозаявлению). Мостик к будущему выводу «финансовой ответственности»: только
      * верифицированные исходы достаточно надёжны, чтобы их оценивать. (Ещё не персистится — ни один
@@ -41,14 +33,6 @@ interface SkladchinaTemplateStrategy {
      * ValidationException (400) / ForbiddenException (403) / NotFoundException (404) при невалидном вводе.
      */
     fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution
-}
-
-/** Как работает отказ для шаблона (V28). */
-enum class DeclinePolicy {
-    /** Мгновенный, бесплатный отказ, контролируемый участником. */
-    FREE,
-    /** Обоснованный запрос, который организатор одобряет (→ declined) или отклоняет (→ нужно платить). */
-    REQUIRES_APPROVAL,
 }
 
 /** Во что шаблон превращает запрос создания; движок персистит это как есть. */

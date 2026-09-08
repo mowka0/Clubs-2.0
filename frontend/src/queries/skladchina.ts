@@ -3,7 +3,6 @@ import {
   closeSkladchina,
   confirmAllSkladchinaPayments,
   createSkladchina,
-  declineSkladchina,
   disputeSkladchinaPayment,
   getEventSplitState,
   getMySkladchinas,
@@ -163,18 +162,6 @@ export function useResolveDeclineMutation() {
     mutationFn: ({ id, userId, approve, rejectReason }: { id: string; userId: string; approve: boolean; rejectReason?: string }) =>
       resolveDeclineSkladchina(id, userId, approve, rejectReason),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
-  });
-}
-
-export function useDeclineSkladchinaMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => declineSkladchina(id),
-    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });

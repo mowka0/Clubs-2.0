@@ -26,6 +26,7 @@ class SkladchinaChatStatusRendererTest {
             collectedKopecks = 300_000,
             totalGoalKopecks = 1_000_000,
             deadline = deadline,
+            deadlinePassed = false,
             pending = listOf(ChatMention(111L, "Наташа"), ChatMention(222L, "Марк"))
         )
 
@@ -35,6 +36,20 @@ class SkladchinaChatStatusRendererTest {
         assertTrue(text.contains("👥 Скинулись — 3 из 10 · сверено 1"))
         assertTrue(text.contains("💵 Собрано 3\u00A0000 из 10\u00A0000 ₽"))
         assertTrue(text.contains("⏳ До 10.07.2026 18:00 МСК"))
+        // Тот же сбор после срока: дата сменяется объяснением, почему он ещё открыт.
+        val afterDeadline = renderer.statusText(
+            title = "Бронь корта",
+            paidCount = 3,
+            confirmedCount = 1,
+            participantCount = 10,
+            collectedKopecks = 300_000,
+            totalGoalKopecks = 1_000_000,
+            deadline = deadline,
+            deadlinePassed = true,
+            pending = emptyList()
+        )
+        assertTrue(afterDeadline.contains("⏳ Срок вышел — организатор сводит сбор"))
+        assertFalse(afterDeadline.contains("⏳ До"))
         assertTrue(text.contains("Ждём: <a href=\"tg://user?id=111\">Наташа</a>, <a href=\"tg://user?id=222\">Марк</a>"))
     }
 
@@ -48,6 +63,7 @@ class SkladchinaChatStatusRendererTest {
             collectedKopecks = 1_000_000,
             totalGoalKopecks = 1_000_000,
             deadline = deadline,
+            deadlinePassed = false,
             pending = emptyList()
         )
         assertFalse(text.contains("Ждём"))
@@ -66,6 +82,7 @@ class SkladchinaChatStatusRendererTest {
             collectedKopecks = 0,
             totalGoalKopecks = null,
             deadline = deadline,
+            deadlinePassed = false,
             pending = listOf(ChatMention(1L, "<script>Вася & Ко"))
         )
 
@@ -87,6 +104,7 @@ class SkladchinaChatStatusRendererTest {
             collectedKopecks = 0,
             totalGoalKopecks = null,
             deadline = deadline,
+            deadlinePassed = false,
             pending = pending
         )
 

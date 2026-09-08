@@ -139,8 +139,7 @@ data class SkladchinaDetailDto(
     val myExpectedAmountKopecks: Long?,
     val myDeclaredAmountKopecks: Long?,
 
-    // V28 отказ-с-подтверждением
-    val declineRequiresApproval: Boolean,          // политика шаблона — фронтенд использует флоу запроса
+    // V28 отказ-с-подтверждением (с 2026-09-09 — единственный путь отказа для всех шаблонов)
     val myDeclineRequested: Boolean,               // у вызывающего открытый запрос на отказ, ждёт организатора
     val myDeclineRejected: Boolean,                // отказ вызывающего отклонён — должен заплатить
     val myDeclineRejectNote: String?,              // V29: причина организатора для отклонения отказа

@@ -53,10 +53,6 @@ export function markPaidSkladchina(
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, body);
 }
 
-export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/decline`);
-}
-
 // V28: участник открывает запрос на отказ с указанием причины (шаблоны REQUIRES_APPROVAL).
 export function requestDeclineSkladchina(id: string, reason: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/request-decline`, { reason });

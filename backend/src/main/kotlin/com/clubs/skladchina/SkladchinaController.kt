@@ -80,16 +80,7 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.markPaid(id, user.userId, request.declaredAmountKopecks))
     }
 
-    @PostMapping("/api/skladchinas/{id}/decline")
-    fun decline(
-        @PathVariable id: UUID,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina decline: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(paymentService.decline(id, user.userId))
-    }
-
-    // V28: участник открывает запрос на отказ с указанием причины (шаблоны REQUIRES_APPROVAL, напр. split_bill).
+    // Отказ — всегда заявка с причиной, которую решает организатор (PO 2026-09-09).
     @PostMapping("/api/skladchinas/{id}/request-decline")
     fun requestDecline(
         @PathVariable id: UUID,

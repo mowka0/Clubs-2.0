@@ -7,8 +7,8 @@ import java.time.OffsetDateTime
 
 /**
  * Тики сверки оплат (V89). Сбор больше не закрывается по дедлайну сам — вместо этого шедулер
- * зовёт организатора сверить деньги, а если тот не пришёл, закрывает сбор нейтрально и решает
- * за него отложенные исходы. Ошибка по одной складчине логируется и не рвёт батч.
+ * зовёт организатора свести сбор, а если тот не пришёл за неделю, сводит за него и решает
+ * отложенные исходы. Ошибка по одной складчине логируется и не рвёт батч.
  */
 @Service
 class SkladchinaScheduler(
@@ -17,7 +17,7 @@ class SkladchinaScheduler(
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaScheduler::class.java)
 
-    /** «Все ответили» или наступил срок → DM организатору «сверьте деньги» (ровно один раз на сбор). */
+    /** Наступил срок (или все уже ответили), а решения есть не по всем → DM организатору «сведите сбор». */
     @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
     fun requestPaymentConfirmations() {
         val ready = skladchinaRepository.findNeedingConfirmationRequest(OffsetDateTime.now())
@@ -29,18 +29,17 @@ class SkladchinaScheduler(
     }
 
     /**
-     * Организатор не пришёл сверять деньги за
-     * [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней после дедлайна — закрываем
-     * нейтрально: ни плюсов, ни минусов никому.
+     * Организатор не свёл сбор за [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней
+     * после дедлайна — сводим за него: заявкам верим, молчание стоит −40.
      */
     @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
-    fun closeAbandoned() {
+    fun settleAbandoned() {
         val cutoff = OffsetDateTime.now().minusDays(SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS)
         val abandoned = skladchinaRepository.findAbandonedActive(cutoff)
         if (abandoned.isEmpty()) return
-        log.info("Neutrally closing {} skladchinas the organizer never confirmed", abandoned.size)
+        log.info("Auto-settling {} skladchinas the organizer never closed", abandoned.size)
         abandoned.forEach { s ->
-            runSafely("neutral close", s.id) { lifecycleService.neutrallyCloseAbandoned(s.id) }
+            runSafely("auto-settle", s.id) { lifecycleService.autoSettleAbandoned(s.id) }
         }
     }
 

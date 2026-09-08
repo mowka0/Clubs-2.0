@@ -10,8 +10,6 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.skladchina.template.DeclinePolicy
-import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import org.slf4j.LoggerFactory
 import com.clubs.common.util.isUploadedImageUrl
 import org.springframework.beans.factory.annotation.Value
@@ -36,7 +34,6 @@ class SkladchinaPaymentService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
-    private val templateRegistry: SkladchinaTemplateRegistry,
     private val queryService: SkladchinaQueryService,
     private val lifecycleService: SkladchinaLifecycleService,
     private val eventPublisher: ApplicationEventPublisher,
@@ -83,41 +80,11 @@ class SkladchinaPaymentService(
         return queryService.getDetail(skladchinaId, callerId)
     }
 
-    @Transactional
-    fun decline(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
-        val skladchina = skladchinaRepository.findById(skladchinaId)
-            ?: throw NotFoundException("Skladchina not found")
-        if (skladchina.status != SkladchinaStatus.active) {
-            throw ValidationException("Skladchina is not active")
-        }
-        requireBeforeDeadline(skladchina)
-        // V28: шаблоны REQUIRES_APPROVAL (split_bill) не допускают мгновенный свободный отказ —
-        // участник должен подать заявку, которую резолвит организатор (см. requestDecline).
-        if (templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL) {
-            throw ValidationException("Для этого сбора отказ оформляется заявкой с причиной")
-        }
-        val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
-            ?: throw ForbiddenException("Not a participant of this skladchina")
-        if (participant.status == SkladchinaParticipantStatus.declined) {
-            throw ValidationException("Already declined")
-        }
-        if (participant.status == SkladchinaParticipantStatus.paid) {
-            throw ValidationException("Already paid, cannot decline")
-        }
-        val updated = skladchinaRepository.setParticipantDeclined(skladchinaId, callerId, OffsetDateTime.now())
-        if (updated == 0) {
-            // F5-03: та же гонка, что и в markPaid — конкурентное закрытие уже резолвило этого участника.
-            throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
-        }
-        log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
-        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        return queryService.getDetail(skladchinaId, callerId)
-    }
-
     /**
-     * V28: участник открывает заявку на отказ с причиной (только для шаблонов REQUIRES_APPROVAL,
-     * например split_bill). Участник остаётся `pending`, пока организатор не резолвит заявку.
-     * Идемпотентно, если заявка уже открыта; отклонённый путь нельзя переоткрыть (участник должен оплатить).
+     * Отказ — всегда заявка с причиной, которую решает организатор (решение PO 2026-09-09;
+     * до этого свободный отказ был у шаблона «свой сбор»). Участник остаётся `pending`, пока
+     * организатор не резолвит заявку. Идемпотентно, если заявка уже открыта; отклонённый путь
+     * нельзя переоткрыть — участник обязан оплатить.
      */
     @Transactional
     fun requestDecline(skladchinaId: UUID, callerId: UUID, reason: String): SkladchinaDetailDto {
@@ -125,9 +92,6 @@ class SkladchinaPaymentService(
             ?: throw NotFoundException("Skladchina not found")
         if (skladchina.status != SkladchinaStatus.active) throw ValidationException("Skladchina is not active")
         requireBeforeDeadline(skladchina)
-        if (templateRegistry.forType(skladchina.template).declinePolicy != DeclinePolicy.REQUIRES_APPROVAL) {
-            throw ValidationException("Этот сбор не поддерживает заявки на отказ")
-        }
         val note = reason.trim()
         if (note.isEmpty()) throw ValidationException("Укажите причину отказа")
 
@@ -204,6 +168,7 @@ class SkladchinaPaymentService(
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
             eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+            lifecycleService.maybeCloseWhenSettled(skladchinaId)
         } else {
             // #7: отклонение должно быть обосновано — без причины организатор не может отказать.
             val reason = rejectReason?.trim().orEmpty()
@@ -263,7 +228,7 @@ class SkladchinaPaymentService(
         log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
             skladchinaId, targetUserId, callerId, share)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        lifecycleService.maybeCloseWhenGoalReached(skladchinaId)
+        lifecycleService.maybeCloseWhenSettled(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -449,8 +414,8 @@ class SkladchinaPaymentService(
             lifecycleService.applyDeferredReputation(skladchinaId, targetUserId)
         }
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
-        // Подтверждение могло добить цель — тогда сбор закроется сам.
-        lifecycleService.maybeCloseWhenGoalReached(skladchinaId)
+        // Это решение могло оказаться последним нерешённым — тогда сбор закроется сам.
+        lifecycleService.maybeCloseWhenSettled(skladchinaId)
 
         val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
         if (wasDispute) {

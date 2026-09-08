@@ -55,6 +55,8 @@ class SkladchinaChatStatusRenderer(
         collectedKopecks: Long,
         totalGoalKopecks: Long?,
         deadline: OffsetDateTime,
+        // Срок прошёл, но сбор ещё открыт: организатор его сводит (редакция PO 2026-09-09).
+        deadlinePassed: Boolean,
         pending: List<ChatMention>
     ): String {
         val sb = StringBuilder()
@@ -68,7 +70,12 @@ class SkladchinaChatStatusRenderer(
         sb.append("💵 Собрано ").append(formatRubles(collectedKopecks))
         totalGoalKopecks?.let { sb.append(" из ").append(formatRubles(it)) }
         sb.append(" ₽\n")
-        sb.append("⏳ До ").append(deadline.format(fmt))
+        // После срока «⏳ До 8 сентября» врало бы: сбор живёт, пока организатор его не сведёт.
+        if (deadlinePassed) {
+            sb.append("⏳ Срок вышел — организатор сводит сбор")
+        } else {
+            sb.append("⏳ До ").append(deadline.format(fmt))
+        }
         mentionsLine(pending)?.let { sb.append("\n\n").append("Ждём: ").append(it) }
         return sb.toString()
     }

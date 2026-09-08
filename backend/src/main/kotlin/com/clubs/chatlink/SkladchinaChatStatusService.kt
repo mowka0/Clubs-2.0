@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.time.OffsetDateTime
 
 /**
  * «Живой статус сбора» (слайс 3.5 club-chat-link): у бота ОДНО сообщение-статус на складчину —
@@ -230,6 +231,7 @@ class SkladchinaChatStatusService(
             collectedKopecks = collected,
             totalGoalKopecks = skladchina.totalGoalKopecks,
             deadline = skladchina.deadline,
+            deadlinePassed = !skladchina.deadline.isAfter(OffsetDateTime.now()),
             pending = mentions
         )
     }

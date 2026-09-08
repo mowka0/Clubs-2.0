@@ -6,8 +6,6 @@ import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.generated.jooq.enums.SkladchinaTemplate
-import com.clubs.skladchina.template.DeclinePolicy
-import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -27,7 +25,6 @@ class SkladchinaPaymentServiceTest {
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var clubRepository: ClubRepository
     private lateinit var clubRoleGuard: ClubRoleGuard
-    private lateinit var templateRegistry: SkladchinaTemplateRegistry
     private lateinit var queryService: SkladchinaQueryService
     private lateinit var lifecycleService: SkladchinaLifecycleService
     private lateinit var eventPublisher: ApplicationEventPublisher
@@ -88,7 +85,6 @@ class SkladchinaPaymentServiceTest {
     fun setUp() {
         skladchinaRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
-        templateRegistry = mockk()
         queryService = mockk()
         lifecycleService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
@@ -97,13 +93,10 @@ class SkladchinaPaymentServiceTest {
         // не-создатель без роли должен получать 403 (fail-close).
         every { clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) } returns false
         service = SkladchinaPaymentService(
-            skladchinaRepository, clubRepository, clubRoleGuard, templateRegistry, queryService,
+            skladchinaRepository, clubRepository, clubRoleGuard, queryService,
             lifecycleService, eventPublisher, STORAGE_BASE_URL
         )
         every { queryService.getDetail(any(), any()) } returns mockk()
-        every { templateRegistry.forType(any()) } returns mockk {
-            every { declinePolicy } returns DeclinePolicy.FREE
-        }
     }
 
     @Test
@@ -127,17 +120,6 @@ class SkladchinaPaymentServiceTest {
 
         // ofType, не any: any<T>() в MockK не проверяет тип и посчитал бы посторонние события.
         verify(exactly = 0) { eventPublisher.publishEvent(ofType<SkladchinaProgressChangedEvent>()) }
-    }
-
-    @Test
-    fun `decline публикует SkladchinaProgressChangedEvent`() {
-        every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
-        every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns participant()
-        every { skladchinaRepository.setParticipantDeclined(skladchinaId, participantId, any()) } returns 1
-
-        service.decline(skladchinaId, participantId)
-
-        verify { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId)) }
     }
 
     @Test
@@ -174,9 +156,6 @@ class SkladchinaPaymentServiceTest {
         // Дедлайн ближе 48ч → extendDeadline вернёт 1 (сдвинут) → строка «⏳ До» в чате изменилась.
         every { skladchinaRepository.findById(skladchinaId) } returns
             skladchina(template = SkladchinaTemplate.split_bill, deadline = OffsetDateTime.now().plusHours(10))
-        every { templateRegistry.forType(SkladchinaTemplate.split_bill) } returns mockk {
-            every { declinePolicy } returns DeclinePolicy.REQUIRES_APPROVAL
-        }
         every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns participant()
         every { skladchinaRepository.requestDecline(skladchinaId, participantId, any(), any()) } returns 1
         every { skladchinaRepository.extendDeadline(skladchinaId, any()) } returns 1
@@ -191,9 +170,6 @@ class SkladchinaPaymentServiceTest {
     fun `requestDecline без сдвига дедлайна — SkladchinaProgressChangedEvent НЕ публикуется`() {
         every { skladchinaRepository.findById(skladchinaId) } returns
             skladchina(template = SkladchinaTemplate.split_bill, deadline = OffsetDateTime.now().plusDays(10))
-        every { templateRegistry.forType(SkladchinaTemplate.split_bill) } returns mockk {
-            every { declinePolicy } returns DeclinePolicy.REQUIRES_APPROVAL
-        }
         every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns participant()
         every { skladchinaRepository.requestDecline(skladchinaId, participantId, any(), any()) } returns 1
         every { skladchinaRepository.extendDeadline(skladchinaId, any()) } returns 0

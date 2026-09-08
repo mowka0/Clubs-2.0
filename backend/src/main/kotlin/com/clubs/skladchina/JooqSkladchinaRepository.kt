@@ -692,11 +692,25 @@ class JooqSkladchinaRepository(
                         .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
                 )
         )
+        // Звать организатора не за чем, если решения приняты по всем: такой сбор закрывается сам.
+        val hasUnsettled = DSL.exists(
+            DSL.selectOne().from(SKLADCHINA_PARTICIPANTS)
+                .where(
+                    SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID)
+                        .and(
+                            SKLADCHINA_PARTICIPANTS.STATUS.`in`(
+                                SkladchinaParticipantStatus.pending,
+                                SkladchinaParticipantStatus.paid
+                            )
+                        )
+                )
+        )
         return dsl.selectFrom(SKLADCHINAS)
             .where(
                 SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
                     .and(SKLADCHINAS.CONFIRMATION_REQUESTED_AT.isNull)
-                    // Сверять есть что, когда все ответили ИЛИ вышел срок.
+                    .and(hasUnsettled)
+                    // Момент настал, когда вышел срок ИЛИ все уже ответили.
                     .and(SKLADCHINAS.DEADLINE.lessOrEqual(now).or(DSL.not(stillWaitingForSomeone)))
             )
             .fetch()

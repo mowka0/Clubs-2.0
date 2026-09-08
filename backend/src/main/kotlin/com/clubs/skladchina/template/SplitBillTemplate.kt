@@ -38,9 +38,6 @@ class SplitBillTemplate(
 
     override val type = SkladchinaTemplate.split_bill
     override val outcomesVerified = true
-    // Благо уже потреблено (ты был на событии) — бесплатный отказ был бы безбилетничеством,
-    // поэтому отказ должен быть обоснован и одобрен организатором (V28).
-    override val declinePolicy = DeclinePolicy.REQUIRES_APPROVAL
 
     override fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution {
         val eventId = request.eventId
