@@ -16,8 +16,10 @@ interface OrganizerParticipantListProps {
   confirmMode?: boolean;
   rejectedUserIds?: ReadonlySet<string>;
   onToggleRejected?: (userId: string) => void;
-  // V89: организатор разбирает присланный чек — засчитать оплату или отказать окончательно.
+  // V89: решение организатора по оплате — разбор присланного чека и сверка по ходу сбора.
   onResolvePayment?: (p: SkladchinaParticipantDto, accept: boolean) => void;
+  // V89 (правка PO 2026-09-08): пока сбор идёт, заявку можно сверить сразу — кнопками в строке.
+  canReviewPayments?: boolean;
 }
 
 const rowActionStyle: CSSProperties = {
@@ -68,6 +70,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   rejectedUserIds,
   onToggleRejected,
   onResolvePayment,
+  canReviewPayments = false,
 }) => {
   // V29: какая строка сейчас в режиме «отклонить с причиной» и её черновик причины.
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -104,9 +107,50 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
           const checked = inConfirmList && !rejectedUserIds?.has(p.userId);
           // Спор с чеком разбирается прямо в строке — карточка ниже.
           const showDispute = !!onResolvePayment && p.status === 'payment_disputed';
+          // Сверка по ходу сбора: заявленную оплату можно засчитать или отклонить сразу,
+          // а уже вынесенное решение — переиграть, пока сбор не закрыт.
+          const review = canReviewPayments && !!onResolvePayment && !showDeclineRequest &&
+            (p.status === 'paid' || p.status === 'payment_confirmed' || p.status === 'payment_rejected')
+            ? (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {/* Отметку «получил наличкой» организатор мог поставить по ошибке — она снимается
+                    отдельно от сверки: «не дошёл» звало бы человека прислать чек за чужую ошибку. */}
+                {canManagePayments && p.status === 'paid' && (
+                  <button
+                    type="button"
+                    style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                    disabled={busy}
+                    onClick={() => onUnmark?.(p)}
+                  >
+                    {busy ? '…' : 'Отменить'}
+                  </button>
+                )}
+                {p.status !== 'payment_confirmed' && (
+                  <button
+                    type="button"
+                    style={rowActionStyle}
+                    disabled={busy}
+                    onClick={() => onResolvePayment(p, true)}
+                  >
+                    {busy ? '…' : 'Засчитать'}
+                  </button>
+                )}
+                {p.status !== 'payment_rejected' && (
+                  <button
+                    type="button"
+                    style={{ ...rowActionStyle, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                    disabled={busy}
+                    onClick={() => onResolvePayment(p, false)}
+                  >
+                    {busy ? '…' : 'Не дошёл'}
+                  </button>
+                )}
+              </div>
+            )
+            : null;
           // A-2: pending → «Отметить оплату»; paid → «Отменить». Если у участника открыт запрос
           // на отказ, вместо кнопки отметки показываются элементы управления запросом ниже.
-          const action = inConfirmList ? (
+          const action = review ?? (inConfirmList ? (
             <button
               type="button"
               aria-label={checked ? `Снять отметку оплаты: ${p.firstName}` : `Отметить оплату: ${p.firstName}`}
@@ -138,7 +182,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
               >
                 {busy ? '…' : 'Отменить'}
               </button>
-            ) : null;
+            ) : null);
           return (
             <div key={p.userId}>
               <div className="rd-rep-row" style={{ cursor: 'default' }}>

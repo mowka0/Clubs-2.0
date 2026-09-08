@@ -68,6 +68,10 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
   const peoplePercent = skladchina.participantCount > 0
     ? Math.round((skladchina.paidCount / skladchina.participantCount) * 100)
     : 0;
+  // V89: сверенная организатором доля — зелёная голова полосы.
+  const confirmedPercent = skladchina.participantCount > 0
+    ? Math.round((skladchina.confirmedCount / skladchina.participantCount) * 100)
+    : 0;
   const moneyLine = hasGoal
     ? `${formatRubles(skladchina.collectedKopecks)} ₽ из ${formatRubles(skladchina.totalGoalKopecks!)} ₽`
     : `${formatRubles(skladchina.collectedKopecks)} ₽ собрано`;
@@ -88,8 +92,10 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
         <div className="rd-act-meta" style={{ fontWeight: 600, color: 'var(--text)' }}>
           Скинулись {skladchina.paidCount} из {skladchina.participantCount}
         </div>
-        <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
-          <span className="rd-fill" style={{ width: `${peoplePercent}%`, display: 'block', height: '100%' }} />
+        {/* Две доли, как на странице сбора: сверенное организатором зелёным, заявленное — серым. */}
+        <div className="rd-progress rd-split" style={{ marginTop: 8 }} aria-hidden="true">
+          <span className="rd-fill rd-fill-confirmed" style={{ width: `${confirmedPercent}%` }} />
+          <span className="rd-fill rd-fill-claimed" style={{ width: `${Math.max(0, peoplePercent - confirmedPercent)}%` }} />
         </div>
         <div className="rd-act-meta">
           {moneyLine} · до {deadlineStr}

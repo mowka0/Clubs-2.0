@@ -119,13 +119,20 @@ export const SkladchinaPage: FC = () => {
   const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
 
   // A-5: заглавная метрика — прогресс по людям; деньги — декоративная строка под ней.
+  // V89: полоса из двух сегментов — сверенное организатором и заявленное, но ещё не сверенное.
   const peoplePercent = s.participantCount > 0
     ? Math.round((s.paidCount / s.participantCount) * 100)
+    : 0;
+  const peopleConfirmedPercent = s.participantCount > 0
+    ? Math.round((s.confirmedCount / s.participantCount) * 100)
     : 0;
   // Сплит «Каждый сам» (voluntary + цель): доли неравные, поэтому осмысленный сигнал — именно деньги
   // к цели: бар заполняется рублями, и в заголовке первыми идут деньги, а не люди.
   const moneyPercent = hasGoal
     ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
+    : 0;
+  const moneyConfirmedPercent = hasGoal
+    ? Math.min(100, Math.round((s.confirmedKopecks / s.totalGoalKopecks!) * 100))
     : 0;
   const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
   // #3: последний ещё-pending участник voluntary-сбора видит в подсказке поля суммы ровно остаток
@@ -146,6 +153,9 @@ export const SkladchinaPage: FC = () => {
     : undefined
   ) ?? null;
   const canManagePayments = isActive && isCreator && isFixed && !s.awaitingConfirmation;
+  // V89 (правка PO 2026-09-08): организатор сверяет заявки по ходу сбора, не дожидаясь закрытия.
+  // В самом списке сверки кнопки не нужны — там решают галки.
+  const canReviewPayments = isActive && isCreator;
   // Сбор дождался всех ответов или своего срока: платить уже поздно, дальше слово за организатором.
   const awaitingConfirmation = s.awaitingConfirmation;
   // Список сверки открывается сам, когда сбор ждёт сверки, и вручную кнопкой «Закрыть сбор».
@@ -326,9 +336,12 @@ export const SkladchinaPage: FC = () => {
 
   const handleResolvePayment = async (p: SkladchinaParticipantDto, accept: boolean) => {
     const who = participantName(p);
+    const fromDispute = p.status === 'payment_disputed';
     const question = accept
       ? `Засчитать оплату ${who}? Деньги считаются полученными.`
-      : `Платежа от ${who} нет? Решение окончательное${s.affectsReputation ? ', спишется 40 очков надёжности' : ''}.`;
+      : fromDispute
+        ? `Платежа от ${who} нет? Решение окончательное${s.affectsReputation ? ', спишется 40 очков надёжности' : ''}.`
+        : `Платёж от ${who} не дошёл? Участник получит запрос прислать чек — 48 часов.`;
     if (!window.confirm(question)) return;
     setActionError(null);
     try {
@@ -486,8 +499,22 @@ export const SkladchinaPage: FC = () => {
             ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
             : `Скинулись ${s.paidCount} из ${s.participantCount}`}
         </div>
-        <div className="rd-progress">
-          <div className="rd-fill" style={{ width: `${useMoneyBar ? moneyPercent : peoplePercent}%` }} />
+        {/* Зелёное — деньги, которые организатор сверил; серое — заявленные и ждущие сверки. */}
+        <div className="rd-progress rd-split">
+          <div
+            className="rd-fill rd-fill-confirmed"
+            style={{ width: `${useMoneyBar ? moneyConfirmedPercent : peopleConfirmedPercent}%` }}
+          />
+          <div
+            className="rd-fill rd-fill-claimed"
+            style={{
+              width: `${Math.max(
+                0,
+                (useMoneyBar ? moneyPercent : peoplePercent) -
+                  (useMoneyBar ? moneyConfirmedPercent : peopleConfirmedPercent),
+              )}%`,
+            }}
+          />
         </div>
         <div className="rd-sklad-stats">
           {useMoneyBar
@@ -497,6 +524,7 @@ export const SkladchinaPage: FC = () => {
               : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
           {/* Режим оплаты у сплита сказан здесь: ряда бейджей, где он стоял раньше, больше нет. */}
           {isSplit && ` · ${paymentModeLabel(s.paymentMode).toLowerCase()}`}
+          {s.confirmedCount > 0 && s.confirmedCount < s.paidCount && ` · сверено ${s.confirmedCount}`}
           {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
         </div>
         {s.description && (
@@ -761,6 +789,7 @@ export const SkladchinaPage: FC = () => {
           onUnmark={handleOrgUnmark}
           onResolveDecline={handleResolveDecline}
           confirmMode={showConfirmList}
+          canReviewPayments={canReviewPayments && !showConfirmList}
           rejectedUserIds={rejectedIds}
           onToggleRejected={toggleRejected}
           onResolvePayment={handleResolvePayment}

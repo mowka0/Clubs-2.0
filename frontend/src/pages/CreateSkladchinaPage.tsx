@@ -331,7 +331,7 @@ export const CreateSkladchinaPage: FC = () => {
                 // Без доступа = вне складчины: frozen (первый взнос) и expired (просрочка продления).
                 const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
                 return (
-                  <div key={m.userId} className="rd-pick-row">
+                  <div key={m.userId} className="rd-pick-member">
                     <button
                       type="button"
                       className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`}

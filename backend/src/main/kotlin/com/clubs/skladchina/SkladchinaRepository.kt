@@ -178,6 +178,12 @@ interface SkladchinaRepository {
     /** Сколько участников «занесли деньги» — заявили оплату до закрытия или подтверждены после. */
     fun countPaidLike(skladchinaId: UUID): Int
 
+    /** Сколько оплат организатор уже сверил с выпиской (`payment_confirmed`). */
+    fun countConfirmed(skladchinaId: UUID): Int
+
+    /** Сумма только по сверенным оплатам — «деньги, которые точно дошли». */
+    fun sumConfirmedKopecks(skladchinaId: UUID): Long
+
     /**
      * Сборы, по которым пора звать организатора сверить деньги: активные, ещё не позванные
      * (`confirmation_requested_at IS NULL`), у которых наступил дедлайн ИЛИ не осталось `pending`.
@@ -292,5 +298,7 @@ data class SkladchinaWithAggregates(
     val skladchina: Skladchina,
     val collectedKopecks: Long,
     val participantCount: Int,
-    val paidCount: Int
+    val paidCount: Int,
+    // Из них сверено организатором: прогресс рисуется двумя сегментами — подтверждённое и заявленное.
+    val confirmedCount: Int = 0
 )

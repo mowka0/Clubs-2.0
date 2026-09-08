@@ -102,15 +102,16 @@ export function disputeSkladchinaPayment(
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/dispute-payment`, { receiptUrl, note });
 }
 
-// V89: организатор разбирает чек — засчитать оплату или отказать окончательно.
+// V89: решение организатора по оплате участника — и по ходу сбора, и при разборе чека.
 export function resolveSkladchinaPayment(
   id: string,
   userId: string,
   accept: boolean,
+  reason?: string,
 ): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(
     `/api/skladchinas/${id}/participants/${userId}/resolve-payment`,
-    { accept },
+    { accept, reason },
   );
 }
 

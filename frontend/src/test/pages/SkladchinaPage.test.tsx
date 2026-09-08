@@ -50,6 +50,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     paymentMode: 'fixed_equal',
     totalGoalKopecks: 500000,
     collectedKopecks: 100000,
+    confirmedKopecks: 0,
     paymentLink: 'https://pay.example/x',
     paymentMethodNote: null,
     deadline: FUTURE,
@@ -72,6 +73,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     participants: null,
     participantCount: 5,
     paidCount: 1,
+    confirmedCount: 0,
     pendingCount: 4,
     ...overrides,
   };
@@ -236,6 +238,7 @@ describe('SkladchinaPage — Phase A', () => {
       myStatus: null,
       participants,
       collectedKopecks: 100000,
+    confirmedKopecks: 0,
       totalGoalKopecks: 500000,
     }));
     renderPage();
@@ -507,5 +510,50 @@ describe('SkladchinaPage — сверка оплат организатором 
     expect(
       screen.getByText('Снятая галка = платёж не дошёл: у человека будет 48 часов прислать чек.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('SkladchinaPage — сверка по ходу сбора и двухцветный прогресс (V89)', () => {
+  const claimant = {
+    userId: 'u-1', firstName: 'Анна', lastName: null, avatarUrl: null,
+    expectedAmountKopecks: 100000, declaredAmountKopecks: 100000,
+    status: 'paid' as const, paidAt: new Date().toISOString(),
+    declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
+    paymentRejectNote: null, receiptUrl: null, receiptNote: null,
+    disputedAt: null, disputeTerminal: false,
+  };
+
+  it('организатор сверяет заявку, не дожидаясь закрытия сбора', async () => {
+    mockDetail(buildDetail({ isOrganizerView: true, myStatus: null, participants: [claimant] }));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Засчитать' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Не дошёл' })).toBeInTheDocument();
+    // Список сверки с галками сюда ещё не приехал — сбор идёт.
+    expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();
+  });
+
+  it('у сверенной оплаты остаётся только обратное действие', async () => {
+    mockDetail(buildDetail({
+      isOrganizerView: true,
+      myStatus: null,
+      confirmedCount: 1,
+      participants: [{ ...claimant, status: 'payment_confirmed' }],
+    }));
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Не дошёл' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Засчитать' })).not.toBeInTheDocument();
+  });
+
+  it('прогресс рисуется двумя сегментами: сверенное и заявленное', async () => {
+    mockDetail(buildDetail({ participantCount: 4, paidCount: 3, confirmedCount: 1 }));
+    const { container } = renderPage();
+
+    expect(await screen.findByText('Сбор на баню')).toBeInTheDocument();
+    const confirmed = container.querySelector('.rd-fill-confirmed') as HTMLElement | null;
+    const claimed = container.querySelector('.rd-fill-claimed') as HTMLElement | null;
+    expect(confirmed).not.toBeNull();
+    expect(claimed).not.toBeNull();
   });
 });

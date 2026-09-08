@@ -48,6 +48,7 @@ function closedSkladchina(over: Partial<MySkladchinaListItemDto> = {}): MySkladc
     collectedKopecks: 500000,
     participantCount: 5,
     paidCount: 5,
+    confirmedCount: 0,
     deadline: '2026-06-15T18:00:00Z',
     status: 'closed_success',
     isOrganizerView: true,

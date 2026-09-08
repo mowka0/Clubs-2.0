@@ -99,10 +99,14 @@ data class DisputePaymentRequest(
     val note: String? = null
 )
 
-// V89: организатор решает спор по чеку. true — деньги сошлись (+10), false — платежа нет (−40).
+// V89: решение организатора по оплате участника. true — деньги сошлись, false — платежа нет
+// (тогда у участника открывается окно на чек). reason — необязательное пояснение, оно уходит
+// участнику в ЛС и показывается ему на экране сбора.
 data class ResolvePaymentRequest(
     @field:NotNull
-    val accept: Boolean
+    val accept: Boolean,
+    @field:Size(max = 500)
+    val reason: String? = null
 )
 
 data class SkladchinaDetailDto(
@@ -126,6 +130,9 @@ data class SkladchinaDetailDto(
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,
+    // Из собранного — сверено организатором. Прогресс рисуется двумя сегментами: подтверждённые
+    // деньги зелёным, заявленные и ещё не сверенные — серым хвостом.
+    val confirmedKopecks: Long,
     val paymentLink: String,
     val paymentMethodNote: String?,
 
@@ -156,6 +163,7 @@ data class SkladchinaDetailDto(
     val participants: List<SkladchinaParticipantDto>?,   // не-null ТОЛЬКО для организатора
     val participantCount: Int,
     val paidCount: Int,
+    val confirmedCount: Int,                       // из них сверено организатором
     val pendingCount: Int                          // #3: видно всем, чтобы последний pending видел, что осталось
 )
 
@@ -208,6 +216,7 @@ data class MySkladchinaListItemDto(
     val collectedKopecks: Long,
     val participantCount: Int,
     val paidCount: Int,
+    val confirmedCount: Int,
     val deadline: OffsetDateTime,
     val status: String,
     val isOrganizerView: Boolean,

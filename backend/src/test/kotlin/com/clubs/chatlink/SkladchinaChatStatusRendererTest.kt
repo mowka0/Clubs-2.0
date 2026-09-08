@@ -21,21 +21,39 @@ class SkladchinaChatStatusRendererTest {
         val text = renderer.statusText(
             title = "Бронь корта",
             paidCount = 3,
+            confirmedCount = 1,
             participantCount = 10,
+            collectedKopecks = 300_000,
+            totalGoalKopecks = 1_000_000,
             deadline = deadline,
             pending = listOf(ChatMention(111L, "Наташа"), ChatMention(222L, "Марк"))
         )
 
         assertTrue(text.contains("💰 Бронь корта"))
-        assertTrue(text.contains("👥 Скинулись — 3 из 10"))
+        // Полоса: одна сверенная ячейка, две заявленные, остальное пусто.
+        assertTrue(text.contains("🟩🟨🟨⬜⬜⬜⬜⬜⬜⬜"))
+        assertTrue(text.contains("👥 Скинулись — 3 из 10 · сверено 1"))
+        assertTrue(text.contains("💵 Собрано 3\u00A0000 из 10\u00A0000 ₽"))
         assertTrue(text.contains("⏳ До 10.07.2026 18:00 МСК"))
         assertTrue(text.contains("Ждём: <a href=\"tg://user?id=111\">Наташа</a>, <a href=\"tg://user?id=222\">Марк</a>"))
     }
 
     @Test
     fun `statusText без pending — строки «Ждём» нет`() {
-        val text = renderer.statusText("Бронь корта", 10, 10, deadline, pending = emptyList())
+        val text = renderer.statusText(
+            title = "Бронь корта",
+            paidCount = 10,
+            confirmedCount = 10,
+            participantCount = 10,
+            collectedKopecks = 1_000_000,
+            totalGoalKopecks = 1_000_000,
+            deadline = deadline,
+            pending = emptyList()
+        )
         assertFalse(text.contains("Ждём"))
+        // Всё сверено — полоса целиком зелёная, а строка «сверено N» не дублирует «скинулись».
+        assertTrue(text.contains("🟩".repeat(10)))
+        assertFalse(text.contains("сверено"))
     }
 
     @Test
@@ -43,7 +61,10 @@ class SkladchinaChatStatusRendererTest {
         val text = renderer.statusText(
             title = "Сбор <b>&\"жирный\"</b>",
             paidCount = 0,
+            confirmedCount = 0,
             participantCount = 1,
+            collectedKopecks = 0,
+            totalGoalKopecks = null,
             deadline = deadline,
             pending = listOf(ChatMention(1L, "<script>Вася & Ко"))
         )
@@ -58,7 +79,16 @@ class SkladchinaChatStatusRendererTest {
     fun `statusText — упоминания режутся по MAX_MENTIONS с хвостом «и ещё k»`() {
         val pending = (1..17).map { ChatMention(it.toLong(), "Гость$it") }
 
-        val text = renderer.statusText("Сбор", 0, 17, deadline, pending)
+        val text = renderer.statusText(
+            title = "Сбор",
+            paidCount = 0,
+            confirmedCount = 0,
+            participantCount = 17,
+            collectedKopecks = 0,
+            totalGoalKopecks = null,
+            deadline = deadline,
+            pending = pending
+        )
 
         assertTrue(text.contains("Гость${SkladchinaChatStatusRenderer.MAX_MENTIONS}"))
         assertFalse(text.contains("Гость${SkladchinaChatStatusRenderer.MAX_MENTIONS + 1}<"))

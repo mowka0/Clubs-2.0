@@ -183,12 +183,15 @@ class JooqSkladchinaRepository(
             .fetch()
             .associate { it.value1()!! to (it.value2()?.toLong() ?: 0L) }
 
+        val confirmedCounts = countConfirmedBySkladchina(ids)
+
         return skladchinas.map { s ->
             SkladchinaWithAggregates(
                 skladchina = s,
                 collectedKopecks = collectedSums[s.id] ?: 0L,
                 participantCount = participantCounts[s.id] ?: 0,
-                paidCount = paidCounts[s.id] ?: 0
+                paidCount = paidCounts[s.id] ?: 0,
+                confirmedCount = confirmedCounts[s.id] ?: 0
             )
         }
     }
@@ -298,6 +301,8 @@ class JooqSkladchinaRepository(
             .fetch()
             .associate { it.value1()!! to (it.value2()?.toLong() ?: 0L) }
 
+        val confirmedCounts = countConfirmedBySkladchina(skladchinaIds)
+
         val myRows = dsl.select(
             SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID,
             SKLADCHINA_PARTICIPANTS.STATUS,
@@ -324,7 +329,8 @@ class JooqSkladchinaRepository(
                 myPaymentRejectedAt = myRejectedAt[id],
                 collectedKopecks = collectedSums[id] ?: 0L,
                 participantCount = participantCounts[id] ?: 0,
-                paidCount = paidCounts[id] ?: 0
+                paidCount = paidCounts[id] ?: 0,
+                confirmedCount = confirmedCounts[id] ?: 0
             )
         }
 
@@ -556,9 +562,11 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // Отклоняют либо заявку при сверке, либо спор после чека.
+                    // Отклоняют заявку при сверке, спор после чека или собственное решение,
+                    // принятое раньше по ходу сбора (пока очки не начислены — их даёт закрытие).
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(
                         SkladchinaParticipantStatus.paid,
+                        SkladchinaParticipantStatus.payment_confirmed,
                         SkladchinaParticipantStatus.payment_disputed
                     ))
             )
@@ -604,6 +612,37 @@ class JooqSkladchinaRepository(
             .set(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED, true)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId))
             .execute()
+
+    override fun countConfirmed(skladchinaId: UUID): Int =
+        dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_confirmed))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun sumConfirmedKopecks(skladchinaId: UUID): Long {
+        val sum = dsl.select(DSL.coalesce(DSL.sum(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS), 0L))
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_confirmed))
+            )
+            .fetchOne(0, java.math.BigDecimal::class.java) ?: java.math.BigDecimal.ZERO
+        return sum.toLong()
+    }
+
+    /** Сколько оплат организатор уже сверил — по каждому из сборов [ids] (батч для лент). */
+    private fun countConfirmedBySkladchina(ids: Collection<UUID>): Map<UUID, Int> =
+        dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, DSL.count())
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_confirmed))
+            )
+            .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
+            .fetch()
+            .associate { it.value1()!! to it.value2() }
 
     override fun countPaidLike(skladchinaId: UUID): Int =
         dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
@@ -652,20 +691,26 @@ class JooqSkladchinaRepository(
     override fun findRejectedPaymentsDueForPenalty(rejectedBefore: OffsetDateTime): List<SkladchinaParticipantKey> =
         dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, SKLADCHINA_PARTICIPANTS.USER_ID)
             .from(SKLADCHINA_PARTICIPANTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
             .where(
                 SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_rejected)
                     .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
                     .and(SKLADCHINA_PARTICIPANTS.PAYMENT_REJECTED_AT.lessThan(rejectedBefore))
+                    // Только по закрытым сборам: пока сбор идёт, организатор ещё может пересмотреть
+                    // своё решение, и очки не начисляются (см. applyDeferredReputation).
+                    .and(SKLADCHINAS.STATUS.ne(SkladchinaStatus.active))
             )
             .fetch { r -> SkladchinaParticipantKey(r.value1()!!, r.value2()!!) }
 
     override fun findStaleDisputes(disputedBefore: OffsetDateTime): List<SkladchinaParticipantKey> =
         dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, SKLADCHINA_PARTICIPANTS.USER_ID)
             .from(SKLADCHINA_PARTICIPANTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
             .where(
                 SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.payment_disputed)
                     .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
                     .and(SKLADCHINA_PARTICIPANTS.DISPUTED_AT.lessThan(disputedBefore))
+                    .and(SKLADCHINAS.STATUS.ne(SkladchinaStatus.active))
             )
             .fetch { r -> SkladchinaParticipantKey(r.value1()!!, r.value2()!!) }
 

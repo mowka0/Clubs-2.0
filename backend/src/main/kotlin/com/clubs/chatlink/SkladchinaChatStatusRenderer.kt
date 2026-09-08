@@ -40,24 +40,58 @@ class SkladchinaChatStatusRenderer(
     fun buttonText(): String = "Открыть сбор"
 
     /**
-     * Живой статус: прогресс в людях (Фаза A складчины — деньги в чате не светим),
-     * дедлайн и «Ждём:» с упоминаниями. Пингует только ПЕРВЫЙ пост — последующие
-     * редактирования по механике Telegram уведомлений не создают.
+     * Живой статус: полоса прогресса, люди, деньги, дедлайн и «Ждём:» с упоминаниями. Пингует
+     * только ПЕРВЫЙ пост — последующие редактирования по механике Telegram уведомлений не создают.
+     *
+     * Общая сумма в чате показывается с 2026-09-08 (просьба PO: в посте было слишком мало
+     * информации, люди уходили в приложение за цифрой, которая и так объявлена в сборе). Кто
+     * сколько внёс — по-прежнему не светим: это остаётся видом организатора.
      */
     fun statusText(
         title: String,
         paidCount: Int,
+        confirmedCount: Int,
         participantCount: Int,
+        collectedKopecks: Long,
+        totalGoalKopecks: Long?,
         deadline: OffsetDateTime,
         pending: List<ChatMention>
     ): String {
         val sb = StringBuilder()
         sb.append("💰 ").append(escapeHtml(title)).append("\n")
-        sb.append("👥 Скинулись — ").append(paidCount).append(" из ").append(participantCount).append("\n")
+        sb.append(progressBar(confirmedCount, paidCount, participantCount)).append("\n")
+        sb.append("👥 Скинулись — ").append(paidCount).append(" из ").append(participantCount)
+        // Сверенные показываем, только когда организатор уже что-то сверил и что-то ещё нет —
+        // иначе строка повторяет предыдущую и шумит.
+        if (confirmedCount in 1 until paidCount) sb.append(" · сверено ").append(confirmedCount)
+        sb.append("\n")
+        sb.append("💵 Собрано ").append(formatRubles(collectedKopecks))
+        totalGoalKopecks?.let { sb.append(" из ").append(formatRubles(it)) }
+        sb.append(" ₽\n")
         sb.append("⏳ До ").append(deadline.format(fmt))
         mentionsLine(pending)?.let { sb.append("\n\n").append("Ждём: ").append(it) }
         return sb.toString()
     }
+
+    /**
+     * Полоса прогресса в чате — единственная доступная здесь графика: 🟩 деньги, которые
+     * организатор сверил, 🟨 заявленные и ещё не сверенные, ⬜ неоплаченные доли. Ровно
+     * [PROGRESS_CELLS] ячеек, чтобы полоса не «дышала» между перерисовками.
+     */
+    private fun progressBar(confirmedCount: Int, paidCount: Int, participantCount: Int): String {
+        if (participantCount <= 0) return "⬜".repeat(PROGRESS_CELLS)
+        val paidCells = (paidCount * PROGRESS_CELLS + participantCount - 1) / participantCount
+        val confirmedCells = confirmedCount * PROGRESS_CELLS / participantCount
+        // Заявленная оплата всегда видна хотя бы одной ячейкой: увидев пустую полосу после своего
+        // «Я оплатил», человек решит, что отметка не прошла.
+        val filled = paidCells.coerceAtMost(PROGRESS_CELLS)
+        val green = confirmedCells.coerceAtMost(filled)
+        return "🟩".repeat(green) + "🟨".repeat(filled - green) + "⬜".repeat(PROGRESS_CELLS - filled)
+    }
+
+    /** Рубли из копеек с разделителем тысяч: «4 000». */
+    private fun formatRubles(kopecks: Long): String =
+        (kopecks / 100).toString().reversed().chunked(3).joinToString("\u00A0").reversed()
 
     /**
      * Финал при закрытии: нейтральный, БЕЗ списка неоплативших и без упоминаний
@@ -103,6 +137,10 @@ class SkladchinaChatStatusRenderer(
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     companion object {
+        // Ячеек в полосе прогресса живого статуса: 10 — читается на узком экране телефона
+        // и даёт шаг 10%, которого хватает, чтобы движение сбора было заметно.
+        const val PROGRESS_CELLS = 10
+
         // Максимум text_mention-упоминаний в одном сообщении — дальше «и ещё k» (без пинга)
         const val MAX_MENTIONS = 15
 

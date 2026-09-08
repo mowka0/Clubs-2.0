@@ -56,7 +56,9 @@ data class MySkladchinaFeedItem(
     val myPaymentRejectedAt: OffsetDateTime? = null,
     val collectedKopecks: Long,
     val participantCount: Int,
-    val paidCount: Int
+    val paidCount: Int,
+    // Из них сверено организатором (payment_confirmed) — зелёный сегмент прогресса.
+    val confirmedCount: Int = 0
 )
 
 /**

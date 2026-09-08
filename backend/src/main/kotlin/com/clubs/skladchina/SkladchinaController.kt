@@ -169,16 +169,18 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.disputePayment(id, user.userId, request.receiptUrl, request.note))
     }
 
-    // V89: организатор разбирает присланный чек — засчитать оплату или отказать окончательно.
+    // V89: решение организатора по оплате участника — и по ходу сбора, и при разборе чека.
     @PostMapping("/api/skladchinas/{id}/participants/{userId}/resolve-payment")
-    fun resolvePaymentDispute(
+    fun resolveParticipantPayment(
         @PathVariable id: UUID,
         @PathVariable userId: UUID,
         @RequestBody @Valid request: ResolvePaymentRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina resolve-payment: id={} target={} by={} accept={}", id, userId, user.userId, request.accept)
-        return ResponseEntity.ok(paymentService.resolvePaymentDispute(id, user.userId, userId, request.accept))
+        return ResponseEntity.ok(
+            paymentService.resolveParticipantPayment(id, user.userId, userId, request.accept, request.reason)
+        )
     }
 
     @PostMapping("/api/skladchinas/{id}/close")

@@ -225,12 +225,13 @@ export function useDisputePaymentMutation() {
   });
 }
 
-/** V89: организатор разбирает присланный чек. */
+/** V89: решение организатора по оплате участника (сверка по ходу сбора или разбор чека). */
 export function useResolvePaymentMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, userId, accept }: { id: string; userId: string; accept: boolean }) =>
-      resolveSkladchinaPayment(id, userId, accept),
+    mutationFn: ({ id, userId, accept, reason }: {
+      id: string; userId: string; accept: boolean; reason?: string;
+    }) => resolveSkladchinaPayment(id, userId, accept, reason),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });

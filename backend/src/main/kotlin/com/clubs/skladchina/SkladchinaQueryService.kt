@@ -60,6 +60,7 @@ class SkladchinaQueryService(
             val collected = skladchinaRepository.sumCollectedKopecks(s.id)
             val totalParticipants = skladchinaRepository.countParticipants(s.id)
             val paid = skladchinaRepository.countPaidLike(s.id)
+            val confirmed = skladchinaRepository.countConfirmed(s.id)
             val callerParticipant = skladchinaRepository.findParticipant(s.id, callerId)
             mapper.toMyFeedItemDto(
                 MySkladchinaFeedItem(
@@ -69,7 +70,8 @@ class SkladchinaQueryService(
                     myStatus = callerParticipant?.status,
                     collectedKopecks = collected,
                     participantCount = totalParticipants,
-                    paidCount = paid
+                    paidCount = paid,
+                    confirmedCount = confirmed
                 ),
                 callerId,
                 callerIsManager

@@ -803,6 +803,8 @@ export interface SkladchinaDetailDto {
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
+  // Из собранного — сверено организатором: зелёный сегмент прогресса, остальное серый хвост.
+  confirmedKopecks: number;
   paymentLink: string;
   paymentMethodNote: string | null;
   deadline: string;
@@ -827,6 +829,7 @@ export interface SkladchinaDetailDto {
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;
+  confirmedCount: number;                 // из них организатор уже сверил
   pendingCount: number;                   // #3: позволяет последнему pending-участнику увидеть, что осталось
 }
 
@@ -849,6 +852,7 @@ export interface MySkladchinaListItemDto {
   collectedKopecks: number;
   participantCount: number;
   paidCount: number;
+  confirmedCount: number;
   deadline: string;
   status: SkladchinaStatus;
   isOrganizerView: boolean;

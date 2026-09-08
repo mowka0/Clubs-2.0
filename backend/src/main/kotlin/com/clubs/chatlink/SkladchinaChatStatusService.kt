@@ -210,6 +210,8 @@ class SkladchinaChatStatusService(
 
     private fun renderStatus(skladchina: Skladchina): String {
         val paid = skladchinaRepository.countPaidLike(skladchina.id)
+        val confirmed = skladchinaRepository.countConfirmed(skladchina.id)
+        val collected = skladchinaRepository.sumCollectedKopecks(skladchina.id)
         val total = skladchinaRepository.countParticipants(skladchina.id)
         val pendingIds = skladchinaRepository.findParticipants(skladchina.id)
             .filter { it.status == SkladchinaParticipantStatus.pending }
@@ -220,7 +222,16 @@ class SkladchinaChatStatusService(
             .filter { it.telegramId != null }
             .sortedBy { it.firstName }
             .map { ChatMention(it.telegramId!!, it.firstName ?: "Участник") }
-        return renderer.statusText(skladchina.title, paid, total, skladchina.deadline, mentions)
+        return renderer.statusText(
+            title = skladchina.title,
+            paidCount = paid,
+            confirmedCount = confirmed,
+            participantCount = total,
+            collectedKopecks = collected,
+            totalGoalKopecks = skladchina.totalGoalKopecks,
+            deadline = skladchina.deadline,
+            pending = mentions
+        )
     }
 
     /** Привязка клуба, если статус сборов включён и бот в чате; иначе null (фича молчит). */

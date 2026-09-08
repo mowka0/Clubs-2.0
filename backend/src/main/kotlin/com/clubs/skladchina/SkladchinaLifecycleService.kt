@@ -69,10 +69,12 @@ class SkladchinaLifecycleService(
         }
 
         val now = OffsetDateTime.now()
-        // Сверять можно только заявленные оплаты: id, которого нет среди них (посторонний,
-        // отказавшийся, молчун), в списке отклонённых просто игнорируется.
+        // Сверять можно только оплаты: id, которого нет среди них (посторонний, отказавшийся,
+        // молчун), в списке отклонённых просто игнорируется. Уже сверенные по ходу сбора строки
+        // тоже здесь — галка в списке остаётся последним словом организатора. Спор с чеком не
+        // трогаем: он разбирается отдельно и не должен закрыться «заодно».
         val (rejected, confirmed) = skladchinaRepository.findParticipants(skladchinaId)
-            .filter { it.status == SkladchinaParticipantStatus.paid }
+            .filter { it.status in CONFIRMABLE_AT_CLOSE_STATUSES }
             .partition { it.userId in rejectedUserIds }
         rejected.forEach { p ->
             skladchinaRepository.rejectParticipantPayment(
@@ -201,6 +203,8 @@ class SkladchinaLifecycleService(
     @Transactional
     fun applyDeferredReputation(skladchinaId: UUID, userId: UUID) {
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
+        // Очки даёт только закрытие: по идущему сбору решение организатора ещё можно пересмотреть.
+        if (skladchina.status == SkladchinaStatus.active) return
         val participant = skladchinaRepository.findParticipant(skladchinaId, userId) ?: return
         if (participant.reputationApplied) return
         val club = clubRepository.findById(skladchina.clubId) ?: return
@@ -384,6 +388,13 @@ class SkladchinaLifecycleService(
         )
         // Максимальная длина причины «платёж не найден» (символов) — как у причины отказа.
         private const val REJECT_NOTE_MAX = 500
+        // Статусы, которые список сверки приводит к галкам при закрытии: заявленная оплата и уже
+        // вынесенные по ходу сбора решения (их можно переиграть до самого закрытия).
+        private val CONFIRMABLE_AT_CLOSE_STATUSES = setOf(
+            SkladchinaParticipantStatus.paid,
+            SkladchinaParticipantStatus.payment_confirmed,
+            SkladchinaParticipantStatus.payment_rejected
+        )
         private const val SUCCESS_THRESHOLD = 0.80     // fixed-режим: собрано ≥80% цели к дедлайну → успех
         private const val GOAL_TOLERANCE_KOPECKS = 300L // прощаемый недобор до цели (3 ₽): округление долей
     }

@@ -77,6 +77,10 @@ class SkladchinaMapper {
         val isOrganizerView = skladchina.creatorId == callerUserId || callerIsManager
         val myParticipant = participants.firstOrNull { it.userId == callerUserId }
         val paidCount = participants.count { it.status in PAID_LIKE_STATUSES }
+        val confirmedCount = participants.count { it.status == SkladchinaParticipantStatus.payment_confirmed }
+        val confirmedKopecks = participants
+            .filter { it.status == SkladchinaParticipantStatus.payment_confirmed }
+            .sumOf { it.declaredAmountKopecks ?: 0L }
         val pendingCount = participants.count { it.status == SkladchinaParticipantStatus.pending }
         // V89: сбор завершён, но организатор ещё не сверил деньги — ни оплатить, ни отказаться уже
         // нельзя, экран показывает «ждём сверки». Состояние вычисляемое, в БД его нет.
@@ -100,6 +104,7 @@ class SkladchinaMapper {
             paymentMode = skladchina.paymentMode.literal,
             totalGoalKopecks = skladchina.totalGoalKopecks,
             collectedKopecks = collectedKopecks,
+            confirmedKopecks = confirmedKopecks,
             paymentLink = skladchina.paymentLink,
             paymentMethodNote = skladchina.paymentMethodNote,
             deadline = skladchina.deadline,
@@ -123,6 +128,7 @@ class SkladchinaMapper {
             participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
             participantCount = participants.size,
             paidCount = paidCount,
+            confirmedCount = confirmedCount,
             pendingCount = pendingCount
         )
     }
@@ -152,6 +158,7 @@ class SkladchinaMapper {
             collectedKopecks = item.collectedKopecks,
             participantCount = item.participantCount,
             paidCount = item.paidCount,
+            confirmedCount = item.confirmedCount,
             deadline = item.skladchina.deadline,
             status = item.skladchina.status.literal,
             isOrganizerView = isOrganizerView,

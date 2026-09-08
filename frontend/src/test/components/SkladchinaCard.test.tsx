@@ -17,6 +17,7 @@ function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchi
     collectedKopecks: 100000,
     participantCount: 5,
     paidCount: 1,
+    confirmedCount: 0,
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status: 'active',
     isOrganizerView: false,

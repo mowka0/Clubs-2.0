@@ -385,17 +385,23 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * V89: организатор разбирает чек. Засчитал → `payment_confirmed` (+10), не засчитал →
-     * отклонение становится окончательным (`dispute_terminal`) и −40 применяется сразу.
-     * Арбитра над организатором нет — так же, как в спорах о явке. Репутация применяется тут же,
-     * а не ждёт шедулера: решение принято, тянуть незачем.
+     * V89: решение организатора по оплате участника. Работает и **по ходу сбора** (заявку можно
+     * сверить сразу, не дожидаясь закрытия — просьба PO 2026-09-08), и при разборе присланного чека.
+     *
+     * Засчитал → `payment_confirmed`; не засчитал → `payment_rejected`, и у участника открывается
+     * окно на чек. Отказ **по чеку** окончателен (`dispute_terminal`) — арбитра над организатором
+     * нет, как и в спорах о явке, иначе спор можно было бы гонять по кругу.
+     *
+     * Репутация пишется только по закрытому сбору: пока сбор идёт, решение живёт в статусе
+     * участника и может быть пересмотрено, а очки начисляет закрытие.
      */
     @Transactional
-    fun resolvePaymentDispute(
+    fun resolveParticipantPayment(
         skladchinaId: UUID,
         callerId: UUID,
         targetUserId: UUID,
-        accept: Boolean
+        accept: Boolean,
+        reason: String? = null
     ): SkladchinaDetailDto {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
@@ -406,36 +412,59 @@ class SkladchinaPaymentService(
         }
         val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
             ?: throw NotFoundException("Participant not found in this skladchina")
-        if (participant.status != SkladchinaParticipantStatus.payment_disputed) {
-            throw ValidationException("У этого участника нет открытого спора об оплате")
+        if (participant.status !in RESOLVABLE_PAYMENT_STATUSES) {
+            throw ValidationException("У этого участника нечего сверять — оплата не заявлена")
         }
+        val wasDispute = participant.status == SkladchinaParticipantStatus.payment_disputed
 
         val now = OffsetDateTime.now()
         val updated = if (accept) {
             skladchinaRepository.confirmParticipantPayment(skladchinaId, targetUserId, now)
         } else {
             skladchinaRepository.rejectParticipantPayment(
-                skladchinaId, targetUserId, now, participant.paymentRejectNote, terminal = true
+                skladchinaId, targetUserId, now,
+                reason?.trim()?.takeIf { it.isNotEmpty() }?.take(REJECT_NOTE_MAX)
+                    ?: participant.paymentRejectNote,
+                terminal = wasDispute
             )
         }
-        if (updated == 0) throw ConflictException("Спор уже разобран — обновите экран")
-        log.info("Skladchina payment dispute resolved: id={} target={} by={} accepted={}",
-            skladchinaId, targetUserId, callerId, accept)
+        if (updated == 0) throw ConflictException("Решение по этой оплате изменилось — обновите экран")
+        log.info("Skladchina payment resolved: id={} target={} by={} accepted={} fromDispute={}",
+            skladchinaId, targetUserId, callerId, accept, wasDispute)
 
-        lifecycleService.applyDeferredReputation(skladchinaId, targetUserId)
+        // Пока сбор идёт, очки не начисляются: решение ещё можно пересмотреть, а репутацию
+        // эмитит закрытие. По закрытому сбору решение окончательное — применяем сразу.
+        if (skladchina.status != SkladchinaStatus.active) {
+            lifecycleService.applyDeferredReputation(skladchinaId, targetUserId)
+        }
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
 
         val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
-        eventPublisher.publishEvent(
-            SkladchinaPaymentDisputeResolvedEvent(
-                skladchinaId = skladchinaId,
-                participantUserId = targetUserId,
-                clubName = clubName,
-                title = skladchina.title,
-                accepted = accept,
-                affectsReputation = skladchina.affectsReputation
+        if (wasDispute) {
+            eventPublisher.publishEvent(
+                SkladchinaPaymentDisputeResolvedEvent(
+                    skladchinaId = skladchinaId,
+                    participantUserId = targetUserId,
+                    clubName = clubName,
+                    title = skladchina.title,
+                    accepted = accept,
+                    affectsReputation = skladchina.affectsReputation
+                )
             )
-        )
+        } else if (!accept) {
+            // Отклонение по ходу сбора: участник узнаёт сразу, окно на чек тикает с этой секунды.
+            eventPublisher.publishEvent(
+                SkladchinaPaymentRejectedEvent(
+                    skladchinaId = skladchinaId,
+                    participantUserId = targetUserId,
+                    clubName = clubName,
+                    title = skladchina.title,
+                    reason = reason?.trim()?.takeIf { it.isNotEmpty() }?.take(REJECT_NOTE_MAX),
+                    receiptDeadline = now.plusHours(SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS),
+                    affectsReputation = skladchina.affectsReputation
+                )
+            )
+        }
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -507,5 +536,16 @@ class SkladchinaPaymentService(
         private const val DECLINE_RESOLUTION_WINDOW_HOURS = 48L
         // Максимальная длина комментария участника к чеку (символов).
         private const val RECEIPT_NOTE_MAX = 500
+        // Максимальная длина причины «платёж не найден» (символов).
+        private const val REJECT_NOTE_MAX = 500
+        // Статусы, по которым организатору есть что решать: заявленная оплата (сверка по ходу или
+        // при закрытии), оспоренная чеком, а также уже вынесенное решение — его можно пересмотреть,
+        // пока сбор не закрыт и очки не начислены.
+        private val RESOLVABLE_PAYMENT_STATUSES = setOf(
+            SkladchinaParticipantStatus.paid,
+            SkladchinaParticipantStatus.payment_confirmed,
+            SkladchinaParticipantStatus.payment_rejected,
+            SkladchinaParticipantStatus.payment_disputed
+        )
     }
 }

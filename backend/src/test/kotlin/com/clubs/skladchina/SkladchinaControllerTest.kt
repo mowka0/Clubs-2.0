@@ -1574,6 +1574,59 @@ class SkladchinaControllerTest {
     // --- V89: сверка оплат организатором (docs/modules/skladchina.md) ---
 
     @Test
+    fun `organizer confirms a payment mid-collection — points wait for the close`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+
+        resolvePayment(id, memberAId, accept = true).andExpect(status().isOk)
+        assertEquals("payment_confirmed", participantStatus(id, memberAId))
+        // Сбор ещё идёт: решение можно переиграть, поэтому очков пока нет.
+        assertEquals(0, ledgerRows(memberAId, id))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.confirmedCount").value(1))
+            .andExpect(jsonPath("$.paidCount").value(1))
+
+        confirmAndClose(id)
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+    }
+
+    @Test
+    fun `organizer can change a mid-collection decision until the collection closes`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+
+        resolvePayment(id, memberAId, accept = false).andExpect(status().isOk)
+        assertEquals("payment_rejected", participantStatus(id, memberAId))
+
+        // Нашёлся платёж — организатор возвращает своё решение обратно.
+        resolvePayment(id, memberAId, accept = true).andExpect(status().isOk)
+        assertEquals("payment_confirmed", participantStatus(id, memberAId))
+        assertEquals(0, ledgerRows(memberAId, id))
+    }
+
+    @Test
+    fun `a mid-collection rejection does not penalise while the collection is still open`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        markPaidBy(id, memberAToken)
+        resolvePayment(id, memberAId, accept = false).andExpect(status().isOk)
+
+        // Окно на чек «истекло», но сбор ещё идёт — списывать нечего.
+        dsl.execute(
+            "UPDATE skladchina_participants SET payment_rejected_at = NOW() - INTERVAL '49 hours' " +
+                "WHERE skladchina_id = ? AND user_id = ?", id, memberAId
+        )
+        scheduler.finalizeOverduePaymentOutcomes()
+        assertEquals(0, ledgerRows(memberAId, id))
+
+        // После закрытия то же самое решение становится окончательным.
+        confirmAndClose(id, rejected = listOf(memberAId))
+        scheduler.finalizeOverduePaymentOutcomes()
+        assertEquals(-40, soleLedgerPoints(memberAId, id))
+    }
+
+    @Test
     fun `organizer rejects one payment at close — that participant gets no plus and no penalty yet`() {
         val id = createRepSkladchina(listOf(memberAId, memberBId))
         markPaidBy(id, memberAToken)
