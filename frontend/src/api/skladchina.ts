@@ -80,17 +80,15 @@ export function unmarkOwnPayment(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/unmark-paid`);
 }
 
-// V89: организатор сверил деньги и закрывает сбор. rejectedUserIds — те, от кого платёж не дошёл;
-// им откроется окно на чек. Пустой список = подтвердить всех заявивших.
-export function confirmSkladchinaPayments(
-  id: string,
-  rejectedUserIds: string[],
-  rejectNotes: Record<string, string> = {},
-): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/confirm-payments`, {
-    rejectedUserIds,
-    rejectNotes,
-  });
+// V89: «Засчитать всех» — организатор подтверждает разом все неразобранные заявки.
+// Отдельного закрытия не нужно: сбор закроется сам, когда разбирать станет нечего.
+export function confirmAllSkladchinaPayments(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/confirm-all`);
+}
+
+// Закрыть сбор «как есть»: неразобранные заявки останутся нейтральными.
+export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
 }
 
 // V89: участник оспаривает отклонение, приложив фото или скриншот чека.

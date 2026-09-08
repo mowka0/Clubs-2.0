@@ -5,7 +5,8 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSetClubContext } from '../store/useClubContextStore';
 import {
-  useConfirmPaymentsMutation,
+  useCloseSkladchinaMutation,
+  useConfirmAllPaymentsMutation,
   useDeclineSkladchinaMutation,
   useDisputePaymentMutation,
   useMarkPaidMutation,
@@ -74,7 +75,8 @@ export const SkladchinaPage: FC = () => {
   const requestDeclineMut = useRequestDeclineMutation();
   const resolveDeclineMut = useResolveDeclineMutation();
   const unmarkOwnMut = useUnmarkOwnPaymentMutation();
-  const confirmPaymentsMut = useConfirmPaymentsMutation();
+  const confirmAllMut = useConfirmAllPaymentsMutation();
+  const closeMut = useCloseSkladchinaMutation();
   const disputeMut = useDisputePaymentMutation();
   const resolvePaymentMut = useResolvePaymentMutation();
 
@@ -84,9 +86,6 @@ export const SkladchinaPage: FC = () => {
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [photoZoomed, setPhotoZoomed] = useState(false);
-  // V89 сверка: организатор открыл список с галками; снятая галка = платёж не дошёл.
-  const [confirmMode, setConfirmMode] = useState(false);
-  const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
   // V89 спор: чек участника, который он прикладывает к неподтверждённой оплате.
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [receiptNote, setReceiptNote] = useState('');
@@ -152,15 +151,13 @@ export const SkladchinaPage: FC = () => {
     : resolveDeclineMut.isPending ? resolveDeclineMut.variables?.userId
     : undefined
   ) ?? null;
-  const canManagePayments = isActive && isCreator && isFixed && !s.awaitingConfirmation;
-  // V89 (правка PO 2026-09-08): организатор сверяет заявки по ходу сбора, не дожидаясь закрытия.
-  // В самом списке сверки кнопки не нужны — там решают галки.
+  const canManagePayments = isActive && isCreator && isFixed;
+  // V89 (правка PO 2026-09-08): отдельного экрана сверки нет — организатор разбирает заявки
+  // кнопками в строках, а сбор закрывается сам, когда разбирать становится нечего.
   const canReviewPayments = isActive && isCreator;
   // Сбор дождался всех ответов или своего срока: платить уже поздно, дальше слово за организатором.
   const awaitingConfirmation = s.awaitingConfirmation;
-  // Список сверки открывается сам, когда сбор ждёт сверки, и вручную кнопкой «Закрыть сбор».
-  const showConfirmList = isCreator && isActive && (confirmMode || awaitingConfirmation);
-  const claimedParticipants = s.participants?.filter((p) => p.status === 'paid') ?? [];
+  const unsettledClaims = s.participants?.filter((p) => p.status === 'paid') ?? [];
 
   const handleOpenPaymentLink = () => {
     haptic.impact('light');
@@ -356,33 +353,36 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  const toggleRejected = (userId: string) => {
-    haptic.impact('light');
-    setRejectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId); else next.add(userId);
-      return next;
-    });
+  const handleConfirmAll = async () => {
+    if (!window.confirm(`Засчитать все оплаты (${unsettledClaims.length})? Деньги считаются полученными.`)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await confirmAllMut.mutateAsync(s.id);
+      haptic.notify('success');
+      setToastMessage('Оплаты засчитаны.');
+    } catch (e) {
+      console.error('confirm all failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось засчитать оплаты. Попробуйте ещё раз.');
+    }
   };
 
-  const handleConfirmAndClose = async () => {
-    const rejected = claimedParticipants.filter((p) => rejectedIds.has(p.userId));
-    const question = rejected.length > 0
-      ? `Закрыть сбор? У ${rejected.length} участник(ов) платёж не найден — им придёт запрос прислать чек.`
-      : 'Подтвердить все оплаты и закрыть сбор?';
-    if (!window.confirm(question)) return;
+  const handleClose = async () => {
+    const warn = unsettledClaims.length > 0
+      ? `Закрыть сбор? ${unsettledClaims.length} неразобранных оплат останутся незасчитанными — ни плюсов, ни минусов по ним.`
+      : 'Закрыть сбор? Дальнейшие оплаты будут невозможны.';
+    if (!window.confirm(warn)) return;
     setActionError(null);
     try {
       haptic.impact('heavy');
-      await confirmPaymentsMut.mutateAsync({ id: s.id, rejectedUserIds: rejected.map((p) => p.userId) });
+      await closeMut.mutateAsync(s.id);
       haptic.notify('success');
-      setConfirmMode(false);
-      setRejectedIds(new Set());
       setToastMessage('Сбор закрыт.');
     } catch (e) {
-      console.error('confirm payments failed', e);
+      console.error('close failed', e);
       haptic.notify('error');
-      setActionError('Не удалось закрыть сбор. Попробуйте ещё раз.');
+      setActionError('Не удалось закрыть сбор.');
     }
   };
 
@@ -788,57 +788,45 @@ export const SkladchinaPage: FC = () => {
           onMarkPaid={handleOrgMarkPaid}
           onUnmark={handleOrgUnmark}
           onResolveDecline={handleResolveDecline}
-          confirmMode={showConfirmList}
-          canReviewPayments={canReviewPayments && !showConfirmList}
-          rejectedUserIds={rejectedIds}
-          onToggleRejected={toggleRejected}
+          canReviewPayments={canReviewPayments}
           onResolvePayment={handleResolvePayment}
         />
       )}
 
       {isActive && isCreator && (
-        showConfirmList ? (
-          <div>
+        <div style={{ marginTop: 4 }}>
+          {awaitingConfirmation && unsettledClaims.length > 0 && (
             <div className="rd-warn-block" style={{ marginBottom: 10 }}>
-              {awaitingConfirmation ? 'Сбор завершён — сверьте деньги. ' : ''}
-              Снимите галку с тех, от кого платёж не дошёл. После подтверждения сбор закроется.
+              Сбор завершён — разберите оплаты. Сбор закроется сам, как только по каждой будет решение.
             </div>
-            <button
-              type="button"
-              className="rd-btn-primary"
-              onClick={handleConfirmAndClose}
-              disabled={confirmPaymentsMut.isPending}
-            >
-              {confirmPaymentsMut.isPending ? 'Закрываем…' : 'Подтвердить и закрыть сбор'}
-            </button>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>
-              Снятая галка = платёж не дошёл: у человека будет 48 часов прислать чек.
-            </div>
-            {!awaitingConfirmation && (
+          )}
+          {unsettledClaims.length > 0 && (
+            <>
               <button
                 type="button"
-                className="rd-btn-outline"
-                style={{ marginTop: 8 }}
-                onClick={() => { setConfirmMode(false); setRejectedIds(new Set()); }}
+                className="rd-btn-primary"
+                onClick={handleConfirmAll}
+                disabled={confirmAllMut.isPending}
               >
-                Отмена
+                {confirmAllMut.isPending ? 'Засчитываем…' : `Засчитать всех (${unsettledClaims.length})`}
               </button>
-            )}
-            {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
-          </div>
-        ) : (
-          <div style={{ marginTop: 4 }}>
-            <button
-              type="button"
-              className="rd-btn-outline"
-              onClick={() => { haptic.impact('light'); setConfirmMode(true); }}
-              style={{ color: 'var(--danger)' }}
-            >
-              Закрыть сбор
-            </button>
-            {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
-          </div>
-        )
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', margin: '8px 0 12px' }}>
+                Если чей-то платёж не дошёл — нажмите «Не дошёл» в его строке: у человека будет
+                48 часов прислать чек.
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            className="rd-btn-outline"
+            onClick={handleClose}
+            disabled={closeMut.isPending}
+            style={{ color: 'var(--danger)' }}
+          >
+            {closeMut.isPending ? 'Закрываем…' : 'Закрыть сбор'}
+          </button>
+          {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
+        </div>
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

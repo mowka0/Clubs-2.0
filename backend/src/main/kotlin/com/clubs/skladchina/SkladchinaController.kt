@@ -144,18 +144,15 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.unmarkOwnPayment(id, user.userId))
     }
 
-    // V89: организатор сверил деньги списком и закрывает сбор. rejectedUserIds — те, от кого платёж
-    // не дошёл; у них будет окно на чек.
-    @PostMapping("/api/skladchinas/{id}/confirm-payments")
-    fun confirmPayments(
+    // V89: «Засчитать всех» — организатор подтверждает разом все неразобранные заявки.
+    // Отдельного шага закрытия нет: сбор закроется сам, когда разбирать станет нечего.
+    @PostMapping("/api/skladchinas/{id}/confirm-all")
+    fun confirmAllPayments(
         @PathVariable id: UUID,
-        @RequestBody @Valid request: ConfirmPaymentsRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina confirm-payments: id={} by={} rejected={}", id, user.userId, request.rejectedUserIds.size)
-        return ResponseEntity.ok(
-            lifecycleService.confirmAndClose(id, user.userId, request.rejectedUserIds.toSet(), request.rejectNotes)
-        )
+        log.info("Skladchina confirm-all: id={} by={}", id, user.userId)
+        return ResponseEntity.ok(lifecycleService.confirmAllClaimed(id, user.userId))
     }
 
     // V89: участник оспаривает отклонение оплаты, приложив фото или скриншот чека.

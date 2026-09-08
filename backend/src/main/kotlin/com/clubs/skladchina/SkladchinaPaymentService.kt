@@ -111,6 +111,7 @@ class SkladchinaPaymentService(
         }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        lifecycleService.maybeCloseWhenSettled(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -204,6 +205,7 @@ class SkladchinaPaymentService(
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
             eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+            lifecycleService.maybeCloseWhenSettled(skladchinaId)
         } else {
             // #7: отклонение должно быть обосновано — без причины организатор не может отказать.
             val reason = rejectReason?.trim().orEmpty()
@@ -242,8 +244,8 @@ class SkladchinaPaymentService(
 
         val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
             ?: throw NotFoundException("Participant not found in this skladchina")
-        if (participant.status == SkladchinaParticipantStatus.paid) {
-            return queryService.getDetail(skladchinaId, callerId) // идемпотентно
+        if (participant.status in UNMARKABLE_STATUSES) {
+            return queryService.getDetail(skladchinaId, callerId) // идемпотентно (в т.ч. по наличным)
         }
         if (participant.status != SkladchinaParticipantStatus.pending) {
             throw ValidationException("Можно отметить оплату только у ожидающего участника")
@@ -251,14 +253,19 @@ class SkladchinaPaymentService(
         val share = participant.expectedAmountKopecks
             ?: throw ValidationException("Сумма участника не назначена")
 
-        val updated = skladchinaRepository.setParticipantPaid(skladchinaId, targetUserId, share, OffsetDateTime.now())
+        val now = OffsetDateTime.now()
+        val updated = skladchinaRepository.setParticipantPaid(skladchinaId, targetUserId, share, now)
         if (updated == 0) {
             // F5-03: конкурентное закрытие истекло/освободило участника между чтением и UPDATE.
             throw ConflictException("Сбор уже закрыт — изменить нельзя. Обновите экран")
         }
+        // Наличные организатор пересчитал руками — сверять их второй раз незачем, отметка сразу
+        // становится подтверждённой оплатой (иначе он бы тут же нажимал «Засчитать» самому себе).
+        skladchinaRepository.confirmParticipantPayment(skladchinaId, targetUserId, now)
         log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
             skladchinaId, targetUserId, callerId, share)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        lifecycleService.maybeCloseWhenSettled(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -280,7 +287,7 @@ class SkladchinaPaymentService(
         if (participant.status == SkladchinaParticipantStatus.pending) {
             return queryService.getDetail(skladchinaId, callerId) // идемпотентно
         }
-        if (participant.status != SkladchinaParticipantStatus.paid) {
+        if (participant.status !in UNMARKABLE_STATUSES) {
             throw ValidationException("Снять отметку можно только у оплатившего участника")
         }
 
@@ -415,6 +422,12 @@ class SkladchinaPaymentService(
         if (participant.status !in RESOLVABLE_PAYMENT_STATUSES) {
             throw ValidationException("У этого участника нечего сверять — оплата не заявлена")
         }
+        // Идемпотентность: повторный тап по тому же решению ничего не меняет (и не должен
+        // передвигать окно на чек, начиная отсчёт заново).
+        val alreadyResolvedTheSameWay =
+            (accept && participant.status == SkladchinaParticipantStatus.payment_confirmed) ||
+                (!accept && participant.status == SkladchinaParticipantStatus.payment_rejected)
+        if (alreadyResolvedTheSameWay) return queryService.getDetail(skladchinaId, callerId)
         val wasDispute = participant.status == SkladchinaParticipantStatus.payment_disputed
 
         val now = OffsetDateTime.now()
@@ -438,6 +451,8 @@ class SkladchinaPaymentService(
             lifecycleService.applyDeferredReputation(skladchinaId, targetUserId)
         }
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        // Разобрана последняя заявка и все ответили — отдельный шаг «закрыть» не нужен.
+        lifecycleService.maybeCloseWhenSettled(skladchinaId)
 
         val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
         if (wasDispute) {
@@ -541,6 +556,12 @@ class SkladchinaPaymentService(
         // Статусы, по которым организатору есть что решать: заявленная оплата (сверка по ходу или
         // при закрытии), оспоренная чеком, а также уже вынесенное решение — его можно пересмотреть,
         // пока сбор не закрыт и очки не начислены.
+        // Отметку об оплате можно снять и после того, как она стала подтверждённой: наличные
+        // организатор подтверждает сам, и его же ошибка не должна требовать «отклонения» с чеком.
+        private val UNMARKABLE_STATUSES = setOf(
+            SkladchinaParticipantStatus.paid,
+            SkladchinaParticipantStatus.payment_confirmed
+        )
         private val RESOLVABLE_PAYMENT_STATUSES = setOf(
             SkladchinaParticipantStatus.paid,
             SkladchinaParticipantStatus.payment_confirmed,

@@ -487,7 +487,7 @@ describe('SkladchinaPage — сверка оплат организатором 
     expect(screen.getByText(/40 очков не списываются/)).toBeInTheDocument();
   });
 
-  it('организатор завершённого сбора сразу попадает на список сверки', async () => {
+  it('организатор завершённого сбора видит призыв разобрать оплаты и массовую кнопку', async () => {
     mockDetail(buildDetail({
       isOrganizerView: true,
       awaitingConfirmation: true,
@@ -505,11 +505,12 @@ describe('SkladchinaPage — сверка оплат организатором 
     }));
     renderPage();
 
-    expect(await screen.findByRole('button', { name: 'Подтвердить и закрыть сбор' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Снять отметку оплаты: Анна' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Засчитать всех (1)' })).toBeInTheDocument();
     expect(
-      screen.getByText('Снятая галка = платёж не дошёл: у человека будет 48 часов прислать чек.'),
+      screen.getByText(/Сбор завершён — разберите оплаты/),
     ).toBeInTheDocument();
+    // Отдельного экрана сверки с галками больше нет — решают кнопки в строке участника.
+    expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();
   });
 });
 

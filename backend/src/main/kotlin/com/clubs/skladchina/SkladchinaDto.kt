@@ -82,14 +82,6 @@ data class ResolveDeclineRequest(
     val rejectReason: String? = null
 )
 
-// V89: сверка оплат при закрытии. Присылаем ОТКЛОНЁННЫХ, а не подтверждённых: если участник
-// заявит оплату между загрузкой списка и отправкой, он попадёт в подтверждённые — ошибка в
-// пользу участника там, где на другой чаше −40. rejectNotes — необязательные причины по каждому.
-data class ConfirmPaymentsRequest(
-    val rejectedUserIds: List<UUID> = emptyList(),
-    val rejectNotes: Map<UUID, String> = emptyMap()
-)
-
 // V89: участник оспаривает отклонение чеком. Спорить «на словах» нельзя — фото или скриншот
 // обязателен и обязан быть ссылкой нашего загрузчика (проверяется в сервисе).
 data class DisputePaymentRequest(

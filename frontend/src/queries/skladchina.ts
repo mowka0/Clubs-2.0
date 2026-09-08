@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  confirmSkladchinaPayments,
+  closeSkladchina,
+  confirmAllSkladchinaPayments,
   createSkladchina,
   declineSkladchina,
   disputeSkladchinaPayment,
@@ -194,22 +195,30 @@ export function useUnmarkOwnPaymentMutation() {
   });
 }
 
-/** V89: организатор сверил деньги списком и закрыл сбор — меняются и статусы, и итог. */
-export function useConfirmPaymentsMutation() {
+/** V89: «Засчитать всех» — разом подтверждает неразобранные заявки (сбор может закрыться сам). */
+export function useConfirmAllPaymentsMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, rejectedUserIds, rejectNotes }: {
-      id: string;
-      rejectedUserIds: string[];
-      rejectNotes?: Record<string, string>;
-    }) => confirmSkladchinaPayments(id, rejectedUserIds, rejectNotes),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
+    mutationFn: (id: string) => confirmAllSkladchinaPayments(id),
+    onSuccess: (_data, id) => invalidateSkladchina(qc, id),
   });
+}
+
+/** Закрыть сбор «как есть» — для случая «сбор больше не актуален». */
+export function useCloseSkladchinaMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => closeSkladchina(id),
+    onSuccess: (_data, id) => invalidateSkladchina(qc, id),
+  });
+}
+
+/** Закрытие и массовая сверка меняют и статусы, и итог — обновляем деталку вместе с лентами. */
+function invalidateSkladchina(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
 }
 
 /** V89: участник прикладывает чек к неподтверждённой оплате. */

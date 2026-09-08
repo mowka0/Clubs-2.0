@@ -170,6 +170,24 @@ interface SkladchinaRepository {
     fun releaseParticipant(skladchinaId: UUID, userId: UUID): Int
 
     /**
+     * Закрывает нейтрально заявленные оплаты, которые организатор так и не разобрал (`paid` →
+     * `released`): решения по ним нет, поэтому ни строки в леджере, ни денег в итоге сбора.
+     */
+    fun releaseUnsettledClaims(skladchinaId: UUID): Int
+
+    /** Сколько участников ещё не ответили (`pending`) — на этом держится автозакрытие. */
+    fun countParticipantsPending(skladchinaId: UUID): Int
+
+    /** Сколько заявленных оплат ждут решения организатора (`paid`). 0 = сверять больше нечего. */
+    fun countClaimedUnsettled(skladchinaId: UUID): Int
+
+    /**
+     * Активные сборы, у которых наступил дедлайн И организатор уже разобрал все заявки —
+     * их пора закрывать: ждать больше нечего, а молчуны получают `expired_no_response`.
+     */
+    fun findSettledAfterDeadline(now: OffsetDateTime): List<Skladchina>
+
+    /**
      * Помечает репутационное решение принятым по ВСЕМ участникам сбора, не создавая строк леджера —
      * нейтральное закрытие брошенного сбора (организатор не пришёл сверять деньги).
      */

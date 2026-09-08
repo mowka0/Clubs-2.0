@@ -12,10 +12,6 @@ interface OrganizerParticipantListProps {
   // V28/V29: организатор разрешает запрос участника на отказ. Отклонение (approve=false) несёт
   // обязательную причину — почему участник всё же должен заплатить.
   onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => void;
-  // V89 сверка: вместо кнопок в строках — галки у заявивших оплату. Снятая галка = платёж не дошёл.
-  confirmMode?: boolean;
-  rejectedUserIds?: ReadonlySet<string>;
-  onToggleRejected?: (userId: string) => void;
   // V89: решение организатора по оплате — разбор присланного чека и сверка по ходу сбора.
   onResolvePayment?: (p: SkladchinaParticipantDto, accept: boolean) => void;
   // V89 (правка PO 2026-09-08): пока сбор идёт, заявку можно сверить сразу — кнопками в строке.
@@ -66,9 +62,6 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   onMarkPaid,
   onUnmark,
   onResolveDecline,
-  confirmMode = false,
-  rejectedUserIds,
-  onToggleRejected,
   onResolvePayment,
   canReviewPayments = false,
 }) => {
@@ -102,9 +95,6 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
           ].filter(Boolean).join(' · ');
           const busy = busyUserId === p.userId;
           const showDeclineRequest = !!onResolveDecline && p.declineRequested;
-          // В режиме сверки заявившие оплату получают галку вместо кнопок: снятая = платёж не дошёл.
-          const inConfirmList = confirmMode && p.status === 'paid';
-          const checked = inConfirmList && !rejectedUserIds?.has(p.userId);
           // Спор с чеком разбирается прямо в строке — карточка ниже.
           const showDispute = !!onResolvePayment && p.status === 'payment_disputed';
           // Сверка по ходу сбора: заявленную оплату можно засчитать или отклонить сразу,
@@ -150,37 +140,11 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
             : null;
           // A-2: pending → «Отметить оплату»; paid → «Отменить». Если у участника открыт запрос
           // на отказ, вместо кнопки отметки показываются элементы управления запросом ниже.
-          const action = review ?? (inConfirmList ? (
-            <button
-              type="button"
-              aria-label={checked ? `Снять отметку оплаты: ${p.firstName}` : `Отметить оплату: ${p.firstName}`}
-              aria-pressed={checked}
-              onClick={() => onToggleRejected?.(p.userId)}
-              style={{
-                ...rowActionStyle,
-                width: 30,
-                padding: '4px 0',
-                textAlign: 'center',
-                background: checked ? 'var(--success, #22a06b)' : 'transparent',
-                color: checked ? '#08130d' : 'var(--text-faint)',
-                borderColor: checked ? 'var(--success, #22a06b)' : 'var(--text-faint)',
-              }}
-            >
-              ✓
-            </button>
-          ) : !canManagePayments || showDeclineRequest ? null
+          const action = review ?? (
+            !canManagePayments || showDeclineRequest ? null
             : p.status === 'pending' ? (
               <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>
                 {busy ? '…' : 'Отметить оплату'}
-              </button>
-            ) : p.status === 'paid' ? (
-              <button
-                type="button"
-                style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
-                disabled={busy}
-                onClick={() => onUnmark?.(p)}
-              >
-                {busy ? '…' : 'Отменить'}
               </button>
             ) : null);
           return (
@@ -202,11 +166,9 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  {!inConfirmList && (
-                    <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
-                      {showDeclineRequest ? 'Просит отказаться' : badge.text}
-                    </span>
-                  )}
+                  <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
+                    {showDeclineRequest ? 'Просит отказаться' : badge.text}
+                  </span>
                   {action}
                 </div>
               </div>

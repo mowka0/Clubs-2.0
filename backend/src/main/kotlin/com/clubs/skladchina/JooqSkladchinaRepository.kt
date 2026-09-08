@@ -475,12 +475,17 @@ class JooqSkladchinaRepository(
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.pending)
             .setNull(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS)
             .setNull(SKLADCHINA_PARTICIPANTS.PAID_AT)
+            .setNull(SKLADCHINA_PARTICIPANTS.PAYMENT_CONFIRMED_AT)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // A-2: откатываем только реальную оплату; участника, которого конкурентное
-                    // закрытие уже перевело в терминальный статус, заново не открываем.
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+                    // A-2: откатываем реальную оплату — заявленную или подтверждённую (наличные
+                    // организатор подтверждает сразу); участника, которого конкурентное закрытие
+                    // уже перевело в терминальный статус, заново не открываем.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.`in`(
+                        SkladchinaParticipantStatus.paid,
+                        SkladchinaParticipantStatus.payment_confirmed
+                    ))
             )
             .execute()
 
@@ -594,6 +599,52 @@ class JooqSkladchinaRepository(
                     .and(SKLADCHINA_PARTICIPANTS.REPUTATION_APPLIED.isFalse)
             )
             .execute()
+
+    override fun releaseUnsettledClaims(skladchinaId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    // Заявленная оплата, которую организатор так и не разобрал: решения нет,
+                    // поэтому исход нейтральный — ни плюса участнику, ни денег в итог сбора.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .execute()
+
+    override fun countParticipantsPending(skladchinaId: UUID): Int =
+        dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun countClaimedUnsettled(skladchinaId: UUID): Int =
+        dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun findSettledAfterDeadline(now: OffsetDateTime): List<Skladchina> {
+        val hasUnsettledClaim = DSL.exists(
+            DSL.selectOne().from(SKLADCHINA_PARTICIPANTS)
+                .where(
+                    SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID)
+                        .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+                )
+        )
+        return dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
+                    .and(SKLADCHINAS.DEADLINE.lessOrEqual(now))
+                    // Организатор разобрал все заявки — ждать больше нечего, молчуны получают своё.
+                    .and(DSL.not(hasUnsettledClaim))
+            )
+            .fetch()
+            .map(mapper::toDomain)
+    }
 
     override fun releaseParticipant(skladchinaId: UUID, userId: UUID): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)

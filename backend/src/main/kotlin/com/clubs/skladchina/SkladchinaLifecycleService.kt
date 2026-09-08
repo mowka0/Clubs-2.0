@@ -41,87 +41,57 @@ class SkladchinaLifecycleService(
     private val log = LoggerFactory.getLogger(SkladchinaLifecycleService::class.java)
 
     /**
-     * V89: сверка оплат при закрытии. Организатор снимает галки с тех, от кого денег не пришло
-     * ([rejectedUserIds]), остальные заявленные оплаты засчитываются — и сбор закрывается.
-     * Пустой список = «подтвердить всех» (этим же путём работает старый `POST /close`).
+     * V89 (правка PO 2026-09-08): «Засчитать всех» — организатор одним действием подтверждает все
+     * заявленные оплаты, которые ещё не разобрал. Экрана сверки с галками больше нет: решение по
+     * каждому участнику принимается кнопками в его строке, а это — массовый вариант того же
+     * действия, чтобы сбор на десять человек не требовал десяти тапов.
      *
-     * Отклонённый участник НЕ получает −40 сразу: у него есть окно на чек
-     * ([SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS]), поэтому его репутационное решение
-     * откладывается (`reputation_applied` остаётся false, см. [applyReputationDeltas]).
+     * Закрытие отдельным шагом не нужно: как только не остаётся ни одной неразобранной заявки и
+     * ни одного молчуна, сбор закрывается сам ([maybeCloseWhenSettled]).
      */
     @Transactional
-    fun confirmAndClose(
-        skladchinaId: UUID,
-        callerId: UUID,
-        rejectedUserIds: Set<UUID>,
-        rejectNotes: Map<UUID, String>
-    ): SkladchinaDetailDto {
-        val skladchina = skladchinaRepository.findById(skladchinaId)
-            ?: throw NotFoundException("Skladchina not found")
-        // У-1 (co-organizers): сверять деньги может создатель ИЛИ менеджер клуба.
-        if (skladchina.creatorId != callerId &&
-            !clubRoleGuard.hasCapability(skladchina.clubId, callerId, ClubCapability.MANAGE_SKLADCHINA)
-        ) {
-            throw ForbiddenException("Only the creator or a club manager can close skladchina")
-        }
+    fun confirmAllClaimed(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
+        val skladchina = requireManager(skladchinaId, callerId)
         if (skladchina.status != SkladchinaStatus.active) {
-            throw ValidationException("Skladchina is already closed")
+            throw ValidationException("Сбор уже закрыт")
         }
-
         val now = OffsetDateTime.now()
-        // Сверять можно только оплаты: id, которого нет среди них (посторонний, отказавшийся,
-        // молчун), в списке отклонённых просто игнорируется. Уже сверенные по ходу сбора строки
-        // тоже здесь — галка в списке остаётся последним словом организатора. Спор с чеком не
-        // трогаем: он разбирается отдельно и не должен закрыться «заодно».
-        val (rejected, confirmed) = skladchinaRepository.findParticipants(skladchinaId)
-            .filter { it.status in CONFIRMABLE_AT_CLOSE_STATUSES }
-            .partition { it.userId in rejectedUserIds }
-        rejected.forEach { p ->
-            skladchinaRepository.rejectParticipantPayment(
-                skladchinaId, p.userId, now,
-                rejectNotes[p.userId]?.trim()?.takeIf { it.isNotEmpty() }?.take(REJECT_NOTE_MAX),
-                terminal = false
-            )
-        }
-        confirmed.forEach { p -> skladchinaRepository.confirmParticipantPayment(skladchinaId, p.userId, now) }
-        log.info("Skladchina payments confirmed: id={} by={} confirmed={} rejected={}",
-            skladchinaId, callerId, confirmed.size, rejected.size)
+        val claimed = skladchinaRepository.findParticipants(skladchinaId)
+            .filter { it.status == SkladchinaParticipantStatus.paid }
+        claimed.forEach { p -> skladchinaRepository.confirmParticipantPayment(skladchinaId, p.userId, now) }
+        log.info("Skladchina confirm-all: id={} by={} confirmed={}", skladchinaId, callerId, claimed.size)
 
-        // Отклонённому нужно узнать об этом вовремя: окно на чек тикает с этой секунды.
-        val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
-        rejected.forEach { p ->
-            eventPublisher.publishEvent(
-                SkladchinaPaymentRejectedEvent(
-                    skladchinaId = skladchinaId,
-                    participantUserId = p.userId,
-                    clubName = clubName,
-                    title = skladchina.title,
-                    reason = rejectNotes[p.userId]?.trim()?.takeIf { it.isNotEmpty() }?.take(REJECT_NOTE_MAX),
-                    receiptDeadline = now.plusHours(SkladchinaConfirmationPolicy.RECEIPT_WINDOW_HOURS),
-                    affectsReputation = skladchina.affectsReputation
-                )
-            )
-        }
-
-        // Ручным (и потому «отменяющим при недоборе») считается только закрытие ДО дедлайна:
-        // сверка после срока — обычный финал сбора, его итог считается по собранной сумме.
-        closeInternal(skladchinaId, closedBy = callerId, manualClose = now.isBefore(skladchina.deadline))
+        maybeCloseWhenSettled(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
     /**
-     * `POST /close` — «подтвердить всех заявивших и закрыть»: частный случай [confirmAndClose]
-     * с пустым списком отклонённых. Отдельная кнопка «Закрыть сбор» у организатора ведёт на тот же
-     * экран сверки, поэтому расходиться этим двум путям незачем.
+     * Сбор закрывается сам, когда решать больше нечего: не осталось ни заявок без ответа
+     * организатора, ни участников, которые ещё не ответили. Отсюда инвариант, ради которого
+     * убрали финальный экран (решение PO 2026-09-08): **сбор закрыт ⇒ все платежи разобраны**.
+     *
+     * Спор с чеком считается разобранным: он живёт своей веткой (окно на чек, решение организатора,
+     * протухание) и не должен держать сбор открытым.
      */
-    @Transactional
-    fun closeManually(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto =
-        confirmAndClose(skladchinaId, callerId, emptySet(), emptyMap())
+    fun maybeCloseWhenSettled(skladchinaId: UUID) {
+        val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
+        if (skladchina.status != SkladchinaStatus.active) return
+        if (skladchinaRepository.countClaimedUnsettled(skladchinaId) > 0) return
+        if (skladchinaRepository.countParticipantsPending(skladchinaId) > 0) return
+
+        try {
+            closeInternal(skladchinaId, closedBy = null, manualClose = false)
+        } catch (e: Exception) {
+            // Сбой закрытия не должен рушить действие, которое его вызвало: сбор останется
+            // активным, а следующий тик шедулера попробует снова.
+            log.error("Close-when-settled failed for skladchina {}", skladchinaId, e)
+        }
+    }
 
     /**
-     * V89: зовём организатора сверить деньги — сбор дождался всех ответов или своего срока.
-     * Штамп `confirmation_requested_at` ставится атомарно и только один раз: проигравший гонку
-     * (или повторный проход шедулера) молча ничего не делает, второго DM не будет.
+     * V89: зовём организатора разобрать оплаты — сбор дождался всех ответов или своего срока,
+     * но заявки ещё висят. Штамп `confirmation_requested_at` ставится атомарно и только один раз:
+     * проигравший гонку (или повторный проход шедулера) молча ничего не делает, второго DM не будет.
      */
     @Transactional
     fun requestConfirmation(skladchinaId: UUID) {
@@ -145,53 +115,47 @@ class SkladchinaLifecycleService(
         )
     }
 
+    /** Общая проверка прав на управление сбором: создатель ИЛИ менеджер клуба (У-1). */
+    private fun requireManager(skladchinaId: UUID, callerId: UUID): Skladchina {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        if (skladchina.creatorId != callerId &&
+            !clubRoleGuard.hasCapability(skladchina.clubId, callerId, ClubCapability.MANAGE_SKLADCHINA)
+        ) {
+            throw ForbiddenException("Only the creator or a club manager can manage this skladchina")
+        }
+        return skladchina
+    }
+
     /**
-     * Организатор так и не пришёл сверять деньги (прошло
+     * `POST /close` — «закрыть сбор сейчас, как есть». Заявки, которые организатор так и не
+     * разобрал, закрываются нейтрально (`released`): в итог они не идут, но и наказывать за них
+     * некого — решения по ним нет. Кнопка нужна для «сбор больше не актуален», обычный финал
+     * наступает сам, когда разобрана последняя заявка.
+     */
+    @Transactional
+    fun closeManually(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
+        val skladchina = requireManager(skladchinaId, callerId)
+        if (skladchina.status != SkladchinaStatus.active) {
+            throw ValidationException("Skladchina is already closed")
+        }
+        val now = OffsetDateTime.now()
+        // Ручное закрытие ДО дедлайна отменяет сбор при недоборе — прежнее поведение; после
+        // дедлайна это обычный финал, и итог считается по собранному.
+        closeInternal(skladchinaId, closedBy = callerId, manualClose = now.isBefore(skladchina.deadline))
+        return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * Организатор так и не пришёл разбирать оплаты (прошло
      * [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней после дедлайна) — сбор
-     * закрывается НЕЙТРАЛЬНО: ни плюсов, ни минусов никому, включая промолчавших. Решение PO:
-     * цена отсутствия организатора не перекладывается на участников. Прямая аналогия с
-     * `neutrallyFinalizeUnmarkedBefore` у встреч.
-     *
-     * Заявленные оплаты остаются в статусе `paid` — сбор так и закрылся несверенным, и собранная
-     * сумма продолжает отражать то, что люди заявили.
+     * закрывается НЕЙТРАЛЬНО: молчуны и неразобранные заявки уходят в `released` без строк в
+     * леджере. То, что организатор успел подтвердить, своё получает: он прямо сказал «деньги
+     * дошли», отнимать за это очки не за что (правка PO 2026-09-08).
      */
     @Transactional
     fun neutrallyCloseAbandoned(skladchinaId: UUID) {
-        val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
-        if (skladchina.status != SkladchinaStatus.active) return
-        val club = clubRepository.findById(skladchina.clubId) ?: return
-
-        val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-        val closedAt = OffsetDateTime.now()
-        val finalStatus = computeFinalStatus(skladchina, collected, manualClose = false)
-        if (!skladchinaRepository.claimClose(skladchinaId, finalStatus, closedBy = null, closedAt = closedAt)) {
-            log.info("Neutral close claim lost: id={} — already closed concurrently, no-op", skladchinaId)
-            return
-        }
-        skladchinaRepository.releasePendingParticipants(skladchinaId)
-        // Репутационное решение принято по всем — оно нулевое, строк в леджере не появляется.
-        skladchinaRepository.markReputationAppliedForAll(skladchinaId)
-
-        val paidCount = skladchinaRepository.countPaidLike(skladchinaId)
-        val totalParticipants = skladchinaRepository.countParticipants(skladchinaId)
-        log.info("Skladchina closed neutrally (organizer never confirmed): id={} status={} paid={}/{}",
-            skladchinaId, finalStatus, paidCount, totalParticipants)
-
-        eventPublisher.publishEvent(
-            SkladchinaClosedEvent(
-                skladchinaId = skladchinaId,
-                creatorId = skladchina.creatorId,
-                clubName = club.name,
-                title = skladchina.title,
-                finalStatus = finalStatus,
-                collectedKopecks = collected,
-                totalGoalKopecks = skladchina.totalGoalKopecks,
-                paidCount = paidCount,
-                participantCount = totalParticipants,
-                affectsReputation = skladchina.affectsReputation,
-                closedWithoutConfirmation = true
-            )
-        )
+        closeInternal(skladchinaId, closedBy = null, manualClose = false, neutral = true)
     }
 
     /**
@@ -252,7 +216,7 @@ class SkladchinaLifecycleService(
      * и claim, и отметки reputation_applied — ретрай может восстановиться (нет осиротевших участников).
      */
     @Transactional
-    fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean) {
+    fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean, neutral: Boolean = false) {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
         if (skladchina.status != SkladchinaStatus.active) {
@@ -262,7 +226,14 @@ class SkladchinaLifecycleService(
         val club = clubRepository.findById(skladchina.clubId)
             ?: throw NotFoundException("Club not found")
 
-        val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
+        // Итог считается по деньгам, которые организатор СВЕРИЛ: заявка без его решения — это
+        // обещание, а не деньги (решение PO 2026-09-08). Исключение — нейтральное закрытие
+        // брошенного сбора: там решений нет вовсе, и итог честнее считать по заявленному.
+        val collected = if (neutral) {
+            skladchinaRepository.sumCollectedKopecks(skladchinaId)
+        } else {
+            skladchinaRepository.sumConfirmedKopecks(skladchinaId)
+        }
         val finalStatus = computeFinalStatus(skladchina, collected, manualClose)
         val closedAt = OffsetDateTime.now()
 
@@ -272,11 +243,15 @@ class SkladchinaLifecycleService(
         }
 
         val deadlineReached = !closedAt.isBefore(skladchina.deadline)
-        if (deadlineReached) {
+        if (deadlineReached && !neutral) {
             skladchinaRepository.expirePendingParticipants(skladchinaId)
         } else {
+            // Нейтральное закрытие не наказывает даже молчунов: организатор не пришёл разбирать,
+            // и цена его отсутствия не перекладывается на участников.
             skladchinaRepository.releasePendingParticipants(skladchinaId)
         }
+        // Заявки, до которых организатор не дошёл, закрываются нейтрально — ни очков, ни денег в итог.
+        skladchinaRepository.releaseUnsettledClaims(skladchinaId)
 
         val totalParticipants = skladchinaRepository.countParticipants(skladchinaId)
         val paidCount = skladchinaRepository.countPaidLike(skladchinaId)
@@ -311,7 +286,8 @@ class SkladchinaLifecycleService(
                 paidCount = paidCount,
                 participantCount = totalParticipants,
                 affectsReputation = skladchina.affectsReputation,
-                expiredParticipantUserIds = expiredUserIds
+                expiredParticipantUserIds = expiredUserIds,
+                closedWithoutConfirmation = neutral
             )
         )
     }
