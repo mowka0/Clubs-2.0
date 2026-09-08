@@ -18,7 +18,7 @@ class SkladchinaScheduler(
     private val log = LoggerFactory.getLogger(SkladchinaScheduler::class.java)
 
     /** Наступил срок (или все уже ответили), а решения есть не по всем → DM организатору «сведите сбор». */
-    @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
+    @Scheduled(fixedDelayString = CONFIRMATION_POLL_MS)
     fun requestPaymentConfirmations() {
         val ready = skladchinaRepository.findNeedingConfirmationRequest(OffsetDateTime.now())
         if (ready.isEmpty()) return
@@ -32,7 +32,7 @@ class SkladchinaScheduler(
      * Организатор не свёл сбор за [SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS] дней
      * после дедлайна — сводим за него: заявкам верим, молчание стоит −40.
      */
-    @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
+    @Scheduled(fixedDelayString = CONFIRMATION_POLL_MS)
     fun settleAbandoned() {
         val cutoff = OffsetDateTime.now().minusDays(SkladchinaConfirmationPolicy.ABANDONED_CONFIRMATION_DAYS)
         val abandoned = skladchinaRepository.findAbandonedActive(cutoff)
@@ -48,7 +48,7 @@ class SkladchinaScheduler(
      * организатор не разобрал за [SkladchinaConfirmationPolicy.DISPUTE_RESOLUTION_DAYS] дней,
      * закрывается нейтрально — участник своё сделал, прислав чек.
      */
-    @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
+    @Scheduled(fixedDelayString = CONFIRMATION_POLL_MS)
     fun finalizeOverduePaymentOutcomes() {
         val now = OffsetDateTime.now()
 
@@ -87,6 +87,9 @@ class SkladchinaScheduler(
     }
 
     companion object {
-        private const val SCHEDULER_PERIOD_MS = 600_000L  // 10 минут
+        // Период всех трёх тиков сверки. Вынесен в конфиг тем же приёмом, что
+        // skladchinas.reminder-poll-ms: staging ужимает его до секунд, чтобы сквозной тест
+        // «срок вышел → свели → добили исходы» не ждал по 10 минут на каждом шаге.
+        private const val CONFIRMATION_POLL_MS = "\${skladchinas.confirmation-poll-ms:600000}"
     }
 }

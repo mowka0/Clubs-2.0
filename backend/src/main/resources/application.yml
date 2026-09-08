@@ -176,6 +176,10 @@ skladchinas:
   # складчины, влияющей на репутацию. Дефолт 1440 (= 24ч). В минутах, чтобы staging мог
   # поставить малое значение (например 5) для теста.
   deadline-reminder-minutes-before: ${SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE:1440}
+  # Период тиков сверки оплат (SkladchinaScheduler, мс): зов организатора свести сбор,
+  # автосведение брошенного, добивание отложенных исходов. Дефолт 600000 = 10мин;
+  # staging ставит секунды, чтобы ручной тест не ждал тика.
+  confirmation-poll-ms: ${SKLADCHINA_CONFIRMATION_POLL_MS:600000}
 
 ---
 spring:

@@ -139,8 +139,24 @@ WHERE skladchina_id = '<id>' AND user_id = '<id>';
 UPDATE skladchinas SET confirmation_requested_at = NULL WHERE id = '<id>';
 ```
 
-Три тика `SkladchinaScheduler` (зов к сведению, автосведение, добивание исходов) ходят **раз в
-10 минут** — после SQL нужно подождать или перезапустить бэкенд.
+**Настройка окружения перед тестом.** Три тика `SkladchinaScheduler` (зов к сведению,
+автосведение, добивание исходов) ходят раз в `skladchinas.confirmation-poll-ms` — дефолт
+10 минут. Для ручного теста в Coolify (staging) ставится
+
+```
+SKLADCHINA_CONFIRMATION_POLL_MS=30000
+```
+
+— тогда после каждого SQL достаточно подождать полминуты, а не десять. Переменная добавлена тем
+же приёмом, что `SKLADCHINA_REMINDER_POLL_MS`; в проде остаётся дефолт. Без неё тик приходит раз в
+10 минут либо сразу после перезапуска бэкенда:
+
+```bash
+ssh root@77.42.23.177 'docker restart $(docker ps -q -f name=backend-u91a5392n24ubfq17kl251z4)'
+```
+
+Остальные окна (48 ч на чек, 7 дней на спор и на автосведение) — константы
+`SkladchinaConfirmationPolicy`, конфигом не ускоряются: их сдвигают SQL-ом выше.
 
 ## 5. Открытые вопросы и следствия
 
