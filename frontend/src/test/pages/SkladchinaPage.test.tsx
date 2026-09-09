@@ -183,8 +183,9 @@ describe('SkladchinaPage — reputation redesign UI', () => {
     }));
     renderPage();
 
-    expect(await screen.findByText('Не потребовался')).toBeInTheDocument();
-    expect(screen.getByText('Не ответил')).toBeInTheDocument();
+    // Закрытый сбор — итоги одним списком, без табов; статус — строкой под именем.
+    expect(await screen.findByText('не потребовался')).toBeInTheDocument();
+    expect(screen.getByText('не ответил')).toBeInTheDocument();
   });
 });
 
@@ -228,7 +229,7 @@ describe('SkladchinaPage — Phase A', () => {
     expect(screen.getByText(/Скинулись 1 из 5/)).toBeInTheDocument();
   });
 
-  it('A-2: организатор fixed active — кнопки «Отметить оплату» / «Отменить» (без перераспределения)', async () => {
+  it('A-2: организатор fixed active — заявка с чекбоксом в «В работе», наличные в «Ждём»', async () => {
     const participants: SkladchinaParticipantDto[] = [
       {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
@@ -257,11 +258,14 @@ describe('SkladchinaPage — Phase A', () => {
     }));
     renderPage();
 
-    expect(await screen.findByText('Отметить оплату')).toBeInTheDocument(); // строка pending
-    expect(screen.getByText('Отменить')).toBeInTheDocument();               // строка paid
+    // «В работе» открыт по умолчанию: заявивший Пётр с чекбоксом справа, «Обработать» без отметок неактивна.
+    expect(await screen.findByRole('checkbox', { name: 'Принять: Пётр' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Обработать' })).toBeDisabled();
+    // Молчащий Иван — в «Ждём», с кнопкой наличных (fixed-режим).
+    fireEvent.click(screen.getByRole('button', { name: /Ждём/ }));
+    expect(await screen.findByLabelText('Получили наличными: Иван')).toBeInTheDocument();
     // Перераспределение убрано — панели дефицита больше нет.
     expect(screen.queryByText(/Не хватает/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Перераспределить на неоплативших')).not.toBeInTheDocument();
   });
 
   it('A-2: для voluntary у организатора нет кнопок отметки оплаты', async () => {
@@ -283,8 +287,9 @@ describe('SkladchinaPage — Phase A', () => {
     }));
     renderPage();
 
+    fireEvent.click(await screen.findByRole('button', { name: /Ждём/ }));
     expect(await screen.findByText('Иван')).toBeInTheDocument();
-    expect(screen.queryByText('Отметить оплату')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Получили наличными/)).not.toBeInTheDocument();
     expect(screen.queryByText('Не хватает')).not.toBeInTheDocument();
   });
 });
@@ -328,10 +333,13 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
     }));
     renderPage();
 
-    expect(await screen.findByText('Просит отказаться')).toBeInTheDocument();
-    expect(screen.getByText('«не ел, только смотрел»')).toBeInTheDocument();
+    // В строке — только статус; причина и решения — в шторке по тапу.
+    expect(await screen.findByText('просит отказаться')).toBeInTheDocument();
+    expect(screen.queryByText('«не ел, только смотрел»')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть заявку: Иван' }));
+    expect(await screen.findByText('«не ел, только смотрел»')).toBeInTheDocument();
     expect(screen.getByText('Одобрить отказ')).toBeInTheDocument();
-    expect(screen.getByText('Отклонить')).toBeInTheDocument();
+    expect(screen.getByText('Отклонить — с причиной')).toBeInTheDocument();
   });
 
   it('V29: «Отклонить» открывает поле причины, кнопка отказа активна только с текстом', async () => {
@@ -350,7 +358,8 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
     }));
     renderPage();
 
-    fireEvent.click(await screen.findByText('Отклонить'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Открыть заявку: Иван' }));
+    fireEvent.click(await screen.findByText('Отклонить — с причиной'));
     const reason = screen.getByPlaceholderText('Почему участник должен оплатить (обязательно)');
     expect(reason).toBeInTheDocument();
     // Кнопка подтверждения неактивна, пока не введена причина.
@@ -493,7 +502,7 @@ describe('SkladchinaPage — сверка оплат организатором 
     expect(screen.getByText(/40 очков не списываются/)).toBeInTheDocument();
   });
 
-  it('организатор завершённого сбора видит призыв разобрать оплаты и массовую кнопку', async () => {
+  it('организатор после срока видит призыв свести сбор и «Обработать» по отмеченным', async () => {
     mockDetail(buildDetail({
       isOrganizerView: true,
       awaitingConfirmation: true,
@@ -511,15 +520,15 @@ describe('SkladchinaPage — сверка оплат организатором 
     }));
     renderPage();
 
-    expect(await screen.findByRole('button', { name: 'Засчитать всех (1)' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/Срок вышел — сведите сбор/),
-    ).toBeInTheDocument();
-    // Отдельного экрана сверки с галками больше нет — решают кнопки в строке участника.
-    expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Срок вышел — сведите сбор/)).toBeInTheDocument();
+    // «Обработать» считает отмеченных: без галочек неактивна, с одной — «(1)».
+    expect(screen.getByRole('button', { name: 'Обработать' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Принять: Анна' }));
+    expect(screen.getByRole('button', { name: 'Обработать (1)' })).not.toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Засчитать всех/ })).not.toBeInTheDocument();
   });
 
-  it('после срока кнопка закрытия называется «Свести сбор», до срока — «Закрыть сбор»', async () => {
+  it('кнопка внизу: «Свести сбор» после срока, «Отменить сбор» при недоборе, «Завершить сбор» при цели', async () => {
     const silent = {
       userId: 'u-1', firstName: 'Пётр', lastName: null, avatarUrl: null,
       expectedAmountKopecks: 100000, declaredAmountKopecks: null,
@@ -533,17 +542,30 @@ describe('SkladchinaPage — сверка оплат организатором 
       deadline: new Date(Date.now() - 3_600_000).toISOString(),
       participants: [silent],
     }));
-    const { unmount } = renderPage();
+    const first = renderPage();
     expect(await screen.findByText('Свести сбор')).toBeInTheDocument();
     // Молчун виден в призыве: организатору решать, сдал он или нет.
     expect(screen.getByText(/Не ответили: 1/)).toBeInTheDocument();
-    unmount();
+    // «Активный» больше не показываем; после срока бейдж говорит, почему сбор ещё открыт.
+    expect(screen.getByText('Срок вышел')).toBeInTheDocument();
+    expect(screen.queryByText('Активный')).not.toBeInTheDocument();
+    first.unmount();
 
     mockDetail(buildDetail({
       isOrganizerView: true, myStatus: null, participants: [silent],
     }));
+    const second = renderPage();
+    expect(await screen.findByText('Отменить сбор')).toBeInTheDocument();
+    expect(screen.queryByText('Срок вышел')).not.toBeInTheDocument();
+    expect(screen.queryByText('Активный')).not.toBeInTheDocument();
+    second.unmount();
+
+    mockDetail(buildDetail({
+      isOrganizerView: true, myStatus: null, participants: [silent],
+      confirmedKopecks: 500000, totalGoalKopecks: 500000,
+    }));
     renderPage();
-    expect(await screen.findByText('Закрыть сбор')).toBeInTheDocument();
+    expect(await screen.findByText('Завершить сбор')).toBeInTheDocument();
   });
 });
 
@@ -561,10 +583,11 @@ describe('SkladchinaPage — сверка по ходу сбора и двухц
     mockDetail(buildDetail({ isOrganizerView: true, myStatus: null, participants: [claimant] }));
     renderPage();
 
+    // Заявка в работе: чекбокс справа, а решения словами — в шторке по тапу на строку.
+    expect(await screen.findByRole('checkbox', { name: 'Принять: Анна' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть заявку: Анна' }));
     expect(await screen.findByRole('button', { name: 'Засчитать' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Не дошёл' })).toBeInTheDocument();
-    // Список сверки с галками сюда ещё не приехал — сбор идёт.
-    expect(screen.queryByRole('button', { name: 'Подтвердить и закрыть сбор' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Не дошёл — попросить чек' })).toBeInTheDocument();
   });
 
   it('у сверенной оплаты остаётся только обратное действие', async () => {
@@ -576,7 +599,12 @@ describe('SkladchinaPage — сверка по ходу сбора и двухц
     }));
     renderPage();
 
-    expect(await screen.findByRole('button', { name: 'Не дошёл' })).toBeInTheDocument();
+    // Сверенная оплата — в «Готово», без чекбокса; пересмотр — из шторки.
+    fireEvent.click(await screen.findByRole('button', { name: /Готово/ }));
+    expect(await screen.findByText(/зачтено/)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть заявку: Анна' }));
+    expect(await screen.findByRole('button', { name: 'Не дошёл — попросить чек' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Засчитать' })).not.toBeInTheDocument();
   });
 

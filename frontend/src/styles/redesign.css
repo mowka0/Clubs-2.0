@@ -3529,3 +3529,32 @@
   margin: 11px -16px 0; padding: 11px 16px 0;
   font-size: 12.5px; color: var(--text-dim);
 }
+
+/* ---------- Заявки на оплату: панель организатора сбора (V89, мокап 09) ---------- */
+/* Строки — те же .rd-pend-* и хвост .rd-remind-all, что у панели «Без ответа» встречи: список сверки
+   намеренно выглядит как ростер (решение PO 2026-09-09). Здесь только то, чего у ростера нет. */
+.rd-seg-cnt { margin-left: 4px; font-weight: 600; opacity: 0.7; }
+.rd-req-grp {
+  display: flex; align-items: center; gap: 8px; padding: 10px 8px 4px;
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
+}
+.rd-req-grp::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
+/* «›» в конце статуса — часть текста, а не кнопка: намёк, что строка раскрывается (вариант F). */
+.rd-req-chev { color: var(--accent); margin-left: 3px; }
+.rd-req-met-ok { color: var(--live); }
+.rd-req-met-bad { color: var(--danger); }
+.rd-vdot.rd-d-ok { background: var(--live); }
+/* Чекбокс «принять заявку» — у правого края, под большой палец. */
+.rd-req-cb {
+  width: 22px; height: 22px; flex-shrink: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 7px; border: 1.5px solid var(--text-faint); background: transparent;
+  font-size: 13px; font-weight: 800; color: transparent; cursor: pointer; font-family: inherit;
+}
+.rd-req-cb.rd-on { background: var(--accent); border-color: var(--accent); color: #1a0d05; }
+.rd-req-cb:disabled { opacity: 0.5; cursor: default; }
+.rd-req-sheet-h { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.rd-req-sheet-name { font-size: 15px; font-weight: 650; color: var(--text); }
+.rd-req-sheet-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.rd-req-sheet-quote { font-size: 13px; color: var(--text-dim); margin: 0 0 12px; }
+.rd-req-sheet-receipt { display: block; max-width: 100%; max-height: 260px; border-radius: 10px; margin: 0 0 12px; }
