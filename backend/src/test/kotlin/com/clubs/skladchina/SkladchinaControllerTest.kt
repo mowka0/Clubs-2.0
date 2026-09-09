@@ -1058,13 +1058,15 @@ class SkladchinaControllerTest {
             .andExpect(jsonPath("$.participantCount").value(3))   // организатор вернулся в состав
             .andExpect(jsonPath("$.paidCount").value(1))          // и сразу оплатившим
             .andExpect(jsonPath("$.collectedKopecks").value(30000))
+            // Свои деньги организатор не сверяет — они сразу сверенные, а не «ждут сверки».
+            .andExpect(jsonPath("$.confirmedKopecks").value(30000))
             .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // цель — полный чек
-            .andExpect(jsonPath("$.myStatus").value("paid"))
+            .andExpect(jsonPath("$.myStatus").value("payment_confirmed"))
             .andExpect(jsonPath("$.myDeclaredAmountKopecks").value(30000))
         assertEquals(30000L, participantExpected(id, memberAId))
         assertEquals(30000L, participantExpected(id, memberBId))
         assertEquals(30000L, participantExpected(id, organizerId))
-        assertEquals("paid", participantStatus(id, organizerId))
+        assertEquals("payment_confirmed", participantStatus(id, organizerId))
     }
 
     @Test
@@ -1075,7 +1077,7 @@ class SkladchinaControllerTest {
         mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.collectedKopecks").value(30000))
-            .andExpect(jsonPath("$.myStatus").value("paid"))
+            .andExpect(jsonPath("$.myStatus").value("payment_confirmed"))
         assertEquals(null, participantExpected(id, memberAId))
         assertEquals(null, participantExpected(id, organizerId), "voluntary не назначает долю даже предоплатившему")
         assertEquals(30000L, participantDeclared(id, organizerId))
@@ -1091,7 +1093,7 @@ class SkladchinaControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.participantCount").value(2))
         assertEquals(30000L, participantExpected(id, memberAId))
-        assertEquals("paid", participantStatus(id, organizerId))
+        assertEquals("payment_confirmed", participantStatus(id, organizerId))
     }
 
     @Test

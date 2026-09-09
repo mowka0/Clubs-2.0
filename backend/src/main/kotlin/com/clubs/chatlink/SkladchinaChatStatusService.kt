@@ -212,7 +212,8 @@ class SkladchinaChatStatusService(
     private fun renderStatus(skladchina: Skladchina): String {
         val paid = skladchinaRepository.countPaidLike(skladchina.id)
         val confirmed = skladchinaRepository.countConfirmed(skladchina.id)
-        val collected = skladchinaRepository.sumCollectedKopecks(skladchina.id)
+        val confirmedKopecks = skladchinaRepository.sumConfirmedKopecks(skladchina.id)
+        val claimedKopecks = skladchinaRepository.sumCollectedKopecks(skladchina.id) - confirmedKopecks
         val total = skladchinaRepository.countParticipants(skladchina.id)
         val pendingIds = skladchinaRepository.findParticipants(skladchina.id)
             .filter { it.status == SkladchinaParticipantStatus.pending }
@@ -228,10 +229,12 @@ class SkladchinaChatStatusService(
             paidCount = paid,
             confirmedCount = confirmed,
             participantCount = total,
-            collectedKopecks = collected,
+            confirmedKopecks = confirmedKopecks,
+            claimedKopecks = claimedKopecks,
             totalGoalKopecks = skladchina.totalGoalKopecks,
             deadline = skladchina.deadline,
             deadlinePassed = !skladchina.deadline.isAfter(OffsetDateTime.now()),
+            affectsReputation = skladchina.affectsReputation,
             pending = mentions
         )
     }

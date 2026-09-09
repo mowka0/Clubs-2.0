@@ -2,6 +2,7 @@ package com.clubs.bot
 
 import com.clubs.chatlink.SkladchinaChatStatusService
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
 import com.clubs.skladchina.SkladchinaDeclineRejectedEvent
@@ -73,7 +74,7 @@ class SkladchinaBotNotifier(
             if (event.affectsReputation) {
                 // Штраф -40 за молчание легитимен только если условия были объявлены заранее
                 // (launch-blocker редизайна, уведомление #1).
-                append("\n\n⚠️ Важный сбор: оплата +10, отказ — без штрафа, молчание до дедлайна −40")
+                append("\n\n").append(ReputationPolicy.skladchinaRulesLine())
             }
             append("\n\n💳 Платёжная ссылка:\n").append(event.paymentLink)
             append("\n\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")

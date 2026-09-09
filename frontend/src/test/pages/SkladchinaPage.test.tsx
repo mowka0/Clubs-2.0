@@ -206,11 +206,26 @@ describe('SkladchinaPage — Phase A', () => {
     expect(screen.getByText('Я оплатил')).toBeInTheDocument();
   });
 
-  it('A-5: прогресс показан в людях «Скинулись N из M»', async () => {
-    mockDetail(buildDetail({ paidCount: 1, participantCount: 5 }));
+  it('заголовок — сверенные деньги, заявленное и люди — строкой под полосой (вариант A)', async () => {
+    mockDetail(buildDetail({
+      paidCount: 1, participantCount: 5, collectedKopecks: 100000, confirmedKopecks: 0, totalGoalKopecks: 500000,
+    }));
     renderPage();
 
-    expect(await screen.findByText('Скинулись 1 из 5')).toBeInTheDocument();
+    expect(await screen.findByText(/Сверено 0 ₽/)).toBeInTheDocument();
+    expect(screen.getByText(/Ещё 1.000 ₽ ждут сверки/)).toBeInTheDocument();
+    expect(screen.getByText(/скинулись 1 из 5/)).toBeInTheDocument();
+  });
+
+  it('когда заявленных нет — строка про сверку не показывается', async () => {
+    mockDetail(buildDetail({
+      paidCount: 1, participantCount: 5, collectedKopecks: 100000, confirmedKopecks: 100000, totalGoalKopecks: 500000,
+    }));
+    renderPage();
+
+    expect(await screen.findByText(/Сверено 1.000 ₽/)).toBeInTheDocument();
+    expect(screen.queryByText(/ждут сверки/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Скинулись 1 из 5/)).toBeInTheDocument();
   });
 
   it('A-2: организатор fixed active — кнопки «Отметить оплату» / «Отменить» (без перераспределения)', async () => {

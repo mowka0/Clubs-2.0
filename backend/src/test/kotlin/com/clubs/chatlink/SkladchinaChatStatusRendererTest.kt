@@ -23,18 +23,25 @@ class SkladchinaChatStatusRendererTest {
             paidCount = 3,
             confirmedCount = 1,
             participantCount = 10,
-            collectedKopecks = 300_000,
+            confirmedKopecks = 100_000,
+            claimedKopecks = 200_000,
             totalGoalKopecks = 1_000_000,
             deadline = deadline,
             deadlinePassed = false,
+            affectsReputation = true,
             pending = listOf(ChatMention(111L, "Наташа"), ChatMention(222L, "Марк"))
         )
 
         assertTrue(text.contains("💰 Бронь корта"))
+        // Важный сбор до срока: пост повторяет условия из DM — цену молчания и просьбу отметить оплату.
+        assertTrue(text.contains("⚠️ Важный сбор — влияет на репутацию: оплата +10, отказ — без штрафа, молчание до срока −40"))
+        assertTrue(text.contains("После оплаты — отметьте в приложении, чтобы организатор увидел."))
         // Полоса: одна сверенная ячейка, две заявленные, остальное пусто.
         assertTrue(text.contains("🟩🟨🟨⬜⬜⬜⬜⬜⬜⬜"))
         assertTrue(text.contains("👥 Скинулись — 3 из 10 · сверено 1"))
-        assertTrue(text.contains("💵 Собрано 3\u00A0000 из 10\u00A0000 ₽"))
+        // Деньги: сверенное и заявленное — отдельно, как на экране сбора (вариант A).
+        assertTrue(text.contains("💵 Сверено 1\u00A0000 из 10\u00A0000 ₽ · ещё 2\u00A0000 ₽ ждут сверки"))
+        assertFalse(text.contains("Собрано"))
         assertTrue(text.contains("⏳ До 10.07.2026 18:00 МСК"))
         // Тот же сбор после срока: дата сменяется объяснением, почему он ещё открыт.
         val afterDeadline = renderer.statusText(
@@ -42,15 +49,39 @@ class SkladchinaChatStatusRendererTest {
             paidCount = 3,
             confirmedCount = 1,
             participantCount = 10,
-            collectedKopecks = 300_000,
+            confirmedKopecks = 100_000,
+            claimedKopecks = 200_000,
             totalGoalKopecks = 1_000_000,
             deadline = deadline,
             deadlinePassed = true,
+            affectsReputation = true,
             pending = emptyList()
         )
         assertTrue(afterDeadline.contains("⏳ Срок вышел — организатор сводит сбор"))
         assertFalse(afterDeadline.contains("⏳ До"))
+        // После срока платить нельзя — ни условий, ни просьбы отметить оплату в посте нет.
+        assertFalse(afterDeadline.contains("Важный сбор"))
+        assertFalse(afterDeadline.contains("отметьте в приложении"))
         assertTrue(text.contains("Ждём: <a href=\"tg://user?id=111\">Наташа</a>, <a href=\"tg://user?id=222\">Марк</a>"))
+    }
+
+    @Test
+    fun `statusText — обычный сбор — просьба отметить оплату есть, условий по репутации нет`() {
+        val text = renderer.statusText(
+            title = "Бронь корта",
+            paidCount = 1,
+            confirmedCount = 0,
+            participantCount = 3,
+            confirmedKopecks = 0,
+            claimedKopecks = 80_000,
+            totalGoalKopecks = 240_000,
+            deadline = deadline,
+            deadlinePassed = false,
+            affectsReputation = false,
+            pending = listOf(ChatMention(111L, "Наташа"))
+        )
+        assertTrue(text.contains("После оплаты — отметьте в приложении, чтобы организатор увидел."))
+        assertFalse(text.contains("Важный сбор"))
     }
 
     @Test
@@ -60,10 +91,12 @@ class SkladchinaChatStatusRendererTest {
             paidCount = 10,
             confirmedCount = 10,
             participantCount = 10,
-            collectedKopecks = 1_000_000,
+            confirmedKopecks = 0,
+            claimedKopecks = 1_000_000,
             totalGoalKopecks = 1_000_000,
             deadline = deadline,
             deadlinePassed = false,
+            affectsReputation = false,
             pending = emptyList()
         )
         assertFalse(text.contains("Ждём"))
@@ -79,10 +112,12 @@ class SkladchinaChatStatusRendererTest {
             paidCount = 0,
             confirmedCount = 0,
             participantCount = 1,
-            collectedKopecks = 0,
+            confirmedKopecks = 0,
+            claimedKopecks = 0,
             totalGoalKopecks = null,
             deadline = deadline,
             deadlinePassed = false,
+            affectsReputation = false,
             pending = listOf(ChatMention(1L, "<script>Вася & Ко"))
         )
 
@@ -101,10 +136,12 @@ class SkladchinaChatStatusRendererTest {
             paidCount = 0,
             confirmedCount = 0,
             participantCount = 17,
-            collectedKopecks = 0,
+            confirmedKopecks = 0,
+            claimedKopecks = 0,
             totalGoalKopecks = null,
             deadline = deadline,
             deadlinePassed = false,
+            affectsReputation = false,
             pending = pending
         )
 

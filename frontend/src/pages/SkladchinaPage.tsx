@@ -115,23 +115,25 @@ export const SkladchinaPage: FC = () => {
   const isFixed = s.paymentMode !== 'voluntary';
   const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
 
-  // A-5: заглавная метрика — прогресс по людям; деньги — декоративная строка под ней.
-  // V89: полоса из двух сегментов — сверенное организатором и заявленное, но ещё не сверенное.
+  // Заглавная метрика — деньги, которые организатор сверил (вариант A, PO 2026-09-09): прежнее
+  // «Собрано» складывало заявленное и сверенное в одно число. Люди и «ещё N ₽ ждут сверки» —
+  // строкой под полосой. Полоса из двух сегментов — сверенное и заявленное.
   const peoplePercent = s.participantCount > 0
     ? Math.round((s.paidCount / s.participantCount) * 100)
     : 0;
   const peopleConfirmedPercent = s.participantCount > 0
     ? Math.round((s.confirmedCount / s.participantCount) * 100)
     : 0;
-  // Сплит «Каждый сам» (voluntary + цель): доли неравные, поэтому осмысленный сигнал — именно деньги
-  // к цели: бар заполняется рублями, и в заголовке первыми идут деньги, а не люди.
+  // При цели полоса считается в рублях — о том же, о чём заголовок; без цели (voluntary) — в людях.
   const moneyPercent = hasGoal
     ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
     : 0;
   const moneyConfirmedPercent = hasGoal
     ? Math.min(100, Math.round((s.confirmedKopecks / s.totalGoalKopecks!) * 100))
     : 0;
-  const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
+  const useMoneyBar = hasGoal;
+  // Заявлено участниками, но организатором ещё не сверено.
+  const awaitingReviewKopecks = Math.max(0, s.collectedKopecks - s.confirmedKopecks);
   // #3: последний ещё-pending участник voluntary-сбора видит в подсказке поля суммы ровно остаток
   // до цели — и может закрыть сбор одним платежом.
   const remainingToGoalKopecks = hasGoal ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks) : 0;
@@ -490,11 +492,14 @@ export const SkladchinaPage: FC = () => {
           </div>
         )}
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
-          {useMoneyBar
-            ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
-            : `Скинулись ${s.paidCount} из ${s.participantCount}`}
+          {`Сверено ${formatRubles(s.confirmedKopecks)} ₽`}
+          {hasGoal && (
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-dim)' }}>
+              {` из ${formatRubles(s.totalGoalKopecks!)} ₽`}
+            </span>
+          )}
         </div>
-        {/* Зелёное — деньги, которые организатор сверил; серое — заявленные и ждущие сверки. */}
+        {/* Зелёное — деньги, которые организатор сверил; оранжевая штриховка — заявленные и ждущие сверки. */}
         <div className="rd-progress rd-split">
           <div
             className="rd-fill rd-fill-confirmed"
@@ -512,14 +517,13 @@ export const SkladchinaPage: FC = () => {
           />
         </div>
         <div className="rd-sklad-stats">
-          {useMoneyBar
-            ? `Внесли ${s.paidCount} из ${s.participantCount}`
-            : hasGoal
-              ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
-              : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
+          {awaitingReviewKopecks > 0 && (
+            <span style={{ color: 'var(--accent)' }}>{`Ещё ${formatRubles(awaitingReviewKopecks)} ₽ ждут сверки`}</span>
+          )}
+          {awaitingReviewKopecks > 0 ? ' · скинулись ' : 'Скинулись '}
+          {`${s.paidCount} из ${s.participantCount}`}
           {/* Режим оплаты у сплита сказан здесь: ряда бейджей, где он стоял раньше, больше нет. */}
           {isSplit && ` · ${paymentModeLabel(s.paymentMode).toLowerCase()}`}
-          {s.confirmedCount > 0 && s.confirmedCount < s.paidCount && ` · сверено ${s.confirmedCount}`}
           {/* После срока «до 8 сентября» врало бы: сбор живёт, пока организатор его не сведёт. */}
           {isActive && deadlinePassed
             ? ' · срок вышел'

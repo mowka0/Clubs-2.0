@@ -30,6 +30,10 @@ const rowActionStyle: CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+// Всё, что раскрывается под строкой участника (кнопки сверки, чек, заявка на отказ), начинается
+// под его именем — с отступом на аватар и зазор строки.
+const rowDetailStyle: CSSProperties = { padding: '0 0 12px 46px' };
+
 function getInitials(firstName: string, lastName: string | null): string {
   const last = lastName ? lastName.charAt(0).toUpperCase() : '';
   return `${firstName.charAt(0).toUpperCase()}${last}`;
@@ -100,11 +104,12 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
           // Спор с чеком разбирается прямо в строке — карточка ниже.
           const showDispute = !!onResolvePayment && p.status === 'payment_disputed';
           // Сверка по ходу сбора: заявленную оплату можно засчитать или отклонить сразу,
-          // а уже вынесенное решение — переиграть, пока сбор не закрыт.
+          // а уже вынесенное решение — переиграть, пока сбор не закрыт. Кнопки живут ПОД строкой
+          // (staging 2026-09-09: три кнопки справа от имени отжимали имя до нуля и переносились).
           const review = canReviewPayments && !!onResolvePayment && !showDeclineRequest &&
             (p.status === 'paid' || p.status === 'payment_confirmed' || p.status === 'payment_rejected')
             ? (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <>
                 {/* Отметку «получил наличкой» организатор мог поставить по ошибке — она снимается
                     отдельно от сверки: «не дошёл» звало бы человека прислать чек за чужую ошибку. */}
                 {canManagePayments && p.status === 'paid' && (
@@ -137,7 +142,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                     {busy ? '…' : 'Не дошёл'}
                   </button>
                 )}
-              </div>
+              </>
             )
             : null;
           // A-2: pending → «Отметить оплату»; paid → «Отменить». Если у участника открыт запрос
@@ -167,15 +172,17 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
-                    {showDeclineRequest ? 'Просит отказаться' : badge.text}
-                  </span>
+                <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`} style={{ flexShrink: 0 }}>
+                  {showDeclineRequest ? 'Просит отказаться' : badge.text}
+                </span>
+              </div>
+              {action && (
+                <div style={{ ...rowDetailStyle, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {action}
                 </div>
-              </div>
+              )}
               {showDispute && (
-                <div style={{ padding: '0 0 12px 46px' }}>
+                <div style={rowDetailStyle}>
                   {p.receiptNote && (
                     <div className="rd-met" style={{ marginBottom: 8 }}>«{p.receiptNote}»</div>
                   )}
@@ -204,10 +211,10 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                 </div>
               )}
               {p.status === 'payment_rejected' && p.paymentRejectNote && (
-                <div className="rd-met" style={{ padding: '0 0 10px 46px' }}>«{p.paymentRejectNote}»</div>
+                <div className="rd-met" style={rowDetailStyle}>«{p.paymentRejectNote}»</div>
               )}
               {showDeclineRequest && (
-                <div style={{ padding: '0 0 10px 46px' }}>
+                <div style={rowDetailStyle}>
                   {p.declineNote && (
                     <div className="rd-met" style={{ marginBottom: 8 }}>«{p.declineNote}»</div>
                   )}

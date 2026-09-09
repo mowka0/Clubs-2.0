@@ -95,8 +95,11 @@ class SkladchinaCreationService(
         val created = skladchinaRepository.create(domain, resolution.participants)
         // Организатор, закрывший часть счёта своими деньгами, стартует уже оплатившим: его взнос
         // сразу в собранной сумме и в прогрессе, платёжная панель ему не показывается (split_bill).
+        // Свои деньги он не сверяет — отметка сразу подтверждённая, как у наличных (иначе он видел бы
+        // «ещё N ₽ ждут сверки» и кнопку «Засчитать» на самом себе).
         resolution.prepaidByCreatorKopecks?.let { prepaid ->
             skladchinaRepository.setParticipantPaid(created.id, creatorId, prepaid, now)
+            skladchinaRepository.confirmParticipantPayment(created.id, creatorId, now)
         }
         log.info("Skladchina created: id={} clubId={} creatorId={} template={} mode={} participants={} prepaidByCreator={}",
             created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size,

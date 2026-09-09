@@ -72,6 +72,15 @@ object ReputationPolicy {
         SkladchinaParticipantStatus.pending -> null
     }
 
+    /**
+     * Условия «важного сбора» одной строкой — для DM участнику при создании и для живого поста в
+     * чате клуба. Штраф за молчание легитимен, только если условия объявлены заранее, поэтому цифры
+     * берутся отсюда же, откуда их возьмёт леджер: текст не разойдётся с начислением.
+     */
+    fun skladchinaRulesLine(): String =
+        "⚠️ Важный сбор — влияет на репутацию: оплата +${pointsFor(ReputationKind.skladchina_paid)}, " +
+            "отказ — без штрафа, молчание до срока −${-pointsFor(ReputationKind.skladchina_expired)}"
+
     fun pointsFor(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 100
         // Подтверждённая бронь, которую пропустили, сжигает слот и план организатора:

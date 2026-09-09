@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.reputation.ReputationPolicy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
@@ -52,11 +53,16 @@ class SkladchinaChatStatusRenderer(
         paidCount: Int,
         confirmedCount: Int,
         participantCount: Int,
-        collectedKopecks: Long,
+        // Деньги, которые организатор сверил, и отдельно — заявленные, но ещё не сверенные: в одно
+        // число их не мешаем (вариант A, PO 2026-09-09), как и на экране сбора.
+        confirmedKopecks: Long,
+        claimedKopecks: Long,
         totalGoalKopecks: Long?,
         deadline: OffsetDateTime,
         // Срок прошёл, но сбор ещё открыт: организатор его сводит (редакция PO 2026-09-09).
         deadlinePassed: Boolean,
+        // Важный сбор: условия по репутации объявляются в посте, как и в DM (просьба PO 2026-09-09).
+        affectsReputation: Boolean,
         pending: List<ChatMention>
     ): String {
         val sb = StringBuilder()
@@ -67,14 +73,23 @@ class SkladchinaChatStatusRenderer(
         // иначе строка повторяет предыдущую и шумит.
         if (confirmedCount in 1 until paidCount) sb.append(" · сверено ").append(confirmedCount)
         sb.append("\n")
-        sb.append("💵 Собрано ").append(formatRubles(collectedKopecks))
+        sb.append("💵 Сверено ").append(formatRubles(confirmedKopecks))
         totalGoalKopecks?.let { sb.append(" из ").append(formatRubles(it)) }
-        sb.append(" ₽\n")
+        sb.append(" ₽")
+        if (claimedKopecks > 0) sb.append(" · ещё ").append(formatRubles(claimedKopecks)).append(" ₽ ждут сверки")
+        sb.append("\n")
         // После срока «⏳ До 8 сентября» врало бы: сбор живёт, пока организатор его не сведёт.
         if (deadlinePassed) {
             sb.append("⏳ Срок вышел — организатор сводит сбор")
         } else {
             sb.append("⏳ До ").append(deadline.format(fmt))
+        }
+        // Пока платить ещё можно, пост повторяет то, что участник получил бы в DM: цену молчания и
+        // просьбу отметить оплату. После срока обе строки теряют смысл — ответы закрыты.
+        if (!deadlinePassed) {
+            sb.append("\n")
+            if (affectsReputation) sb.append("\n").append(ReputationPolicy.skladchinaRulesLine())
+            sb.append("\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")
         }
         mentionsLine(pending)?.let { sb.append("\n\n").append("Ждём: ").append(it) }
         return sb.toString()
