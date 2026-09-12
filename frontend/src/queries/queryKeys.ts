@@ -76,6 +76,11 @@ export const queryKeys = {
     eventState: (eventId: string) => ['skladchinas', 'event-state', eventId] as const,
     splittableEvents: (clubId: string) => ['skladchinas', 'splittable-events', clubId] as const,
   },
+  debts: {
+    all: ['debts'] as const,
+    overview: ['debts', 'overview'] as const,
+    pair: (userId: string) => ['debts', 'pair', userId] as const,
+  },
   activities: {
     // Префикс для инвалидации всех фильтр-вариантов ленты клуба разом.
     byClubAll: (clubId: string) => ['activities', 'by-club', clubId] as const,

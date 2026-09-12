@@ -4,9 +4,8 @@
 package com.clubs.generated.jooq.tables.daos
 
 
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
 
@@ -20,9 +19,10 @@ import org.jooq.impl.DAOImpl
 
 
 /**
- * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта и
- * т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую (СБП)
- * мимо платформы, приложение ведёт учёт статусов и напоминания.
+ * Сбор денег внутри клуба: повод и обёртка над долгами (название, вид, срок,
+ * реквизиты, чат-пост, пачка долгов в debts). Создать может любой активный
+ * участник клуба; отменить — создатель или владелец клуба. Спека:
+ * docs/modules/skladchina-v3.md.
  */
 @Suppress("UNCHECKED_CAST")
 open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRecord, com.clubs.generated.jooq.tables.pojos.Skladchinas, UUID>(Skladchinas.SKLADCHINAS, com.clubs.generated.jooq.tables.pojos.Skladchinas::class.java, configuration) {
@@ -117,26 +117,15 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
     fun fetchByPhotoUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.PHOTO_URL, *values)
 
     /**
-     * Fetch records that have <code>payment_mode BETWEEN lowerInclusive AND
+     * Fetch records that have <code>amount_kopecks BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfPaymentMode(lowerInclusive: SkladchinaMode, upperInclusive: SkladchinaMode): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.PAYMENT_MODE, lowerInclusive, upperInclusive)
+    fun fetchRangeOfAmountKopecks(lowerInclusive: Long?, upperInclusive: Long?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.AMOUNT_KOPECKS, lowerInclusive, upperInclusive)
 
     /**
-     * Fetch records that have <code>payment_mode IN (values)</code>
+     * Fetch records that have <code>amount_kopecks IN (values)</code>
      */
-    fun fetchByPaymentMode(vararg values: SkladchinaMode): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.PAYMENT_MODE, *values)
-
-    /**
-     * Fetch records that have <code>total_goal_kopecks BETWEEN lowerInclusive
-     * AND upperInclusive</code>
-     */
-    fun fetchRangeOfTotalGoalKopecks(lowerInclusive: Long?, upperInclusive: Long?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.TOTAL_GOAL_KOPECKS, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>total_goal_kopecks IN (values)</code>
-     */
-    fun fetchByTotalGoalKopecks(vararg values: Long): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.TOTAL_GOAL_KOPECKS, *values.toTypedArray())
+    fun fetchByAmountKopecks(vararg values: Long): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.AMOUNT_KOPECKS, *values.toTypedArray())
 
     /**
      * Fetch records that have <code>payment_link BETWEEN lowerInclusive AND
@@ -164,23 +153,12 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>deadline BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfDeadline(lowerInclusive: OffsetDateTime, upperInclusive: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.DEADLINE, lowerInclusive, upperInclusive)
+    fun fetchRangeOfDeadline(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.DEADLINE, lowerInclusive, upperInclusive)
 
     /**
      * Fetch records that have <code>deadline IN (values)</code>
      */
     fun fetchByDeadline(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.DEADLINE, *values)
-
-    /**
-     * Fetch records that have <code>affects_reputation BETWEEN lowerInclusive
-     * AND upperInclusive</code>
-     */
-    fun fetchRangeOfAffectsReputation(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.AFFECTS_REPUTATION, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>affects_reputation IN (values)</code>
-     */
-    fun fetchByAffectsReputation(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.AFFECTS_REPUTATION, *values.toTypedArray())
 
     /**
      * Fetch records that have <code>status BETWEEN lowerInclusive AND
@@ -203,17 +181,6 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>closed_at IN (values)</code>
      */
     fun fetchByClosedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.CLOSED_AT, *values)
-
-    /**
-     * Fetch records that have <code>closed_by BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfClosedBy(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.CLOSED_BY, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>closed_by IN (values)</code>
-     */
-    fun fetchByClosedBy(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.CLOSED_BY, *values)
 
     /**
      * Fetch records that have <code>created_at BETWEEN lowerInclusive AND
@@ -249,17 +216,6 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
     fun fetchByReminderSentAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.REMINDER_SENT_AT, *values)
 
     /**
-     * Fetch records that have <code>template BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfTemplate(lowerInclusive: SkladchinaTemplate?, upperInclusive: SkladchinaTemplate?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.TEMPLATE, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>template IN (values)</code>
-     */
-    fun fetchByTemplate(vararg values: SkladchinaTemplate): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.TEMPLATE, *values)
-
-    /**
      * Fetch records that have <code>event_id BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
@@ -269,4 +225,81 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>event_id IN (values)</code>
      */
     fun fetchByEventId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.EVENT_ID, *values)
+
+    /**
+     * Fetch records that have <code>kind BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfKind(lowerInclusive: SkladchinaKind, upperInclusive: SkladchinaKind): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.KIND, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>kind IN (values)</code>
+     */
+    fun fetchByKind(vararg values: SkladchinaKind): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.KIND, *values)
+
+    /**
+     * Fetch records that have <code>enrollment_until BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfEnrollmentUntil(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.ENROLLMENT_UNTIL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>enrollment_until IN (values)</code>
+     */
+    fun fetchByEnrollmentUntil(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.ENROLLMENT_UNTIL, *values)
+
+    /**
+     * Fetch records that have <code>min_participants BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfMinParticipants(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.MIN_PARTICIPANTS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>min_participants IN (values)</code>
+     */
+    fun fetchByMinParticipants(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.MIN_PARTICIPANTS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>locked_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLockedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.LOCKED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>locked_at IN (values)</code>
+     */
+    fun fetchByLockedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.LOCKED_AT, *values)
+
+    /**
+     * Fetch records that have <code>ordered_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfOrderedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.ORDERED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>ordered_at IN (values)</code>
+     */
+    fun fetchByOrderedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.ORDERED_AT, *values)
+
+    /**
+     * Fetch records that have <code>hidden_from_user_id BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfHiddenFromUserId(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.HIDDEN_FROM_USER_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>hidden_from_user_id IN (values)</code>
+     */
+    fun fetchByHiddenFromUserId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.HIDDEN_FROM_USER_ID, *values)
+
+    /**
+     * Fetch records that have <code>order_reminded_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfOrderRemindedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.ORDER_REMINDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>order_reminded_at IN (values)</code>
+     */
+    fun fetchByOrderRemindedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.ORDER_REMINDED_AT, *values)
 }

@@ -1,27 +1,29 @@
 package com.clubs.bot
 
 import com.clubs.chatlink.SkladchinaChatStatusService
+import com.clubs.common.util.Money
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
-import com.clubs.skladchina.SkladchinaDeclineRejectedEvent
-import com.clubs.skladchina.SkladchinaDeclineRequestedEvent
+import com.clubs.skladchina.SkladchinaLockedEvent
+import com.clubs.skladchina.SkladchinaOrderedEvent
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionalEventListener
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /**
- * Отправка DM ботом по жизненному циклу складчины. Слушает доменные события,
- * публикуемые SkladchinaService, и шлёт DM ПОСЛЕ коммита исходной транзакции
- * (`@TransactionalEventListener` фаза по умолчанию = AFTER_COMMIT).
- *
- * Тот же паттерн, что EventBotNotifier — проверенный способ «отправить DM после
- * успешной мутации в БД». Создание складчины дополнительно оркестрирует чат-пост
- * (маршрутизатор рассылок, PO 2026-07-08): сначала живой статус в чат, затем DM
- * только тем участникам, кого пост не покрыл ([ChatAwareBroadcast]).
+ * DM по жизненному циклу сбора (skladchina-v3 § 6): создание по виду, заморозка списка «Кто в деле?»,
+ * «Заказываю», итог. Слушает доменные события ПОСЛЕ коммита (`@TransactionalEventListener`).
+ * Создание дополнительно оркестрирует чат-пост: сначала живой статус в чат, затем DM только
+ * тем, кого пост не покрыл ([ChatAwareBroadcast]); тихий сбор в чат не идёт.
  */
 @Component
 class SkladchinaBotNotifier(
@@ -31,177 +33,151 @@ class SkladchinaBotNotifier(
     private val chatAwareBroadcast: ChatAwareBroadcast
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
-    private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+    private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm 'МСК'").withZone(ZoneId.of("Europe/Moscow"))
 
     // @Async: пост в чат + N getChatMember + DM-цикл — Telegram I/O не место на потоке коммита.
     @Async
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaCreated(event: SkladchinaCreatedEvent) {
         // Сначала чат: решение «кому DM» зависит от ФАКТА выхода поста — шаги последовательны.
-        val chatPostChatId = skladchinaChatStatusService.onSkladchinaCreated(event.clubId, event.skladchinaId)
-        val telegramIds = chatAwareBroadcast.dmTargets(
-            chatPostChatId, userRepository.findTelegramIds(event.participantUserIds)
-        )
-        log.info("Skladchina-created DM: id={} participants={} chatPost={} dmTargets={}",
-            event.skladchinaId, event.participantUserIds.size, chatPostChatId != null, telegramIds.size)
-        if (telegramIds.isEmpty()) {
-            log.info("Skladchina-created DM SKIPPED — all covered by chat or no telegramIds, skladchina={}", event.skladchinaId)
+        val chatPostChatId = if (event.hiddenFromUserId == null) {
+            skladchinaChatStatusService.onSkladchinaCreated(event.clubId, event.skladchinaId)
+        } else null
+        val recipients = userRepository.findByIds(event.recipientUserIds)
+        val dmTelegramIds = chatAwareBroadcast.dmTargets(chatPostChatId, recipients.map { it.telegramId }).toSet()
+        log.info("Skladchina-created DM: id={} kind={} recipients={} chatPost={} dmTargets={}",
+            event.skladchinaId, event.kind, recipients.size, chatPostChatId != null, dmTelegramIds.size)
+
+        val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
+        recipients.filter { it.telegramId in dmTelegramIds }.forEach { user ->
+            val text = createdText(event, creatorName, share = event.debtorShares[user.id])
+            notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+        }
+    }
+
+    private fun createdText(e: SkladchinaCreatedEvent, creatorName: String, share: Long?): String = buildString {
+        when (e.kind) {
+            SkladchinaKind.shared -> {
+                append("💰 Сбор «${e.title}» в клубе «${e.clubName}»")
+                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                if (share != null) {
+                    append("\n\n💵 Ваша доля: ").append(Money.rub(share))
+                    e.deadline?.let { append("\n⏳ До: ").append(it.format(fmt)) }
+                    append(requisites(e.paymentLink, e.paymentMethodNote))
+                    append("\n\nПосле перевода нажмите «Отдал» — $creatorName подтвердит.")
+                } else {
+                    append("\n\n").append(Money.rub(e.amountKopecks ?: 0L)).append(" на группу, поровну между теми, кто в деле.")
+                    e.enrollmentUntil?.let { append("\n⏳ Отметиться до ").append(it.format(fmt)) }
+                }
+                append("\n\n").append(ReputationPolicy.skladchinaRulesLine())
+            }
+            SkladchinaKind.per_head -> {
+                append("🎫 «${e.title}» в клубе «${e.clubName}»: ").append(Money.rub(e.amountKopecks ?: 0L)).append(" за штуку.")
+                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                e.deadline?.let { append("\n\n$creatorName покупает ").append(it.format(fmt)).append(" на тех, кто оплатил.") }
+                append("\nНажмите «Беру», если вам нужно.")
+            }
+            SkladchinaKind.voluntary -> {
+                append("🎁 «${e.title}» в клубе «${e.clubName}» — по желанию")
+                e.amountKopecks?.let { append(", ориентир ").append(Money.rub(it)) }
+                e.deadline?.let { append(", до ").append(it.format(fmt)) }
+                append(". Собирает $creatorName.")
+                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                append(requisites(e.paymentLink, e.paymentMethodNote))
+                append("\n\nПеревели — нажмите «Перевёл» в приложении.")
+            }
+        }
+    }
+
+    /** Список заморожен: должникам их доля, создателю итог; не набрали — только создателю. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onLocked(event: SkladchinaLockedEvent) {
+        val creatorTelegramId = userRepository.findById(event.creatorId)?.telegramId
+        if (event.cancelledForShortfall) {
+            creatorTelegramId?.let {
+                notificationService.sendDirectMessageWithDeepLink(
+                    it,
+                    "Не набрали: в деле ${event.enrolledCount}" + (event.minParticipants?.let { m -> " из $m" } ?: "") +
+                        ". Сбор «${event.title}» отменён, денег никто не переводил.",
+                    "/skladchina/${event.skladchinaId}", OPEN_BUTTON
+                )
+            }
             return
         }
-
-        val expectedNote = when (event.paymentMode) {
-            "voluntary" -> "💵 Сумма: по желанию"
-            else -> {
-                val rubles = event.totalGoalKopecks?.let { it / 100 } ?: 0
-                "💵 Сумма сбора: $rubles ₽"
+        val share = event.debtorShares.values.firstOrNull()
+        val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
+        userRepository.findByIds(event.debtorShares.keys).forEach { user ->
+            val amount = event.debtorShares[user.id] ?: return@forEach
+            val text = buildString {
+                append("💰 Список «${event.title}» заморожен: в деле ${event.enrolledCount}.")
+                append("\n\n💵 Ваша доля: ").append(Money.rub(amount))
+                event.deadline?.let { append("\n⏳ До: ").append(it.format(fmt)) }
+                append(requisites(event.paymentLink, event.paymentMethodNote))
+                append("\n\nПосле перевода нажмите «Отдал» — $creatorName подтвердит.")
+                append("\n\n").append(ReputationPolicy.skladchinaRulesLine())
             }
+            notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
         }
-        // buildString вместо """trimIndent""" — interpolated description с собственными
-        // переводами строк ломал trimIndent calculation (минимальный indent становился 0,
-        // остальные строки оставались с 12 пробелами отступа в финальной DM).
-        val text = buildString {
-            append("💰 Новый сбор в клубе «${event.clubName}»: ${event.title}")
-            event.description?.takeIf { it.isNotBlank() }?.let {
-                append("\n\n").append(it.take(200))
-            }
-            append("\n\n").append(expectedNote)
-            append("\n⏰ До: ").append(event.deadline.format(fmt))
-            if (event.affectsReputation) {
-                // Штраф -40 за молчание легитимен только если условия были объявлены заранее
-                // (launch-blocker редизайна, уведомление #1).
-                append("\n\n⚠️ Важный сбор: оплата +10, отказ — без штрафа, молчание до дедлайна −40")
-            }
-            append("\n\n💳 Платёжная ссылка:\n").append(event.paymentLink)
-            append("\n\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")
-        }
-
-        // WebApp inline button c прямым frontend URL — открывает Mini App
-        // на /skladchina/<id>, React Router рендерит SkladchinaPage напрямую.
-        val webAppPath = "/skladchina/${event.skladchinaId}"
-        telegramIds.forEach { telegramId ->
+        creatorTelegramId?.let {
             notificationService.sendDirectMessageWithDeepLink(
-                telegramId = telegramId,
-                text = text,
-                webAppPath = webAppPath,
-                buttonText = "💰 Открыть сбор"
+                it,
+                "👥 «${event.title}»: в деле ${event.enrolledCount}, список заморожен" +
+                    (share?.let { s -> ", по ${Money.rub(s)} с человека" } ?: "") + ".",
+                "/skladchina/${event.skladchinaId}", OPEN_BUTTON
             )
         }
+        log.info("Skladchina-locked DM sent: id={} debtors={}", event.skladchinaId, event.debtorShares.size)
     }
 
-    /**
-     * #6: участник попросил освободить его от оплаты (шаблоны REQUIRES_APPROVAL). Отправляем DM
-     * организатору с именем просителя и причиной, с кнопкой перехода на страницу складчины для решения.
-     */
+    /** «Заказываю»: выбывшим без долга. */
     @TransactionalEventListener(fallbackExecution = true)
-    fun onDeclineRequested(event: SkladchinaDeclineRequestedEvent) {
-        val organizerTelegramId = userRepository.findById(event.creatorId)?.telegramId
-        if (organizerTelegramId == null) {
-            log.warn("Skladchina decline-request DM SKIPPED — organizer telegramId missing: id={}", event.skladchinaId)
-            return
+    fun onOrdered(event: SkladchinaOrderedEvent) {
+        if (event.droppedUserIds.isEmpty()) return
+        val text = "🛒 «${event.title}» в клубе «${event.clubName}»: заказ сделан. " +
+            "Вы не оплатили до заказа — вы выбыли, долга нет."
+        userRepository.findTelegramIds(event.droppedUserIds).forEach {
+            notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
         }
-        val requesterName = userRepository.findById(event.requesterUserId)?.firstName ?: "Участник"
-        val text = buildString {
-            append("🙅 $requesterName просит отказаться от оплаты")
-            append("\nСбор «${event.title}»")
-            if (event.clubName.isNotBlank()) append(" · клуб «${event.clubName}»")
-            append("\n\nПричина: «${event.reason}»")
-            append("\n\nОдобрите отказ или отклоните (с причиной) в приложении.")
-        }
-        notificationService.sendDirectMessageWithDeepLink(
-            telegramId = organizerTelegramId,
-            text = text,
-            webAppPath = "/skladchina/${event.skladchinaId}",
-            buttonText = "💰 Открыть сбор"
-        )
-        log.info("Skladchina decline-request DM sent: id={} organizer={}", event.skladchinaId, organizerTelegramId)
+        log.info("Skladchina-ordered DM sent: id={} dropped={}", event.skladchinaId, event.droppedUserIds.size)
     }
 
-    /**
-     * #7: организатор отклонил запрос на отказ от оплаты. Отправляем участнику DM с причиной
-     * организатора и кнопкой на страницу складчины — платить всё равно нужно.
-     */
-    @TransactionalEventListener(fallbackExecution = true)
-    fun onDeclineRejected(event: SkladchinaDeclineRejectedEvent) {
-        val participantTelegramId = userRepository.findById(event.participantUserId)?.telegramId
-        if (participantTelegramId == null) {
-            log.warn("Skladchina decline-rejected DM SKIPPED — participant telegramId missing: id={}", event.skladchinaId)
-            return
-        }
-        val text = buildString {
-            append("❌ Ваш запрос на отказ отклонён")
-            append("\nСбор «${event.title}»")
-            if (event.clubName.isNotBlank()) append(" · клуб «${event.clubName}»")
-            append("\n\nПричина организатора: «${event.reason}»")
-            append("\n\nНужно оплатить счёт.")
-        }
-        notificationService.sendDirectMessageWithDeepLink(
-            telegramId = participantTelegramId,
-            text = text,
-            webAppPath = "/skladchina/${event.skladchinaId}",
-            buttonText = "💰 Открыть сбор"
-        )
-        log.info("Skladchina decline-rejected DM sent: id={} participant={}", event.skladchinaId, participantTelegramId)
-    }
-
+    /** Итог создателю: собран — суммы; отменён — кому вернуть уже полученное. */
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaClosed(event: SkladchinaClosedEvent) {
-        notifyExpiredParticipants(event)
-
         val creatorTelegramId = userRepository.findById(event.creatorId)?.telegramId
         if (creatorTelegramId == null) {
             log.warn("Skladchina-closed DM SKIPPED — creator telegramId missing: id={}", event.skladchinaId)
             return
         }
-        val collectedRub = event.collectedKopecks / 100
-        val goalLine = event.totalGoalKopecks?.let { " из ${it / 100} ₽" } ?: ""
-        val statusEmoji = when (event.finalStatus) {
-            SkladchinaStatus.closed_success -> "✅"
-            SkladchinaStatus.closed_failed -> "⚠️"
-            SkladchinaStatus.cancelled -> "🚫"
-            else -> "❓"
-        }
-        val text = buildString {
-            append("$statusEmoji Сбор закрыт: «${event.title}»")
-            append("\n\nСобрано: $collectedRub ₽$goalLine")
-            append("\nОплатили: ${event.paidCount} из ${event.participantCount}")
-            if (event.affectsReputation) {
-                append("\n⚠️ Репутация участников пересчитана.")
+        val text = when (event.finalStatus) {
+            SkladchinaStatus.collected -> buildString {
+                append("✅ Сбор «${event.title}» собран")
+                append("\n\nПолучено: ").append(Money.rub(event.receivedKopecks))
+                event.targetKopecks?.let { append(" из ").append(Money.rub(it)) }
+                if (event.kind == SkladchinaKind.per_head) append("\nКуплено: ${event.receivedCount}")
+                else append("\nОплатили: ${event.receivedCount} из ${event.debtCount}")
+            }
+            else -> buildString {
+                append("🚫 Сбор «${event.title}» отменён.")
+                if (event.refunds.isNotEmpty()) {
+                    val names = userRepository.findByIds(event.refunds.keys).associateBy { it.id!! }
+                    append("\n\nКому вернуть:")
+                    event.refunds.forEach { (userId, amount) ->
+                        append("\n• ").append(names[userId]?.firstName ?: "Участник").append(" — ").append(Money.rub(amount))
+                    }
+                }
             }
         }
-
-        // Deep-link ведёт прямо на саму складчину, а не на корень приложения — организатор
-        // попадает на закрытый сбор (статусы участников, собранная сумма), как во всех
-        // остальных DM по складчине (фидбек со staging 2026-06-12).
-        notificationService.sendDirectMessageWithDeepLink(
-            telegramId = creatorTelegramId,
-            text = text,
-            webAppPath = "/skladchina/${event.skladchinaId}",
-            buttonText = "💰 Открыть сбор"
-        )
-        log.info("Skladchina-closed DM sent: id={} status={} creator={}",
-            event.skladchinaId, event.finalStatus, creatorTelegramId)
+        notificationService.sendDirectMessageWithDeepLink(creatorTelegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+        log.info("Skladchina-closed DM sent: id={} status={} creator={}", event.skladchinaId, event.finalStatus, creatorTelegramId)
     }
 
-    /**
-     * Уведомление #3 из тройки launch-blocker'ов редизайна (DM с суммой → напоминание за 24ч →
-     * отчёт по штрафу): каждый, кто получил -40, должен быть уведомлён явно, а не узнать об этом
-     * случайно из своего профиля. [SkladchinaClosedEvent.expiredParticipantUserIds] непусто
-     * только при закрытии, влияющем на репутацию, в момент/после дедлайна.
-     */
-    private fun notifyExpiredParticipants(event: SkladchinaClosedEvent) {
-        if (event.expiredParticipantUserIds.isEmpty()) return
-        val telegramIds = userRepository.findTelegramIds(event.expiredParticipantUserIds)
-        log.info("Skladchina-expired DM: id={} expired={} resolved telegramIds={}",
-            event.skladchinaId, event.expiredParticipantUserIds.size, telegramIds.size)
-        val text = "⚠️ Сбор «${event.title}» в клубе «${event.clubName}» закрыт.\n\n" +
-            "Вы не ответили на важный сбор до дедлайна — репутация снижена на 40."
-        telegramIds.forEach { telegramId ->
-            notificationService.sendDirectMessageWithDeepLink(
-                telegramId = telegramId,
-                text = text,
-                webAppPath = "/skladchina/${event.skladchinaId}",
-                buttonText = "💰 Открыть сбор"
-            )
-        }
+    private fun requisites(paymentLink: String, note: String?): String = buildString {
+        append("\n\n💳 Реквизиты:\n").append(paymentLink)
+        note?.takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
+    }
+
+    companion object {
+        const val OPEN_BUTTON = "💰 Открыть сбор"
     }
 }

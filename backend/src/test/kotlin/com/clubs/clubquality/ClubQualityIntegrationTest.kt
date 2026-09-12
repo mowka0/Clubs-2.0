@@ -63,7 +63,7 @@ class ClubQualityIntegrationTest {
     fun setUp() {
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM membership_history")
         dsl.execute("DELETE FROM memberships")
@@ -213,11 +213,11 @@ class ClubQualityIntegrationTest {
     }
 
     @Test
-    fun `successfulSkladchinas counts only closed_success`() {
-        insertSkladchina("closed_success")
-        insertSkladchina("closed_success")
+    fun `successfulSkladchinas counts only collected`() {
+        insertSkladchina("collected")
+        insertSkladchina("collected")
         insertSkladchina("active")
-        insertSkladchina("closed_failed")
+        insertSkladchina("cancelled")
         insertSkladchina("cancelled")
 
         assertEquals(2, clubQualityService.getClubFacts(clubId).successfulSkladchinas)
@@ -332,8 +332,8 @@ class ClubQualityIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, status)
-            VALUES ('$id', '$clubId', '$ownerId', 'Сбор', 'voluntary'::skladchina_mode, 'http://pay',
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link, deadline, status)
+            VALUES ('$id', '$clubId', '$ownerId', 'Сбор', 'voluntary'::skladchina_kind, 'http://pay',
                     NOW() + INTERVAL '7 days', '$status'::skladchina_status)
             """.trimIndent()
         )

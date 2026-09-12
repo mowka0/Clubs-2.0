@@ -15,44 +15,40 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+/** Эндпоинты сбора (docs/modules/skladchina-v3.md § 7 «Сборы»). Права проверяют сервисы. */
 @RestController
 class SkladchinaController(
     private val creationService: SkladchinaCreationService,
     private val queryService: SkladchinaQueryService,
-    private val paymentService: SkladchinaPaymentService,
+    private val participationService: SkladchinaParticipationService,
     private val lifecycleService: SkladchinaLifecycleService
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaController::class.java)
 
+    // Список сборов клуба в «Управлении»: единственное оставшееся применение MANAGE_SKLADCHINA.
     @RequiresCapability(ClubCapability.MANAGE_SKLADCHINA, clubIdParam = "clubId")
     @GetMapping("/api/clubs/{clubId}/skladchinas/active")
     fun getClubActiveSkladchinas(
         @PathVariable clubId: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<MySkladchinaListItemDto>> {
-        val list = queryService.getClubActiveSkladchinas(clubId, user.userId)
-        return ResponseEntity.ok(list)
-    }
+    ): ResponseEntity<List<MySkladchinaListItemDto>> =
+        ResponseEntity.ok(queryService.getClubActiveSkladchinas(clubId, user.userId))
 
-    // Шаг «выберите встречу» в форме «Разделить счёт»: только те встречи, по которым сплит
-    // реально создастся (явка отмечена, есть кому платить, счёт ещё не делили).
-    @RequiresCapability(ClubCapability.MANAGE_SKLADCHINA, clubIdParam = "clubId")
     @GetMapping("/api/clubs/{clubId}/skladchinas/splittable-events")
     fun getSplittableEvents(
-        @PathVariable clubId: UUID
+        @PathVariable clubId: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<List<SplittableEventDto>> =
-        ResponseEntity.ok(queryService.getSplittableEvents(clubId))
+        ResponseEntity.ok(queryService.getSplittableEvents(clubId, user.userId))
 
-    @RequiresCapability(ClubCapability.MANAGE_SKLADCHINA, clubIdParam = "clubId")
     @PostMapping("/api/clubs/{clubId}/skladchinas")
     fun create(
         @PathVariable clubId: UUID,
         @RequestBody @Valid request: CreateSkladchinaRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Create skladchina: clubId={} userId={} title='{}'", clubId, user.userId, request.title)
-        val dto = creationService.createSkladchina(clubId, request, user.userId)
-        return ResponseEntity.status(HttpStatus.CREATED).body(dto)
+        log.info("Create skladchina: clubId={} userId={} kind={} title='{}'", clubId, user.userId, request.kind, request.title)
+        return ResponseEntity.status(HttpStatus.CREATED).body(creationService.createSkladchina(clubId, request, user.userId))
     }
 
     @GetMapping("/api/skladchinas/{id}")
@@ -62,76 +58,55 @@ class SkladchinaController(
     ): ResponseEntity<SkladchinaDetailDto> =
         ResponseEntity.ok(queryService.getDetail(id, user.userId))
 
-    // Кнопка "Разделить счёт" на EventPage: уже есть ли сплит для этого события (active → открыть его,
-    // closed_success → уже собрано)? Оба null, когда можно создать новый сплит.
     @GetMapping("/api/events/{eventId}/skladchina")
-    fun getEventSkladchina(
-        @PathVariable eventId: UUID
-    ): ResponseEntity<EventSplitStateDto> =
+    fun getEventSkladchina(@PathVariable eventId: UUID): ResponseEntity<EventSplitStateDto> =
         ResponseEntity.ok(queryService.findEventSplitState(eventId))
 
-    @PostMapping("/api/skladchinas/{id}/mark-paid")
-    fun markPaid(
+    @PostMapping("/api/skladchinas/{id}/join")
+    fun join(
         @PathVariable id: UUID,
-        @RequestBody @Valid request: MarkPaidRequest,
+        @RequestBody(required = false) @Valid request: JoinSkladchinaRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina mark-paid: id={} userId={} amount={}", id, user.userId, request.declaredAmountKopecks)
-        return ResponseEntity.ok(paymentService.markPaid(id, user.userId, request.declaredAmountKopecks))
+        log.info("Skladchina join: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(participationService.join(id, user.userId, request?.note))
     }
 
-    @PostMapping("/api/skladchinas/{id}/decline")
-    fun decline(
+    @PostMapping("/api/skladchinas/{id}/leave")
+    fun leave(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina decline: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(paymentService.decline(id, user.userId))
+        log.info("Skladchina leave: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(participationService.leave(id, user.userId))
     }
 
-    // V28: участник открывает запрос на отказ с указанием причины (шаблоны REQUIRES_APPROVAL, напр. split_bill).
-    @PostMapping("/api/skladchinas/{id}/request-decline")
-    fun requestDecline(
+    @PostMapping("/api/skladchinas/{id}/contribute")
+    fun contribute(
         @PathVariable id: UUID,
-        @RequestBody @Valid request: RequestDeclineRequest,
+        @RequestBody @Valid request: ContributeRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina decline-request: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(paymentService.requestDecline(id, user.userId, request.reason))
+        log.info("Skladchina contribute: id={} userId={} amount={}", id, user.userId, request.amountKopecks)
+        return ResponseEntity.ok(participationService.contribute(id, user.userId, request.amountKopecks))
     }
 
-    // V28: организатор одобряет/отклоняет запрос участника на отказ.
-    @PostMapping("/api/skladchinas/{id}/participants/{userId}/resolve-decline")
-    fun resolveDecline(
+    @PostMapping("/api/skladchinas/{id}/lock")
+    fun lock(
         @PathVariable id: UUID,
-        @PathVariable userId: UUID,
-        @RequestBody @Valid request: ResolveDeclineRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina resolve-decline: id={} target={} by={} approve={}", id, userId, user.userId, request.approve)
-        return ResponseEntity.ok(paymentService.resolveDecline(id, user.userId, userId, request.approve, request.rejectReason))
+        log.info("Skladchina lock: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(lifecycleService.lock(id, user.userId))
     }
 
-    // A-2: организатор отмечает участника оплатившим ("получил наличкой"). Только создатель (проверяется в service).
-    @PostMapping("/api/skladchinas/{id}/participants/{userId}/mark-paid")
-    fun organizerMarkPaid(
+    @PostMapping("/api/skladchinas/{id}/order")
+    fun order(
         @PathVariable id: UUID,
-        @PathVariable userId: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina organizer-mark-paid: id={} target={} by={}", id, userId, user.userId)
-        return ResponseEntity.ok(paymentService.organizerMarkPaid(id, user.userId, userId))
-    }
-
-    // A-2 (toggle): организатор возвращает оплату участника обратно в статус ожидания.
-    @PostMapping("/api/skladchinas/{id}/participants/{userId}/unmark")
-    fun organizerUnmarkPaid(
-        @PathVariable id: UUID,
-        @PathVariable userId: UUID,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina organizer-unmark: id={} target={} by={}", id, userId, user.userId)
-        return ResponseEntity.ok(paymentService.organizerUnmarkPaid(id, user.userId, userId))
+        log.info("Skladchina order: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(lifecycleService.order(id, user.userId))
     }
 
     @PostMapping("/api/skladchinas/{id}/close")
@@ -140,6 +115,36 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina close: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(lifecycleService.closeManually(id, user.userId))
+        return ResponseEntity.ok(lifecycleService.close(id, user.userId))
+    }
+
+    @PostMapping("/api/skladchinas/{id}/cancel")
+    fun cancel(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina cancel: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(lifecycleService.cancel(id, user.userId))
+    }
+
+    @PostMapping("/api/skladchinas/{id}/debts")
+    fun addDebtor(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: AddDebtorRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina add debtor: id={} target={} by={}", id, request.userId, user.userId)
+        return ResponseEntity.ok(participationService.addDebtor(id, user.userId, request.userId, request.amountKopecks))
+    }
+
+    @PostMapping("/api/skladchinas/{id}/debts/{debtId}/replace")
+    fun replaceDebtor(
+        @PathVariable id: UUID,
+        @PathVariable debtId: UUID,
+        @RequestBody @Valid request: ReplaceDebtorRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina replace debtor: id={} debt={} new={} by={}", id, debtId, request.userId, user.userId)
+        return ResponseEntity.ok(participationService.replaceDebtor(id, debtId, user.userId, request.userId))
     }
 }

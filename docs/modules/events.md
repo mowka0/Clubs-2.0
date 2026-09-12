@@ -1093,7 +1093,7 @@ EventController ──┬─► EventService ────► EventRepository ─
 
 ### Каскад при отмене
 - Само событие: `status → cancelled`, `cancellation_reason`, `updated_at` (предикат гарда выше).
-- **Привязанный split-сбор** (`skladchinas.event_id = eventId AND status = active`): `pending`-участники → `released` (без ledger-строк), сам сбор → `cancelled`. **Успешно закрытый** сбор (`closed_success`) НЕ трогаем — деньги уже собраны (honor-system). Зеркало `cancelActiveByClub`, но по `event_id`.
+- **Привязанный сбор «Скинуться после встречи»** (`skladchinas.event_id = eventId AND status = active`): открытые долги → `forgiven` (без ledger-строк), сам сбор → `cancelled` (сборы v3). **Собранный** сбор (`collected`) НЕ трогаем — деньги уже собраны (honor-system). Зеркало `cancelActiveByClub`, но по `event_id`.
 - **DM** заинтересованным (`stage_1_vote ∈ {going, maybe}` = аудитория `findStage2TargetTelegramIds`): «Событие отменено» (+ причина, если есть). `EventCancelledEvent` → `EventCancelledListener` (AFTER_COMMIT, @Async, best-effort) — паттерн `Stage2StartedListener`.
 
 ### API контракт

@@ -13,6 +13,8 @@ import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubInterests
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
+import com.clubs.generated.jooq.tables.DebtSettlements
+import com.clubs.generated.jooq.tables.Debts
 import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.EventTemplates
@@ -23,7 +25,7 @@ import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts
-import com.clubs.generated.jooq.tables.SkladchinaParticipants
+import com.clubs.generated.jooq.tables.SkladchinaEnrollments
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.SubscriptionEvent
 import com.clubs.generated.jooq.tables.SubscriptionPricing
@@ -120,6 +122,22 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val CLUBS: Clubs get() = Clubs.CLUBS
 
     /**
+     * Подтверждение сальдо пары: «Отдал Σ» разом по всем открытым долгам двух
+     * людей в обе стороны. Сальдо считается только внутри пары, через третьих
+     * ничего не схлопывается. Пока сальдо в claimed, одиночные кнопки у долгов
+     * пары скрыты.
+     */
+    val DEBT_SETTLEMENTS: DebtSettlements get() = DebtSettlements.DEBT_SETTLEMENTS
+
+    /**
+     * Долг между двумя людьми: кто → кому · сколько · за что (сбор) · до какого
+     * · состояние. Подтверждает получатель. Один долг на пару (сбор, должник).
+     * Экран «Долги» показывает только долги, где пользователь одна из сторон;
+     * чужих долгов не видит никто, включая владельца клуба.
+     */
+    val DEBTS: Debts get() = Debts.DEBTS
+
+    /**
      * Сообщения бота в привязанном чате по конкретному событию («живой закреп»,
      * слайс 3 club-chat-link): закреплённый статус, который бот редактирует при
      * изменении ростера, и пост-итог после отметки явки. Одна строка на
@@ -198,15 +216,18 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val SKLADCHINA_CHAT_POSTS: SkladchinaChatPosts get() = SkladchinaChatPosts.SKLADCHINA_CHAT_POSTS
 
     /**
-     * Участие члена клуба в складчине: назначенная/заявленная сумма, статус
-     * ответа и репутационная отметка. Составной PK (skladchina_id, user_id).
+     * Отметки «В деле» на этапе записи shared-сбора до события
+     * (skladchinas.enrollment_until). Это запись, не долг: доля считается
+     * только при заморозке (locked_at), тогда из каждой строки рождается долг в
+     * debts. Создатель в списке по умолчанию.
      */
-    val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants get() = SkladchinaParticipants.SKLADCHINA_PARTICIPANTS
+    val SKLADCHINA_ENROLLMENTS: SkladchinaEnrollments get() = SkladchinaEnrollments.SKLADCHINA_ENROLLMENTS
 
     /**
-     * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта
-     * и т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую
-     * (СБП) мимо платформы, приложение ведёт учёт статусов и напоминания.
+     * Сбор денег внутри клуба: повод и обёртка над долгами (название, вид,
+     * срок, реквизиты, чат-пост, пачка долгов в debts). Создать может любой
+     * активный участник клуба; отменить — создатель или владелец клуба. Спека:
+     * docs/modules/skladchina-v3.md.
      */
     val SKLADCHINAS: Skladchinas get() = Skladchinas.SKLADCHINAS
 
@@ -278,6 +299,8 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         ClubInterests.CLUB_INTERESTS,
         ClubRank.CLUB_RANK,
         Clubs.CLUBS,
+        DebtSettlements.DEBT_SETTLEMENTS,
+        Debts.DEBTS,
         EventChatPins.EVENT_CHAT_PINS,
         EventResponses.EVENT_RESPONSES,
         EventTemplates.EVENT_TEMPLATES,
@@ -288,7 +311,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         ReputationLedger.REPUTATION_LEDGER,
         ServiceSubscription.SERVICE_SUBSCRIPTION,
         SkladchinaChatPosts.SKLADCHINA_CHAT_POSTS,
-        SkladchinaParticipants.SKLADCHINA_PARTICIPANTS,
+        SkladchinaEnrollments.SKLADCHINA_ENROLLMENTS,
         Skladchinas.SKLADCHINAS,
         SubscriptionEvent.SUBSCRIPTION_EVENT,
         SubscriptionPricing.SUBSCRIPTION_PRICING,

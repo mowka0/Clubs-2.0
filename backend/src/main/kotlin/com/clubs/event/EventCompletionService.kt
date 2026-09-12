@@ -12,8 +12,8 @@ import java.time.OffsetDateTime
  * Здесь чинится пробел в жизненном цикле: `Stage2Service` переводит события
  * `upcoming -> stage_2`, но ничто не выставляло [com.clubs.generated.jooq.enums.EventStatus.completed].
  * Из-за этого прошедшие события навсегда оставались `upcoming`/`stage_2`, и единая лента активности
- * никогда их не приглушала (приглушение = статус в completed/cancelled) — в отличие от складчин,
- * которые закрывает [com.clubs.skladchina.SkladchinaScheduler].
+ * никогда их не приглушала (приглушение = статус в completed/cancelled) — в отличие от сборов,
+ * которые закрываются сами, когда не остаётся открытых долгов (SkladchinaLifecycleService).
  *
  * Флоу посещаемости после события ([AttendanceService.markAttendance], спор, разрешение,
  * [AttendanceService.finalizeAttendance]) опирается только на булевы `attendance_marked` /

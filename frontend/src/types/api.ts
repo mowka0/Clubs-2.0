@@ -745,32 +745,51 @@ export interface MyAttendanceDto {
   disputeNote: string | null;
 }
 
-export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
-export type SkladchinaTemplate = 'custom' | 'split_bill' | 'gear' | 'booking' | 'birthday';
-export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
-export type SkladchinaParticipantStatus =
-  | 'pending'
-  | 'paid'
-  | 'declined'
-  | 'expired_no_response'
-  // Складчина закрыта до дедлайна, пока участник ещё был в статусе pending:
-  // обязательство не было нарушено, запись в репутацию не создаётся.
-  | 'released';
+// --- Сборы и долги v3 (docs/modules/skladchina-v3.md): сбор — обёртка над долгами между людьми ---
 
-export interface SkladchinaParticipantDto {
-  userId: string;
+/** Вид сбора: shared «Скинуться», per_head «Кто берёт?», voluntary «По желанию». */
+export type SkladchinaKind = 'shared' | 'per_head' | 'voluntary';
+/** Итог сбора: collected (нет открытых долгов) или cancelled; порогов и «не собран» нет. */
+export type SkladchinaStatus = 'active' | 'collected' | 'cancelled';
+/** Состояние долга; открытые — waiting, promised, claimed. */
+export type DebtStatus = 'waiting' | 'promised' | 'claimed' | 'received' | 'forgiven' | 'dropped';
+export type DebtSettlementStatus = 'claimed' | 'received' | 'rejected';
+
+export interface DebtPersonDto {
+  id: string;
   firstName: string;
   lastName: string | null;
+  username: string | null;
   avatarUrl: string | null;
-  expectedAmountKopecks: number | null;
-  declaredAmountKopecks: number | null;
-  status: SkladchinaParticipantStatus;
-  paidAt: string | null;
-  // V28 decline-with-approval (вид организатора)
-  declineRequested: boolean;
-  declineNote: string | null;
-  declineRejected: boolean;
-  declineRejectNote: string | null;       // V29: причина организатора, если отказ был отклонён
+}
+
+/** Строка долга: одна и та же на экране сбора, в паре и в списке создателя. */
+export interface DebtDto {
+  id: string;
+  skladchinaId: string;
+  skladchinaTitle: string;
+  skladchinaKind: SkladchinaKind;
+  clubId: string;
+  clubName: string;
+  debtor: DebtPersonDto;
+  creditor: DebtPersonDto;
+  amountKopecks: number;
+  dueAt: string | null;
+  status: DebtStatus;
+  /** «Оплачу позже»: дата (YYYY-MM-DD). */
+  promisedAt: string | null;
+  claimedAt: string | null;
+  confirmedAt: string | null;
+  rejectedAt: string | null;
+  rejectNote: string | null;
+  note: string | null;
+  receiptUrl: string | null;
+  /** Долг в составе сальдо пары: одиночные кнопки скрыты, пока сальдо не разобрано. */
+  settlementId: string | null;
+  paymentLink: string;
+  paymentMethodNote: string | null;
+  isOverdue: boolean;
+  createdAt: string;
 }
 
 export interface SkladchinaDetailDto {
@@ -779,41 +798,48 @@ export interface SkladchinaDetailDto {
   clubName: string;
   clubAvatarUrl: string | null;
   creatorId: string;
+  creatorName: string;
   title: string;
   description: string | null;
   rules: string | null;
   photoUrl: string | null;
-  template: SkladchinaTemplate;
-  eventId: string | null;
-  // Встреча, счёт которой делится (split_bill): открывает экран сбора блоком «за что скидываемся».
-  eventTitle: string | null;
-  eventDatetime: string | null;
-  paymentMode: SkladchinaMode;
-  totalGoalKopecks: number | null;
-  collectedKopecks: number;
+  kind: SkladchinaKind;
+  /** shared: общая сумма; per_head: цена за человека; voluntary: ориентир (может быть null). */
+  amountKopecks: number | null;
+  /** Знаменатель «получено X из Y»: сумма живых долгов, до их появления — amountKopecks. */
+  targetKopecks: number | null;
+  receivedKopecks: number;
+  claimedKopecks: number;
   paymentLink: string;
   paymentMethodNote: string | null;
-  deadline: string;
-  affectsReputation: boolean;
+  deadline: string | null;
+  enrollmentUntil: string | null;
+  minParticipants: number | null;
+  lockedAt: string | null;
+  orderedAt: string | null;
+  eventId: string | null;
+  eventTitle: string | null;
+  eventDatetime: string | null;
   status: SkladchinaStatus;
   closedAt: string | null;
-  isOrganizerView: boolean;
-  myStatus: SkladchinaParticipantStatus | null;
-  myExpectedAmountKopecks: number | null;
-  myDeclaredAmountKopecks: number | null;
-  // V28: отказ-с-подтверждением
-  declineRequiresApproval: boolean;
-  myDeclineRequested: boolean;
-  myDeclineRejected: boolean;
-  myDeclineRejectNote: string | null;     // V29: причина организатора, почему отклонил мой отказ
-  participants: SkladchinaParticipantDto[] | null;
-  participantCount: number;
-  paidCount: number;
-  pendingCount: number;                   // #3: позволяет последнему pending-участнику увидеть, что осталось
+  isCreator: boolean;
+  /** Отменить может создатель или владелец клуба. */
+  canCancel: boolean;
+  isEnrolling: boolean;
+  enrolledCount: number;
+  myEnrolled: boolean;
+  debtCount: number;
+  receivedCount: number;
+  openCount: number;
+  claimedCount: number;
+  /** Мой долг как должника (null = долга нет). */
+  myDebt: DebtDto | null;
+  /** Список долгов сбора — только создателю. */
+  debts: DebtDto[] | null;
 }
 
-// Состояние сплита, привязанного к событию — управляет кнопкой «Разделить счёт» на EventPage.
-// skladchinaId null = сплита ещё нет (создать); status active → открыть его; closed_success → уже собрано.
+// Состояние сбора, привязанного к встрече — кнопка «Скинуться» на EventPage.
+// skladchinaId null = сбора ещё нет (создать); active → открыть; collected → уже собрано.
 export interface EventSplitStateDto {
   skladchinaId: string | null;
   status: SkladchinaStatus | null;
@@ -825,26 +851,22 @@ export interface MySkladchinaListItemDto {
   clubId: string;
   clubName: string;
   clubAvatarUrl: string | null;
-  template: SkladchinaTemplate;
-  paymentMode: SkladchinaMode;
-  totalGoalKopecks: number | null;
-  collectedKopecks: number;
-  participantCount: number;
-  paidCount: number;
-  deadline: string;
+  kind: SkladchinaKind;
+  amountKopecks: number | null;
+  targetKopecks: number | null;
+  receivedKopecks: number;
+  debtCount: number;
+  receivedCount: number;
+  deadline: string | null;
   status: SkladchinaStatus;
-  isOrganizerView: boolean;
-  myStatus: SkladchinaParticipantStatus | null;
+  isCreator: boolean;
+  myDebtStatus: DebtStatus | null;
+  /** Мне нужно действовать: открытый долг как должнику или «Отдал» ждёт моего ответа. */
   actionRequired: boolean;
-  affectsReputation: boolean;
+  photoUrl: string | null;
 }
 
-export interface CreateSkladchinaParticipantInput {
-  userId: string;
-  expectedAmountKopecks?: number | null;
-}
-
-/** Встреча, по которой счёт ещё можно разделить (шаг выбора в форме «Разделить счёт»). */
+/** Встреча, по которой ещё можно скинуться (шаг выбора в форме «Скинуться после встречи»). */
 export interface SplittableEventDto {
   eventId: string;
   title: string;
@@ -852,22 +874,71 @@ export interface SplittableEventDto {
   attendedCount: number;
 }
 
+export interface DebtorInput {
+  userId: string;
+  amountKopecks?: number | null;
+}
+
 export interface CreateSkladchinaRequest {
   title: string;
   description?: string | null;
   rules?: string | null;
   photoUrl?: string | null;
-  template?: SkladchinaTemplate;          // по умолчанию "custom" на сервере
-  eventId?: string | null;                // split_bill: исходное событие
-  excludeSelf?: boolean;                  // split_bill: исключить организатора из тех, с кого берут деньги
-  selfPaidKopecks?: number | null;        // split_bill + excludeSelf: сколько организатор внёс сам (зачтётся в сбор)
-  paymentMode: SkladchinaMode;
-  totalGoalKopecks?: number | null;
+  kind: SkladchinaKind;
+  amountKopecks?: number | null;
   paymentLink: string;
   paymentMethodNote?: string | null;
-  deadline: string;
-  affectsReputation: boolean;
-  participants?: CreateSkladchinaParticipantInput[];  // не передаётся/[] для split_bill
+  /** Обязателен у shared и per_head; у voluntary необязателен. */
+  deadline?: string | null;
+  /** shared после встречи: список = пришедшие. */
+  eventId?: string | null;
+  /** shared до события: этап «Кто в деле?» до этого момента + минимум людей. */
+  enrollmentUntil?: string | null;
+  minParticipants?: number | null;
+  /** voluntary: от кого скрыть (тихий сбор). */
+  hiddenFromUserId?: string | null;
+  /** shared со списком: суммы либо у всех (по людям), либо ни у кого (поровну). */
+  debtors?: DebtorInput[];
+}
+
+/** Плашка человека на экране «Долги». balanceKopecks > 0 — мне должны, < 0 — я должен. */
+export interface DebtCounterpartyDto {
+  user: DebtPersonDto;
+  balanceKopecks: number;
+  oweKopecks: number;
+  owedKopecks: number;
+  debtCount: number;
+  nearestDueAt: string | null;
+  awaitingMyConfirmation: number;
+  awaitingTheirConfirmation: number;
+}
+
+export interface DebtsOverviewDto {
+  oweKopecks: number;
+  owedKopecks: number;
+  awaitingMyConfirmation: number;
+  people: DebtCounterpartyDto[];
+}
+
+export interface DebtSettlementDto {
+  id: string;
+  payerId: string;
+  payeeId: string;
+  amountKopecks: number;
+  status: DebtSettlementStatus;
+  claimedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface DebtPairDto {
+  user: DebtPersonDto;
+  owe: DebtDto[];
+  owed: DebtDto[];
+  oweKopecks: number;
+  owedKopecks: number;
+  balanceKopecks: number;
+  /** Неразобранное сальдо пары (claimed) или null. */
+  settlement: DebtSettlementDto | null;
 }
 
 export interface MyEventListItemDto {

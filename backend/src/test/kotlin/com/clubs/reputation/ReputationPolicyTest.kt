@@ -2,7 +2,6 @@ package com.clubs.reputation
 
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.ReputationKind
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -57,15 +56,10 @@ class ReputationPolicyTest {
     }
 
     @Test
-    fun `finance kinds and points match the 2026-06-12 skladchina redesign`() {
-        assertEquals(ReputationKind.skladchina_paid, ReputationPolicy.financeKind(SkladchinaParticipantStatus.paid))
-        assertEquals(ReputationKind.skladchina_expired, ReputationPolicy.financeKind(SkladchinaParticipantStatus.expired_no_response))
-        // Decline is the desired behaviour and the free exit from a punitive skladchina:
-        // NO ledger row at all (a 0-row would inflate outcome_count out of "Новичок").
-        assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.declined))
-        // Released (closed before the deadline, F5-02): no promise broken — no row.
-        assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.released))
-        assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.pending))
+    fun `finance points match skladchina v3 (+10 on time, −40 after three weeks overdue)`() {
+        assertEquals(3L, ReputationPolicy.DEBT_OVERDUE_WEEKS)
+        assertTrue(ReputationPolicy.skladchinaRulesLine().contains("+10"))
+        assertTrue(ReputationPolicy.skladchinaRulesLine().contains("−40"))
 
         assertEquals(10, ReputationPolicy.pointsFor(ReputationKind.skladchina_paid))
         // -40 = 1/5 of no_show: comparable harm, but the obligation was imposed by the

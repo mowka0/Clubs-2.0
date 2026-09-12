@@ -1,7 +1,7 @@
 import { FC, ReactNode, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
-import type { EventFormat } from '../../types/api';
+import type { EventFormat, SkladchinaKind } from '../../types/api';
 import { formatWords } from '../../utils/eventFormat';
 
 interface ActivityTypeOptionsProps {
@@ -31,7 +31,7 @@ const OPTIONS: PickerOption[] = [
     key: 'skladchina',
     emoji: '💰',
     title: 'Сбор',
-    subtitle: 'Сбор денег на бронь / инвентарь / подарок',
+    subtitle: 'Скинуться, «кто берёт?» или по желанию — долги между людьми',
   },
 ];
 
@@ -363,30 +363,34 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
   );
 };
 
-// Показываются только уже реализованные шаблоны. По мере появления gear/booking/birthday — добавлять сюда.
-export type SkladchinaTemplateKey = 'split_bill' | 'custom';
-
-interface SkladchinaTemplateOptionsProps {
-  onPick: (template: SkladchinaTemplateKey) => void;
+// Три вида сбора (skladchina-v3 § 2.1): всё, чем они отличаются, — откуда берётся долг и что с ним в срок.
+interface SkladchinaKindOptionsProps {
+  onPick: (kind: SkladchinaKind) => void;
   onBack: () => void;
 }
 
-const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: string; subtitle: string }[] = [
+const SKLADCHINA_OPTIONS: { key: SkladchinaKind; emoji: string; title: string; subtitle: string }[] = [
   {
-    key: 'split_bill',
-    emoji: '🧾',
-    title: 'Разделить счёт',
-    subtitle: 'Поделить расходы прошедшего события поровну между пришедшими',
+    key: 'shared',
+    emoji: '💰',
+    title: 'Скинуться',
+    subtitle: 'После встречи, по списку или «кто в деле» — каждому своя доля до срока',
   },
   {
-    key: 'custom',
-    emoji: '💰',
-    title: 'Свой сбор',
-    subtitle: 'Сумма, участники и сроки — вручную',
+    key: 'per_head',
+    emoji: '🎫',
+    title: 'Кто берёт?',
+    subtitle: 'Билеты, мерч: каждый жмёт «Беру», платят только взявшие',
+  },
+  {
+    key: 'voluntary',
+    emoji: '🎁',
+    title: 'По желанию',
+    subtitle: 'Подарок, благодарность: сколько хотите, можно скрыть от именинника',
   },
 ];
 
-/** Выбор шаблона, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
-export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick, onBack }) => (
+/** Выбор вида, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
+export const SkladchinaKindOptions: FC<SkladchinaKindOptionsProps> = ({ onPick, onBack }) => (
   <PickerOptionList options={SKLADCHINA_OPTIONS} onPick={onPick} onBack={onBack} />
 );

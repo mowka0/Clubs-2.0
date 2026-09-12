@@ -66,7 +66,7 @@ class ActivityControllerTest {
 
     @BeforeEach
     fun setUp() {
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
@@ -147,11 +147,11 @@ class ActivityControllerTest {
         )
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
-                                     deadline, status, photo_url, created_at, updated_at, affects_reputation)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link,
+                                     deadline, status, photo_url, created_at, updated_at)
             VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Sklad +1d', 'voluntary',
                     'https://pay.me', '$skladDeadline', 'active', 'https://cdn.example.com/sklad.jpg',
-                    '$createdAt', '$createdAt', false)
+                    '$createdAt', '$createdAt')
             """.trimIndent()
         )
         // The member votes stage-1 so the event is NOT action-required: an unvoted
@@ -219,10 +219,10 @@ class ActivityControllerTest {
         )
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
-                                     deadline, status, created_at, updated_at, affects_reputation)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link,
+                                     deadline, status, created_at, updated_at)
             VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Closed Sklad -5d', 'voluntary',
-                    'https://pay.me', '$skladDeadline', 'closed_failed', '$createdAt', '$createdAt', false)
+                    'https://pay.me', '$skladDeadline', 'cancelled', '$createdAt', '$createdAt')
             """.trimIndent()
         )
 
@@ -266,10 +266,10 @@ class ActivityControllerTest {
         )
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
-                                     deadline, status, created_at, updated_at, affects_reputation)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link,
+                                     deadline, status, created_at, updated_at)
             VALUES ('$skladchinaId', '$clubId', '$organizerId', 'S', 'voluntary',
-                    'https://pay.me', '$futureDate', 'active', '$createdAt', '$createdAt', false)
+                    'https://pay.me', '$futureDate', 'active', '$createdAt', '$createdAt')
             """.trimIndent()
         )
 

@@ -1,5 +1,11 @@
 # Module: Club Leave (Выход из клуба)
 
+> **Сборы v3 (2026-09-12, ветка `feature/skladchina-rethink`):** всё про `skladchina_participants`,
+> «pending-участие» и штраф `skladchina_expired` на выходе ниже — история до V90. Теперь долг живёт
+> между людьми и выход его **не трогает**: каскад снимает только отметки «В деле» в ещё не
+> замороженных сборах (`removeEnrollmentsForUserInClub`), штрафа за складчины на выходе нет,
+> `LeavePreviewDto.skladchinaObligations` всегда 0. Источник — `skladchina-v3.md` § 13 п. 2.
+
 Связка с [membership.md](membership.md): `leaveClub` — новая операция в `MembershipService`. Существующий `POST /api/clubs/{id}/cancel` сохраняется как legacy-endpoint (соответствует семантике «отменить подписку» из PRD §4.7.3), но новый UI использует только `/leave`.
 
 ## Цель
@@ -181,12 +187,12 @@ Endpoint используется UI создания складчины. Рас
 **AND** строка `event_responses` удалена ПОСЛЕ начисления
 **AND** повторная натуральная `no_show` для того же события не задваивает (UNIQUE, остаётся −200)
 
-### AC-9: Free leave с pending reputation складчиной → −40 (P1b PR-b)
-**GIVEN** caller — active member free-клуба X; есть `active` `affects_reputation` складчина с pending-участием caller
+### AC-9: Free leave с открытым долгом → долг остаётся, штрафа нет (сборы v3)
+**GIVEN** caller — active member free-клуба X; у caller открытый долг `waiting` в сборе клуба X
 **WHEN** POST /api/clubs/X/leave
-**THEN** в `reputation_ledger` строка `skladchina_expired` (−40), `source_type=skladchina`, `occurred_at=deadline`
-**AND** штраф пишется даже при уже прошедшем дедлайне (каскад иначе стёр бы участие без штрафа)
-**AND** не-`affects_reputation` складчина штрафа не даёт
+**THEN** в `reputation_ledger` строк по сбору нет, долг по-прежнему `waiting`
+**AND** отметка «В деле» в ещё не замороженном сборе снята
+*(до V90 здесь был штраф −40 за pending-участие в «важной» складчине — упразднён)*
 
 ### AC-10: Finalized-but-stage_2 событие не стирается выходом
 **GIVEN** caller — active member free-клуба X; событие `attendance_finalized=true` (статус ещё `stage_2`, репутация не обработана) с confirmed бронью caller, отмеченной `absent`
@@ -204,7 +210,7 @@ Endpoint используется UI создания складчины. Рас
 ### AC-12: Leave-preview счётчик
 **GIVEN** caller — active member free-клуба X с 1 confirmed бронью + 1 pending reputation складчиной
 **WHEN** GET /api/clubs/X/leave-preview
-**THEN** `{ eventObligations: 1, skladchinaObligations: 1, totalObligations: 2 }`
+**THEN** `{ eventObligations: 1, skladchinaObligations: 0, totalObligations: 1 }` *(сборы v3: долги выход не нарушает)*
 **AND** для paid-клуба — все нули
 **AND** owner → 400, не-member → 404
 
@@ -244,11 +250,11 @@ Endpoint используется UI создания складчины. Рас
 - Прошлые/завершённые/отменённые **и attendance-finalized** events — сохраняются (история attendance / не-обработанный исход для reputation-пайплайна; событие бывает finalized, пока статус ещё `stage_2`)
 - `EventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)` (каскад) + `findConfirmedActiveEventObligations(userId, clubId)` (enumerate для штрафа) + `promoteFirstWaitlisted(eventId)` (промоут слота)
 
-### С skladchina
-- Cascade удаляет `skladchina_participants` для активных сборов (`status='active'`)
-- Завершённые сборы — сохраняются
-- **Reputation пересчитывается (P1b PR-b):** брошенное pending-участие в `affects_reputation` складчине → `skladchina_expired −40` ДО каскада (см. § «Выход-с-обязательствами»). Не-`affects_reputation` складчины штрафа не дают.
-- `SkladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)` (каскад) + `findPendingReputationObligations(userId, clubId)` (enumerate для штрафа)
+### С skladchina (сборы v3)
+- Долги (`debts`) выход **не трогает**: они между людьми, просрочку спишет `DebtScheduler`.
+- Каскад снимает только отметки «В деле» в активных сборах с ещё открытой записью:
+  `SkladchinaRepository.removeEnrollmentsForUserInClub(userId, clubId)` → `SkladchinaProgressChangedEvent` на каждый сбор (перерисовать чат-пост).
+- Штрафа за складчины на выходе нет; `findPendingReputationObligations` / `deleteParticipantFromActiveSkladchinasInClub` удалены.
 - Новые сборы: в `MemberService` (или новом методе) фильтр расширяется до active+cancelled-в-периоде
 
 ### С reputation

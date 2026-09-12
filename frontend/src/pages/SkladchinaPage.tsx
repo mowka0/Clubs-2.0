@@ -4,56 +4,35 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSetClubContext } from '../store/useClubContextStore';
-import {
-  useCloseSkladchinaMutation,
-  useDeclineSkladchinaMutation,
-  useMarkPaidMutation,
-  useOrganizerMarkPaidMutation,
-  useOrganizerUnmarkMutation,
-  useRequestDeclineMutation,
-  useResolveDeclineMutation,
-  useSkladchinaQuery,
-} from '../queries/skladchina';
+import { useAuthStore } from '../store/useAuthStore';
+import { useSkladchinaActionMutation, useSkladchinaQuery, type SkladchinaAction } from '../queries/skladchina';
+import { useDebtActionMutation, type DebtAction } from '../queries/debts';
+import { ApiError } from '../api/apiClient';
 import { Toast } from '../components/Toast';
 import { ImageLightbox } from '../components/ImageLightbox';
-import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
-import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
+import { DebtRow } from '../components/debt/DebtRow';
+import type { SkladchinaDetailDto } from '../types/api';
+import { formatRub, rubToKopecks } from '../utils/money';
+import { DATE_FMT, KIND_EMOJI, KIND_LABEL, initials, statusLabel } from '../utils/skladchinaKind';
 
-// Формат отображения дедлайна сбора: «5 июля, 18:30» (день + месяц + время, ru-RU).
-// Дата встречи в блоке «за что скидываемся» — день, месяц и время, без года: сплит живёт
-// не дольше 30 дней после встречи, год в такой близи только шумит.
-const EVENT_FMT = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-});
-
-const DEADLINE_FMT = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function formatRubles(kopecks: number): string {
-  return (Math.floor(kopecks / 100)).toLocaleString('ru-RU');
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError && (e.status === 400 || e.status === 403 || e.status === 409) && e.message) return e.message;
+  return fallback;
 }
 
-function statusLabel(status: string): string {
-  switch (status) {
-    case 'active': return 'Активный';
-    case 'closed_success': return 'Завершён успешно';
-    case 'closed_failed': return 'Закрыт без сбора';
-    case 'cancelled': return 'Отменён';
-    default: return status;
+/** Строка стадии под названием: что сейчас происходит со сбором и когда срок. */
+function stageLine(s: SkladchinaDetailDto): string {
+  if (s.isEnrolling) {
+    return `В деле ${s.enrolledCount}${s.minParticipants ? ` · нужно ${s.minParticipants}` : ''} · отметиться до ${DATE_FMT.format(new Date(s.enrollmentUntil!))}`;
   }
-}
-
-function paymentModeLabel(mode: string): string {
-  switch (mode) {
-    case 'fixed_equal': return 'Поровну';
-    case 'fixed_individual': return 'Индивидуальные суммы';
-    case 'voluntary': return 'Ваша сумма';
-    default: return mode;
+  const parts: string[] = [];
+  if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedCount} · приём закрыт` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
+  else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
+  if (s.deadline && s.status === 'active' && !s.orderedAt) {
+    const past = new Date(s.deadline).getTime() < Date.now();
+    parts.push(past ? `срок вышел · не оплатили ${s.openCount}` : `до ${DATE_FMT.format(new Date(s.deadline))}`);
   }
+  return parts.join(' · ');
 }
 
 export const SkladchinaPage: FC = () => {
@@ -61,33 +40,25 @@ export const SkladchinaPage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const haptic = useHaptic();
+  const viewerId = useAuthStore((st) => st.user?.id) ?? '';
   const query = useSkladchinaQuery(id);
   useSetClubContext(query.data?.clubId);
-  const markPaidMut = useMarkPaidMutation();
-  const declineMut = useDeclineSkladchinaMutation();
-  const closeMut = useCloseSkladchinaMutation();
-  const orgMarkMut = useOrganizerMarkPaidMutation();
-  const orgUnmarkMut = useOrganizerUnmarkMutation();
-  const requestDeclineMut = useRequestDeclineMutation();
-  const resolveDeclineMut = useResolveDeclineMutation();
+  const actionMut = useSkladchinaActionMutation();
+  const debtMut = useDebtActionMutation();
 
+  const [toast, setToast] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [showDeclineForm, setShowDeclineForm] = useState(false);
-  const [declineReason, setDeclineReason] = useState('');
+  const [noteInput, setNoteInput] = useState('');
   const [photoZoomed, setPhotoZoomed] = useState(false);
 
   if (query.isPending) {
     return (
       <div className="rd-page">
-        <div className="rd-spinner-row" style={{ paddingTop: 60 }}>
-          <Spinner size="m" />
-        </div>
+        <div className="rd-spinner-row" style={{ paddingTop: 60 }}><Spinner size="m" /></div>
       </div>
     );
   }
-
   if (query.isError || !query.data) {
     return (
       <div className="rd-page">
@@ -98,272 +69,81 @@ export const SkladchinaPage: FC = () => {
     );
   }
 
-  const s: SkladchinaDetailDto = query.data;
+  const s = query.data;
   const isActive = s.status === 'active';
-  const isCreator = s.isOrganizerView;
-  const isMemberParticipant = s.myStatus !== null;
-  const isFixed = s.paymentMode !== 'voluntary';
-  const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
+  const busy = actionMut.isPending || debtMut.isPending;
+  const target = s.targetKopecks ?? s.amountKopecks;
+  const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
+  const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((s.claimedKopecks / target) * 100)) : 0;
 
-  // A-5: заглавная метрика — прогресс по людям; деньги — декоративная строка под ней.
-  const peoplePercent = s.participantCount > 0
-    ? Math.round((s.paidCount / s.participantCount) * 100)
-    : 0;
-  // Сплит «Каждый сам» (voluntary + цель): доли неравные, поэтому осмысленный сигнал — именно деньги
-  // к цели: бар заполняется рублями, и в заголовке первыми идут деньги, а не люди.
-  const moneyPercent = hasGoal
-    ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
-    : 0;
-  const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
-  // #3: последний ещё-pending участник voluntary-сбора видит в подсказке поля суммы ровно остаток
-  // до цели — и может закрыть сбор одним платежом.
-  const remainingToGoalKopecks = hasGoal ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks) : 0;
-  const isLastPending = s.paymentMode === 'voluntary' && hasGoal && s.myStatus === 'pending' && s.pendingCount === 1;
-
-  // A-1: fixed-режимы показывают кнопку в один тап «Я оплатил {доля} ₽» — сервер записывает долю сам.
-  const expectedRub = s.myExpectedAmountKopecks != null
-    ? Math.floor(s.myExpectedAmountKopecks / 100)
-    : null;
-
-  // A-2: строка какого участника сейчас в процессе мутации (её кнопки дизейблим).
-  const busyUserId = (
-    orgMarkMut.isPending ? orgMarkMut.variables?.userId
-    : orgUnmarkMut.isPending ? orgUnmarkMut.variables?.userId
-    : resolveDeclineMut.isPending ? resolveDeclineMut.variables?.userId
-    : undefined
-  ) ?? null;
-  const canManagePayments = isActive && isCreator && isFixed;
-
-  const handleOpenPaymentLink = () => {
-    haptic.impact('light');
-    window.open(s.paymentLink, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleMarkPaid = async () => {
-    setActionError(null);
-    // A-1: fixed-режимы сумму не шлют (сервер записывает назначенную долю); voluntary парсит ввод.
-    let declaredAmountKopecks: number | null = null;
-    if (!isFixed) {
-      const rub = Number(amountInput.trim());
-      if (!Number.isFinite(rub) || rub <= 0) {
-        setActionError('Введите корректную сумму');
-        haptic.notify('error');
-        return;
-      }
-      declaredAmountKopecks = Math.round(rub * 100);
-    }
+  const run = async (action: SkladchinaAction, done: string, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setError(null);
     try {
       haptic.impact('medium');
-      await markPaidMut.mutateAsync({ id: s.id, declaredAmountKopecks });
+      await actionMut.mutateAsync({ id: s.id, action });
       haptic.notify('success');
-      setToastMessage('Спасибо! Сбор обновлён.');
-      setAmountInput('');
+      setToast(done);
     } catch (e) {
-      console.error('markPaid failed', e);
+      console.error('skladchina action failed', action.type, e);
       haptic.notify('error');
-      setActionError('Не удалось отметить оплату. Попробуйте ещё раз.');
+      setError(errorMessage(e, 'Не получилось. Попробуйте ещё раз.'));
     }
   };
 
-  const participantName = (p: SkladchinaParticipantDto) =>
-    `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
-
-  const handleOrgMarkPaid = async (p: SkladchinaParticipantDto) => {
-    if (!window.confirm(`Отметить, что ${participantName(p)} оплатил(а)? Деньги получены наличными или переводом.`)) return;
-    setActionError(null);
+  const runDebt = async (debtId: string, action: DebtAction) => {
+    setError(null);
     try {
       haptic.impact('medium');
-      await orgMarkMut.mutateAsync({ id: s.id, userId: p.userId });
+      await debtMut.mutateAsync({ debtId, action });
       haptic.notify('success');
-      setToastMessage('Оплата отмечена.');
     } catch (e) {
-      console.error('organizer mark-paid failed', e);
+      console.error('debt action failed', action.type, e);
       haptic.notify('error');
-      setActionError('Не удалось отметить оплату. Попробуйте ещё раз.');
+      setError(errorMessage(e, 'Не получилось. Попробуйте ещё раз.'));
     }
   };
 
-  const handleOrgUnmark = async (p: SkladchinaParticipantDto) => {
-    const warn = s.affectsReputation
-      ? `Снять отметку оплаты у ${participantName(p)}? Участник вернётся в «ожидает» — в важном сборе это снова подставит его под −40 за молчание до дедлайна.`
-      : `Снять отметку оплаты у ${participantName(p)}? Участник вернётся в «ожидает».`;
-    if (!window.confirm(warn)) return;
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await orgUnmarkMut.mutateAsync({ id: s.id, userId: p.userId });
-      haptic.notify('success');
-      setToastMessage('Отметка снята.');
-    } catch (e) {
-      console.error('organizer unmark failed', e);
+  const handleContribute = () => {
+    const kopecks = rubToKopecks(amountInput);
+    if (kopecks === null) {
       haptic.notify('error');
-      setActionError('Не удалось снять отметку. Попробуйте ещё раз.');
-    }
-  };
-
-  // V28: шаблоны с одобрением отказа (split_bill) открывают форму причины вместо мгновенного отказа.
-  const handleDeclineClick = () => {
-    setActionError(null);
-    if (s.declineRequiresApproval) {
-      setShowDeclineForm(true);
+      setError('Введите сумму');
       return;
     }
-    void handleInstantDecline();
+    void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.').then(() => setAmountInput(''));
   };
 
-  const handleInstantDecline = async () => {
-    if (!window.confirm('Отказаться от участия в сборе?')) return;
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await declineMut.mutateAsync(s.id);
-      haptic.notify('success');
-      setToastMessage('Вы отказались от участия.');
-    } catch (e) {
-      console.error('decline failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось отказаться. Попробуйте ещё раз.');
-    }
-  };
-
-  const handleRequestDecline = async () => {
-    const reason = declineReason.trim();
-    if (!reason) {
-      setActionError('Укажите причину отказа');
-      haptic.notify('error');
-      return;
-    }
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await requestDeclineMut.mutateAsync({ id: s.id, reason });
-      haptic.notify('success');
-      setShowDeclineForm(false);
-      setDeclineReason('');
-      setToastMessage('Запрос на отказ отправлен организатору.');
-    } catch (e) {
-      console.error('requestDecline failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось отправить запрос. Попробуйте ещё раз.');
-    }
-  };
-
-  // Approve: простой confirm. Reject (#7): причину собирает inline-форма в строке участника и передаёт
-  // сюда — организатор обязан обосновать, почему участник всё-таки должен оплатить.
-  const handleResolveDecline = async (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => {
-    if (approve) {
-      const who = `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
-      if (!window.confirm(`Одобрить отказ ${who}? Участник будет освобождён от оплаты.`)) return;
-    } else if (!rejectReason || !rejectReason.trim()) {
-      setActionError('Укажите причину, по которой участник должен оплатить');
-      return;
-    }
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await resolveDeclineMut.mutateAsync({ id: s.id, userId: p.userId, approve, rejectReason: rejectReason?.trim() });
-      haptic.notify('success');
-      setToastMessage(approve ? 'Отказ одобрен.' : 'Отказ отклонён.');
-    } catch (e) {
-      console.error('resolveDecline failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось обработать заявку. Попробуйте ещё раз.');
-    }
-  };
-
-  const handleClose = async () => {
-    if (!window.confirm('Закрыть сбор? Дальнейшие оплаты будут невозможны.')) return;
-    setActionError(null);
-    try {
-      haptic.impact('heavy');
-      await closeMut.mutateAsync(s.id);
-      haptic.notify('success');
-      setToastMessage('Сбор закрыт.');
-    } catch (e) {
-      console.error('close failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось закрыть сбор.');
-    }
-  };
-
-  const handleBackToClub = () => {
-    haptic.impact('light');
-    navigate(`/clubs/${s.clubId}`);
-  };
-
-  const statusCls =
-    s.status === 'closed_failed' ? 'rd-decline'
-    : s.status === 'cancelled' ? 'rd-neutral2'
-    : 'rd-going';
-
-  // Сбор по встрече открывается двумя блоками — встреча и сбор, — поэтому ни заголовка-пересказа,
-  // ни ряда бейджей у него нет: всё это раньше повторяло то, что и так написано в блоках.
-  const isSplit = s.template === 'split_bill' && Boolean(s.eventId);
-  // Название сбора у сплита по умолчанию генерируется как «Счёт: <встреча>» — показываем его,
-  // только если организатор написал своё, иначе это дубль названия встречи.
-  const customTitle = isSplit && s.title !== `Счёт: ${s.eventTitle ?? ''}` ? s.title : null;
-  const clubInitials = s.clubName.split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('');
+  const clubInitials = initials(s.clubName);
+  const statusCls = s.status === 'cancelled' ? 'rd-neutral2' : s.status === 'collected' ? 'rd-going' : 'rd-warn';
 
   return (
     <div className="rd-page">
-      {isSplit ? (
-        <>
-          <button
-            type="button"
-            className="rd-sklad-crumb"
-            onClick={handleBackToClub}
-            aria-label={`Открыть клуб ${s.clubName}`}
-          >
-            <span className="rd-crumb-ava">
-              {s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}
-            </span>
-            {s.clubName}
-            <span aria-hidden="true">›</span>
-          </button>
+      <button
+        type="button"
+        className="rd-glass rd-host-row"
+        onClick={() => { haptic.impact('light'); navigate(`/clubs/${s.clubId}`); }}
+        aria-label={`Открыть клуб ${s.clubName}`}
+        style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+      >
+        <span className="rd-ico">{s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}</span>
+        <div className="rd-info">
+          <div className="rd-met">Сбор в клубе · собирает {s.creatorName}</div>
+          <div className="rd-ttl">{s.clubName}</div>
+        </div>
+        <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
+      </button>
 
-          <button
-            type="button"
-            className="rd-glass rd-sklad-ev"
-            onClick={() => { haptic.impact('light'); navigate(`/events/${s.eventId}`); }}
-          >
-            <span className="rd-ev-kicker">Счёт за встречу</span>
-            <span className="rd-ev-name">{s.eventTitle ?? 'Встреча'}</span>
-            <span className="rd-ev-line">
-              {s.eventDatetime && `${EVENT_FMT.format(new Date(s.eventDatetime))} · `}
-              <span style={{ color: 'var(--accent)' }}>открыть ›</span>
-            </span>
+      <div className="rd-ft-eyebrow">{KIND_EMOJI[s.kind]} {KIND_LABEL[s.kind]}</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
+      <div className="rd-badges-row" style={{ marginBottom: 16 }}>
+        <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
+        {s.eventId && (
+          <button type="button" className="rd-badge rd-neutral2" style={{ cursor: 'pointer', font: 'inherit' }} onClick={() => navigate(`/events/${s.eventId}`)}>
+            за встречу «{s.eventTitle}» ›
           </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="rd-glass rd-host-row"
-            onClick={handleBackToClub}
-            aria-label={`Открыть клуб ${s.clubName}`}
-            style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-          >
-            <span className="rd-ico">
-              {s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}
-            </span>
-            <div className="rd-info">
-              <div className="rd-met">Сбор в клубе</div>
-              <div className="rd-ttl">{s.clubName}</div>
-            </div>
-            <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
-          </button>
-
-          <div className="rd-ft-eyebrow">Сбор</div>
-          <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
-          <div className="rd-badges-row" style={{ marginBottom: 16 }}>
-            <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
-            <span className="rd-badge rd-neutral2">{paymentModeLabel(s.paymentMode)}</span>
-            {s.affectsReputation && (
-              <span className="rd-badge rd-warn" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
-            )}
-          </div>
-        </>
-      )}
+        )}
+      </div>
 
       {s.photoUrl && (
         <button
@@ -377,6 +157,25 @@ export const SkladchinaPage: FC = () => {
       )}
       <ImageLightbox src={photoZoomed ? s.photoUrl : null} onClose={() => setPhotoZoomed(false)} />
 
+      {/* Прогресс: деньги — главная строка, полоса 🟩 получено / 🟨 говорят, что отдали. */}
+      <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+          {s.isEnrolling
+            ? `${formatRub(s.amountKopecks ?? 0)} на группу, поровну между теми, кто в деле`
+            : target && target > 0
+              ? `Получено ${formatRub(s.receivedKopecks)} из ${formatRub(target)}`
+              : `Получено ${formatRub(s.receivedKopecks)}`}
+        </div>
+        {!s.isEnrolling && (
+          <div className="rd-progress" aria-hidden="true">
+            <div className="rd-fill" style={{ width: `${receivedPct}%`, display: 'inline-block' }} />
+            <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%`, display: 'inline-block' }} />
+          </div>
+        )}
+        <div className="rd-sklad-stats">{stageLine(s)}</div>
+        {s.description && <div className="rd-sklad-inline-sep">{s.description}</div>}
+      </div>
+
       {s.rules && (
         <>
           <div className="rd-section-sub-h">Правила</div>
@@ -386,213 +185,150 @@ export const SkladchinaPage: FC = () => {
         </>
       )}
 
-      <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
-        {/* У сбора по встрече своей шапки нет — статус и собственное название организатора живут здесь. */}
-        {isSplit && (s.status !== 'active' || customTitle) && (
-          <div className="rd-badges-row" style={{ marginBottom: 10 }}>
-            {s.status !== 'active' && <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>}
-            {customTitle && <span className="rd-badge rd-neutral2">{customTitle}</span>}
+      {!s.isCreator && (
+        <>
+          <div className="rd-section-sub-h">Реквизиты</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            {s.paymentMethodNote && <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>}
+            <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('light'); window.open(s.paymentLink, '_blank', 'noopener,noreferrer'); }}>
+              Открыть в банке
+            </button>
+            <div className="rd-payment-link-text">{s.paymentLink}</div>
           </div>
-        )}
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
-          {useMoneyBar
-            ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
-            : `Скинулись ${s.paidCount} из ${s.participantCount}`}
-        </div>
-        <div className="rd-progress">
-          <div className="rd-fill" style={{ width: `${useMoneyBar ? moneyPercent : peoplePercent}%` }} />
-        </div>
-        <div className="rd-sklad-stats">
-          {useMoneyBar
-            ? `Внесли ${s.paidCount} из ${s.participantCount}`
-            : hasGoal
-              ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
-              : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
-          {/* Режим оплаты у сплита сказан здесь: ряда бейджей, где он стоял раньше, больше нет. */}
-          {isSplit && ` · ${paymentModeLabel(s.paymentMode).toLowerCase()}`}
-          {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
-        </div>
-        {s.description && (
-          <div className="rd-sklad-inline-sep">{s.description}</div>
-        )}
-      </div>
+        </>
+      )}
 
-      <div className="rd-section-sub-h">Платёжная ссылка</div>
-      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-        {s.paymentMethodNote && (
-          <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>
-        )}
-        <button type="button" className="rd-btn-primary" onClick={handleOpenPaymentLink}>
-          Открыть в банке
-        </button>
-        <div className="rd-payment-link-text">{s.paymentLink}</div>
-      </div>
-
-      {isActive && isMemberParticipant && s.myStatus === 'pending' && (
+      {/* Моя часть: запись, «Беру», «Перевёл» или мой долг. */}
+      {!s.isCreator && isActive && (
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
-          <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Подтвердите оплату</div>
+          {s.isEnrolling && (
+            s.myEnrolled ? (
+              <>
+                <div className="rd-debt-meta" style={{ marginBottom: 10 }}>Вы в деле. Доля посчитается, когда список закроется.</div>
+                <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => run({ type: 'leave' }, 'Вы вышли из списка.')}>Передумал</button>
+              </>
+            ) : (
+              <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join' }, 'Вы в деле!')}>В деле</button>
+            )
+          )}
 
-          {/* A-1: в fixed-режимах поля суммы нет; voluntary сохраняет ввод. */}
-          {!isFixed && (
-            <div style={{ position: 'relative', marginBottom: 10 }}>
+          {s.kind === 'per_head' && !s.myDebt && !s.orderedAt && (
+            <>
               <input
-                type="number"
-                inputMode="decimal"
-                min="1"
-                step="1"
-                placeholder={isLastPending ? `Осталось закрыть ${formatRubles(remainingToGoalKopecks)} ₽` : 'Ваша сумма, ₽'}
-                value={amountInput}
-                onChange={(e) => setAmountInput(e.target.value)}
                 className="rd-input"
-                style={{ paddingRight: 32 }}
+                placeholder="Заметка: размер, вариант (необязательно)"
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                maxLength={200}
+                style={{ marginBottom: 10 }}
               />
-              <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
-            </div>
-          )}
-          {actionError && <div className="rd-error">{actionError}</div>}
-          {s.affectsReputation && (
-            <div className="rd-warn-block">
-              Это важный сбор. Оплатите или откажитесь до{' '}
-              {DEADLINE_FMT.format(new Date(s.deadline))}: молчание снизит репутацию на 40
-            </div>
-          )}
-
-          {/* V28: состояния отказа-с-одобрением */}
-          {s.myDeclineRejected && (
-            <div className="rd-warn-block" style={{ marginBottom: 10 }}>
-              Запрос на отказ отклонён — нужно оплатить счёт.
-              {s.myDeclineRejectNote && <div style={{ marginTop: 4 }}>Причина: «{s.myDeclineRejectNote}»</div>}
-            </div>
-          )}
-          {s.myDeclineRequested && !s.myDeclineRejected && (
-            <div className="rd-hint" style={{ marginBottom: 10 }}>
-              ⏳ Запрос на отказ отправлен — ждём решения организатора.
-            </div>
-          )}
-
-          {showDeclineForm ? (
-            <div>
-              <textarea
-                className="rd-textarea"
-                rows={3}
-                placeholder="Причина отказа (обязательно)"
-                value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)}
-                maxLength={500}
-              />
-              <div className="rd-form-actions" style={{ marginTop: 10 }}>
-                <button
-                  type="button"
-                  className="rd-btn-primary"
-                  onClick={handleRequestDecline}
-                  disabled={requestDeclineMut.isPending}
-                >
-                  {requestDeclineMut.isPending ? 'Отправляем…' : 'Отправить запрос'}
-                </button>
-                <button
-                  type="button"
-                  className="rd-btn-outline"
-                  onClick={() => { setShowDeclineForm(false); setActionError(null); }}
-                >
-                  Отмена
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="rd-form-actions">
-              <button
-                type="button"
-                className="rd-btn-primary"
-                onClick={handleMarkPaid}
-                disabled={markPaidMut.isPending}
-              >
-                {markPaidMut.isPending
-                  ? 'Сохраняем…'
-                  : isFixed && expectedRub != null
-                    ? `Я оплатил ${expectedRub.toLocaleString('ru-RU')} ₽`
-                    : 'Я оплатил'}
+              <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join', note: noteInput.trim() || null }, 'Записали за вами.')}>
+                Беру
               </button>
-              {!s.myDeclineRequested && !s.myDeclineRejected && (
-                <button
-                  type="button"
-                  className="rd-btn-outline"
-                  onClick={handleDeclineClick}
-                  disabled={declineMut.isPending}
-                >
-                  {s.declineRequiresApproval ? 'Запросить отказ' : 'Отказаться'}
+            </>
+          )}
+          {s.kind === 'per_head' && !s.myDebt && s.orderedAt && (
+            <div className="rd-debt-meta">Приём закрыт: заказ уже сделан.</div>
+          )}
+
+          {s.kind === 'voluntary' && !s.myDebt && (
+            <>
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  step="1"
+                  placeholder="Сколько перевели, ₽"
+                  value={amountInput}
+                  onChange={(e) => setAmountInput(e.target.value)}
+                  className="rd-input"
+                  style={{ paddingRight: 32 }}
+                  aria-label="Сумма перевода"
+                />
+                <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
+              </div>
+              <button type="button" className="rd-btn-primary" disabled={busy} onClick={handleContribute}>Перевёл</button>
+            </>
+          )}
+
+          {s.myDebt && (
+            <>
+              <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Мой долг</div>
+              <DebtRow debt={s.myDebt} viewerId={viewerId} busy={busy} onAction={(a) => runDebt(s.myDebt!.id, a)} />
+              {s.kind === 'per_head' && !s.orderedAt && (s.myDebt.status === 'waiting' || s.myDebt.status === 'promised') && (
+                <button type="button" className="rd-ghost-btn" disabled={busy} style={{ marginTop: 8 }} onClick={() => run({ type: 'leave' }, 'Вы передумали.')}>
+                  Передумал
                 </button>
               )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {isMemberParticipant && s.myStatus !== 'pending' && (
-        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-          {s.myStatus === 'paid' && (
-            <>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success, #22a06b)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span aria-hidden>✅</span> Вы оплатили
-              </div>
-              {s.myDeclaredAmountKopecks != null && (
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
-                  {formatRubles(s.myDeclaredAmountKopecks)} ₽
-                </div>
-              )}
-              {s.affectsReputation && (
-                <div style={{ fontSize: 12, color: 'var(--success, #22a06b)', marginTop: 4 }}>
-                  + к репутации — засчитается при закрытии сбора
-                </div>
-              )}
             </>
           )}
-          {s.myStatus === 'declined' && (
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Вы отказались от участия</div>
+          {error && <div className="rd-error" style={{ marginTop: 8 }}>{error}</div>}
+        </div>
+      )}
+
+      {!s.isCreator && !isActive && s.myDebt && (
+        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+          <DebtRow debt={s.myDebt} viewerId={viewerId} readOnly onAction={() => undefined} />
+        </div>
+      )}
+
+      {/* Создатель: список долгов и кнопки стадии. */}
+      {s.isCreator && s.debts && (
+        <>
+          <div className="rd-section-sub-h">
+            {s.kind === 'per_head' ? 'Берут' : 'Кто должен'} <span className="rd-count">· {s.debts.length}</span>
+          </div>
+          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+            {s.debts.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
+            {s.debts.map((d) => (
+              <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {isActive && (s.isCreator || s.canCancel) && (
+        <div className="rd-form" style={{ marginTop: 4 }}>
+          {s.isCreator && s.isEnrolling && (
+            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'lock' }, 'Список закрыт, долги созданы.', 'Закрыть запись сейчас? Доли посчитаются по тем, кто в деле.')}>
+              Закрыть запись
+            </button>
           )}
-          {s.myStatus === 'expired_no_response' && (
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Срок истёк, оплата не зарегистрирована</div>
+          {s.isCreator && s.kind === 'per_head' && !s.orderedAt && (
+            <button
+              type="button"
+              className="rd-btn-primary"
+              disabled={busy}
+              onClick={() => run({ type: 'order' }, 'Заказ сделан.', `Заказываю: получено ${s.receivedCount}, не оплатили ${s.openCount - s.claimedCount} — они выбывают.`)}
+            >
+              Заказываю
+            </button>
           )}
-          {s.myStatus === 'released' && (
+          {s.isCreator && s.kind === 'voluntary' && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
-                Сбор закрыли досрочно — ваш ответ не потребовался
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
-                Репутация не изменилась
-              </div>
+              <button type="button" className="rd-btn-primary" disabled={busy || s.claimedCount > 0} onClick={() => run({ type: 'close' }, 'Сбор закрыт.', 'Закрыть сбор?')}>
+                Закрыть сбор
+              </button>
+              {s.claimedCount > 0 && <div className="rd-hint">Разберите переводы: {s.claimedCount}</div>}
             </>
           )}
+          {s.canCancel && (
+            <button
+              type="button"
+              className="rd-btn-outline"
+              disabled={busy}
+              style={{ color: 'var(--danger)' }}
+              onClick={() => run({ type: 'cancel' }, 'Сбор отменён.', 'Отменить сбор? Открытые долги простятся, полученное придётся вернуть.')}
+            >
+              Отменить сбор
+            </button>
+          )}
+          {error && <div className="rd-error">{error}</div>}
         </div>
       )}
 
-      {isCreator && s.participants && (
-        <OrganizerParticipantList
-          participants={s.participants}
-          totalGoalKopecks={s.totalGoalKopecks}
-          canManagePayments={canManagePayments}
-          busyUserId={busyUserId}
-          onMarkPaid={handleOrgMarkPaid}
-          onUnmark={handleOrgUnmark}
-          onResolveDecline={handleResolveDecline}
-        />
-      )}
-
-      {isActive && isCreator && (
-        <div style={{ marginTop: 4 }}>
-          <button
-            type="button"
-            className="rd-btn-outline"
-            onClick={handleClose}
-            disabled={closeMut.isPending}
-            style={{ color: 'var(--danger)' }}
-          >
-            {closeMut.isPending ? 'Закрываем…' : 'Закрыть сбор'}
-          </button>
-          {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
-        </div>
-      )}
-
-      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
 };

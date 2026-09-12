@@ -42,18 +42,18 @@ function closedSkladchina(over: Partial<MySkladchinaListItemDto> = {}): MySkladc
     clubId: CLUB_ID,
     clubName: 'Шахматы',
     clubAvatarUrl: null,
-    template: 'custom',
-    paymentMode: 'fixed_equal',
-    totalGoalKopecks: 500000,
-    collectedKopecks: 500000,
-    participantCount: 5,
-    paidCount: 5,
+    kind: 'shared',
+    amountKopecks: 500000,
+    targetKopecks: 500000,
+    receivedKopecks: 500000,
+    debtCount: 5,
+    receivedCount: 5,
     deadline: '2026-06-15T18:00:00Z',
-    status: 'closed_success',
-    isOrganizerView: true,
-    myStatus: null,
+    status: 'collected',
+    isCreator: true,
+    myDebtStatus: null,
     actionRequired: false,
-    affectsReputation: false,
+    photoUrl: null,
     ...over,
   };
 }
@@ -124,7 +124,7 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(useCreateFlowStore.getState().isOpen).toBe(true);
   });
 
-  it('участник без сборов видит текст «добавит тебя» без кнопки «Создать сбор» и без «Перейти в Поиск»', async () => {
+  it('участник без сборов видит текст «добавят тебя» без кнопки «Создать сбор» и без «Перейти в Поиск»', async () => {
     mockEndpoints({
       clubs: [membership({ role: 'member' })],
       skladchinasResponder: () => HttpResponse.json(EMPTY_FEED),
@@ -132,7 +132,7 @@ describe('SkladchinasTab — роль-развилка пустого состо
     renderTab();
 
     expect(await screen.findByText('Сборов пока нет')).toBeInTheDocument();
-    expect(await screen.findByText(/добавит тебя/)).toBeInTheDocument();
+    expect(await screen.findByText(/добавят тебя/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Создать сбор' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Перейти в Поиск/ })).not.toBeInTheDocument();
   });
@@ -145,7 +145,7 @@ describe('SkladchinasTab — роль-развилка пустого состо
     renderTab();
 
     expect(await screen.findByText('Сборов пока нет')).toBeInTheDocument();
-    expect(await screen.findByText(/добавит тебя/)).toBeInTheDocument();
+    expect(await screen.findByText(/добавят тебя/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Создать сбор' })).not.toBeInTheDocument();
   });
 
@@ -165,10 +165,10 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(await screen.findByText('Активных сборов нет')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Создать сбор' })).toBeInTheDocument();
     expect(await screen.findByText('История')).toBeInTheDocument();
-    // Компактная строка: название в .rd-hist-title, финальный статус «Завершён» в подстроке.
+    // Компактная строка: название в .rd-hist-title, финальный статус «Собран» в подстроке.
     expect(await screen.findByText('Аренда зала (июнь)')).toBeInTheDocument();
     expect(container.querySelector('.rd-hist-title')?.textContent).toBe('Аренда зала (июнь)');
-    expect(screen.getByText(/Завершён/)).toBeInTheDocument();
+    expect(screen.getByText(/Собран/)).toBeInTheDocument();
     // Строка компактная: нет полноразмерной обложки-монеты и прогресс-бара активного сбора.
     expect(container.querySelector('.rd-act-cover')).toBeNull();
     expect(container.querySelector('.rd-progress')).toBeNull();
@@ -176,12 +176,12 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
   });
 
-  it('несобранный сбор в истории → подстрока содержит «Не собран»', async () => {
+  it('отменённый сбор в истории → подстрока содержит «Отменён»', async () => {
     mockEndpoints({
       clubs: [membership({ role: 'organizer' })],
       skladchinasResponder: () => HttpResponse.json({
         ...EMPTY_FEED,
-        content: [closedSkladchina({ id: 'sk-failed', title: 'Инвентарь', status: 'closed_failed' })],
+        content: [closedSkladchina({ id: 'sk-cancelled', title: 'Инвентарь', status: 'cancelled' })],
         totalElements: 1,
         totalPages: 1,
       }),
@@ -189,7 +189,7 @@ describe('SkladchinasTab — роль-развилка пустого состо
     renderTab();
 
     expect(await screen.findByText('Инвентарь')).toBeInTheDocument();
-    expect(screen.getByText(/Не собран/)).toBeInTheDocument();
+    expect(screen.getByText(/Отменён/)).toBeInTheDocument();
   });
 
   it('ошибка загрузки → error-сцена «Не удалось загрузить сборы» с «Повторить», НЕ пустая заставка', async () => {

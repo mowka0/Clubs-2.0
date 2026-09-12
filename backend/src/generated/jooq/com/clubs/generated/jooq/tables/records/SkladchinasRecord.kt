@@ -4,9 +4,8 @@
 package com.clubs.generated.jooq.tables.records
 
 
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.Skladchinas
 
 import java.time.OffsetDateTime
@@ -17,9 +16,10 @@ import org.jooq.impl.UpdatableRecordImpl
 
 
 /**
- * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта и
- * т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую (СБП)
- * мимо платформы, приложение ведёт учёт статусов и напоминания.
+ * Сбор денег внутри клуба: повод и обёртка над долгами (название, вид, срок,
+ * реквизиты, чат-пост, пачка долгов в debts). Создать может любой активный
+ * участник клуба; отменить — создатель или владелец клуба. Спека:
+ * docs/modules/skladchina-v3.md.
  */
 @Suppress("UNCHECKED_CAST")
 open class SkladchinasRecord private constructor() : UpdatableRecordImpl<SkladchinasRecord>(Skladchinas.SKLADCHINAS) {
@@ -52,61 +52,73 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         set(value): Unit = set(6, value)
         get(): String? = get(6) as String?
 
-    open var paymentMode: SkladchinaMode
+    open var amountKopecks: Long?
         set(value): Unit = set(7, value)
-        get(): SkladchinaMode = get(7) as SkladchinaMode
-
-    open var totalGoalKopecks: Long?
-        set(value): Unit = set(8, value)
-        get(): Long? = get(8) as Long?
+        get(): Long? = get(7) as Long?
 
     open var paymentLink: String
-        set(value): Unit = set(9, value)
-        get(): String = get(9) as String
+        set(value): Unit = set(8, value)
+        get(): String = get(8) as String
 
     open var paymentMethodNote: String?
+        set(value): Unit = set(9, value)
+        get(): String? = get(9) as String?
+
+    open var deadline: OffsetDateTime?
         set(value): Unit = set(10, value)
-        get(): String? = get(10) as String?
-
-    open var deadline: OffsetDateTime
-        set(value): Unit = set(11, value)
-        get(): OffsetDateTime = get(11) as OffsetDateTime
-
-    open var affectsReputation: Boolean?
-        set(value): Unit = set(12, value)
-        get(): Boolean? = get(12) as Boolean?
+        get(): OffsetDateTime? = get(10) as OffsetDateTime?
 
     open var status: SkladchinaStatus?
-        set(value): Unit = set(13, value)
-        get(): SkladchinaStatus? = get(13) as SkladchinaStatus?
+        set(value): Unit = set(11, value)
+        get(): SkladchinaStatus? = get(11) as SkladchinaStatus?
 
     open var closedAt: OffsetDateTime?
+        set(value): Unit = set(12, value)
+        get(): OffsetDateTime? = get(12) as OffsetDateTime?
+
+    open var createdAt: OffsetDateTime?
+        set(value): Unit = set(13, value)
+        get(): OffsetDateTime? = get(13) as OffsetDateTime?
+
+    open var updatedAt: OffsetDateTime?
         set(value): Unit = set(14, value)
         get(): OffsetDateTime? = get(14) as OffsetDateTime?
 
-    open var closedBy: UUID?
-        set(value): Unit = set(15, value)
-        get(): UUID? = get(15) as UUID?
-
-    open var createdAt: OffsetDateTime?
-        set(value): Unit = set(16, value)
-        get(): OffsetDateTime? = get(16) as OffsetDateTime?
-
-    open var updatedAt: OffsetDateTime?
-        set(value): Unit = set(17, value)
-        get(): OffsetDateTime? = get(17) as OffsetDateTime?
-
     open var reminderSentAt: OffsetDateTime?
+        set(value): Unit = set(15, value)
+        get(): OffsetDateTime? = get(15) as OffsetDateTime?
+
+    open var eventId: UUID?
+        set(value): Unit = set(16, value)
+        get(): UUID? = get(16) as UUID?
+
+    open var kind: SkladchinaKind
+        set(value): Unit = set(17, value)
+        get(): SkladchinaKind = get(17) as SkladchinaKind
+
+    open var enrollmentUntil: OffsetDateTime?
         set(value): Unit = set(18, value)
         get(): OffsetDateTime? = get(18) as OffsetDateTime?
 
-    open var template: SkladchinaTemplate?
+    open var minParticipants: Int?
         set(value): Unit = set(19, value)
-        get(): SkladchinaTemplate? = get(19) as SkladchinaTemplate?
+        get(): Int? = get(19) as Int?
 
-    open var eventId: UUID?
+    open var lockedAt: OffsetDateTime?
         set(value): Unit = set(20, value)
-        get(): UUID? = get(20) as UUID?
+        get(): OffsetDateTime? = get(20) as OffsetDateTime?
+
+    open var orderedAt: OffsetDateTime?
+        set(value): Unit = set(21, value)
+        get(): OffsetDateTime? = get(21) as OffsetDateTime?
+
+    open var hiddenFromUserId: UUID?
+        set(value): Unit = set(22, value)
+        get(): UUID? = get(22) as UUID?
+
+    open var orderRemindedAt: OffsetDateTime?
+        set(value): Unit = set(23, value)
+        get(): OffsetDateTime? = get(23) as OffsetDateTime?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -117,7 +129,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
     /**
      * Create a detached, initialised SkladchinasRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null, template: SkladchinaTemplate? = null, eventId: UUID? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, amountKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null, eventId: UUID? = null, kind: SkladchinaKind, enrollmentUntil: OffsetDateTime? = null, minParticipants: Int? = null, lockedAt: OffsetDateTime? = null, orderedAt: OffsetDateTime? = null, hiddenFromUserId: UUID? = null, orderRemindedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.clubId = clubId
         this.creatorId = creatorId
@@ -125,20 +137,23 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         this.description = description
         this.rules = rules
         this.photoUrl = photoUrl
-        this.paymentMode = paymentMode
-        this.totalGoalKopecks = totalGoalKopecks
+        this.amountKopecks = amountKopecks
         this.paymentLink = paymentLink
         this.paymentMethodNote = paymentMethodNote
         this.deadline = deadline
-        this.affectsReputation = affectsReputation
         this.status = status
         this.closedAt = closedAt
-        this.closedBy = closedBy
         this.createdAt = createdAt
         this.updatedAt = updatedAt
         this.reminderSentAt = reminderSentAt
-        this.template = template
         this.eventId = eventId
+        this.kind = kind
+        this.enrollmentUntil = enrollmentUntil
+        this.minParticipants = minParticipants
+        this.lockedAt = lockedAt
+        this.orderedAt = orderedAt
+        this.hiddenFromUserId = hiddenFromUserId
+        this.orderRemindedAt = orderRemindedAt
         resetChangedOnNotNull()
     }
 
@@ -154,20 +169,23 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
             this.description = value.description
             this.rules = value.rules
             this.photoUrl = value.photoUrl
-            this.paymentMode = value.paymentMode
-            this.totalGoalKopecks = value.totalGoalKopecks
+            this.amountKopecks = value.amountKopecks
             this.paymentLink = value.paymentLink
             this.paymentMethodNote = value.paymentMethodNote
             this.deadline = value.deadline
-            this.affectsReputation = value.affectsReputation
             this.status = value.status
             this.closedAt = value.closedAt
-            this.closedBy = value.closedBy
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
             this.reminderSentAt = value.reminderSentAt
-            this.template = value.template
             this.eventId = value.eventId
+            this.kind = value.kind
+            this.enrollmentUntil = value.enrollmentUntil
+            this.minParticipants = value.minParticipants
+            this.lockedAt = value.lockedAt
+            this.orderedAt = value.orderedAt
+            this.hiddenFromUserId = value.hiddenFromUserId
+            this.orderRemindedAt = value.orderRemindedAt
             resetChangedOnNotNull()
         }
     }

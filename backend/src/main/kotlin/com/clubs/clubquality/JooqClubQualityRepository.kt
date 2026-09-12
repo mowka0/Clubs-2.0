@@ -140,11 +140,11 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** Складчины клуба, закрытые успешно (майлстоун «первый сбор»). */
+    /** Сборы клуба, собранные до конца (майлстоун «первый сбор»). */
     private fun successfulSkladchinas(clubId: UUID): Int =
         dsl.selectCount()
             .from(SKLADCHINAS)
-            .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.closed_success)))
+            .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.collected)))
             .fetchOne(0, Int::class.java) ?: 0
 
     // ---- Батч (Discovery-карточка): возраст · вовлечённость, один сгруппированный запрос на метрику (без N+1) ----

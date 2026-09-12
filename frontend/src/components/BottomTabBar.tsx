@@ -62,6 +62,8 @@ export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
   if (TABLESS_DOCK_PATHS.has(pathname)) return true;
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return true;
+  // Долги (/debts, /debts/with/:userId) — подстраницы профиля: док остаётся, таб «Профиль» активен.
+  if (/^\/debts(\/with\/[^/]+)?$/.test(pathname)) return true;
   return /^\/(clubs|events|skladchina)\/[^/]+(\/manage|\/skladchina\/new)?$/.test(pathname);
 }
 
@@ -70,6 +72,7 @@ function resolveActivePath(pathname: string): string {
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return '/activities';
   if (/^\/(events|skladchina)\/[^/]+$/.test(pathname)) return '/activities';
   if (/^\/clubs\/[^/]+\/skladchina\/new$/.test(pathname)) return '/my-clubs';
+  if (/^\/debts(\/with\/[^/]+)?$/.test(pathname)) return '/profile';
   return pathname;
 }
 

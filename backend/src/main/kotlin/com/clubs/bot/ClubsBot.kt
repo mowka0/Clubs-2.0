@@ -42,6 +42,7 @@ class ClubsBot(
     private val chatLinkBotService: ChatLinkBotService,
     private val chatDoorService: ChatDoorService,
     private val rosterCallbackService: RosterCallbackService,
+    private val debtCallbackService: DebtCallbackService,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -238,6 +239,23 @@ class ClubsBot(
                 // null от сервиса — «отчёт ушёл отдельным DM», алерт не нужен.
                 if (id == null) RosterCallbackService.INVALID_REQUEST else rosterCallbackService.handleRemind(query.from.id, id)
             }
+            // Долги: «Получил / Не получил» по долгу и по сальдо пары (skladchina-v3 § 5).
+            data.startsWith(DebtCallbackService.CONFIRM_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.CONFIRM_PREFIX)
+                    ?.let { debtCallbackService.handleDebt(query.from.id, it, confirm = true) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.REJECT_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.REJECT_PREFIX)
+                    ?.let { debtCallbackService.handleDebt(query.from.id, it, confirm = false) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.SETTLE_CONFIRM_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.SETTLE_CONFIRM_PREFIX)
+                    ?.let { debtCallbackService.handleSettlement(query.from.id, it, confirm = true) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.SETTLE_REJECT_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.SETTLE_REJECT_PREFIX)
+                    ?.let { debtCallbackService.handleSettlement(query.from.id, it, confirm = false) }
+                    ?: RosterCallbackService.INVALID_REQUEST
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null

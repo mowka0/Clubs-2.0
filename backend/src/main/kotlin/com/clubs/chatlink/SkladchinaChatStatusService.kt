@@ -3,10 +3,9 @@ package com.clubs.chatlink
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.bot.UserChatState
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
-import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.debt.DebtRepository
+import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.skladchina.Skladchina
-import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -14,33 +13,34 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * «Живой статус сбора» (слайс 3.5 club-chat-link): у бота ОДНО сообщение-статус на складчину —
- * прогресс «Скинулись N из M», дедлайн, «Ждём:» с text_mention-упоминаниями. Механика зеркалит
+ * «Живой статус сбора» (club-chat-link слайс 3.5, тексты — skladchina-v3 § 6): у бота ОДНО
+ * сообщение-статус на сбор, перерисовывается на каждое изменение долга. Механика зеркалит
  * [LivePinService]: dirty-флаги в памяти + flush-планировщик с дебаунсом
  * (`chatlink.skladchina-status-flush-ms`), рестарт теряет несброшенные флаги безболезненно.
  *
- * Отличия от закрепа событий: close-проход сканирует БД по СТАТУСУ складчины (не по времени) —
- * это обязательная механика закрытия, а не страховка: каскады cancelActiveByClub /
- * cancelActiveByEventId минуют closeInternal и не публикуют SkladchinaClosedEvent.
- * Всё best-effort: сбой Telegram логируется в шлюзе и не валит бизнес-операцию.
+ * Тихий voluntary (hidden_from_user_id) поста не имеет вовсе. Close-проход сканирует БД по
+ * СТАТУСУ сбора: каскады cancelActiveByClub / cancelActiveByEventId минуют сервисы и событий
+ * не публикуют. Всё best-effort: сбой Telegram логируется в шлюзе и не валит бизнес-операцию.
  */
 @Service
 class SkladchinaChatStatusService(
     private val chatLinkRepository: ChatLinkRepository,
     private val postRepository: SkladchinaChatPostRepository,
     private val skladchinaRepository: SkladchinaRepository,
+    private val debtRepository: DebtRepository,
     private val userRepository: UserRepository,
     private val renderer: SkladchinaChatStatusRenderer,
     private val gateway: ChatTelegramGateway
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaChatStatusService::class.java)
 
-    // Dirty-флаги перерисовки: складчина попала сюда → при ближайшем flush её статус
-    // перечитывается из БД и редактируется. Пишут AFTER_COMMIT-листенеры из разных потоков.
+    // Dirty-флаги перерисовки: сбор попал сюда → при ближайшем flush его статус перечитывается из
+    // БД и редактируется. Пишут AFTER_COMMIT-листенеры из разных потоков.
     private val dirtySkladchinaIds: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
     fun markDirty(skladchinaId: UUID) {
@@ -48,11 +48,10 @@ class SkladchinaChatStatusService(
     }
 
     /**
-     * Создание складчины: пост-статус (пинг №1 — упоминания в «Ждём:»), если тумблер включён.
-     * Возвращает chatId, когда живой пост фактически существует после попытки, — маршрутизатор
-     * ([com.clubs.bot.ChatAwareBroadcast]) подавит DM участникам этого чата. Вызывается
-     * синхронно из @Async-оркестратора SkladchinaBotNotifier (не сам @Async — возврат
-     * значения из @Async-метода терялся бы).
+     * Создание сбора: пост-статус, если тумблер включён и сбор не тихий. Возвращает chatId, когда
+     * живой пост фактически существует, — маршрутизатор ([com.clubs.bot.ChatAwareBroadcast])
+     * подавит DM участникам этого чата. Вызывается синхронно из @Async-оркестратора
+     * SkladchinaBotNotifier (возврат значения из @Async-метода терялся бы).
      */
     @Transactional
     fun onSkladchinaCreated(clubId: UUID, skladchinaId: UUID): Long? {
@@ -61,21 +60,16 @@ class SkladchinaChatStatusService(
         return if (createPost(link, skladchina)) link.chatId else null
     }
 
-    /** Закрытие складчины: немедленный финальный edit + unpin (не ждём flush). */
+    /** Закрытие сбора (собран, отменён, не набрали): немедленный финальный edit + unpin, не ждём flush. */
     @Async
     @Transactional
-    fun onSkladchinaClosed(event: SkladchinaClosedEvent) {
-        val post = postRepository.findBySkladchinaId(event.skladchinaId) ?: return
+    fun closeNow(skladchinaId: UUID) {
+        val post = postRepository.findBySkladchinaId(skladchinaId) ?: return
         if (post.closedAt != null) return
-        val text = renderer.closedText(event.title, event.finalStatus, event.paidCount, event.participantCount)
-        gateway.editGroupMessage(post.chatId, post.messageId, text, null, null, PARSE_MODE_HTML)
-        gateway.unpinChatMessage(post.chatId, post.messageId)
-        postRepository.markClosed(event.skladchinaId)
-        log.info("Skladchina chat status closed: skladchinaId={} chatId={} finalStatus={}",
-            event.skladchinaId, post.chatId, event.finalStatus)
+        closePost(post)
     }
 
-    /** Включение тумблера: backfill — статус-пост для всех АКТИВНЫХ складчин клуба без живого поста. */
+    /** Включение тумблера: backfill — статус-пост для всех АКТИВНЫХ сборов клуба без живого поста. */
     @Transactional
     fun backfillForClub(clubId: UUID) {
         val link = liveLinkFor(clubId) ?: return
@@ -96,12 +90,12 @@ class SkladchinaChatStatusService(
     }
 
     /**
-     * Напоминание о дедлайне в чат вместо DM (пинг №2). Возвращает id участников, покрытых
-     * чат-упоминанием (они В ЧАТЕ и упомянуты) — вызывающий шлёт DM остальным.
-     * Пустой сет = чат-канал недоступен (тумблер выключен / поста нет / отправка не удалась) —
-     * фоллбек на DM всем, напоминание не должно теряться.
+     * Напоминание о сроке в чат вместо DM. Возвращает id должников, покрытых чат-упоминанием
+     * (они В ЧАТЕ и упомянуты) — вызывающий шлёт DM остальным. Пустой сет = чат-канал недоступен
+     * (тумблер выключен / поста нет / отправка не удалась) — фоллбек на DM всем.
      */
     fun postDeadlineReminder(skladchina: Skladchina, pendingUserIds: List<UUID>): Set<UUID> {
+        val deadline = skladchina.deadline ?: return emptySet()
         val link = liveLinkFor(skladchina.clubId) ?: return emptySet()
         val post = postRepository.findBySkladchinaId(skladchina.id)
         if (post == null || post.closedAt != null) return emptySet()
@@ -109,17 +103,16 @@ class SkladchinaChatStatusService(
         // Пинг доходит только до участников ЧАТА: остальные получат прежний DM. UNKNOWN
         // (Telegram молчит) считаем «не в чате» — лишний DM лучше потерянного напоминания.
         val inChat = userRepository.findByIds(pendingUserIds)
-            .filter { it.telegramId != null }
-            .filter { gateway.getUserChatState(link.chatId, it.telegramId!!) == UserChatState.IN_CHAT }
+            .filter { gateway.getUserChatState(link.chatId, it.telegramId) == UserChatState.IN_CHAT }
             .sortedBy { it.firstName }
             .take(SkladchinaChatStatusRenderer.MAX_MENTIONS)
         if (inChat.isEmpty()) return emptySet()
 
-        val mentions = inChat.map { ChatMention(it.telegramId!!, it.firstName ?: "Участник") }
+        val mentions = inChat.map { ChatMention(it.telegramId, it.firstName) }
         gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
-            text = renderer.reminderText(skladchina.title, skladchina.deadline, mentions),
-            buttonText = renderer.buttonText(),
+            text = renderer.reminderText(skladchina.title, deadline, mentions),
+            buttonText = renderer.buttonText(skladchina),
             url = renderer.skladchinaUrl(skladchina.id),
             parseMode = PARSE_MODE_HTML
         ) ?: return emptySet()
@@ -131,7 +124,7 @@ class SkladchinaChatStatusService(
 
     /**
      * Flush-планировщик: (1) перерисовать dirty-статусы, (2) close-проход — закрыть статусы
-     * складчин, которые уже не активны (в т.ч. каскадные отмены без доменного события).
+     * сборов, которые уже не активны (в т.ч. каскадные отмены без доменного события).
      */
     @Scheduled(fixedDelayString = "\${chatlink.skladchina-status-flush-ms:30000}")
     @Transactional
@@ -141,36 +134,32 @@ class SkladchinaChatStatusService(
             dirtySkladchinaIds.remove(skladchinaId)
             refreshPost(skladchinaId)
         }
-        postRepository.findOpenPostsOfInactiveSkladchinas().forEach { closeFromDb(it) }
+        postRepository.findOpenPostsOfInactiveSkladchinas().forEach { closePost(it) }
     }
 
     /** TRUE = живой пост существует после попытки (уже был, только что создан или создан конкурентом). */
     private fun createPost(link: ChatLink, skladchina: Skladchina): Boolean {
-        if (skladchina.status != SkladchinaStatus.active) return false
+        if (!skladchina.isActive || skladchina.hiddenFromUserId != null) return false
         if (postRepository.findBySkladchinaId(skladchina.id) != null) return true
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
-            text = renderStatus(skladchina),
-            buttonText = renderer.buttonText(),
+            text = renderer.statusText(buildView(skladchina)),
+            buttonText = renderer.buttonText(skladchina),
             url = renderer.skladchinaUrl(skladchina.id),
             parseMode = PARSE_MODE_HTML
         )
         if (messageId == null) {
-            // Пост не удался — строку не создаём: повторная попытка при следующем включении
-            // тумблера/backfill, здоровье чата организатор видит в табе «Чат».
+            // Пост не удался — строку не создаём: повторная попытка при следующем включении тумблера/backfill.
             log.warn("Skladchina chat status post failed: skladchinaId={} chatId={}", skladchina.id, link.chatId)
             return false
         }
-        // Гонка backfill × onSkladchinaCreated: оба могли пройти проверку выше и отправить пост.
-        // Проигравший не роняет транзакцию тумблера на PK-конфликте, а просто не закрепляет
-        // (его сообщение останется в чате дублем — редкое окно, best-effort).
+        // Гонка backfill × onSkladchinaCreated: проигравший не роняет транзакцию на PK-конфликте,
+        // а просто не закрепляет (его сообщение останется в чате дублем — редкое окно, best-effort).
         if (!postRepository.insertIfAbsent(SkladchinaChatPost(skladchina.id, link.chatId, messageId, closedAt = null))) {
             log.info("Skladchina chat status already posted by concurrent path: skladchinaId={}", skladchina.id)
             return true
         }
-        // Право закрепа могли и не выдать: пост уходит без pin, статус всё равно живёт.
-        // notify = true — как у живого закрепа встречи: сбор должен увидеть весь чат, а не
-        // только те, кто прокрутит ленту. Один пуш на создание, перерисовки статуса молчат.
+        // notify = true — сбор должен увидеть весь чат. Один пуш на создание, перерисовки молчат.
         if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId, notify = true)
         log.info("Skladchina chat status created: skladchinaId={} chatId={} messageId={}",
             skladchina.id, link.chatId, messageId)
@@ -181,47 +170,52 @@ class SkladchinaChatStatusService(
         val post = postRepository.findBySkladchinaId(skladchinaId) ?: return
         if (post.closedAt != null) return
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
-        // Не-активную закроет close-проход (или уже закрыл onSkladchinaClosed) — здесь не трогаем.
-        if (skladchina.status != SkladchinaStatus.active) return
+        // Не-активный закроет close-проход (или уже закрыл closeNow) — здесь не трогаем.
+        if (!skladchina.isActive) return
         gateway.editGroupMessage(
             chatId = post.chatId,
             messageId = post.messageId,
-            text = renderStatus(skladchina),
-            buttonText = renderer.buttonText(),
+            text = renderer.statusText(buildView(skladchina)),
+            buttonText = renderer.buttonText(skladchina),
             url = renderer.skladchinaUrl(skladchina.id),
             parseMode = PARSE_MODE_HTML
         )
     }
 
-    /** Закрытие статуса close-проходом (складчина уже не активна в БД, событие могло не прийти). */
-    private fun closeFromDb(post: SkladchinaChatPost) {
+    /** Финальный edit + unpin по состоянию из БД; строка закрывается даже при сбое, иначе мёртвый пост ретраился бы вечно. */
+    private fun closePost(post: SkladchinaChatPost) {
         val skladchina = skladchinaRepository.findById(post.skladchinaId)
         if (skladchina != null) {
-            val paid = skladchinaRepository.countParticipantsByStatus(post.skladchinaId, SkladchinaParticipantStatus.paid)
-            val total = skladchinaRepository.countParticipants(post.skladchinaId)
-            val text = renderer.closedText(skladchina.title, skladchina.status, paid, total)
-            gateway.editGroupMessage(post.chatId, post.messageId, text, null, null, PARSE_MODE_HTML)
+            gateway.editGroupMessage(post.chatId, post.messageId, renderer.closedText(buildView(skladchina)), null, null, PARSE_MODE_HTML)
             gateway.unpinChatMessage(post.chatId, post.messageId)
         }
-        // Закрываем даже при сбое edit/unpin — иначе мёртвый пост ретраился бы вечно.
         postRepository.markClosed(post.skladchinaId)
-        log.info("Skladchina chat status closed (close-pass): skladchinaId={} chatId={}", post.skladchinaId, post.chatId)
+        log.info("Skladchina chat status closed: skladchinaId={} chatId={} status={}",
+            post.skladchinaId, post.chatId, skladchina?.status)
     }
 
-    private fun renderStatus(skladchina: Skladchina): String {
-        val paid = skladchinaRepository.countParticipantsByStatus(skladchina.id, SkladchinaParticipantStatus.paid)
-        val total = skladchinaRepository.countParticipants(skladchina.id)
-        val pendingIds = skladchinaRepository.findParticipants(skladchina.id)
-            .filter { it.status == SkladchinaParticipantStatus.pending }
-            .map { it.userId }
-        // Стабильный порядок упоминаний (по имени) — иначе перестановка списка давала бы
-        // «пустые» edit'ы, которые Telegram не дедуплицирует по «message is not modified».
-        val mentions = userRepository.findByIds(pendingIds)
-            .filter { it.telegramId != null }
-            .sortedBy { it.firstName }
-            .map { ChatMention(it.telegramId!!, it.firstName ?: "Участник") }
-        return renderer.statusText(skladchina.title, paid, total, skladchina.deadline, mentions)
+    private fun buildView(skladchina: Skladchina): ChatStatusView {
+        val totals = debtRepository.totals(skladchina.id)
+        val waitingIds = debtRepository.findBySkladchina(skladchina.id)
+            .filter { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
+            .map { it.debt.debtorId }
+        val enrolledIds = if (skladchina.enrollmentUntil != null) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
+        return ChatStatusView(
+            skladchina = skladchina,
+            totals = totals,
+            enrolledCount = enrolledIds.size,
+            creatorName = userRepository.findById(skladchina.creatorId)?.firstName ?: "",
+            waiting = mentions(waitingIds),
+            enrolled = mentions(enrolledIds),
+            now = OffsetDateTime.now()
+        )
     }
+
+    // Стабильный порядок упоминаний (по имени) — иначе перестановка списка давала бы «пустые»
+    // edit'ы, которые Telegram не дедуплицирует по «message is not modified».
+    private fun mentions(userIds: List<UUID>): List<ChatMention> =
+        if (userIds.isEmpty()) emptyList()
+        else userRepository.findByIds(userIds).sortedBy { it.firstName }.map { ChatMention(it.telegramId, it.firstName) }
 
     /** Привязка клуба, если статус сборов включён и бот в чате; иначе null (фича молчит). */
     private fun liveLinkFor(clubId: UUID): ChatLink? =

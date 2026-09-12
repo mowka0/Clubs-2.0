@@ -65,7 +65,7 @@ class ClubStatsIntegrationTest {
     fun setUp() {
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM transactions")
         dsl.execute("DELETE FROM applications")
@@ -162,18 +162,19 @@ class ClubStatsIntegrationTest {
     }
 
     @Test
-    fun `skladchina paid share excludes pending and released, with a trend`() {
-        // Current 90d: closed skladchina with 2 paid, 1 declined, 1 released, 1 pending.
+    fun `skladchina paid share excludes open debts and the creator's own share, with a trend`() {
+        // Current 90d: closed skladchina with 2 received, 1 forgiven, 1 waiting (open → excluded),
+        // plus the creator's own share (received, debtor = creditor → excluded).
         val cur = insertClosedSkladchina(daysAgo(10))
-        repeat(2) { insertSkladchinaParticipant(cur, newUser(), "paid") }
-        insertSkladchinaParticipant(cur, newUser(), "declined")
-        insertSkladchinaParticipant(cur, newUser(), "released") // excluded from denominator
-        insertSkladchinaParticipant(cur, newUser(), "pending")  // excluded from denominator
-        // settled = paid(2) + declined(1) = 3 → 2/3 = 67%.
-        // Prior 90-180d: 1 paid, 1 expired_no_response → 1/2 = 50%.
+        repeat(2) { insertDebt(cur, newUser(), "received") }
+        insertDebt(cur, newUser(), "forgiven")
+        insertDebt(cur, newUser(), "waiting")
+        insertDebt(cur, ownerId, "received")
+        // settled = received(2) + forgiven(1) = 3 → 2/3 = 67%.
+        // Prior 90-180d: 1 received, 1 dropped → 1/2 = 50%.
         val prior = insertClosedSkladchina(daysAgo(120))
-        insertSkladchinaParticipant(prior, newUser(), "paid")
-        insertSkladchinaParticipant(prior, newUser(), "expired_no_response")
+        insertDebt(prior, newUser(), "received")
+        insertDebt(prior, newUser(), "dropped")
 
         val stats = clubStatsService.getClubStats(clubId)
 
@@ -366,20 +367,20 @@ class ClubStatsIntegrationTest {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link,
                                      deadline, status, closed_at)
-            VALUES ('$id', '$clubId', '$ownerId', 'Сбор', 'voluntary'::skladchina_mode, 'http://pay',
-                    '$closedAt', 'closed_success'::skladchina_status, '$closedAt')
+            VALUES ('$id', '$clubId', '$ownerId', 'Сбор', 'shared'::skladchina_kind, 'http://pay',
+                    '$closedAt', 'collected'::skladchina_status, '$closedAt')
             """.trimIndent(),
         )
         return id
     }
 
-    private fun insertSkladchinaParticipant(skladchinaId: UUID, userId: UUID, status: String) {
+    private fun insertDebt(skladchinaId: UUID, userId: UUID, status: String) {
         dsl.execute(
             """
-            INSERT INTO skladchina_participants (skladchina_id, user_id, status)
-            VALUES ('$skladchinaId', '$userId', '$status'::skladchina_participant_status)
+            INSERT INTO debts (skladchina_id, debtor_id, creditor_id, amount_kopecks, status)
+            VALUES ('$skladchinaId', '$userId', '$ownerId', 1000, '$status'::debt_status)
             """.trimIndent(),
         )
     }

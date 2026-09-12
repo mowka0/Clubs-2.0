@@ -2,7 +2,6 @@ package com.clubs.reputation
 
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.ReputationKind
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 
 /**
@@ -46,23 +45,16 @@ object ReputationPolicy {
     // отдельного маппинга исходов у формата нет.
 
     /**
-     * Терминальный статус участника складчины → финансовый kind. Null для статусов
-     * без влияния на репутацию (см. docs/backlog/skladchina-reputation-redesign.md):
-     *  - declined: явный отказ — это ЖЕЛАЕМОЕ поведение ("не могу заплатить — скажи
-     *    сразу") и свободный выход из штрафующей складчины. Строка не создаётся вообще
-     *    (не строка с 0 очков): три отказа в один тап не должны выводить пользователя
-     *    из "Новичок" (раздувание outcome_count). Исторические строки skladchina_declined
-     *    сохраняют свои очки; kind остаётся в enum, но больше никогда не выдаётся.
-     *  - released: складчина закрылась ДО дедлайна (F5-02). Обещание было "ответить
-     *    до дедлайна", а дедлайн так и не наступил — обещание не нарушено.
+     * Просрочка долга shared-сбора (в waiting/promised), после которой один раз списывается
+     * skladchina_expired (−40); claimed часы останавливает (docs/modules/skladchina-v3.md § 4).
+     * Рабочее значение читает DebtReputationService из `debts.overdue-weeks` (дефолт = эта константа);
+     * фраза условий ниже — для DM и чат-поста.
      */
-    fun financeKind(status: SkladchinaParticipantStatus): ReputationKind? = when (status) {
-        SkladchinaParticipantStatus.paid -> ReputationKind.skladchina_paid
-        SkladchinaParticipantStatus.expired_no_response -> ReputationKind.skladchina_expired
-        SkladchinaParticipantStatus.declined -> null
-        SkladchinaParticipantStatus.released -> null
-        SkladchinaParticipantStatus.pending -> null
-    }
+    const val DEBT_OVERDUE_WEEKS = 3L
+
+    /** Условия репутации у сбора «Скинуться» одной фразой — в DM должнику и в чат-посте. */
+    fun skladchinaRulesLine(): String =
+        "Репутация: долг закрыт до срока +10, просрочка дольше $DEBT_OVERDUE_WEEKS недель −40."
 
     fun pointsFor(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 100
@@ -74,18 +66,16 @@ object ReputationPolicy {
         ReputationKind.spontaneous -> 100
         ReputationKind.spectator -> -200
         ReputationKind.confirmed_unresolved -> 0
-        // 1/10 от ironclad (+100): посещение подтверждает организатор, оплату
-        // декларирует сам участник. Символический плюс до появления org-подтверждения (P2).
+        // 1/10 от ironclad (+100): долг shared-сбора закрыт до срока и подтверждён получателем
+        // («Получил»), а не самозаявлен (skladchina-v3 § 4).
         ReputationKind.skladchina_paid -> 10
         // Исторический kind — больше не выдаётся (financeKind(declined) = null с
         // редизайна 2026-06-12). Старые строки с -5 на staging сохраняют свои очки;
         // леджер читает сохранённые очки, а не эту функцию, поэтому 0 здесь лишь
         // защищает гипотетического будущего вызывающего.
         ReputationKind.skladchina_declined -> 0
-        // 1/5 от no_show (-200): вред сопоставим (сгоревшая бронь), но обязательство
-        // наложил организатор — участник никогда не нажимал "подтвердить", как на
-        // этапе 2 события. Точка безубыточности ≈ 80% оплат, немного выше метрики
-        // успеха "≥70% платят вовремя".
+        // 1/5 от no_show (-200): долг shared-сбора висит в waiting/promised дольше
+        // DEBT_OVERDUE_WEEKS после срока — списывается один раз, оплата после минуса ничего не возвращает.
         ReputationKind.skladchina_expired -> -40
         // Отказ от подтверждённого места на Этапе 2 без замены в очереди — половина no_show.
         // Начисляется только когда waitlist пуст (иначе первый из очереди сразу закрывает слот,

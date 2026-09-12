@@ -221,9 +221,14 @@ DM каждому, чат-пост меняется на обычный. Соз�
 
 ## 5. Напоминания и шедулер
 
-Один шедулер `DebtScheduler` с периодом из конфига (`debts.poll-ms`, дефолт 10 мин; на staging
-ускоряется как `SKLADCHINA_CONFIRMATION_POLL_MS` сегодня). Все напоминания идемпотентны по
-штампам на долге или сборе.
+Один шедулер `DebtScheduler` (`bot/DebtScheduler.kt`) с периодом из конфига `debts.poll-ms`
+(env `DEBT_POLL_MS`, дефолт 600000 = 10 мин). Остальные ручки: `debts.overdue-weeks`
+(`DEBT_OVERDUE_WEEKS`, дефолт 3), `debts.claim-stale-hours` (`DEBT_CLAIM_STALE_HOURS`, дефолт 48),
+`skladchinas.deadline-reminder-minutes-before` (`SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE`,
+дефолт 1440) — окно «за 24 ч» и для чата, и для DM должникам. На staging все четыре ужимаются
+через env в Coolify. Все напоминания идемпотентны по штампам на долге (`due_reminder_sent_at`,
+`overdue_reminded_at`, `promise_reminded_at`, `claim_reminded_at`) или сборе (`reminder_sent_at`,
+`order_reminded_at`); штамп ставится в одной транзакции с выборкой, ДО отправки DM.
 
 | Кому | Когда | Текст (суть) |
 |---|---|---|
@@ -320,20 +325,30 @@ inline-кнопками, «Не получил» должнику, выбыва�
 
 1. Новые типы: `skladchina_kind` (`shared`, `per_head`, `voluntary`); `debt_status` (`waiting`,
    `promised`, `claimed`, `received`, `forgiven`, `dropped`); `debt_settlement_status`
-   (`claimed`, `received`, `rejected`); `skladchina_status_v3` (`active`, `collected`,
-   `cancelled`), который заменяет старый `skladchina_status`.
+   (`claimed`, `received`, `rejected`); новый `skladchina_status` (`active`, `collected`,
+   `cancelled`) — создаётся как `skladchina_status_v3`, старый тип удаляется, новый
+   переименовывается обратно в `skladchina_status`, чтобы jOOQ-enum остался `SkladchinaStatus`.
 2. `skladchinas`: добавить `kind`, `enrollment_until`, `min_participants`, `locked_at`,
-   `ordered_at`, `hidden_from_user_id`; переименовать `total_goal_kopecks` → `amount_kopecks`;
-   заполнить `kind` из старых полей (`split_bill` или `fixed_*` → `shared`, `voluntary` →
-   `voluntary`); сменить тип `status` с маппингом (`closed_success` → `collected`,
-   `closed_failed` → `cancelled`); убрать колонки `payment_mode`, `affects_reputation`,
-   `template`, `confirmation_requested_at`, `closed_by` и старые типы.
-3. Создать `debts` (§ 2.2) и `debt_settlements` (§ 2.3), индексы по `debtor_id`,
-   `creditor_id`, `skladchina_id`, `status`.
-4. Перенос `skladchina_participants` → `debts`: `paid`/`payment_confirmed` → `received`,
-   `pending`/`payment_rejected`/`payment_disputed` открытых сборов → `waiting`, остальное →
-   `forgiven`. После переноса таблица участников и её enum-тип удаляются.
-5. `COMMENT ON` на русском для каждой таблицы, колонки и типа (конвенция).
+   `ordered_at`, `hidden_from_user_id`, `order_reminded_at` (штамп напоминания «пора заказывать»);
+   переименовать `total_goal_kopecks` → `amount_kopecks`; `deadline` становится NULL-able с
+   CHECK `kind = 'voluntary' OR deadline IS NOT NULL`; заполнить `kind` из старых полей
+   (`voluntary` → `voluntary`, остальное → `shared`); сменить тип `status` с маппингом
+   (`closed_success` → `collected`, `closed_failed` → `cancelled`); убрать колонки `payment_mode`,
+   `affects_reputation`, `template`, `confirmation_requested_at` (только на V89, `IF EXISTS`),
+   `closed_by` и старые типы.
+3. Создать `skladchina_enrollments` (отметки «В деле» на этапе записи: `skladchina_id`,
+   `user_id`, `created_at`; **запись, а не долг** — долг с заглушкой суммы попал бы на экран
+   «Долги»), `debt_settlements` (§ 2.3) и `debts` (§ 2.2 плюс штампы напоминаний
+   `due_reminder_sent_at`, `overdue_reminded_at`, `promise_reminded_at`, `claim_reminded_at`);
+   индексы `(debtor_id, status)`, `(creditor_id, status)`, `skladchina_id`, частичный по
+   `settlement_id`; UNIQUE `(skladchina_id, debtor_id)`.
+4. Перенос `skladchina_participants` → `debts`: `paid`/`payment_confirmed` и доля создателя →
+   `received`, `pending`/`payment_rejected`/`payment_disputed` активных сборов → `waiting`,
+   остальное → `forgiven`; строки без суммы (voluntary без оплаты) долгом не становятся.
+   Старые статусы сравниваются как текст, чтобы миграция шла и на схеме V86 (master), и на V89
+   (staging). После переноса таблица участников и её enum-тип удаляются.
+5. `COMMENT ON` на русском для каждой таблицы, колонки и типа (конвенция); комментарий
+   `reputation_ledger.occurred_at` обновлён: якорь finance-строк теперь в долге.
 
 После миграции: `./gradlew generateJooq` по рецепту временного PG, exhaustive `when` по новым
 enum проверяет компилятор.
@@ -369,8 +384,10 @@ enum проверяет компилятор.
 Остаётся: таблица `skladchinas` (с миграцией), `skladchina_chat_posts` и рендерер поста,
 `SkladchinaBotNotifier` (тексты переписываются), загрузка чека и `UploadedImageUrls`,
 `SkladchinaShares.equal`, лента активностей и карточка, реквизиты и ссылка на оплату,
-`ReputationPolicy` и леджер. Капабилити `MANAGE_SKLADCHINA` теряет применение (создаёт любой,
-отменяет владелец): убрать из карты ролей или оставить для списка сборов в «Управлении», решить при коде (зона `common/auth`, трек L).
+`ReputationPolicy` и леджер. Капабилити `MANAGE_SKLADCHINA` **оставлена** ради одной точки —
+списка активных сборов клуба в «Управлении» (`GET /api/clubs/{clubId}/skladchinas/active`);
+создаёт сбор любой участник, отменяет чужой только владелец, долгов сбора не видит никто, кроме
+сторон (решение при коде 2026-09-12, карта ролей не менялась).
 
 ## 11. Критерии приёмки
 
@@ -436,3 +453,40 @@ GIVEN `waiting` и `now > due_at + 3 недели` THEN −40 один раз и
 5. **Кнопки «Получил / Не получил» в DM.** Решено: в первой версии.
 6. **Стратегии.** `when (kind)` в двух сервисах; если ветвей станет больше двух мест, вернуть
    стратегии по видам.
+
+## 13. Решения при реализации (2026-09-12, ветка `feature/skladchina-rethink`)
+
+Что уточнилось, когда спека стала кодом. Всё ниже — `[spec updated]`; спорного нет, PO
+подтверждает на staging по AC-1…AC-14.
+
+1. **Таблица `skladchina_enrollments`** для этапа «Кто в деле?» (§ 8 п. 3): в § 8 её не было,
+   а § 3.2 без неё не реализуется. Выход и кик из клуба снимают отметку в ещё не замороженных
+   сборах; долги при этом не трогаются.
+2. **Долги переживают выход из клуба.** Долг живёт между людьми, а не в клубе: `leaveClub` и
+   кик больше не удаляют участия и не пишут `skladchina_expired` на выходе; просрочку спишет
+   `DebtScheduler` в свой срок. `LeavePreviewDto.skladchinaObligations` всегда 0 (поле
+   оставлено ради контракта). Спека выхода — `club-leave.md`.
+3. **Знаменатель «получено X из Y»** (`targetKopecks`) = сумма живых долгов (открытые +
+   `received`); пока долгов нет — `amountKopecks` сбора. Так «Изменить сумму» и «добавить
+   человека» не расходятся с итогом. У `voluntary` без ориентира знаменателя нет.
+4. **Ограничения первой версии:** один перевод «По желанию» на человека в сборе (повторный —
+   400); «Заменить» только на человека, у которого в этом сборе ещё нет долга; после
+   «Передумал» в `per_head` снова «Беру» нельзя (переход не в таблице § 2.2).
+5. **API-ответы:** все эндпоинты сбора (§ 7) возвращают `SkladchinaDetailDto`; эндпоинты долга —
+   `DebtDto`; `GET /api/debts` — `DebtsOverviewDto{oweKopecks, owedKopecks,
+   awaitingMyConfirmation, people[]}`; `GET /api/debts/with/{userId}` и действия по сальдо —
+   `DebtPairDto{user, owe[], owed[], oweKopecks, owedKopecks, balanceKopecks, settlement}`.
+   Поля названы `owe`/`owed`, а не `iOwe`/`owedToMe`: Jackson сериализует `getIOwe` как
+   `iowe`. `GET /api/debts/with/{userId}` всегда пара «я ↔ userId», поэтому AC-12 выполняется
+   конструкцией: пары третьих лиц по URL не запросить.
+6. **Права на список сборов в «Управлении»** — § 10: `MANAGE_SKLADCHINA` оставлена только
+   для `GET …/skladchinas/active`.
+7. **Конфиг** — § 5: `DEBT_POLL_MS`, `DEBT_OVERDUE_WEEKS`, `DEBT_CLAIM_STALE_HOURS`,
+   `SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE`; `SKLADCHINA_REMINDER_POLL_MS` удалена.
+8. **Кнопки в чат-посте** — url-кнопка в Mini App с текстом стадии («В деле» / «Беру» /
+   «Открыть сбор»), сам переход делается в приложении. «Ждём: @…» — только `waiting`/`promised`;
+   `claimed` уже в жёлтой части полосы.
+9. **UI создателя в первой версии** — без «Добавить человека», «Заменить» и «Изменить сумму»:
+   эндпоинты есть (§ 7), кнопки появятся по запросу PO после staging.
+10. **`DebtScheduler` живёт в `bot/`** (как остальные шедулеры с DM), логику стадий/репутации/
+    выборок держат `skladchina`/`debt`; зависимость `bot → debt/skladchina` односторонняя.

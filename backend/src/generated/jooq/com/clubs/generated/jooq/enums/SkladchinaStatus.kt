@@ -17,8 +17,7 @@ import org.jooq.Schema
 @Suppress("UNCHECKED_CAST")
 enum class SkladchinaStatus(@get:JvmName("literal") public val literal: String) : EnumType {
     active("active"),
-    closed_success("closed_success"),
-    closed_failed("closed_failed"),
+    collected("collected"),
     cancelled("cancelled");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC

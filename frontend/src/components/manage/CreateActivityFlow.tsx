@@ -6,8 +6,7 @@ import {
   ActivityTypeOptions,
   EventFormatOptions,
   EventTemplateOptions,
-  SkladchinaTemplateOptions,
-  type SkladchinaTemplateKey,
+  SkladchinaKindOptions,
 } from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
 import {
@@ -16,7 +15,7 @@ import {
 } from '../../queries/eventTemplates';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
-import type { EventFormat } from '../../types/api';
+import type { EventFormat, SkladchinaKind } from '../../types/api';
 
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
@@ -38,12 +37,12 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'template' | 'event_format' | 'event_templates' | 'club';
+type Step = 'type' | 'kind' | 'event_format' | 'event_templates' | 'club';
 
 function createRoute(
   clubId: string,
   type: ActivityType,
-  template: SkladchinaTemplateKey | null,
+  kind: SkladchinaKind | null,
   eventFormat: EventFormat | null,
 ): string {
   // Оба формата (V86) — одна форма создания: она читает ?format и адаптирует поля
@@ -51,9 +50,8 @@ function createRoute(
   if (type === 'event') {
     return `/clubs/${clubId}/events/new${eventFormat ? `?format=${eventFormat}` : ''}`;
   }
-  // У split_bill своя страница, не зависящая от точки входа (выбирает событие, делит счёт).
-  if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
-  return `/clubs/${clubId}/skladchina/new`;
+  // Три вида сбора — одна форма: она читает ?kind и показывает поля вида (skladchina-v3 § 9).
+  return `/clubs/${clubId}/skladchina/new${kind ? `?kind=${kind}` : ''}`;
 }
 
 /**
@@ -82,7 +80,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const haptic = useHaptic();
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
-  const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
+  const [pendingKind, setPendingKind] = useState<SkladchinaKind | null>(null);
   const [pendingEventFormat, setPendingEventFormat] = useState<EventFormat | null>(null);
   // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
   // запрос уходил бы у каждого участника при каждом монтировании дока.
@@ -100,7 +98,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const resetFlow = () => {
     setStep('type');
     setPendingType(null);
-    setPendingTemplate(null);
+    setPendingKind(null);
     setPendingEventFormat(null);
     onClose();
   };
@@ -110,40 +108,40 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const goToCreate = (
     clubId: string,
     type: ActivityType,
-    template: SkladchinaTemplateKey | null,
+    kind: SkladchinaKind | null,
     eventFormat: EventFormat | null,
   ) => {
     resetFlow();
-    navigate(createRoute(clubId, type, template, eventFormat));
+    navigate(createRoute(clubId, type, kind, eventFormat));
   };
 
-  // Определяем клуб для выбранной тройки (тип, шаблон, формат): если неоднозначности нет — пикер пропускаем.
+  // Определяем клуб для выбранной тройки (тип, вид, формат): если неоднозначности нет — пикер пропускаем.
   const resolveClub = (
     type: ActivityType,
-    template: SkladchinaTemplateKey | null,
+    kind: SkladchinaKind | null,
     eventFormat: EventFormat | null,
   ) => {
     if (presetClubId) {
-      goToCreate(presetClubId, type, template, eventFormat);
+      goToCreate(presetClubId, type, kind, eventFormat);
       return;
     }
     if (organizerClubs.length === 1) {
-      goToCreate(organizerClubs[0]!.id, type, template, eventFormat);
+      goToCreate(organizerClubs[0]!.id, type, kind, eventFormat);
       return;
     }
     setPendingType(type);
-    setPendingTemplate(template);
+    setPendingKind(kind);
     setPendingEventFormat(eventFormat);
     setStep('club');
   };
 
   const handlePickType = (type: ActivityType) => {
     haptic.impact('medium');
-    // Оба типа разветвляются на промежуточный шаг: «Сбор» — выбор шаблона,
+    // Оба типа разветвляются на промежуточный шаг: «Сбор» — выбор вида,
     // «Событие» — выбор формата (с местами / открытая встреча, PO 2026-07-21).
     if (type === 'skladchina') {
       setPendingType(type);
-      setStep('template');
+      setStep('kind');
       return;
     }
     setPendingType(type);
@@ -158,9 +156,9 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     navigate('/feedback', { state: { from } });
   };
 
-  const handlePickTemplate = (template: SkladchinaTemplateKey) => {
+  const handlePickKind = (kind: SkladchinaKind) => {
     haptic.impact('medium');
-    resolveClub('skladchina', template, null);
+    resolveClub('skladchina', kind, null);
   };
 
   const handlePickEventFormat = (format: EventFormat) => {
@@ -181,7 +179,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const handleBack = () => {
     haptic.impact('light');
     switch (step) {
-      case 'template':
+      case 'kind':
       case 'event_format':
         setPendingType(null);
         setStep('type');
@@ -190,7 +188,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
         setStep('event_format');
         return;
       case 'club':
-        setStep(pendingType === 'skladchina' ? 'template' : 'event_format');
+        setStep(pendingType === 'skladchina' ? 'kind' : 'event_format');
         return;
       default:
         return;
@@ -227,7 +225,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
     haptic.impact('medium');
-    goToCreate(clubId, pendingType, pendingTemplate, pendingEventFormat);
+    goToCreate(clubId, pendingType, pendingKind, pendingEventFormat);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -242,7 +240,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
       {step === 'type' && (
         <ActivityTypeOptions onPick={handlePickType} onPickFeedback={handlePickFeedback} canCreate={canCreate} />
       )}
-      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} onBack={handleBack} />}
+      {step === 'kind' && <SkladchinaKindOptions onPick={handlePickKind} onBack={handleBack} />}
       {step === 'event_format' && (
         <EventFormatOptions
           onPick={handlePickEventFormat}

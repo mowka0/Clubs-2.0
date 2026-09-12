@@ -1,7 +1,9 @@
 package com.clubs.skladchina
 
+import com.clubs.debt.DebtDto
+import com.clubs.debt.DebtTotals
 import com.clubs.event.Event
-import com.clubs.generated.jooq.tables.records.SkladchinaParticipantsRecord
+import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -17,135 +19,103 @@ class SkladchinaMapper {
         description = record.description,
         rules = record.rules,
         photoUrl = record.photoUrl,
-        template = record.template!!,
-        paymentMode = record.paymentMode,
-        totalGoalKopecks = record.totalGoalKopecks,
+        kind = record.kind,
+        amountKopecks = record.amountKopecks,
         paymentLink = record.paymentLink,
         paymentMethodNote = record.paymentMethodNote,
         eventId = record.eventId,
         deadline = record.deadline,
-        affectsReputation = record.affectsReputation ?: false,
+        enrollmentUntil = record.enrollmentUntil,
+        minParticipants = record.minParticipants,
+        lockedAt = record.lockedAt,
+        orderedAt = record.orderedAt,
+        hiddenFromUserId = record.hiddenFromUserId,
         status = record.status!!,
         closedAt = record.closedAt,
-        closedBy = record.closedBy,
+        reminderSentAt = record.reminderSentAt,
+        orderRemindedAt = record.orderRemindedAt,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
-    )
-
-    fun toParticipantDomain(record: SkladchinaParticipantsRecord): SkladchinaParticipant = SkladchinaParticipant(
-        skladchinaId = record.skladchinaId,
-        userId = record.userId,
-        expectedAmountKopecks = record.expectedAmountKopecks,
-        declaredAmountKopecks = record.declaredAmountKopecks,
-        status = record.status!!,
-        paidAt = record.paidAt,
-        declinedAt = record.declinedAt,
-        reputationApplied = record.reputationApplied ?: false,
-        declineNote = record.declineNote,
-        declineRequestedAt = record.declineRequestedAt,
-        declineRejected = record.declineRejected ?: false,
-        createdAt = record.createdAt!!
     )
 
     fun toDetailDto(
         skladchina: Skladchina,
         clubName: String,
         clubAvatarUrl: String?,
-        callerUserId: UUID,
-        // Вызывающий — менеджер клуба сбора (владелец или активный со-орг); вычисляет сервис,
-        // маппер репозитории не дёргает.
-        callerIsManager: Boolean,
-        participants: List<SkladchinaParticipantInfo>,
-        collectedKopecks: Long,
-        declineRequiresApproval: Boolean,
-        // Встреча-источник счёта; null у сборов без события (custom) — тогда блока встречи нет.
-        event: Event? = null
+        creatorName: String,
+        callerId: UUID,
+        canCancel: Boolean,
+        totals: DebtTotals,
+        enrolledCount: Int,
+        myEnrolled: Boolean,
+        debts: List<DebtDto>,
+        event: Event?
     ): SkladchinaDetailDto {
-        // У-7: имя поля isOrganizerView сохранено при расширении семантики (creator ИЛИ manager) —
-        // минимизация фронт-диффа; гейтит орг-действия и список участников в DTO.
-        val isOrganizerView = skladchina.creatorId == callerUserId || callerIsManager
-        val myParticipant = participants.firstOrNull { it.userId == callerUserId }
-        val paidCount = participants.count { it.status.literal == "paid" }
-        val pendingCount = participants.count { it.status.literal == "pending" }
-
+        val isCreator = skladchina.creatorId == callerId
         return SkladchinaDetailDto(
             id = skladchina.id,
             clubId = skladchina.clubId,
             clubName = clubName,
             clubAvatarUrl = clubAvatarUrl,
             creatorId = skladchina.creatorId,
+            creatorName = creatorName,
             title = skladchina.title,
             description = skladchina.description,
             rules = skladchina.rules,
             photoUrl = skladchina.photoUrl,
-            template = skladchina.template.literal,
-            eventId = skladchina.eventId,
-            eventTitle = event?.title,
-            eventDatetime = event?.eventDatetime,
-            paymentMode = skladchina.paymentMode.literal,
-            totalGoalKopecks = skladchina.totalGoalKopecks,
-            collectedKopecks = collectedKopecks,
+            kind = skladchina.kind.literal,
+            amountKopecks = skladchina.amountKopecks,
+            targetKopecks = totals.targetKopecks ?: skladchina.amountKopecks,
+            receivedKopecks = totals.receivedKopecks,
+            claimedKopecks = totals.claimedKopecks,
             paymentLink = skladchina.paymentLink,
             paymentMethodNote = skladchina.paymentMethodNote,
             deadline = skladchina.deadline,
-            affectsReputation = skladchina.affectsReputation,
+            enrollmentUntil = skladchina.enrollmentUntil,
+            minParticipants = skladchina.minParticipants,
+            lockedAt = skladchina.lockedAt,
+            orderedAt = skladchina.orderedAt,
+            eventId = skladchina.eventId,
+            eventTitle = event?.title,
+            eventDatetime = event?.eventDatetime,
             status = skladchina.status.literal,
             closedAt = skladchina.closedAt,
-            isOrganizerView = isOrganizerView,
-            myStatus = myParticipant?.status?.literal,
-            myExpectedAmountKopecks = myParticipant?.expectedAmountKopecks,
-            myDeclaredAmountKopecks = myParticipant?.declaredAmountKopecks,
-            declineRequiresApproval = declineRequiresApproval,
-            myDeclineRequested = myParticipant?.declineRequestedAt != null,
-            myDeclineRejected = myParticipant?.declineRejected ?: false,
-            myDeclineRejectNote = myParticipant?.declineRejectNote,
-            participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
-            participantCount = participants.size,
-            paidCount = paidCount,
-            pendingCount = pendingCount
+            isCreator = isCreator,
+            canCancel = canCancel,
+            isEnrolling = skladchina.isEnrolling,
+            enrolledCount = enrolledCount,
+            myEnrolled = myEnrolled,
+            debtCount = totals.debtCount,
+            receivedCount = totals.receivedCount,
+            openCount = totals.openCount,
+            claimedCount = totals.claimedCount,
+            // Своя доля создателя (received с первой секунды) — не «мой долг», а строка в его списке.
+            myDebt = debts.firstOrNull { it.debtor.id == callerId && it.creditor.id != callerId },
+            debts = if (isCreator) debts else null
         )
     }
 
-    fun toMyFeedItemDto(item: MySkladchinaFeedItem, callerUserId: UUID, callerIsManager: Boolean): MySkladchinaListItemDto {
-        // У-7: creator ИЛИ manager (см. toDetailDto).
-        val isOrganizerView = item.skladchina.creatorId == callerUserId || callerIsManager
-        val actionRequired = item.skladchina.status.literal == "active" &&
-            item.myStatus?.literal == "pending"
-
+    fun toMyFeedItemDto(item: MySkladchinaFeedItem, callerId: UUID): MySkladchinaListItemDto {
+        val s = item.skladchina
+        val myOpen = item.myDebtStatus?.let { DebtStatus.valueOf(it) in setOf(DebtStatus.waiting, DebtStatus.promised) } ?: false
         return MySkladchinaListItemDto(
-            id = item.skladchina.id,
-            title = item.skladchina.title,
-            clubId = item.skladchina.clubId,
+            id = s.id,
+            title = s.title,
+            clubId = s.clubId,
             clubName = item.clubName,
             clubAvatarUrl = item.clubAvatarUrl,
-            template = item.skladchina.template.literal,
-            paymentMode = item.skladchina.paymentMode.literal,
-            totalGoalKopecks = item.skladchina.totalGoalKopecks,
-            collectedKopecks = item.collectedKopecks,
-            participantCount = item.participantCount,
-            paidCount = item.paidCount,
-            deadline = item.skladchina.deadline,
-            status = item.skladchina.status.literal,
-            isOrganizerView = isOrganizerView,
-            myStatus = item.myStatus?.literal,
-            actionRequired = actionRequired,
-            affectsReputation = item.skladchina.affectsReputation
+            kind = s.kind.literal,
+            amountKopecks = s.amountKopecks,
+            targetKopecks = item.totals.targetKopecks ?: s.amountKopecks,
+            receivedKopecks = item.totals.receivedKopecks,
+            debtCount = item.totals.debtCount,
+            receivedCount = item.totals.receivedCount,
+            deadline = s.deadline,
+            status = s.status.literal,
+            isCreator = s.creatorId == callerId,
+            myDebtStatus = item.myDebtStatus,
+            actionRequired = s.isActive && (myOpen || item.awaitingMyConfirmation),
+            photoUrl = s.photoUrl
         )
     }
-
-    private fun toParticipantDto(info: SkladchinaParticipantInfo): SkladchinaParticipantDto =
-        SkladchinaParticipantDto(
-            userId = info.userId,
-            firstName = info.firstName,
-            lastName = info.lastName,
-            avatarUrl = info.avatarUrl,
-            expectedAmountKopecks = info.expectedAmountKopecks,
-            declaredAmountKopecks = info.declaredAmountKopecks,
-            status = info.status.literal,
-            paidAt = info.paidAt,
-            declineRequested = info.declineRequestedAt != null,
-            declineNote = info.declineNote,
-            declineRejected = info.declineRejected,
-            declineRejectNote = info.declineRejectNote
-        )
 }

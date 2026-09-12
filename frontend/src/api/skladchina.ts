@@ -9,16 +9,18 @@ import type {
   SplittableEventDto,
 } from '../types/api';
 
+// Эндпоинты сбора — docs/modules/skladchina-v3.md § 7 «Сборы».
+
 export function getSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.get<SkladchinaDetailDto>(`/api/skladchinas/${id}`);
 }
 
-// Кнопка «Разделить счёт» на EventPage: существующий сплит события (active → open, closed_success → collected).
+// Кнопка «Скинуться» на EventPage: существующий сбор по встрече (active → open, collected → собрано).
 export function getEventSplitState(eventId: string): Promise<EventSplitStateDto> {
   return apiClient.get<EventSplitStateDto>(`/api/events/${eventId}/skladchina`);
 }
 
-// Шаг «выберите встречу» формы сплита: бэкенд отдаёт только те встречи, по которым сбор создастся.
+// Шаг «выберите встречу»: бэкенд отдаёт только те встречи, по которым сбор создастся.
 export function getSplittableEvents(clubId: string): Promise<SplittableEventDto[]> {
   return apiClient.get<SplittableEventDto[]>(`/api/clubs/${clubId}/skladchinas/splittable-events`);
 }
@@ -36,55 +38,53 @@ export function getSkladchinaActionRequiredCount(): Promise<ActionRequiredCountD
   return apiClient.get<ActionRequiredCountDto>('/api/users/me/skladchinas/action-required-count');
 }
 
-export function createSkladchina(
-  clubId: string,
-  body: CreateSkladchinaRequest,
-): Promise<SkladchinaDetailDto> {
+export function createSkladchina(clubId: string, body: CreateSkladchinaRequest): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/clubs/${clubId}/skladchinas`, body);
 }
 
-export function markPaidSkladchina(
-  id: string,
-  declaredAmountKopecks?: number | null,
-): Promise<SkladchinaDetailDto> {
-  // A-1: fixed-режимы сумму не шлют (сервер записывает назначенную долю);
-  // voluntary шлёт сумму, заявленную пользователем.
-  const body = declaredAmountKopecks != null ? { declaredAmountKopecks } : {};
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, body);
+/** «В деле» (shared с этапом) / «Беру» (per_head). */
+export function joinSkladchina(id: string, note?: string | null): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/join`, note ? { note } : {});
 }
 
-export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/decline`);
+/** «Передумал» — до заморозки списка или до заказа. */
+export function leaveSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/leave`);
 }
 
-// V28: участник открывает запрос на отказ с указанием причины (шаблоны REQUIRES_APPROVAL).
-export function requestDeclineSkladchina(id: string, reason: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/request-decline`, { reason });
+/** «Перевёл N ₽» (voluntary): долг рождается сразу claimed. */
+export function contributeSkladchina(id: string, amountKopecks: number): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/contribute`, { amountKopecks });
 }
 
-// V28/V29: организатор одобряет/отклоняет запрос участника на отказ. Для отклонения нужна причина.
-export function resolveDeclineSkladchina(
-  id: string,
-  userId: string,
-  approve: boolean,
-  rejectReason?: string,
-): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(
-    `/api/skladchinas/${id}/participants/${userId}/resolve-decline`,
-    { approve, rejectReason },
-  );
+/** «Закрыть запись» раньше срока. */
+export function lockSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/lock`);
 }
 
+/** «Заказываю» (per_head). */
+export function orderSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/order`);
+}
+
+/** «Закрыть сбор» (voluntary). */
 export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
 }
 
-// A-2: организатор отмечает участника оплатившим («получил наличкой») — только fixed-режимы.
-export function organizerMarkPaidParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/mark-paid`);
+/** «Отменить сбор» — создатель или владелец клуба. */
+export function cancelSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/cancel`);
 }
 
-// A-2 (toggle): организатор возвращает оплату участника обратно в pending.
-export function organizerUnmarkParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/unmark`);
+export function addSkladchinaDebtor(
+  id: string,
+  userId: string,
+  amountKopecks?: number | null,
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/debts`, { userId, amountKopecks: amountKopecks ?? null });
+}
+
+export function replaceSkladchinaDebtor(id: string, debtId: string, userId: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/debts/${debtId}/replace`, { userId });
 }

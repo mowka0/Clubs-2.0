@@ -1,20 +1,22 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addSkladchinaDebtor,
+  cancelSkladchina,
   closeSkladchina,
+  contributeSkladchina,
   createSkladchina,
-  declineSkladchina,
   getEventSplitState,
   getMySkladchinas,
   getSkladchina,
   getSkladchinaActionRequiredCount,
   getSplittableEvents,
-  markPaidSkladchina,
-  organizerMarkPaidParticipant,
-  organizerUnmarkParticipant,
-  requestDeclineSkladchina,
-  resolveDeclineSkladchina,
+  joinSkladchina,
+  leaveSkladchina,
+  lockSkladchina,
+  orderSkladchina,
+  replaceSkladchinaDebtor,
 } from '../api/skladchina';
-import type { CreateSkladchinaRequest } from '../types/api';
+import type { CreateSkladchinaRequest, SkladchinaDetailDto } from '../types/api';
 import { queryKeys } from './queryKeys';
 
 const PAGE_SIZE = 20;
@@ -29,10 +31,8 @@ export function useMySkladchinasQuery() {
 }
 
 /**
- * Число активных складчин, которые пользователю ещё нужно оплатить. Питает бейдж
- * таба «Сборы» + точку на нижней навигации «Активности», чтобы неоплаченные
- * обязательства были видны отовсюду. Лёгкий запрос (один COUNT), выполняется
- * везде, где живёт навигация.
+ * Сколько сборов ждут действия пользователя (открытый долг как должника или «Отдал», ждущий его
+ * ответа). Питает точку на нижней навигации «Активности». Лёгкий запрос (один COUNT).
  */
 export function useSkladchinaActionRequiredCountQuery() {
   return useQuery({
@@ -43,10 +43,7 @@ export function useSkladchinaActionRequiredCountQuery() {
   });
 }
 
-/**
- * Встречи, по которым счёт ещё можно разделить. Фильтры (явка отмечена, минимум двое пришедших,
- * не старше 30 дней, счёт ещё не делили) живут на бэкенде — фронт не дублирует правила сплита.
- */
+/** Встречи, по которым ещё можно скинуться. Фильтры (явка, ≥2 пришедших, ≤30 дней, без сбора) — на бэкенде. */
 export function useSplittableEventsQuery(clubId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.skladchinas.splittableEvents(clubId ?? ''),
@@ -63,7 +60,7 @@ export function useSkladchinaQuery(id: string | undefined) {
   });
 }
 
-/** Существующий сплит для события — управляет кнопкой EventPage «Разделить счёт». */
+/** Существующий сбор по встрече — управляет кнопкой EventPage «Скинуться». */
 export function useEventSplitStateQuery(eventId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.skladchinas.eventState(eventId ?? ''),
@@ -82,110 +79,52 @@ export function useCreateSkladchinaMutation() {
   return useMutation({
     mutationFn: ({ clubId, body }: CreateSkladchinaArgs) => createSkladchina(clubId, body),
     onSuccess: (_data, { clubId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-      // Единый фид активностей тоже должен обновиться — новая складчина
-      // должна появиться сверху во всех вариантах фильтра таба управления.
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
+      qc.invalidateQueries({ queryKey: queryKeys.debts.all });
+      // Единый фид активностей тоже должен обновиться — новый сбор появляется сверху.
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
 }
 
-interface MarkPaidArgs {
-  id: string;
-  // A-1: не передаётся для фиксированных режимов (сервер сам записывает долю); для voluntary — заявленная сумма.
-  declaredAmountKopecks?: number | null;
+/** Действия над сбором (§ 7): участник — «В деле» / «Беру» / «Перевёл» / «Передумал»; создатель — стадии и список. */
+export type SkladchinaAction =
+  | { type: 'join'; note?: string | null }
+  | { type: 'leave' }
+  | { type: 'contribute'; amountKopecks: number }
+  | { type: 'lock' }
+  | { type: 'order' }
+  | { type: 'close' }
+  | { type: 'cancel' }
+  | { type: 'addDebtor'; userId: string; amountKopecks?: number | null }
+  | { type: 'replace'; debtId: string; userId: string };
+
+function runSkladchinaAction(id: string, action: SkladchinaAction): Promise<SkladchinaDetailDto> {
+  switch (action.type) {
+    case 'join': return joinSkladchina(id, action.note);
+    case 'leave': return leaveSkladchina(id);
+    case 'contribute': return contributeSkladchina(id, action.amountKopecks);
+    case 'lock': return lockSkladchina(id);
+    case 'order': return orderSkladchina(id);
+    case 'close': return closeSkladchina(id);
+    case 'cancel': return cancelSkladchina(id);
+    case 'addDebtor': return addSkladchinaDebtor(id, action.userId, action.amountKopecks);
+    case 'replace': return replaceSkladchinaDebtor(id, action.debtId, action.userId);
+  }
 }
 
-export function useMarkPaidMutation() {
+/** Одна мутация на все действия сбора: ответ всегда деталка, инвалидация одинаковая. */
+export function useSkladchinaActionMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, declaredAmountKopecks }: MarkPaidArgs) =>
-      markPaidSkladchina(id, declaredAmountKopecks),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+    mutationFn: ({ id, action }: { id: string; action: SkladchinaAction }) => runSkladchinaAction(id, action),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.skladchinas.detail(data.id), data);
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
-  });
-}
-
-interface OrganizerParticipantArgs {
-  id: string;
-  userId: string;
-}
-
-/** A-2: организатор отмечает участника оплатившим / отменяет отметку. Общая инвалидация для обоих случаев. */
-function invalidateAfterOrganizerAction(qc: ReturnType<typeof useQueryClient>, id: string) {
-  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-  // Обязательство «требуется действие» у отмеченного участника изменилось — обновляем счётчик бейджа.
-  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-}
-
-export function useOrganizerMarkPaidMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerMarkPaidParticipant(id, userId),
-    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
-  });
-}
-
-export function useOrganizerUnmarkMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerUnmarkParticipant(id, userId),
-    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
-  });
-}
-
-/** V28: участник запрашивает отказ от счёта с указанием причины (split_bill). */
-export function useRequestDeclineMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => requestDeclineSkladchina(id, reason),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-    },
-  });
-}
-
-/** V28/V29: организатор одобряет/отклоняет запрос участника на отказ (отклонение требует причины). */
-export function useResolveDeclineMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, userId, approve, rejectReason }: { id: string; userId: string; approve: boolean; rejectReason?: string }) =>
-      resolveDeclineSkladchina(id, userId, approve, rejectReason),
-    onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
-  });
-}
-
-export function useDeclineSkladchinaMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => declineSkladchina(id),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
-  });
-}
-
-export function useCloseSkladchinaMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => closeSkladchina(id),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(data.clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.debts.all });
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(data.clubId) });
     },
   });
 }

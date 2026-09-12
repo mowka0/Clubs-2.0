@@ -6,7 +6,7 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.MembershipEvent
 import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
+import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.generated.jooq.tables.references.APPLICATIONS
@@ -16,7 +16,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIP_HISTORY
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
-import com.clubs.generated.jooq.tables.references.SKLADCHINA_PARTICIPANTS
+import com.clubs.generated.jooq.tables.references.DEBTS
 import com.clubs.generated.jooq.tables.references.TRANSACTIONS
 import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.Condition
@@ -264,26 +264,23 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
     }
 
     /**
-     * Доля оплативших среди «решённых» участников складчин, закрытых в [start, end). Решённые =
-     * {paid, declined, expired_no_response}; `pending` (не определился) и `released` (отпущен
-     * организатором) исключаются. hasBase = есть хотя бы один решённый участник.
+     * Доля оплаченных среди «решённых» долгов сборов, закрытых в [start, end) (skladchina-v3).
+     * Решённые = {received, forgiven, dropped}; открытые не считаются, доля создателя (сам себе)
+     * исключена. hasBase = есть хотя бы один решённый долг.
      */
     private fun skladchinaWindow(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): WindowValue {
-        val settled = listOf(
-            SkladchinaParticipantStatus.paid,
-            SkladchinaParticipantStatus.declined,
-            SkladchinaParticipantStatus.expired_no_response,
-        )
+        val settled = listOf(DebtStatus.received, DebtStatus.forgiven, DebtStatus.dropped)
         val record = dsl.select(
-            DSL.count().filterWhere(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid)),
-            DSL.count().filterWhere(SKLADCHINA_PARTICIPANTS.STATUS.`in`(settled)),
+            DSL.count().filterWhere(DEBTS.STATUS.eq(DebtStatus.received)),
+            DSL.count().filterWhere(DEBTS.STATUS.`in`(settled)),
         )
-            .from(SKLADCHINA_PARTICIPANTS)
-            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
+            .from(DEBTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(DEBTS.SKLADCHINA_ID))
             .where(
                 SKLADCHINAS.CLUB_ID.eq(clubId)
                     .and(SKLADCHINAS.CLOSED_AT.ge(start))
-                    .and(SKLADCHINAS.CLOSED_AT.lt(end)),
+                    .and(SKLADCHINAS.CLOSED_AT.lt(end))
+                    .and(DEBTS.DEBTOR_ID.ne(DEBTS.CREDITOR_ID)),
             )
             .fetchOne()
         val paid = record?.value1() ?: 0

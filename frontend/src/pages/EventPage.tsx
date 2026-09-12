@@ -1653,8 +1653,8 @@ export const EventPage: FC = () => {
             </div>
           </div>
           {myAttendanceBlock}
-          {/* Вход в split_bill. Один сплит на событие: активный — открываем, успешно закрытый —
-              показываем («счёт уже собран»); иначе кнопка создаёт новый сплит. */}
+          {/* «Скинуться» после встречи (skladchina-v3 § 3.1). Один сбор на встречу: активный —
+              открываем, собранный — показываем («уже собрано»); иначе кнопка создаёт новый. */}
           {(() => {
             const split = eventSplitQuery.data;
             const openExisting = () => {
@@ -1664,14 +1664,14 @@ export const EventPage: FC = () => {
             if (split?.skladchinaId && split.status === 'active') {
               return (
                 <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
-                  🧾 Открыть сбор по счёту ›
+                  💰 Открыть сбор ›
                 </button>
               );
             }
-            if (split?.skladchinaId && split.status === 'closed_success') {
+            if (split?.skladchinaId && split.status === 'collected') {
               return (
                 <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
-                  🧾 Счёт уже собран ›
+                  💰 Уже собрано ›
                 </button>
               );
             }
@@ -1682,10 +1682,10 @@ export const EventPage: FC = () => {
                 style={{ marginBottom: 14 }}
                 onClick={() => {
                   haptic.impact('medium');
-                  navigate(`/clubs/${event.clubId}/skladchina/split?eventId=${event.id}`);
+                  navigate(`/clubs/${event.clubId}/skladchina/new?kind=shared&eventId=${event.id}`);
                 }}
               >
-                🧾 Разделить счёт
+                💰 Скинуться
               </button>
             );
           })()}

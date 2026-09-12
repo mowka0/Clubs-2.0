@@ -58,14 +58,15 @@ class ActivityMapper {
             title = s.title,
             createdAt = s.createdAt,
             isCompleted = s.status in COMPLETED_SKLADCHINA_STATUSES,
-            paymentMode = s.paymentMode.literal,
-            totalGoalKopecks = s.totalGoalKopecks,
-            collectedKopecks = item.collectedKopecks,
+            kind = s.kind.literal,
+            amountKopecks = s.amountKopecks,
+            targetKopecks = item.totals.targetKopecks ?: s.amountKopecks,
+            receivedKopecks = item.totals.receivedKopecks,
             deadline = s.deadline,
-            participantCount = item.participantCount,
-            paidCount = item.paidCount,
+            debtCount = item.totals.debtCount,
+            receivedCount = item.totals.receivedCount,
+            enrolledCount = item.enrolledCount,
             status = s.status.literal,
-            affectsReputation = s.affectsReputation,
             photoUrl = s.photoUrl
         )
     }
@@ -91,11 +92,7 @@ class ActivityMapper {
 
         // Статусы события, считающиеся завершёнными (не активными) для ленты активности
         private val COMPLETED_EVENT_STATUSES = setOf(EventStatus.completed, EventStatus.cancelled)
-        // Статусы складчины, считающиеся завершёнными (не активными) для ленты активности
-        private val COMPLETED_SKLADCHINA_STATUSES = setOf(
-            SkladchinaStatus.closed_success,
-            SkladchinaStatus.closed_failed,
-            SkladchinaStatus.cancelled
-        )
+        // Статусы сбора, считающиеся завершёнными (не активными) для ленты активности
+        private val COMPLETED_SKLADCHINA_STATUSES = setOf(SkladchinaStatus.collected, SkladchinaStatus.cancelled)
     }
 }

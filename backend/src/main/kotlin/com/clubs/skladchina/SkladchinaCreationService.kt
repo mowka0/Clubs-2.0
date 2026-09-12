@@ -1,14 +1,17 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubCapability
-import com.clubs.common.auth.ClubRoleGuard
+import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.debt.DebtRepository
+import com.clubs.debt.NewDebt
+import com.clubs.event.EventRepository
+import com.clubs.event.EventResponseRepository
+import com.clubs.generated.jooq.enums.DebtStatus
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
-import com.clubs.skladchina.template.SkladchinaTemplateRegistry
+import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -18,148 +21,241 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
- * Сторона создания движка складчины: валидирует запрос, делегирует подбор участников + расчёт суммы
- * стратегии шаблона, сохраняет пул и анонсирует его (DM). Выделен из бывшего god-`SkladchinaService`
- * по ответственности; движок владеет клубом/владельцем, границами дедлайна, гейтами репутации,
- * персистентностью и созданным событием, стратегия — шаблон-специфичными частями.
+ * Создание сбора (docs/modules/skladchina-v3.md § 2.1, § 3). Три вида — три ветки `when (kind)`:
+ * всё, чем они отличаются при создании, это откуда берётся список должников и появляются ли долги
+ * сразу. Создать сбор может любой активный участник клуба.
  */
 @Service
 class SkladchinaCreationService(
     private val skladchinaRepository: SkladchinaRepository,
+    private val debtRepository: DebtRepository,
     private val clubRepository: ClubRepository,
-    private val clubRoleGuard: ClubRoleGuard,
-    private val templateRegistry: SkladchinaTemplateRegistry,
+    private val membershipRepository: MembershipRepository,
+    private val eventRepository: EventRepository,
+    private val eventResponseRepository: EventResponseRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaCreationService::class.java)
 
+    /** Чем заканчивается разбор запроса по виду: доли (должник → сумма), адресаты DM, нужна ли запись создателя «В деле». */
+    private data class CreationPlan(
+        val shares: Map<UUID, Long>,
+        val amountKopecks: Long?,
+        val eventId: UUID?,
+        val recipientUserIds: List<UUID>,
+        val enrollCreator: Boolean
+    )
+
     @Transactional
     fun createSkladchina(clubId: UUID, request: CreateSkladchinaRequest, creatorId: UUID): SkladchinaDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        // Менеджерский гейт (co-organizers), синхронно с @RequiresCapability(MANAGE_SKLADCHINA) на контроллере.
-        clubRoleGuard.requireCapability(club, creatorId, ClubCapability.MANAGE_SKLADCHINA)
-
-        val templateType = SkladchinaTemplate.values().find { it.literal == request.template }
-            ?: throw ValidationException("Invalid template: ${request.template}")
-        val strategy = templateRegistry.forType(templateType)
-
+        if (!membershipRepository.isActiveMemberInActiveClub(creatorId, clubId)) {
+            throw ForbiddenException("Создать сбор может только участник клуба")
+        }
+        val kind = SkladchinaKind.entries.find { it.literal == request.kind }
+            ?: throw ValidationException("Неизвестный вид сбора: ${request.kind}")
         val now = OffsetDateTime.now()
-        val deadlineMinAge = ChronoUnit.HOURS.between(now, request.deadline)
-        val deadlineMaxAge = ChronoUnit.DAYS.between(now, request.deadline)
-        if (deadlineMinAge < MIN_DEADLINE_HOURS) {
-            throw ValidationException("Deadline must be at least $MIN_DEADLINE_HOURS hour ahead")
-        }
-        if (deadlineMaxAge > MAX_DEADLINE_DAYS) {
-            throw ValidationException("Deadline must be at most $MAX_DEADLINE_DAYS days ahead")
-        }
+        validateCommon(kind, request, now)
 
-        // Шаблон владеет подбором участников + расчётом суммы + собственной валидацией;
-        // движок владеет клубом/владельцем, границами дедлайна, гейтами репутации, персистентностью и DM.
-        val resolution = strategy.resolveCreation(clubId, creatorId, request)
-
-        // #8: VERIFIED-шаблон (split_bill, оба режима) ВСЕГДА влияет на репутацию — его якорь
-        // посещаемости И ЕСТЬ анти-фарм-защита, поэтому он обходит гейты «важного сбора» (rate limit /
-        // 24h-окно / блок voluntary-режима), которые существуют только чтобы контролировать
-        // организаторский тумблер. Кастомный тумблер по-прежнему проходит через гейты.
-        val affectsReputation = strategy.outcomesVerified || request.affectsReputation
-        if (request.affectsReputation && !strategy.outcomesVerified) {
-            validateReputationGates(clubId, resolution.mode, deadlineMinAge, now)
+        val plan = when (kind) {
+            SkladchinaKind.shared -> planShared(clubId, creatorId, request, now)
+            SkladchinaKind.per_head -> planPerHead(clubId, creatorId, request)
+            SkladchinaKind.voluntary -> planVoluntary(clubId, creatorId, request)
         }
 
-        val skladchinaId = UUID.randomUUID()
-        val domain = Skladchina(
-            id = skladchinaId,
-            clubId = clubId,
-            creatorId = creatorId,
-            title = request.title,
-            description = request.description,
-            rules = request.rules,
-            photoUrl = request.photoUrl,
-            template = templateType,
-            paymentMode = resolution.mode,
-            totalGoalKopecks = resolution.totalGoalKopecks,
-            paymentLink = request.paymentLink,
-            paymentMethodNote = request.paymentMethodNote,
-            eventId = resolution.eventId,
-            deadline = request.deadline,
-            affectsReputation = affectsReputation,
-            status = SkladchinaStatus.active,
-            closedAt = null,
-            closedBy = null,
-            createdAt = now,
-            updatedAt = now
+        val id = UUID.randomUUID()
+        val created = skladchinaRepository.create(
+            Skladchina(
+                id = id,
+                clubId = clubId,
+                creatorId = creatorId,
+                title = request.title.trim(),
+                description = request.description?.trim()?.takeIf { it.isNotEmpty() },
+                rules = request.rules?.trim()?.takeIf { it.isNotEmpty() },
+                photoUrl = request.photoUrl,
+                kind = kind,
+                amountKopecks = plan.amountKopecks,
+                paymentLink = request.paymentLink.trim(),
+                paymentMethodNote = request.paymentMethodNote?.trim()?.takeIf { it.isNotEmpty() },
+                eventId = plan.eventId,
+                deadline = request.deadline,
+                enrollmentUntil = if (plan.enrollCreator) request.enrollmentUntil else null,
+                minParticipants = if (plan.enrollCreator) request.minParticipants else null,
+                lockedAt = null,
+                orderedAt = null,
+                hiddenFromUserId = if (kind == SkladchinaKind.voluntary) request.hiddenFromUserId else null,
+                status = SkladchinaStatus.active,
+                closedAt = null,
+                reminderSentAt = null,
+                orderRemindedAt = null,
+                createdAt = now,
+                updatedAt = now
+            )
         )
-
-        val created = skladchinaRepository.create(domain, resolution.participants)
-        // Организатор, закрывший часть счёта своими деньгами, стартует уже оплатившим: его взнос
-        // сразу в собранной сумме и в прогрессе, платёжная панель ему не показывается (split_bill).
-        resolution.prepaidByCreatorKopecks?.let { prepaid ->
-            skladchinaRepository.setParticipantPaid(created.id, creatorId, prepaid, now)
+        if (plan.shares.isNotEmpty()) {
+            debtRepository.insertAll(plan.shares.map { (userId, amount) -> newDebt(created, userId, amount, now) })
         }
-        log.info("Skladchina created: id={} clubId={} creatorId={} template={} mode={} participants={} prepaidByCreator={}",
-            created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size,
-            resolution.prepaidByCreatorKopecks != null)
+        if (plan.enrollCreator) skladchinaRepository.addEnrollment(id, creatorId)
 
-        // DM-рассылка идёт через @TransactionalEventListener в SkladchinaBotNotifier —
-        // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что SkladchinaBotNotifier).
+        log.info(
+            "Skladchina created: id={} clubId={} creatorId={} kind={} amount={} debts={} enrolling={} hidden={}",
+            id, clubId, creatorId, kind, plan.amountKopecks, plan.shares.size, plan.enrollCreator, request.hiddenFromUserId != null
+        )
         eventPublisher.publishEvent(
             SkladchinaCreatedEvent(
-                skladchinaId = created.id,
+                skladchinaId = id,
                 clubId = clubId,
                 clubName = club.name,
+                creatorId = creatorId,
+                kind = kind,
                 title = created.title,
                 description = created.description,
                 paymentLink = created.paymentLink,
-                paymentMode = created.paymentMode.literal,
-                totalGoalKopecks = created.totalGoalKopecks,
+                paymentMethodNote = created.paymentMethodNote,
+                amountKopecks = created.amountKopecks,
                 deadline = created.deadline,
-                affectsReputation = created.affectsReputation,
-                // Предоплативший организатор из рассылки выпадает — он уже оплатил, звать его платить незачем.
-                participantUserIds = resolution.participants.map { it.first }
-                    .filterNot { it == creatorId && resolution.prepaidByCreatorKopecks != null }
+                enrollmentUntil = created.enrollmentUntil,
+                hiddenFromUserId = created.hiddenFromUserId,
+                recipientUserIds = plan.recipientUserIds,
+                debtorShares = plan.shares.filterKeys { it != creatorId }
             )
         )
-
-        return queryService.getDetail(created.id, creatorId)
+        return queryService.getDetail(id, creatorId)
     }
 
-    /**
-     * Гейты для тумблера «важный сбор» (affects_reputation = true), согласно
-     * редизайну 2026-06-12. Сообщения показываются пользователю (форма создания организатора).
-     */
-    private fun validateReputationGates(clubId: UUID, mode: SkladchinaMode, deadlineHoursAhead: Long, now: OffsetDateTime) {
-        if (mode == SkladchinaMode.voluntary) {
-            // «Добровольный сбор со штрафом за молчание» — оксюморон, тумблер работает только с
-            // фиксированными режимами.
-            throw ValidationException("Добровольный сбор не может влиять на репутацию")
+    private fun validateCommon(kind: SkladchinaKind, request: CreateSkladchinaRequest, now: OffsetDateTime) {
+        val deadline = request.deadline
+        if (kind != SkladchinaKind.voluntary && deadline == null) throw ValidationException("Укажите срок оплаты")
+        if (deadline != null) {
+            if (ChronoUnit.HOURS.between(now, deadline) < MIN_DEADLINE_HOURS) {
+                throw ValidationException("Срок должен быть не раньше чем через $MIN_DEADLINE_HOURS ч")
+            }
+            if (ChronoUnit.DAYS.between(now, deadline) > MAX_DEADLINE_DAYS) {
+                throw ValidationException("Срок не дальше $MAX_DEADLINE_DAYS дней")
+            }
         }
-        if (deadlineHoursAhead < MIN_REPUTATION_DEADLINE_HOURS) {
-            // Анти-«сбор-засада»: у участников должно быть реальное окно, чтобы ответить
-            // (DM при создании + DM-напоминание за 24 часа).
-            throw ValidationException("Для важного сбора дедлайн должен быть не раньше чем через 24 часа")
+        if (kind != SkladchinaKind.voluntary && request.amountKopecks == null) {
+            throw ValidationException(if (kind == SkladchinaKind.per_head) "Укажите цену за человека" else "Укажите сумму сбора")
         }
-        val recentCount = skladchinaRepository.countReputationAffectingCreatedSince(
-            clubId, now.minusDays(REPUTATION_RATE_LIMIT_WINDOW_DAYS)
-        )
-        if (recentCount >= REPUTATION_RATE_LIMIT_MAX) {
-            // Единственный реальный механизм анти-фарма И анти-грифинга: ограничивает фарм
-            // до +30/неделю/клуб на друга и грифинг до -120/неделю на игнорируемую жертву.
+        if (kind != SkladchinaKind.voluntary && request.hiddenFromUserId != null) {
+            throw ValidationException("Скрыть от кого-то можно только сбор «По желанию»")
+        }
+        if (kind != SkladchinaKind.shared && (request.eventId != null || request.enrollmentUntil != null || request.debtors.isNotEmpty())) {
+            throw ValidationException("Встреча, этап «Кто в деле?» и список людей есть только у сбора «Скинуться»")
+        }
+    }
+
+    /** shared: список из встречи, либо этап записи, либо список от создателя. */
+    private fun planShared(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest, now: OffsetDateTime): CreationPlan {
+        val amount = request.amountKopecks!!
+        val eventId = request.eventId
+        val enrollmentUntil = request.enrollmentUntil
+        return when {
+            eventId != null -> {
+                if (enrollmentUntil != null) throw ValidationException("У сбора после встречи этапа записи нет")
+                val attended = resolveAttended(clubId, eventId, now)
+                val shares = SkladchinaShares.equal(amount, attended).toMap()
+                CreationPlan(shares, amount, eventId, attended.filter { it != creatorId }, enrollCreator = false)
+            }
+            enrollmentUntil != null -> {
+                if (!enrollmentUntil.isAfter(now)) throw ValidationException("Срок записи уже прошёл")
+                if (enrollmentUntil.isAfter(request.deadline)) throw ValidationException("Запись должна закрыться не позже срока оплаты")
+                if (request.debtors.isNotEmpty()) throw ValidationException("На этапе «Кто в деле?» список набирается сам")
+                val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
+                CreationPlan(emptyMap(), amount, null, members, enrollCreator = true)
+            }
+            else -> {
+                val shares = resolveListedShares(clubId, creatorId, request, amount)
+                CreationPlan(shares, shares.values.sum(), null, shares.keys.filter { it != creatorId }, enrollCreator = false)
+            }
+        }
+    }
+
+    /** per_head: долгов при создании нет, «Беру» жмут сами; сумма — цена за человека; знают о сборе все участники клуба. */
+    private fun planPerHead(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): CreationPlan {
+        val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
+        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrollCreator = false)
+    }
+
+    /** voluntary: без долгов; тихий сбор скрыт от одного человека — он не адресат. */
+    private fun planVoluntary(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): CreationPlan {
+        val hidden = request.hiddenFromUserId
+        if (hidden != null) {
+            if (hidden == creatorId) throw ValidationException("Нельзя скрыть сбор от самого себя")
+            if (skladchinaRepository.findNonActiveMembers(clubId, listOf(hidden)).isNotEmpty()) {
+                throw ValidationException("Скрыть можно только от участника клуба")
+            }
+        }
+        val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId && it != hidden }
+        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrollCreator = false)
+    }
+
+    /** Пришедшие на встречу активные участники; те же условия, что отбирают встречи в списке «Скинуться после встречи». */
+    private fun resolveAttended(clubId: UUID, eventId: UUID, now: OffsetDateTime): List<UUID> {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Встреча не найдена")
+        if (event.clubId != clubId) throw ValidationException("Встреча из другого клуба")
+        if (!event.attendanceMarked) throw ValidationException("Сначала отметьте, кто пришёл на встречу")
+        if (event.eventDatetime.isBefore(now.minusDays(MAX_EVENT_AGE_DAYS))) {
+            throw ValidationException("Встреча старше $MAX_EVENT_AGE_DAYS дней — скинуться уже не выйдет")
+        }
+        skladchinaRepository.findBlockingByEventId(eventId)?.let { existing ->
             throw ValidationException(
-                "Лимит важных сборов: не больше $REPUTATION_RATE_LIMIT_MAX за " +
-                    "$REPUTATION_RATE_LIMIT_WINDOW_DAYS дней в одном клубе. " +
-                    "Создайте сбор без влияния на репутацию или попробуйте позже"
+                if (existing.status == SkladchinaStatus.active) "По этой встрече сбор уже идёт — откройте его"
+                else "По этой встрече уже собрано"
             )
         }
+        val attendedAll = eventResponseRepository.findAttendedUserIds(eventId)
+        val notActive = skladchinaRepository.findNonActiveMembers(clubId, attendedAll)
+        val attended = attendedAll.filter { it !in notActive }
+        // Пришедшие считаются целиком, создатель среди них может быть, а может и нет: нужно как минимум двое.
+        if (attended.size < MIN_ATTENDED) {
+            throw ValidationException("Нужно минимум $MIN_ATTENDED пришедших участника, чтобы скинуться")
+        }
+        return attended
+    }
+
+    /** Список от создателя: суммы либо у всех (по людям), либо ни у кого (поровну); все — активные участники. */
+    private fun resolveListedShares(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest, amount: Long): Map<UUID, Long> {
+        val debtors = request.debtors
+        if (debtors.isEmpty()) throw ValidationException("Добавьте хотя бы одного человека")
+        val userIds = debtors.map { it.userId }
+        if (userIds.distinct().size != userIds.size) throw ValidationException("Человек в списке дважды")
+        if (userIds.all { it == creatorId }) throw ValidationException("Нужен хотя бы один человек кроме вас")
+        if (skladchinaRepository.findNonActiveMembers(clubId, userIds).isNotEmpty()) {
+            throw ForbiddenException("В списке есть не участники клуба")
+        }
+        val withAmount = debtors.count { it.amountKopecks != null }
+        return when (withAmount) {
+            0 -> {
+                if (amount < userIds.size) throw ValidationException("Сумма слишком мала — на каждого не выходит и копейки")
+                SkladchinaShares.equal(amount, userIds).toMap()
+            }
+            debtors.size -> debtors.associate { it.userId to it.amountKopecks!! }
+            else -> throw ValidationException("Суммы должны быть либо у всех, либо ни у кого (тогда поровну)")
+        }
+    }
+
+    /** Доля создателя сразу received: он не должен сам себе, но «получено X из Y» должно сходиться. */
+    private fun newDebt(s: Skladchina, userId: UUID, amount: Long, now: OffsetDateTime): NewDebt {
+        val own = userId == s.creatorId
+        return NewDebt(
+            skladchinaId = s.id,
+            debtorId = userId,
+            creditorId = s.creatorId,
+            amountKopecks = amount,
+            dueAt = s.deadline,
+            status = if (own) DebtStatus.received else DebtStatus.waiting,
+            confirmedAt = if (own) now else null
+        )
     }
 
     companion object {
-        private const val MIN_DEADLINE_HOURS = 1L  // минимальный отступ дедлайна сбора от текущего момента
-        private const val MAX_DEADLINE_DAYS = 90L  // максимальный горизонт дедлайна сбора вперёд
-
-        // Гейты «важного сбора» (docs/backlog/skladchina-reputation-redesign.md § Валидации):
-        private const val MIN_REPUTATION_DEADLINE_HOURS = 24L   // анти-засада; 48ч отвергнуты (ломает «бронь на завтра»)
-        private const val REPUTATION_RATE_LIMIT_MAX = 3         // на клуб, скользящее окно
-        private const val REPUTATION_RATE_LIMIT_WINDOW_DAYS = 7L // ширина скользящего окна в днях
+        private const val MIN_DEADLINE_HOURS = 1L   // минимальный отступ срока от текущего момента
+        private const val MAX_DEADLINE_DAYS = 90L   // максимальный горизонт срока вперёд
+        // Встреча, по которой ещё можно скинуться: не старше 30 дней (общее с findSplittableEvents).
+        const val MAX_EVENT_AGE_DAYS = 30L
+        // Минимум пришедших, чтобы было между кем делить счёт.
+        const val MIN_ATTENDED = 2
     }
 }

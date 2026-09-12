@@ -74,7 +74,7 @@
 |---|---|
 | `APPROVE_APPLICATIONS` | Заявки клуба: смотреть инбокс и счётчики, одобрить, отклонить (с причиной), «Расширить клуб и принять всех». |
 | `MANAGE_EVENTS` | События: создать; отменить, править и «Проводим» — только **создатель встречи или владелец клуба** (PO 2026-09-06, `Event.requireCreatorOrOwner` поверх капабилити); отметить посещаемость, разрешать споры, видеть dispute-note откликнувшихся и `telegramUsername` не подтвердивших на Этапе 2 ([`event-stage2-composition.md`](./event-stage2-composition.md)). Плюс шаблоны встреч клуба — создать, переименовать, перезаписать, удалить ([`event-templates.md`](./event-templates.md)). |
-| `MANAGE_SKLADCHINA` | Складчины клуба: создать, вести, отметить оплату участнику, resolve-decline, закрыть — по ЛЮБОМУ сбору клуба (не только своему, У-1). |
+| `MANAGE_SKLADCHINA` | Список активных сборов клуба в «Управлении» (`GET …/skladchinas/active`). Со сборов v3 ([`skladchina-v3.md`](./skladchina-v3.md) § 2.4) это единственное применение: создаёт сбор любой активный участник, отменяет чужой только **владелец клуба** (со-организаторы нет), долги сбора видят только его стороны. |
 | `MANAGE_MEMBERS` | Участники (`role = member`): заморозка/разморозка, «взнос получен»/«не получен», reject-dues, своя дата доступа (access-until), заметка, кик; менеджерский вид ростера и карточки участника. |
 | `GRANT_AWARDS` | Награды участнику (`role = member`): выдать, снять, видеть подсказки-награды. |
 | `EDIT_CLUB_SETTINGS` | Настройки клуба: название, описание, город, правила, лимит участников, аватар. БЕЗ СБП-реквизитов и БЕЗ перехода в платный (это `EDIT_PAYMENT_REQUISITES`). |
@@ -251,8 +251,8 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 11 | `membership/MemberController.kt:168` | GET `/{clubId}/award-suggestions` | `GRANT_AWARDS` |
 | 12 | `club/ClubController.kt:92` | GET `/{id}/finances` | `VIEW_FINANCES` |
 | 13 | `event/EventController.kt:31` | POST `/api/clubs/{id}/events` | `MANAGE_EVENTS` |
-| 14 | `skladchina/SkladchinaController.kt:26` | GET `.../skladchinas/active` | `MANAGE_SKLADCHINA` |
-| 15 | `skladchina/SkladchinaController.kt:36` | POST `.../skladchinas` | `MANAGE_SKLADCHINA` |
+| 14 | `skladchina/SkladchinaController.kt` | GET `.../skladchinas/active` | `MANAGE_SKLADCHINA` |
+| 15 | `skladchina/SkladchinaController.kt` → `SkladchinaCreationService` | POST `.../skladchinas` | активное членство (`isActiveMemberInActiveClub`), капабилити не нужна (сборы v3) |
 | 16 | `clubquality/ClubQualityController.kt:43` | GET `/{clubId}/stats` | `VIEW_STATS` |
 | 17 | `clubquality/ClubQualityController.kt:53` | GET `/{clubId}/churned-members` | `VIEW_STATS` |
 | 18 | `eventtemplate/EventTemplateController.kt` | GET `/{clubId}/event-templates` | `MANAGE_EVENTS` |
@@ -282,10 +282,10 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 26 | `event/EventService.kt:77` | cancelEvent | `MANAGE_EVENTS` |
 | 27 | `event/VoteService.kt:92` | видимость `dispute_note`, `telegram_username` и `stage2_reminded_at` в getEventResponders | `MANAGE_EVENTS` |
 | 27a | `event/Stage2ReminderService.kt:46` | remind (ручное напоминание подтвердить участие) | `MANAGE_EVENTS` — в пути id события, аннотация неприменима ([`event-stage2-composition.md`](./event-stage2-composition.md) § 6) |
-| 28 | `skladchina/SkladchinaCreationService.kt:38` | create (дублирует #15) | `MANAGE_SKLADCHINA` |
-| 29 | `skladchina/SkladchinaLifecycleService.kt:81` | closeManually | `MANAGE_SKLADCHINA` (creator ИЛИ право, У-1) |
-| 30 | `skladchina/SkladchinaPaymentService.kt:293` | requireActiveAsCreator (resolve-decline / mark-paid / unmark) | `MANAGE_SKLADCHINA` (creator ИЛИ право, У-1) |
-| 31 | `skladchina/SkladchinaMapper.kt:58` | `isOrganizerView = creatorId == caller` | `MANAGE_SKLADCHINA` (creator ИЛИ право; имя поля не менять, У-7) |
+| 28 | `skladchina/SkladchinaLifecycleService.kt` | cancel | **создатель ИЛИ `club.ownerId`** — без капабилити, со-организаторы нет (PO 2026-09-12, сборы v3) |
+| 29 | `skladchina/SkladchinaLifecycleService.kt` | lock / order / close | только создатель (`requireActiveAsCreator`) |
+| 30 | `skladchina/SkladchinaParticipationService.kt`, `debt/DebtService.kt`, `debt/DebtSettlementService.kt` | join / leave / contribute, переходы долга, сальдо | сторона долга (должник / получатель) или активное членство; см. `skladchina-v3.md` § 2.4 |
+| 31 | `skladchina/SkladchinaMapper.kt` | `isCreator`, `canCancel`, `debts` только создателю | создатель / владелец; список долгов сбора никому, кроме создателя |
 | 32 | `club/ClubService.kt:159` | updateClub (настройки) | `EDIT_CLUB_SETTINGS` (+ полевой owner-гейт: СБП/free→paid = `EDIT_PAYMENT_REQUISITES`) |
 | 33 | `club/ClubService.kt:186` | deleteClub | `DELETE_CLUB` (owner-only) |
 | 34 | `club/ClubService.kt:119` | regenerateInviteLink | `MANAGE_INVITE_LINK` (У-4) |

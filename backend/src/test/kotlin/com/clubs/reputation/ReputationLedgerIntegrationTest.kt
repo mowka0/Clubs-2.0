@@ -83,7 +83,7 @@ class ReputationLedgerIntegrationTest {
         dsl.execute("DELETE FROM reputation_ledger")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM user_club_reputation")
         dsl.execute("DELETE FROM membership_history")
@@ -495,33 +495,21 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
-    fun `leaving penalizes a pending reputation skladchina with an unexpired deadline (−40)`() {
+    fun `leaving keeps an open debt alive and writes no exit penalty for it (skladchina v3)`() {
         val member = insertUser("Leaver"); insertMembership(member, "member")
-        val deadline = OffsetDateTime.now().plusDays(2)
-        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = deadline)
-        insertPendingParticipant(skladchinaId, member)
+        val skladchinaId = insertActiveSkladchina(deadline = OffsetDateTime.now().plusDays(2))
+        insertWaitingDebt(skladchinaId, member)
 
         membershipService.leaveClub(clubId, member)
 
-        assertReputation(member, reliability = -40, conf = 0, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        assertEquals(ReputationKind.skladchina_expired, soleKind(member, skladchinaId))
-        assertEquals(skladchinaDeadline(skladchinaId).toInstant(), ledgerOccurredAt(member, skladchinaId).toInstant())
-    }
-
-    @Test
-    fun `leaving penalizes a pending reputation skladchina even with a passed deadline (cascade would erase it)`() {
-        val member = insertUser("Leaver"); insertMembership(member, "member")
-        // Дедлайн уже прошёл, но складчина всё ещё active (sweep протухания ещё не сработал).
-        // Каскад удаляет pending-строку, поэтому путь выхода обязан сам записать −40 — иначе участник
-        // ускользает и от штрафа за выход, и от естественного протухания (вновь открытая симметричная дыра B).
-        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = OffsetDateTime.now().minusHours(1))
-        insertPendingParticipant(skladchinaId, member)
-
-        membershipService.leaveClub(clubId, member)
-
-        assertReputation(member, reliability = -40, conf = 0, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        assertEquals(ReputationKind.skladchina_expired, soleKind(member, skladchinaId))
-        assertEquals(skladchinaDeadline(skladchinaId).toInstant(), ledgerOccurredAt(member, skladchinaId).toInstant())
+        // Долг живёт между людьми, а не в клубе: выход его не прощает и не штрафует — просрочку
+        // спишет DebtScheduler в свой срок.
+        assertNull(reputationRepository.findByUserAndClub(member, clubId), "no exit penalty for a debt")
+        assertEquals(0, ledgerRows(member, skladchinaId))
+        assertEquals(
+            "waiting",
+            dsl.fetchOne("SELECT status::text FROM debts WHERE skladchina_id = ? AND debtor_id = ?", skladchinaId, member)?.get(0, String::class.java)
+        )
     }
 
     @Test
@@ -541,18 +529,6 @@ class ReputationLedgerIntegrationTest {
         // Конвейер всё равно выдаёт реальный исход (−200 no_show) — выход его не стирает.
         reputationService.processFinalizedEvent(eventId)
         assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
-    }
-
-    @Test
-    fun `leaving does not penalize a pending non-reputation skladchina`() {
-        val member = insertUser("Leaver"); insertMembership(member, "member")
-        val skladchinaId = insertActiveSkladchina(affectsReputation = false, deadline = OffsetDateTime.now().plusDays(2))
-        insertPendingParticipant(skladchinaId, member)
-
-        membershipService.leaveClub(clubId, member)
-
-        assertNull(reputationRepository.findByUserAndClub(member, clubId), "non-reputation skladchina never scores")
-        assertEquals(0, ledgerRows(member, skladchinaId))
     }
 
     @Test
@@ -616,13 +592,14 @@ class ReputationLedgerIntegrationTest {
     fun `leave preview counts open obligations for a free club, zero for a paid club`() {
         val member = insertUser("Previewer"); insertMembership(member, "member")
         val eventId = insertActiveEvent(); insertConfirmed(eventId, member, "going", null)
-        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = OffsetDateTime.now().plusDays(2))
-        insertPendingParticipant(skladchinaId, member)
+        val skladchinaId = insertActiveSkladchina(deadline = OffsetDateTime.now().plusDays(2))
+        insertWaitingDebt(skladchinaId, member)
 
         val preview = membershipService.getLeavePreview(clubId, member)
         assertEquals(1, preview.eventObligations)
-        assertEquals(1, preview.skladchinaObligations)
-        assertEquals(2, preview.totalObligations)
+        // Долги выход не нарушает (skladchina v3) — в превью их нет.
+        assertEquals(0, preview.skladchinaObligations)
+        assertEquals(1, preview.totalObligations)
 
         // Платный клуб: обязательства действуют до expire → в превью одни нули.
         val paidClub = insertPaidClub()
@@ -777,23 +754,23 @@ class ReputationLedgerIntegrationTest {
         )
     }
 
-    private fun insertActiveSkladchina(affectsReputation: Boolean, deadline: OffsetDateTime): UUID {
+    private fun insertActiveSkladchina(deadline: OffsetDateTime): UUID {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, affects_reputation, status)
-            VALUES ('$id', '$clubId', '$ownerId', 'Sbor', 'voluntary'::skladchina_mode, 'http://pay',
-                    '$deadline', $affectsReputation, 'active'::skladchina_status)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link, deadline, status)
+            VALUES ('$id', '$clubId', '$ownerId', 'Sbor', 'shared'::skladchina_kind, 'http://pay',
+                    '$deadline', 'active'::skladchina_status)
             """.trimIndent()
         )
         return id
     }
 
-    private fun insertPendingParticipant(skladchinaId: UUID, userId: UUID) {
+    private fun insertWaitingDebt(skladchinaId: UUID, userId: UUID) {
         dsl.execute(
             """
-            INSERT INTO skladchina_participants (skladchina_id, user_id, status)
-            VALUES ('$skladchinaId', '$userId', 'pending'::skladchina_participant_status)
+            INSERT INTO debts (skladchina_id, debtor_id, creditor_id, amount_kopecks, due_at, status)
+            VALUES ('$skladchinaId', '$userId', '$ownerId', 1000, (SELECT deadline FROM skladchinas WHERE id = '$skladchinaId'), 'waiting'::debt_status)
             """.trimIndent()
         )
     }

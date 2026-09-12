@@ -94,14 +94,15 @@ class ActivityItemDtoTest {
             title = "Pizza night",
             createdAt = OffsetDateTime.parse("2026-05-02T12:00:00Z"),
             isCompleted = false,
-            paymentMode = "FIXED",
-            totalGoalKopecks = 500000L,
-            collectedKopecks = 120000L,
+            kind = "shared",
+            amountKopecks = 500000L,
+            targetKopecks = 500000L,
+            receivedKopecks = 120000L,
             deadline = OffsetDateTime.parse("2026-05-20T23:59:59Z"),
-            participantCount = 10,
-            paidCount = 3,
+            debtCount = 10,
+            receivedCount = 3,
+            enrolledCount = 0,
             status = "ACTIVE",
-            affectsReputation = true,
             photoUrl = "https://cdn.example.com/sklad.jpg"
         )
 
@@ -109,13 +110,12 @@ class ActivityItemDtoTest {
 
         assertEquals(1, countOccurrences(json, "\"type\""), "exactly one type field expected; got: $json")
         assertTrue(json.contains("\"type\":\"skladchina\""), "expected type=skladchina; got: $json")
-        assertTrue(json.contains("\"paymentMode\":\"FIXED\""))
-        assertTrue(json.contains("\"totalGoalKopecks\":500000"))
-        assertTrue(json.contains("\"collectedKopecks\":120000"))
-        assertTrue(json.contains("\"participantCount\":10"))
-        assertTrue(json.contains("\"paidCount\":3"))
+        assertTrue(json.contains("\"kind\":\"shared\""))
+        assertTrue(json.contains("\"targetKopecks\":500000"))
+        assertTrue(json.contains("\"receivedKopecks\":120000"))
+        assertTrue(json.contains("\"debtCount\":10"))
+        assertTrue(json.contains("\"receivedCount\":3"))
         assertTrue(json.contains("\"status\":\"ACTIVE\""))
-        assertTrue(json.contains("\"affectsReputation\":true"))
         assertTrue(
             json.contains("\"photoUrl\":\"https://cdn.example.com/sklad.jpg\""),
             "expected photoUrl present; got: $json"

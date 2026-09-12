@@ -63,9 +63,15 @@
 
 ## 3. Состояние ветки и staging
 
+> **Обновление 2026-09-12 (вторая сессия): код по спеке НАПИСАН целиком — шаги 1–3 ниже сделаны.**
+> Бэк: V90 + пакет `debt/` + переписанный `skladchina/` + бот/чат, `./gradlew test` 1064/0.
+> Фронт: страница сбора, единая форма `?kind=`, экраны `/debts` и `/debts/with/:userId`, плитка
+> «Долги» в профиле, `tsc`/`npm test` (670) / `npm run build` чистые. Решения при реализации —
+> `docs/modules/skladchina-v3.md` § 13. Дальше по § 4 «Шаг 4»: ревью → пуш → staging → тест PO.
+
 | Что | Состояние |
 |---|---|
-| `feature/skladchina-rethink` | от `master`, 4 коммита доков (`cd84284` → `ec4135e`), **не запушена** |
+| `feature/skladchina-rethink` | от `master`, 4 коммита доков (`cd84284` → `ec4135e`) + коммит(ы) кода v3 |
 | `feature/skladchina-payment-confirmation` | `a526709`, запушена, staging сейчас на ней, в master не влита, **на паузе** |
 | `master` | `c5cf22d`, миграции до V86 |
 | staging БД | на **V89** (сверка оплат) |
@@ -126,15 +132,35 @@
 
 ### Шаг 4. Процесс
 Reviewer → Security (деньги, права, `initData` не трогаем) → Analyst по `docs/INDEX.md`
-(строка `skladchina-v3.md` уже есть; после мержа `skladchina.md` → `docs/backlog/`) → пуш ветки
-→ staging → тест PO по AC-1…AC-14 → «готово, запушь».
+(сделано: `skladchina-v3.md` § 13, `reputation-v2.md`, `club-roles.md`, `club-leave.md`,
+`club-chat-link.md`, `club-quality.md`, `events.md`, `unified-activity-creation.md`,
+`telegram-bot.md`, `INDEX.md`; после мержа `skladchina.md` → `docs/backlog/`, PRD § 4.8 —
+на шаге «готово, запушь») → пуш ветки → staging → тест PO по AC-1…AC-14 → «готово, запушь».
 
-Для теста на staging: период шедулера `debts.poll-ms` (env по образцу
-`SKLADCHINA_CONFIRMATION_POLL_MS=30000` в Coolify, имя новой переменной задать в
-`application.yml` и в обоих compose-файлах — греп по коду обязателен), клуб «Партия» с чатом
-«Опат» и тремя аккаунтами PO (Ivan владелец, Clubs Support, XX).
+Для теста на staging — env в Coolify (все с дефолтами в `application.yml`, в compose-файлах их
+нет): `DEBT_POLL_MS=30000` (тик шедулера), `DEBT_OVERDUE_WEEKS=0` (−40 сразу после срока —
+для AC-11), `DEBT_CLAIM_STALE_HOURS=0` (напоминание получателю на первом тике),
+`SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE=5`. Старая `SKLADCHINA_REMINDER_POLL_MS` удалена.
+Клуб «Партия» с чатом «Опат» и тремя аккаунтами PO (Ivan владелец, Clubs Support, XX).
 
 ## 5. Ловушки этой сессии
+
+### Вторая сессия (код, 2026-09-12)
+
+- **Jackson и поля вида `iOwe`:** геттер `getIOwe` сериализуется как `iowe` — фронт не находил
+  поле. Именовать DTO-поля без «одна строчная + заглавная» в начале (`owe`/`owed`).
+- **`planPerHead`/`planVoluntary` теряли сумму** (передавали `null` вместо `request.amountKopecks`)
+  → NPE на «Беру». Ловится только интеграционным тестом через API.
+- **Неразрывный пробел в `Money.rub`** ломал сравнения в тестах; в коде обычный пробел.
+- **URL чека в тестах** должен начинаться с `s3.base-url` тестового профиля
+  (`http://localhost:9000/test-bucket/uploads/...`), root-relative `/uploads/...` там не проходит.
+- **BSD `sed` не знает `\b`** — массовые переименования делать через `perl -pi -e 's/\bX\b/Y/g'`.
+- **Serena (Kotlin LSP) снова не поднялась** — вся навигация grep/Read; компилятор как оракул.
+- **Flyway и соседние ветки:** `out-of-order` в `application.yml` не включён. Если V90 уедет в
+  master раньше V87/V88 (биллинг) или V89 (сверка), Flyway на проде откажется применять меньшие
+  номера («resolved migration not applied»). Решение PO: либо `spring.flyway.out-of-order: true`
+  в prod-профиле, либо перенумеровать отстающие ветки перед их мержем.
+- Полный `./gradlew test` ~4,5 мин с Testcontainers; файлы во время прогона не трогать.
 
 - **Хук `safety-guard.py` блокирует Bash-команды, в тексте которых есть слова про удаление
   таблиц**, даже внутри heredoc с документацией. Такие файлы писать инструментом Write.

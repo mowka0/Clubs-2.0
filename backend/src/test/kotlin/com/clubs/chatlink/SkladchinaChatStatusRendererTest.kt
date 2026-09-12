@@ -1,104 +1,116 @@
 package com.clubs.chatlink
 
+import com.clubs.debt.DebtTotals
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.skladchina.Skladchina
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.util.UUID
+
+// Сбор для текстов поста: минимально заполненный, активный по умолчанию.
+internal fun rendererSkladchina(
+    kind: SkladchinaKind = SkladchinaKind.shared,
+    status: SkladchinaStatus = SkladchinaStatus.active,
+    amountKopecks: Long? = 600_000L,
+    deadline: OffsetDateTime? = OffsetDateTime.now().plusDays(2),
+    enrollmentUntil: OffsetDateTime? = null,
+    minParticipants: Int? = null,
+    lockedAt: OffsetDateTime? = null,
+    orderedAt: OffsetDateTime? = null,
+    hiddenFromUserId: UUID? = null,
+    title: String = "Ужин после игры"
+): Skladchina = Skladchina(
+    id = UUID.randomUUID(), clubId = UUID.randomUUID(), creatorId = UUID.randomUUID(),
+    title = title, description = null, rules = null, photoUrl = null,
+    kind = kind, amountKopecks = amountKopecks, paymentLink = "https://bank.example/pay", paymentMethodNote = null,
+    eventId = null, deadline = deadline, enrollmentUntil = enrollmentUntil, minParticipants = minParticipants,
+    lockedAt = lockedAt, orderedAt = orderedAt, hiddenFromUserId = hiddenFromUserId,
+    status = status, closedAt = null, reminderSentAt = null, orderRemindedAt = null,
+    createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now()
+)
 
 class SkladchinaChatStatusRendererTest {
 
-    private val renderer = SkladchinaChatStatusRenderer(botUsername = "clubs_test_bot")
+    private val renderer = SkladchinaChatStatusRenderer(botUsername = "clubs_admin_bot")
+    private val now = OffsetDateTime.now()
 
-    // 2026-07-10 15:00 UTC = 18:00 МСК
-    private val deadline = OffsetDateTime.of(2026, 7, 10, 15, 0, 0, 0, ZoneOffset.UTC)
+    private fun view(
+        s: Skladchina,
+        totals: DebtTotals = DebtTotals(receivedKopecks = 100_000, claimedKopecks = 0, targetKopecks = 600_000, debtCount = 6, receivedCount = 1, openCount = 5, claimedCount = 0),
+        waiting: List<ChatMention> = emptyList(),
+        enrolled: List<ChatMention> = emptyList(),
+        enrolledCount: Int = enrolled.size,
+        at: OffsetDateTime = now
+    ) = ChatStatusView(s, totals, enrolledCount, creatorName = "Иван", waiting = waiting, enrolled = enrolled, now = at)
 
     @Test
-    fun `statusText — прогресс в людях, дедлайн МСК и упоминания в «Ждём»`() {
-        val text = renderer.statusText(
-            title = "Бронь корта",
-            paidCount = 3,
-            participantCount = 10,
-            deadline = deadline,
-            pending = listOf(ChatMention(111L, "Наташа"), ChatMention(222L, "Марк"))
-        )
-
-        assertTrue(text.contains("💰 Бронь корта"))
-        assertTrue(text.contains("👥 Скинулись — 3 из 10"))
-        assertTrue(text.contains("⏳ До 10.07.2026 18:00 МСК"))
-        assertTrue(text.contains("Ждём: <a href=\"tg://user?id=111\">Наташа</a>, <a href=\"tg://user?id=222\">Марк</a>"))
+    fun `shared status shows money progress, share per person and mentions before the deadline`() {
+        val text = renderer.statusText(view(rendererSkladchina(), waiting = listOf(ChatMention(11L, "Саша"), ChatMention(12L, "Оля"))))
+        assertTrue(text.contains("по 1 000 ₽ с человека"), text)
+        assertTrue(text.contains("Получено 1 000 ₽ из 6 000 ₽"), text)
+        assertTrue(text.contains("оплатили 1 из 6"), text)
+        assertTrue(text.contains("Ждём: "), text)
+        assertTrue(text.contains("<a href=\"tg://user?id=11\">Саша</a>"), text)
+        assertTrue(text.contains("🟩"), text)
     }
 
     @Test
-    fun `statusText без pending — строки «Ждём» нет`() {
-        val text = renderer.statusText("Бронь корта", 10, 10, deadline, pending = emptyList())
-        assertFalse(text.contains("Ждём"))
+    fun `after the deadline only the number of unpaid is shown, no names (PO 2026-09-12)`() {
+        val past = rendererSkladchina(deadline = now.minusHours(1))
+        val text = renderer.statusText(view(past, waiting = listOf(ChatMention(11L, "Саша"))))
+        assertTrue(text.contains("Срок вышел · не оплатили 5"), text)
+        assertFalse(text.contains("Ждём"), text)
+        assertFalse(text.contains("Саша"), text)
     }
 
     @Test
-    fun `statusText — HTML в заголовке и именах экранируется (инъекция разметки невозможна)`() {
-        val text = renderer.statusText(
-            title = "Сбор <b>&\"жирный\"</b>",
-            paidCount = 0,
-            participantCount = 1,
-            deadline = deadline,
-            pending = listOf(ChatMention(1L, "<script>Вася & Ко"))
-        )
-
-        assertTrue(text.contains("💰 Сбор &lt;b&gt;&amp;\"жирный\"&lt;/b&gt;"))
-        assertTrue(text.contains(">&lt;script&gt;Вася &amp; Ко</a>"))
-        assertFalse(text.contains("<b>"))
-        assertFalse(text.contains("<script>"))
+    fun `enrolling stage lists who is in and the minimum, button says В деле`() {
+        val s = rendererSkladchina(enrollmentUntil = now.plusDays(1), minParticipants = 6)
+        val text = renderer.statusText(view(s, totals = DebtTotals.EMPTY, enrolled = listOf(ChatMention(1L, "Иван"), ChatMention(2L, "Оля"))))
+        assertTrue(text.contains("6 000 ₽ на группу"), text)
+        assertTrue(text.contains("В деле 2 · нужно 6"), text)
+        assertTrue(text.contains("Отметиться до"), text)
+        assertEquals("В деле", renderer.buttonText(s))
     }
 
     @Test
-    fun `statusText — упоминания режутся по MAX_MENTIONS с хвостом «и ещё k»`() {
-        val pending = (1..17).map { ChatMention(it.toLong(), "Гость$it") }
+    fun `per_head shows takers and Беру button, after order shows bought count`() {
+        val s = rendererSkladchina(kind = SkladchinaKind.per_head, amountKopecks = 150_000)
+        val text = renderer.statusText(view(s, totals = DebtTotals(300_000, 0, 450_000, 3, 2, 1, 0)))
+        assertTrue(text.contains("1 500 ₽ за штуку"), text)
+        assertTrue(text.contains("Берут 3 · оплатили 2"), text)
+        assertEquals("Беру", renderer.buttonText(s))
 
-        val text = renderer.statusText("Сбор", 0, 17, deadline, pending)
-
-        assertTrue(text.contains("Гость${SkladchinaChatStatusRenderer.MAX_MENTIONS}"))
-        assertFalse(text.contains("Гость${SkladchinaChatStatusRenderer.MAX_MENTIONS + 1}<"))
-        assertTrue(text.contains("и ещё 2"))
+        val ordered = rendererSkladchina(kind = SkladchinaKind.per_head, amountKopecks = 150_000, orderedAt = now)
+        val orderedText = renderer.statusText(view(ordered, totals = DebtTotals(300_000, 0, 300_000, 2, 2, 0, 0)))
+        assertTrue(orderedText.contains("Куплено 2 · 3 000 ₽ · приём закрыт"), orderedText)
+        assertEquals("Открыть сбор", renderer.buttonText(ordered))
     }
 
     @Test
-    fun `closedText — нейтральный финал без списка неоплативших`() {
-        assertEquals(
-            "💰 Бронь корта\nСбор закрыт · скинулись 8 из 10 ✅",
-            renderer.closedText("Бронь корта", SkladchinaStatus.closed_success, 8, 10)
-        )
-        assertEquals(
-            "💰 Бронь корта\nСбор закрыт · скинулись 3 из 10",
-            renderer.closedText("Бронь корта", SkladchinaStatus.closed_failed, 3, 10)
-        )
-        assertEquals(
-            "💰 Бронь корта\nСбор отменён",
-            renderer.closedText("Бронь корта", SkladchinaStatus.cancelled, 0, 10)
-        )
+    fun `closed texts distinguish collected, cancelled and shortfall`() {
+        val collected = rendererSkladchina(status = SkladchinaStatus.collected)
+        assertTrue(renderer.closedText(view(collected, totals = DebtTotals(600_000, 0, 600_000, 6, 6, 0, 0))).contains("Собрано 6 000 ₽ · оплатили 6 из 6"))
+
+        val cancelled = rendererSkladchina(status = SkladchinaStatus.cancelled)
+        assertTrue(renderer.closedText(view(cancelled)).contains("Сбор отменён"))
+
+        val shortfall = rendererSkladchina(status = SkladchinaStatus.cancelled, enrollmentUntil = now, minParticipants = 6, lockedAt = now)
+        val text = renderer.closedText(view(shortfall, totals = DebtTotals.EMPTY, enrolledCount = 4))
+        assertTrue(text.contains("Не набрали: в деле 4 из 6"), text)
+        assertTrue(text.contains("денег никто не переводил"), text)
     }
 
     @Test
-    fun `reminderText — упоминания не ответивших, БЕЗ цены молчания (не коллектор)`() {
-        val text = renderer.reminderText(
-            title = "Бронь корта",
-            deadline = deadline,
-            pending = listOf(ChatMention(111L, "Наташа"))
-        )
-
-        assertTrue(text.contains("⏰ Напоминание: сбор «Бронь корта» закрывается 10.07.2026 18:00 МСК."))
-        assertTrue(text.contains("Ещё не ответили: <a href=\"tg://user?id=111\">Наташа</a>"))
-        // Публичный текст не позорит и не грозит штрафом — полная цена молчания живёт в DM.
-        assertFalse(text.contains("40"))
-        assertFalse(text.lowercase().contains("репутац"))
-    }
-
-    @Test
-    fun `skladchinaUrl — deep link Main Mini App с префиксом skladchina_`() {
-        val id = UUID.randomUUID()
-        assertEquals("https://t.me/clubs_test_bot?startapp=skladchina_$id", renderer.skladchinaUrl(id))
+    fun `user input is html-escaped`() {
+        val s = rendererSkladchina(title = "<b>Ужин</b> & Co")
+        val text = renderer.statusText(view(s, waiting = listOf(ChatMention(5L, "<script>"))))
+        assertTrue(text.contains("&lt;b&gt;Ужин&lt;/b&gt; &amp; Co"), text)
+        assertTrue(text.contains("&lt;script&gt;"), text)
+        assertFalse(text.contains("<b>"), text)
     }
 }
