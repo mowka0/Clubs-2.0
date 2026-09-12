@@ -4,6 +4,8 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.Money
+import com.clubs.common.util.UploadedImageUrls
 import com.clubs.debt.DebtRepository
 import com.clubs.debt.NewDebt
 import com.clubs.event.EventRepository
@@ -13,6 +15,7 @@ import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -34,7 +37,9 @@ class SkladchinaCreationService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val queryService: SkladchinaQueryService
+    private val queryService: SkladchinaQueryService,
+    // Origin нашего хранилища: фото сбора принимается только из него (как чек и скриншот взноса).
+    @Value("\${s3.base-url:}") private val storageBaseUrl: String
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaCreationService::class.java)
 
@@ -138,6 +143,13 @@ class SkladchinaCreationService(
         if (kind != SkladchinaKind.voluntary && request.amountKopecks == null) {
             throw ValidationException(if (kind == SkladchinaKind.per_head) "Укажите цену за человека" else "Укажите сумму сбора")
         }
+        if ((request.amountKopecks ?: 0L) > Money.MAX_AMOUNT_KOPECKS) {
+            throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+        }
+        validatePaymentLink(request.paymentLink)
+        request.photoUrl?.let {
+            if (!UploadedImageUrls.isUploadedImageUrl(it, storageBaseUrl)) throw ValidationException("Фото должно быть загружено через приложение")
+        }
         if (kind != SkladchinaKind.voluntary && request.hiddenFromUserId != null) {
             throw ValidationException("Скрыть от кого-то можно только сбор «По желанию»")
         }
@@ -146,9 +158,23 @@ class SkladchinaCreationService(
         }
     }
 
+    /**
+     * Реквизиты — либо https-ссылка (СБП, банк), либо свободный текст (телефон, номер карты).
+     * Ссылки с другой схемой (javascript:, data:, tg:) не принимаются: реквизиты уходят всем
+     * должникам в DM и в кнопку «Открыть в банке».
+     */
+    private fun validatePaymentLink(link: String) {
+        val v = link.trim().lowercase()
+        val looksLikeUrl = v.contains("://") || v.startsWith("javascript:") || v.startsWith("data:")
+        if (looksLikeUrl && !v.startsWith("https://") && !v.startsWith("http://")) {
+            throw ValidationException("Ссылка для оплаты должна начинаться с https://")
+        }
+    }
+
     /** shared: список из встречи, либо этап записи, либо список от создателя. */
     private fun planShared(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest, now: OffsetDateTime): CreationPlan {
         val amount = request.amountKopecks!!
+        val deadline = request.deadline ?: throw ValidationException("Укажите срок оплаты")
         val eventId = request.eventId
         val enrollmentUntil = request.enrollmentUntil
         return when {
@@ -160,7 +186,7 @@ class SkladchinaCreationService(
             }
             enrollmentUntil != null -> {
                 if (!enrollmentUntil.isAfter(now)) throw ValidationException("Срок записи уже прошёл")
-                if (enrollmentUntil.isAfter(request.deadline)) throw ValidationException("Запись должна закрыться не позже срока оплаты")
+                if (enrollmentUntil.isAfter(deadline)) throw ValidationException("Запись должна закрыться не позже срока оплаты")
                 if (request.debtors.isNotEmpty()) throw ValidationException("На этапе «Кто в деле?» список набирается сам")
                 val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
                 CreationPlan(emptyMap(), amount, null, members, enrollCreator = true)
@@ -231,7 +257,12 @@ class SkladchinaCreationService(
                 if (amount < userIds.size) throw ValidationException("Сумма слишком мала — на каждого не выходит и копейки")
                 SkladchinaShares.equal(amount, userIds).toMap()
             }
-            debtors.size -> debtors.associate { it.userId to it.amountKopecks!! }
+            debtors.size -> {
+                if (debtors.any { it.amountKopecks!! > Money.MAX_AMOUNT_KOPECKS }) {
+                    throw ValidationException("Доля не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+                }
+                debtors.associate { it.userId to it.amountKopecks!! }
+            }
             else -> throw ValidationException("Суммы должны быть либо у всех, либо ни у кого (тогда поровну)")
         }
     }

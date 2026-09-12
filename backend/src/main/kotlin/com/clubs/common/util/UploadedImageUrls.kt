@@ -9,7 +9,8 @@ package com.clubs.common.util
  */
 object UploadedImageUrls {
 
-    private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png)$", RegexOption.IGNORE_CASE)
+    // Расширения, которые пишет StorageController (jpg/png/webp по content-type).
+    private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE)
 
     fun isUploadedImageUrl(url: String, storageBaseUrl: String): Boolean {
         val prefix = storageBaseUrl.trimEnd('/')

@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS debt_settlements (
     status         debt_settlement_status NOT NULL DEFAULT 'claimed',
     claimed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     resolved_at    TIMESTAMPTZ,
+    reminded_at    TIMESTAMPTZ,
     CONSTRAINT chk_debt_settlements_distinct_parties CHECK (payer_id <> payee_id)
 );
 CREATE INDEX IF NOT EXISTS idx_debt_settlements_payee_status ON debt_settlements(payee_id, status);
@@ -166,6 +167,7 @@ COMMENT ON COLUMN debt_settlements.amount_kopecks IS 'Разница сумм о
 COMMENT ON COLUMN debt_settlements.status IS 'Состояние сальдо (enum debt_settlement_status): claimed / received / rejected.';
 COMMENT ON COLUMN debt_settlements.claimed_at IS 'Когда плательщик нажал «Отдал Σ». Для репутации считается моментом оплаты всех долгов сальдо.';
 COMMENT ON COLUMN debt_settlements.resolved_at IS 'Когда получатель ответил «Получил» или «Не получил» (NULL = ждём ответа).';
+COMMENT ON COLUMN debt_settlements.reminded_at IS 'Когда получателю в последний раз ушло DM «плательщик говорит, что перевёл сальдо, ответьте» (claimed дольше 48 ч, раз в 3 дня). Штамп дедупликации шедулера.';
 
 CREATE TABLE IF NOT EXISTS debts (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),

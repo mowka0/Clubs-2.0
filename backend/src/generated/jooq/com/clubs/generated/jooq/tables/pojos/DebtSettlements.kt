@@ -24,7 +24,8 @@ data class DebtSettlements(
     var amountKopecks: Long,
     var status: DebtSettlementStatus? = null,
     var claimedAt: OffsetDateTime? = null,
-    var resolvedAt: OffsetDateTime? = null
+    var resolvedAt: OffsetDateTime? = null,
+    var remindedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -66,6 +67,12 @@ data class DebtSettlements(
         }
         else if (this.resolvedAt != o.resolvedAt)
             return false
+        if (this.remindedAt == null) {
+            if (o.remindedAt != null)
+                return false
+        }
+        else if (this.remindedAt != o.remindedAt)
+            return false
         return true
     }
 
@@ -79,6 +86,7 @@ data class DebtSettlements(
         result = prime * result + (if (this.status == null) 0 else this.status.hashCode())
         result = prime * result + (if (this.claimedAt == null) 0 else this.claimedAt.hashCode())
         result = prime * result + (if (this.resolvedAt == null) 0 else this.resolvedAt.hashCode())
+        result = prime * result + (if (this.remindedAt == null) 0 else this.remindedAt.hashCode())
         return result
     }
 
@@ -92,6 +100,7 @@ data class DebtSettlements(
         sb.append(", ").append(status)
         sb.append(", ").append(claimedAt)
         sb.append(", ").append(resolvedAt)
+        sb.append(", ").append(remindedAt)
 
         sb.append(")")
         return sb.toString()

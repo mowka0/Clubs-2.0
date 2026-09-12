@@ -130,6 +130,14 @@ open class DebtSettlements(
      */
     val RESOLVED_AT: TableField<DebtSettlementsRecord, OffsetDateTime?> = createField(DSL.name("resolved_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда получатель ответил «Получил» или «Не получил» (NULL = ждём ответа).")
 
+    /**
+     * The column <code>public.debt_settlements.reminded_at</code>. Когда
+     * получателю в последний раз ушло DM «плательщик говорит, что перевёл
+     * сальдо, ответьте» (claimed дольше 48 ч, раз в 3 дня). Штамп дедупликации
+     * шедулера.
+     */
+    val REMINDED_AT: TableField<DebtSettlementsRecord, OffsetDateTime?> = createField(DSL.name("reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда получателю в последний раз ушло DM «плательщик говорит, что перевёл сальдо, ответьте» (claimed дольше 48 ч, раз в 3 дня). Штамп дедупликации шедулера.")
+
     private constructor(alias: Name, aliased: Table<DebtSettlementsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<DebtSettlementsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<DebtSettlementsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

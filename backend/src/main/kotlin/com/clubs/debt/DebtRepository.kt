@@ -15,6 +15,9 @@ interface DebtRepository {
 
     fun insertAll(debts: List<NewDebt>): List<Debt>
 
+    /** Вставка «только если долга (сбор, должник) ещё нет» — ON CONFLICT DO NOTHING; null = уже есть (второй тап). */
+    fun insertIfAbsent(debt: NewDebt): Debt?
+
     fun findById(id: UUID): Debt?
 
     fun findWithContext(id: UUID): DebtWithContext?
@@ -84,6 +87,20 @@ interface DebtRepository {
 
     /** Все неразобранные сальдо, где [userId] плательщик или получатель — для плашек экрана «Долги». */
     fun findClaimedSettlementsForUser(userId: UUID): List<DebtSettlement>
+
+    /** Неразобранные сальдо, заявленные раньше [claimedBefore], без напоминания позже [remindedBefore]. */
+    fun findStaleSettlements(claimedBefore: OffsetDateTime, remindedBefore: OffsetDateTime): List<DebtSettlement>
+
+    fun markSettlementReminded(id: UUID, at: OffsetDateTime)
+
+    /**
+     * Отмена сбора: неразобранные сальдо, в которые вошли его долги, отклоняются (все долги пары
+     * снова открыты) — иначе сальдо повисло бы с суммой, куда входит уже прощённый долг. Число сальдо.
+     */
+    fun rejectSettlementsTouching(skladchinaId: UUID, at: OffsetDateTime): Int
+
+    /** Была ли между двумя людьми хоть одна запись долга (любого статуса) — гейт экрана пары. */
+    fun existsAnyBetween(userA: UUID, userB: UUID): Boolean
 
     /** Открытые долги [debtIds] → claimed с [settlementId]; claimed_at = момент «Отдал Σ». */
     fun attachToSettlement(debtIds: Collection<UUID>, settlementId: UUID, at: OffsetDateTime): Int

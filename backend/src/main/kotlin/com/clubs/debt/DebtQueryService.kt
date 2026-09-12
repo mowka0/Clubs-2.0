@@ -62,6 +62,11 @@ class DebtQueryService(
     fun pair(userId: UUID, otherId: UUID): DebtPairDto {
         val now = OffsetDateTime.now()
         val open = debtRepository.findOpenBetween(userId, otherId)
+        // Пара существует только у людей, между которыми был хоть один долг: иначе экран
+        // отдавал бы профиль любого пользователя по UUID.
+        if (open.isEmpty() && !debtRepository.existsAnyBetween(userId, otherId)) {
+            throw NotFoundException("Долгов с этим человеком не было")
+        }
         val other = open.firstOrNull()?.let { if (it.debt.debtorId == userId) it.creditor else it.debtor }
             ?: userRepository.findById(otherId)?.let {
                 DebtPerson(it.id!!, it.firstName, it.lastName, it.telegramUsername, it.avatarUrl)

@@ -4,6 +4,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.Money
 import com.clubs.debt.DebtClaimedEvent
 import com.clubs.debt.DebtCreatedEvent
 import com.clubs.debt.DebtReplacedEvent
@@ -21,7 +22,9 @@ import java.util.UUID
 
 /**
  * Как человек попадает в сбор и выходит из него (§ 2.2, § 3): «В деле» / «Беру» / «Перевёл»,
- * «Передумал», добавление и замена должника создателем. Каждая мутация в своей транзакции.
+ * «Передумал», добавление и замена должника создателем. Каждая мутация в своей транзакции;
+ * строка сбора берётся под блокировку, чтобы не гоняться с «Заказываю» / «Закрыть запись»,
+ * а вставка долга идёт через ON CONFLICT — второй тап даёт 409, а не 500.
  */
 @Service
 class SkladchinaParticipationService(
@@ -52,7 +55,7 @@ class SkladchinaParticipationService(
                 }
                 val now = OffsetDateTime.now()
                 val own = callerId == s.creatorId
-                debtRepository.insertAll(listOf(
+                debtRepository.insertIfAbsent(
                     NewDebt(
                         skladchinaId = skladchinaId, debtorId = callerId, creditorId = s.creatorId,
                         amountKopecks = s.amountKopecks!!, dueAt = s.deadline,
@@ -60,7 +63,7 @@ class SkladchinaParticipationService(
                         confirmedAt = if (own) now else null,
                         note = note?.trim()?.takeIf { it.isNotEmpty() }
                     )
-                ))
+                ) ?: throw ConflictException("Вы уже берёте — обновите экран")
                 log.info("Skladchina take: id={} userId={}", skladchinaId, callerId)
             }
             else -> throw ValidationException("В этом сборе нет записи")
@@ -101,19 +104,19 @@ class SkladchinaParticipationService(
         val s = requireActiveForMember(skladchinaId, callerId)
         if (s.kind != SkladchinaKind.voluntary) throw ValidationException("«Перевёл» есть только у сбора «По желанию»")
         if (callerId == s.creatorId) throw ValidationException("Создатель не переводит сам себе")
-        if (amountKopecks > MAX_CONTRIBUTION_KOPECKS) throw ValidationException("Сумма не может превышать ${MAX_CONTRIBUTION_KOPECKS / 100} ₽")
+        if (amountKopecks > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
         debtRepository.findBySkladchinaAndDebtor(skladchinaId, callerId)?.let { existing ->
             throw ValidationException(
                 if (existing.isOpen) "Ваш перевод уже ждёт подтверждения" else "Вы уже переводили в этот сбор"
             )
         }
         val now = OffsetDateTime.now()
-        val created = debtRepository.insertAll(listOf(
+        val created = debtRepository.insertIfAbsent(
             NewDebt(
                 skladchinaId = skladchinaId, debtorId = callerId, creditorId = s.creatorId,
                 amountKopecks = amountKopecks, dueAt = null, status = DebtStatus.claimed, claimedAt = now
             )
-        )).single()
+        ) ?: throw ConflictException("Перевод уже отмечен — обновите экран")
         log.info("Skladchina contribute: id={} userId={} amount={}", skladchinaId, callerId, amountKopecks)
         eventPublisher.publishEvent(DebtClaimedEvent(debtRepository.findWithContext(created.id)!!))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
@@ -132,16 +135,17 @@ class SkladchinaParticipationService(
         if (existing.any { it.debt.debtorId == userId }) throw ValidationException("Этот человек уже в сборе")
         val amount = amountKopecks ?: existing.lastOrNull()?.debt?.amountKopecks ?: s.amountKopecks
             ?: throw ValidationException("Укажите сумму")
+        if (amount > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
         val now = OffsetDateTime.now()
         val own = userId == s.creatorId
-        val created = debtRepository.insertAll(listOf(
+        val created = debtRepository.insertIfAbsent(
             NewDebt(
                 skladchinaId = skladchinaId, debtorId = userId, creditorId = s.creatorId, amountKopecks = amount,
                 dueAt = s.deadline,
                 status = if (own) DebtStatus.received else DebtStatus.waiting,
                 confirmedAt = if (own) now else null
             )
-        )).single()
+        ) ?: throw ConflictException("Этот человек уже в сборе — обновите экран")
         log.info("Skladchina debtor added: id={} userId={} amount={} by={}", skladchinaId, userId, amount, callerId)
         if (!own) eventPublisher.publishEvent(DebtCreatedEvent(debtRepository.findWithContext(created.id)!!))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
@@ -158,6 +162,8 @@ class SkladchinaParticipationService(
             throw ValidationException("Заменить можно только того, кто ещё не платил")
         }
         if (newUserId == debt.debtorId) throw ValidationException("Это тот же человек")
+        // Долг создателя перед собой в waiting никто не сможет закрыть — сбор застрял бы.
+        if (newUserId == s.creatorId) throw ValidationException("Заменить на себя нельзя — простите долг")
         if (skladchinaRepository.findNonActiveMembers(s.clubId, listOf(newUserId)).isNotEmpty()) {
             throw ValidationException("Заменить можно только участником клуба")
         }
@@ -165,12 +171,12 @@ class SkladchinaParticipationService(
             throw ValidationException("Этот человек уже участвует в сборе")
         }
         if (debtRepository.forgive(debtId) == 0) throw ConflictException("Долг уже изменился — обновите экран")
-        val created = debtRepository.insertAll(listOf(
+        val created = debtRepository.insertIfAbsent(
             NewDebt(
                 skladchinaId = skladchinaId, debtorId = newUserId, creditorId = s.creatorId,
                 amountKopecks = debt.amountKopecks, dueAt = debt.dueAt
             )
-        )).single()
+        ) ?: throw ConflictException("Этот человек уже участвует — обновите экран")
         log.info("Skladchina debtor replaced: id={} debt={} old={} new={}", skladchinaId, debtId, debt.debtorId, newUserId)
         eventPublisher.publishEvent(DebtReplacedEvent(debt.debtorId, debtRepository.findWithContext(created.id)!!))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
@@ -179,7 +185,7 @@ class SkladchinaParticipationService(
     }
 
     private fun requireActiveForMember(skladchinaId: UUID, callerId: UUID): Skladchina {
-        val s = skladchinaRepository.findById(skladchinaId) ?: throw NotFoundException("Сбор не найден")
+        val s = skladchinaRepository.findByIdForUpdate(skladchinaId) ?: throw NotFoundException("Сбор не найден")
         if (s.isHiddenFrom(callerId)) throw NotFoundException("Сбор не найден")
         if (!membershipRepository.isActiveMemberInActiveClub(callerId, s.clubId)) {
             throw ForbiddenException("Только для участников клуба")
@@ -189,15 +195,10 @@ class SkladchinaParticipationService(
     }
 
     private fun requireSharedAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
-        val s = skladchinaRepository.findById(skladchinaId) ?: throw NotFoundException("Сбор не найден")
+        val s = skladchinaRepository.findByIdForUpdate(skladchinaId) ?: throw NotFoundException("Сбор не найден")
         if (s.creatorId != callerId) throw ForbiddenException("Это действие доступно только создателю сбора")
         if (!s.isActive) throw ValidationException("Сбор уже закрыт")
         if (s.kind != SkladchinaKind.shared) throw ValidationException("Список людей есть только у сбора «Скинуться»")
         return s
-    }
-
-    companion object {
-        // Верхняя граница перевода «по желанию»: гигиена статистики, не защита от злоупотреблений.
-        private const val MAX_CONTRIBUTION_KOPECKS = 10_000_000L
     }
 }

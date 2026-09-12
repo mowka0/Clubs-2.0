@@ -53,13 +53,15 @@ class DebtScheduler(
         }
         step("debt-reminders") {
             reminderService.collect(now).forEach(notifier::sendReminder)
+            reminderService.collectStaleSettlements(now).forEach(notifier::sendSettlementReminder)
         }
         step("chat-deadline-reminders") { chatDeadlineReminders(now) }
     }
 
     /**
-     * За 24 часа до срока сбора — в чат клуба с упоминаниями (гарантированный канал), DM только
-     * тем, кого в чате нет. Штамп на сборе ставится ДО отправки.
+     * За 24 часа до срока сбора — в чат клуба с упоминаниями ещё не оплативших. Личное «завтра
+     * срок» каждому должнику шлёт шаг debt-reminders (DUE_SOON), поэтому DM-фоллбека здесь нет —
+     * иначе должник вне чата получал бы два одинаковых DM. Штамп на сборе ставится ДО отправки.
      */
     private fun chatDeadlineReminders(now: OffsetDateTime) {
         skladchinaRepository.findNeedingDeadlineReminder(now, now.plusMinutes(deadlineReminderMinutesBefore)).forEach { s ->
@@ -69,9 +71,7 @@ class DebtScheduler(
                 .map { it.debt.debtorId }
             if (pending.isEmpty()) return@forEach
             val covered = chatStatusService.postDeadlineReminder(s, pending)
-            val rest = pending.filterNot { it in covered }
-            if (rest.isNotEmpty()) notifier.sendDeadlineFallback(s, rest)
-            log.info("Skladchina deadline reminder: id={} pending={} coveredByChat={} dm={}", s.id, pending.size, covered.size, rest.size)
+            log.info("Skladchina deadline reminder: id={} pending={} mentionedInChat={}", s.id, pending.size, covered.size)
         }
     }
 

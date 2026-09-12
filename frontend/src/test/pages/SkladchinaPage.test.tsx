@@ -229,6 +229,22 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByText('Приём закрыт: заказ уже сделан.')).toBeInTheDocument();
   });
 
+  it('«Кто берёт?»: создатель тоже может «Беру», пока сам не взял и заказ не сделан', async () => {
+    useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
+    mockDetail(buildDetail({ kind: 'per_head', isCreator: true, canCancel: true, myDebt: null, debts: [], debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
+    const first = renderPage();
+    expect(await screen.findByRole('button', { name: 'Беру' })).toBeInTheDocument();
+    first.unmount();
+
+    mockDetail(buildDetail({
+      kind: 'per_head', isCreator: true, canCancel: true, myDebt: null,
+      debts: [buildDebt({ debtor: creator, creditor: creator, status: 'received', confirmedAt: FUTURE })],
+    }));
+    renderPage();
+    expect(await screen.findByText('Берут')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Беру' })).not.toBeInTheDocument();
+  });
+
   it('«По желанию»: поле суммы и «Перевёл»; создателю «Закрыть сбор» недоступна, пока есть переводы', async () => {
     mockDetail(buildDetail({ kind: 'voluntary', amountKopecks: 50000, targetKopecks: null, deadline: null, myDebt: null, debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
     renderPage();

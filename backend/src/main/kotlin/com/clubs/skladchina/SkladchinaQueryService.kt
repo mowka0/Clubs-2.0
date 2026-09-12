@@ -85,9 +85,11 @@ class SkladchinaQueryService(
         )
     }
 
-    /** Кнопка «Скинуться» на EventPage: активный сбор → открыть, собранный → уже собрано, иначе создать. */
+    /** Кнопка «Скинуться» на EventPage: активный сбор → открыть, собранный → уже собрано, иначе создать. Только участникам клуба встречи. */
     @Transactional(readOnly = true)
-    fun findEventSplitState(eventId: UUID): EventSplitStateDto {
+    fun findEventSplitState(eventId: UUID, callerId: UUID): EventSplitStateDto {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Встреча не найдена")
+        requireMember(event.clubId, callerId)
         val split = skladchinaRepository.findBlockingByEventId(eventId)
         return EventSplitStateDto(skladchinaId = split?.id, status = split?.status?.literal)
     }

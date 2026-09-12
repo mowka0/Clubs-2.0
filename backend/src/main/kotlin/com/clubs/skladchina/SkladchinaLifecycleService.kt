@@ -125,18 +125,24 @@ class SkladchinaLifecycleService(
     /** Отменить: создатель или владелец клуба (со-организаторы нет). Открытые долги прощаются, полученные — «кому вернуть». */
     @Transactional
     fun cancel(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
-        val s = skladchinaRepository.findById(skladchinaId) ?: throw NotFoundException("Сбор не найден")
+        val s = skladchinaRepository.findByIdForUpdate(skladchinaId) ?: throw NotFoundException("Сбор не найден")
+        if (s.isHiddenFrom(callerId)) throw NotFoundException("Сбор не найден")
         val club = clubRepository.findById(s.clubId) ?: throw NotFoundException("Club not found")
         if (s.creatorId != callerId && club.ownerId != callerId) {
             throw ForbiddenException("Отменить сбор может только его создатель или владелец клуба")
         }
         if (!s.isActive) throw ValidationException("Сбор уже закрыт")
+        val now = OffsetDateTime.now()
         val refunds = debtRepository.findBySkladchina(skladchinaId)
             .filter { it.debt.status == DebtStatus.received && it.debt.debtorId != s.creatorId }
             .associate { it.debt.debtorId to it.debt.amountKopecks }
+        // Долг этого сбора мог войти в сальдо пары: такое сальдо отклоняется целиком (остальные
+        // долги пары снова открыты), иначе получатель подтвердил бы «Получил Σ» по уже неверной сумме.
+        val rejectedSettlements = debtRepository.rejectSettlementsTouching(skladchinaId, now)
         val forgiven = debtRepository.forgiveOpenBySkladchina(skladchinaId)
-        log.info("Skladchina cancelled: id={} by={} forgiven={} refunds={}", skladchinaId, callerId, forgiven, refunds.size)
-        complete(s, SkladchinaStatus.cancelled, OffsetDateTime.now(), refunds)
+        log.info("Skladchina cancelled: id={} by={} forgiven={} refunds={} rejectedSettlements={}",
+            skladchinaId, callerId, forgiven, refunds.size, rejectedSettlements)
+        complete(s, SkladchinaStatus.cancelled, now, refunds)
         return queryService.getDetail(skladchinaId, callerId)
     }
 
@@ -149,8 +155,10 @@ class SkladchinaLifecycleService(
         val s = skladchinaRepository.findById(skladchinaId) ?: return
         if (!s.isActive) return
         val totals = debtRepository.totals(skladchinaId)
+        // shared: долги есть с создания (список/встреча) или с заморозки; «всех простили» — тоже
+        // «открытых нет», сбор закрывается, а не висит active с «0 из 0».
         val ready = when (s.kind) {
-            SkladchinaKind.shared -> !s.isEnrolling && totals.debtCount > 0
+            SkladchinaKind.shared -> !s.isEnrolling
             SkladchinaKind.per_head -> s.orderedAt != null
             SkladchinaKind.voluntary -> false
         }
@@ -186,7 +194,7 @@ class SkladchinaLifecycleService(
     }
 
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
-        val s = skladchinaRepository.findById(skladchinaId) ?: throw NotFoundException("Сбор не найден")
+        val s = skladchinaRepository.findByIdForUpdate(skladchinaId) ?: throw NotFoundException("Сбор не найден")
         if (s.isHiddenFrom(callerId)) throw NotFoundException("Сбор не найден")
         if (s.creatorId != callerId) throw ForbiddenException("Это действие доступно только создателю сбора")
         if (!s.isActive) throw ValidationException("Сбор уже закрыт")

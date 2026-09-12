@@ -113,4 +113,15 @@ open class DebtSettlementsDao(configuration: Configuration?) : DAOImpl<DebtSettl
      * Fetch records that have <code>resolved_at IN (values)</code>
      */
     fun fetchByResolvedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.DebtSettlements> = fetch(DebtSettlements.DEBT_SETTLEMENTS.RESOLVED_AT, *values)
+
+    /**
+     * Fetch records that have <code>reminded_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfRemindedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.DebtSettlements> = fetchRange(DebtSettlements.DEBT_SETTLEMENTS.REMINDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>reminded_at IN (values)</code>
+     */
+    fun fetchByRemindedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.DebtSettlements> = fetch(DebtSettlements.DEBT_SETTLEMENTS.REMINDED_AT, *values)
 }

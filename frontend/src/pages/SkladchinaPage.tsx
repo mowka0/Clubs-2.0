@@ -273,6 +273,24 @@ export const SkladchinaPage: FC = () => {
         </div>
       )}
 
+      {/* Создатель тоже может «взять» вещь как все — его долг ляжет сразу received (§ 2.1); своя доля
+          в myDebt не попадает, поэтому смотрим список долгов. */}
+      {s.isCreator && isActive && s.kind === 'per_head' && !s.orderedAt && !(s.debts ?? []).some((d) => d.debtor.id === viewerId) && (
+        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+          <input
+            className="rd-input"
+            placeholder="Заметка: размер, вариант (необязательно)"
+            value={noteInput}
+            onChange={(e) => setNoteInput(e.target.value)}
+            maxLength={200}
+            style={{ marginBottom: 10 }}
+          />
+          <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join', note: noteInput.trim() || null }, 'Записали и за вами.')}>
+            Беру
+          </button>
+        </div>
+      )}
+
       {/* Создатель: список долгов и кнопки стадии. */}
       {s.isCreator && s.debts && (
         <>

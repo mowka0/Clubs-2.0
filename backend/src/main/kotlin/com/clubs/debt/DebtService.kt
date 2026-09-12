@@ -4,6 +4,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.Money
 import com.clubs.common.util.UploadedImageUrls
 import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.enums.SkladchinaKind
@@ -115,7 +116,7 @@ class DebtService(
         val d = requireAsCreditor(debtId, callerId)
         if (d.skladchinaKind != SkladchinaKind.shared) throw ValidationException("Сумму можно менять только у сбора «Скинуться»")
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised)
-        if (amountKopecks > MAX_DEBT_KOPECKS) throw ValidationException("Сумма не может превышать ${MAX_DEBT_KOPECKS / 100} ₽")
+        if (amountKopecks > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
         if (amountKopecks == d.debt.amountKopecks) return mapper.toDto(d)
         applied(debtRepository.changeAmount(debtId, amountKopecks))
         log.info("Debt amount changed: id={} {} -> {} by={}", debtId, d.debt.amountKopecks, amountKopecks, callerId)
@@ -182,7 +183,5 @@ class DebtService(
         private val MSK: ZoneId = ZoneId.of("Europe/Moscow")
         // «Оплачу позже» не дальше трёх месяцев: обещание на год — не обещание.
         private const val MAX_PROMISE_DAYS = 90L
-        // Верхняя граница суммы долга: гигиена, не защита.
-        private const val MAX_DEBT_KOPECKS = 10_000_000L
     }
 }

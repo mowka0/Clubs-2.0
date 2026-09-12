@@ -9,6 +9,7 @@ import com.clubs.debt.DebtRejectedEvent
 import com.clubs.debt.DebtReminder
 import com.clubs.debt.DebtReminderKind
 import com.clubs.debt.DebtReplacedEvent
+import com.clubs.debt.DebtSettlement
 import com.clubs.debt.DebtTotals
 import com.clubs.debt.DebtWithContext
 import com.clubs.debt.SettlementClaimedEvent
@@ -94,9 +95,24 @@ class DebtBotNotifier(
     @TransactionalEventListener(fallbackExecution = true)
     fun onSettlementClaimed(event: SettlementClaimedEvent) {
         val s = event.settlement
+        sendSettlementDecision(
+            s,
+            "💸 ${event.payerName} говорит, что перевёл ${Money.rub(s.amountKopecks)} — сальдо по вашим долгам (${event.debtCount} шт.).\n\n" +
+                "Подтвердите, когда деньги придут."
+        )
+    }
+
+    /** Сальдо без ответа дольше 48 ч: получателю повтор с кнопками (раз в 3 дня, зовёт DebtScheduler). */
+    fun sendSettlementReminder(s: DebtSettlement) {
+        val payerName = userRepository.findById(s.payerId)?.firstName ?: "Участник"
+        sendSettlementDecision(
+            s,
+            "⏳ $payerName говорит, что перевёл ${Money.rub(s.amountKopecks)} — сальдо по вашим долгам — ещё ${s.claimedAt.format(dateFmt)}. Ответьте:"
+        )
+    }
+
+    private fun sendSettlementDecision(s: DebtSettlement, text: String) {
         val telegramId = telegramIdOf(s.payeeId) ?: return
-        val text = "💸 ${event.payerName} говорит, что перевёл ${Money.rub(s.amountKopecks)} — сальдо по вашим долгам (${event.debtCount} шт.).\n\n" +
-            "Подтвердите, когда деньги придут."
         gateway.sendDmWithButtons(
             telegramId, text,
             listOf(
@@ -107,7 +123,7 @@ class DebtBotNotifier(
                 listOf(DmButton(OPEN_DEBTS_BUTTON, webAppPath = "/debts/with/${s.payerId}"))
             )
         )
-        log.info("Settlement-claimed DM sent: id={} payee={}", s.id, s.payeeId)
+        log.info("Settlement-decision DM sent: id={} payee={}", s.id, s.payeeId)
     }
 
     // --- Напоминания и штрафы (зовёт DebtScheduler) ---
@@ -141,15 +157,6 @@ class DebtBotNotifier(
         val telegramId = telegramIdOf(s.creatorId) ?: return
         val text = "🛒 «${s.title}»: срок вышел, пора заказывать. Оплатили ${totals.receivedCount}, ждём ${totals.openCount}."
         notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON)
-    }
-
-    /** Напоминание о сроке сбора тем должникам, кого чат-упоминание не покрыло. */
-    fun sendDeadlineFallback(s: Skladchina, userIds: Collection<UUID>) {
-        val deadline = s.deadline ?: return
-        val text = "⏰ Напоминание: сбор «${s.title}» — срок ${deadline.format(fmt)}."
-        userRepository.findTelegramIds(userIds).forEach {
-            notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON)
-        }
     }
 
     // --- helpers ---

@@ -45,6 +45,22 @@ class JooqDebtRepository(
         return step.returning().fetch().map(mapper::toDomain)
     }
 
+    override fun insertIfAbsent(debt: NewDebt): Debt? =
+        dsl.insertInto(DEBTS)
+            .set(DEBTS.SKLADCHINA_ID, debt.skladchinaId)
+            .set(DEBTS.DEBTOR_ID, debt.debtorId)
+            .set(DEBTS.CREDITOR_ID, debt.creditorId)
+            .set(DEBTS.AMOUNT_KOPECKS, debt.amountKopecks)
+            .set(DEBTS.DUE_AT, debt.dueAt)
+            .set(DEBTS.STATUS, debt.status)
+            .set(DEBTS.CLAIMED_AT, debt.claimedAt)
+            .set(DEBTS.CONFIRMED_AT, debt.confirmedAt)
+            .set(DEBTS.NOTE, debt.note)
+            .onConflictDoNothing()
+            .returning()
+            .fetchOne()
+            ?.let(mapper::toDomain)
+
     override fun findById(id: UUID): Debt? =
         dsl.selectFrom(DEBTS).where(DEBTS.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
 
@@ -111,7 +127,7 @@ class JooqDebtRepository(
 
     override fun findOpenBetween(userA: UUID, userB: UUID): List<DebtWithContext> =
         contextSelect()
-            .where(betweenCondition(userA, userB).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)))
+            .where(betweenCondition(userA, userB).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)).and(CLUBS.IS_ACTIVE.isTrue))
             .orderBy(DEBTS.DUE_AT.asc().nullsLast(), DEBTS.CREATED_AT.asc())
             .fetch(::toContext)
 
@@ -142,6 +158,7 @@ class JooqDebtRepository(
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.claimed)
             .set(DEBTS.CLAIMED_AT, at)
+            .setNull(DEBTS.PROMISED_AT)
             .setNull(DEBTS.CLAIM_REMINDED_AT)
             .set(DEBTS.UPDATED_AT, at)
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised)).and(DEBTS.SETTLEMENT_ID.isNull))
@@ -159,6 +176,7 @@ class JooqDebtRepository(
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.received)
             .set(DEBTS.CONFIRMED_AT, at)
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.UPDATED_AT, at)
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)).and(DEBTS.SETTLEMENT_ID.isNull))
             .execute()
@@ -177,6 +195,7 @@ class JooqDebtRepository(
     override fun drop(id: UUID, fromStatuses: Set<DebtStatus>): Int =
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.dropped)
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.UPDATED_AT, OffsetDateTime.now())
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(fromStatuses)).and(DEBTS.SETTLEMENT_ID.isNull))
             .execute()
@@ -184,6 +203,7 @@ class JooqDebtRepository(
     override fun forgive(id: UUID): Int =
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.forgiven)
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.UPDATED_AT, OffsetDateTime.now())
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)).and(DEBTS.SETTLEMENT_ID.isNull))
             .execute()
@@ -266,11 +286,47 @@ class JooqDebtRepository(
             .fetch()
             .map(mapper::toSettlement)
 
+    override fun findStaleSettlements(claimedBefore: OffsetDateTime, remindedBefore: OffsetDateTime): List<DebtSettlement> =
+        dsl.selectFrom(DEBT_SETTLEMENTS)
+            .where(
+                DEBT_SETTLEMENTS.STATUS.eq(DebtSettlementStatus.claimed)
+                    .and(DEBT_SETTLEMENTS.CLAIMED_AT.le(claimedBefore))
+                    .and(DEBT_SETTLEMENTS.REMINDED_AT.isNull.or(DEBT_SETTLEMENTS.REMINDED_AT.le(remindedBefore)))
+            )
+            .fetch()
+            .map(mapper::toSettlement)
+
+    override fun markSettlementReminded(id: UUID, at: OffsetDateTime) {
+        dsl.update(DEBT_SETTLEMENTS).set(DEBT_SETTLEMENTS.REMINDED_AT, at).where(DEBT_SETTLEMENTS.ID.eq(id)).execute()
+    }
+
+    override fun rejectSettlementsTouching(skladchinaId: UUID, at: OffsetDateTime): Int {
+        val settlementIds = dsl.selectDistinct(DEBTS.SETTLEMENT_ID)
+            .from(DEBTS)
+            .where(DEBTS.SKLADCHINA_ID.eq(skladchinaId).and(DEBTS.SETTLEMENT_ID.isNotNull))
+            .fetch()
+            .mapNotNull { it.value1() }
+        var rejected = 0
+        settlementIds.forEach { id ->
+            val settlement = findSettlement(id) ?: return@forEach
+            if (resolveSettlement(id, DebtSettlementStatus.rejected, at) > 0) {
+                rejectBySettlement(id, settlement.payerId, at)
+                rejected++
+            }
+        }
+        return rejected
+    }
+
+    override fun existsAnyBetween(userA: UUID, userB: UUID): Boolean =
+        dsl.fetchExists(dsl.selectOne().from(DEBTS).where(betweenCondition(userA, userB)))
+
     override fun attachToSettlement(debtIds: Collection<UUID>, settlementId: UUID, at: OffsetDateTime): Int {
         if (debtIds.isEmpty()) return 0
         return dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.claimed)
-            .set(DEBTS.CLAIMED_AT, at)
+            // Одиночное «Отдал», сделанное раньше, не теряет дату: для +10 считается первое заявление.
+            .set(DEBTS.CLAIMED_AT, DSL.coalesce(DEBTS.CLAIMED_AT, DSL.`val`(at)))
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.SETTLEMENT_ID, settlementId)
             .setNull(DEBTS.CLAIM_REMINDED_AT)
             .set(DEBTS.UPDATED_AT, at)

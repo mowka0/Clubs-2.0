@@ -50,6 +50,10 @@ open class DebtSettlementsRecord private constructor() : UpdatableRecordImpl<Deb
         set(value): Unit = set(6, value)
         get(): OffsetDateTime? = get(6) as OffsetDateTime?
 
+    open var remindedAt: OffsetDateTime?
+        set(value): Unit = set(7, value)
+        get(): OffsetDateTime? = get(7) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -59,7 +63,7 @@ open class DebtSettlementsRecord private constructor() : UpdatableRecordImpl<Deb
     /**
      * Create a detached, initialised DebtSettlementsRecord
      */
-    constructor(id: UUID? = null, payerId: UUID, payeeId: UUID, amountKopecks: Long, status: DebtSettlementStatus? = null, claimedAt: OffsetDateTime? = null, resolvedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, payerId: UUID, payeeId: UUID, amountKopecks: Long, status: DebtSettlementStatus? = null, claimedAt: OffsetDateTime? = null, resolvedAt: OffsetDateTime? = null, remindedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.payerId = payerId
         this.payeeId = payeeId
@@ -67,6 +71,7 @@ open class DebtSettlementsRecord private constructor() : UpdatableRecordImpl<Deb
         this.status = status
         this.claimedAt = claimedAt
         this.resolvedAt = resolvedAt
+        this.remindedAt = remindedAt
         resetChangedOnNotNull()
     }
 
@@ -82,6 +87,7 @@ open class DebtSettlementsRecord private constructor() : UpdatableRecordImpl<Deb
             this.status = value.status
             this.claimedAt = value.claimedAt
             this.resolvedAt = value.resolvedAt
+            this.remindedAt = value.remindedAt
             resetChangedOnNotNull()
         }
     }

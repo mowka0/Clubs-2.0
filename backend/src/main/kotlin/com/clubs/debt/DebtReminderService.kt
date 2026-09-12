@@ -53,6 +53,14 @@ class DebtReminderService(
         return reminders
     }
 
+    /** Неразобранные сальдо старше `claim-stale-hours`: получателю напоминание раз в 3 дня, штамп до отправки. */
+    @Transactional
+    fun collectStaleSettlements(now: OffsetDateTime): List<DebtSettlement> {
+        val stale = debtRepository.findStaleSettlements(now.minusHours(claimStaleHours), now.minusDays(CLAIM_REPEAT_DAYS))
+        stale.forEach { debtRepository.markSettlementReminded(it.id, now) }
+        return stale
+    }
+
     companion object {
         private val MSK: ZoneId = ZoneId.of("Europe/Moscow")
         // Просрочка: напоминание в день срока и затем раз в 7 дней.

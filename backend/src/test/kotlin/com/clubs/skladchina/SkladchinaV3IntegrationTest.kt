@@ -380,8 +380,8 @@ class SkladchinaV3IntegrationTest {
     @Test
     fun `owner sees neither the pair of two other members nor the debt list of someone else's skladchina`() {
         val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
-        val ownerPair = json(get("/api/debts/with/$aliceId", owner).andExpect(status().isOk))
-        assertEquals(0, ownerPair["owe"].size() + ownerPair["owed"].size())
+        // Пара «владелец ↔ Алиса» не существует: долгов между ними не было — 404, а не пустой экран.
+        get("/api/debts/with/$aliceId", owner).andExpect(status().isNotFound)
         assertEquals(0, json(get("/api/debts", owner))["people"].size())
         val ownerView = json(get("/api/skladchinas/$id", owner).andExpect(status().isOk))
         assertTrue(ownerView["debts"].isNull)
@@ -439,6 +439,100 @@ class SkladchinaV3IntegrationTest {
         assertEquals("waiting", ownerRow["status"].asText())
         assertEquals(2_000L, added["targetKopecks"].asLong(), "знаменатель — сумма живых долгов")
         postJson("/api/skladchinas/$id/debts", alice, """{"userId":"$outsiderId"}""").andExpect(status().isBadRequest)
+    }
+
+    // --- Правки по ревью: закрытие «всех простили», отмена при живом сальдо, замена на себя, повторный тап ---
+
+    @Test
+    fun `forgiving the last open debt closes the shared skladchina`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val forgiven = json(post("/api/debts/${myDebtId(id, bob)}/forgive", alice).andExpect(status().isOk))
+        assertEquals("forgiven", forgiven["status"].asText())
+        assertEquals("collected", json(get("/api/skladchinas/$id", alice))["status"].asText(), "открытых долгов нет — сбор не висит active")
+    }
+
+    @Test
+    fun `cancel while a pair settlement is claimed rejects the settlement and reopens the untouched debts`() {
+        val s1 = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val s2 = createShared(alice, listOf(bobId), amount = 500)["id"].asText()
+        val settled = json(post("/api/debts/with/$aliceId/settle", bob).andExpect(status().isOk))
+        val settlementId = settled["settlement"]["id"].asText()
+
+        post("/api/skladchinas/$s1/cancel", alice).andExpect(status().isOk)
+
+        val settlementStatus = dsl.fetchOne("SELECT status::text AS s FROM debt_settlements WHERE id = ?", UUID.fromString(settlementId))!!.get("s", String::class.java)
+        assertEquals("rejected", settlementStatus, "сальдо с прощённым долгом внутри не подтверждается")
+        val bobPair = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertTrue(bobPair["settlement"].isNull)
+        assertEquals(listOf(500L), bobPair["owe"].map { it["amountKopecks"].asLong() }, "долг второго сбора снова открыт")
+        assertEquals("waiting", bobPair["owe"][0]["status"].asText())
+        assertEquals("forgiven", dsl.fetchOne("SELECT status::text AS s FROM debts WHERE skladchina_id = ? AND debtor_id = ?", UUID.fromString(s1), bobId)!!.get("s", String::class.java))
+        assertEquals("active", json(get("/api/skladchinas/$s2", alice))["status"].asText())
+    }
+
+    @Test
+    fun `replace onto the creator is refused, reject after order drops the debt`() {
+        val shared = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        postJson("/api/skladchinas/$shared/debts/${myDebtId(shared, bob)}/replace", alice, """{"userId":"$aliceId"}""").andExpect(status().isBadRequest)
+
+        val perHead = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$perHead/join", bob).andExpect(status().isOk)
+        val bobDebt = myDebtId(perHead, bob)
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isOk)
+        post("/api/skladchinas/$perHead/order", owner).andExpect(status().isOk)
+        val rejected = json(post("/api/debts/$bobDebt/reject", owner).andExpect(status().isOk))
+        assertEquals("dropped", rejected["status"].asText(), "после заказа «Не получил» = выбыл, долга нет")
+        assertEquals("collected", json(get("/api/skladchinas/$perHead", owner))["status"].asText())
+    }
+
+    @Test
+    fun `creator may take in own per_head and the share is received at once`() {
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700)).andExpect(status().isCreated))["id"].asText()
+        val taken = json(post("/api/skladchinas/$id/join", owner).andExpect(status().isOk))
+        val ownRow = taken["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals("received", ownRow["status"].asText())
+        assertTrue(taken["myDebt"].isNull)
+        post("/api/skladchinas/$id/join", owner).andExpect(status().isBadRequest)
+    }
+
+    // --- Security-ревью: лимит суммы, схема ссылки, чужая пара, встреча чужого клуба ---
+
+    @Test
+    fun `amount above the cap and a non-https payment link are rejected, free-text requisites pass`() {
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 10_000_001)).andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, perHeadBody(price = 10_000_001)).andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 100).replace("https://pay.example/owner", "javascript:alert(1)"))
+            .andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 100).replace("https://pay.example/owner", "+7 999 123-45-67, Сбер"))
+            .andExpect(status().isCreated)
+        val voluntary = json(postJson("/api/clubs/$clubId/skladchinas", alice, voluntaryBody(hiddenFrom = null)).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$voluntary/contribute", bob, """{"amountKopecks":10000001}""").andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `pair with someone you never had a debt with is 404 and event split state needs club membership`() {
+        get("/api/debts/with/$carolId", bob).andExpect(status().isNotFound)
+        createShared(bob, listOf(carolId), amount = 100)
+        get("/api/debts/with/$carolId", bob).andExpect(status().isOk)
+
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Игра', 'Парк', now() + interval '1 day', 10, 'upcoming'::event_status, false)
+            """.trimIndent()
+        )
+        get("/api/events/$eventId/skladchina", alice).andExpect(status().isOk)
+        get("/api/events/$eventId/skladchina", outsider).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `money claims have their own rate limit bucket`() {
+        val id = createShared(alice, listOf(bobId), amount = 100)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        repeat(10) { post("/api/debts/$bobDebt/claim", bob).andReturn() }
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isTooManyRequests)
+        get("/api/skladchinas/$id", bob).andExpect(status().isOk)
     }
 
     // ---- helpers ----

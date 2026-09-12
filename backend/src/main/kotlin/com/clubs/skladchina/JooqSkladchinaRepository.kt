@@ -58,6 +58,9 @@ class JooqSkladchinaRepository(
     override fun findById(id: UUID): Skladchina? =
         dsl.selectFrom(SKLADCHINAS).where(SKLADCHINAS.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
 
+    override fun findByIdForUpdate(id: UUID): Skladchina? =
+        dsl.selectFrom(SKLADCHINAS).where(SKLADCHINAS.ID.eq(id)).forUpdate().fetchOne()?.let(mapper::toDomain)
+
     override fun findBlockingByEventId(eventId: UUID): Skladchina? =
         dsl.selectFrom(SKLADCHINAS)
             .where(SKLADCHINAS.EVENT_ID.eq(eventId).and(SKLADCHINAS.STATUS.`in`(BLOCKING_STATUSES)))
@@ -267,6 +270,8 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
                     .and(SKLADCHINAS.HIDDEN_FROM_USER_ID.isNull)
+                    // На этапе записи долгов ещё нет — напоминать некому, штамп не сжигаем.
+                    .and(SKLADCHINAS.ENROLLMENT_UNTIL.isNull.or(SKLADCHINAS.LOCKED_AT.isNotNull))
                     .and(SKLADCHINAS.DEADLINE.greaterThan(now))
                     .and(SKLADCHINAS.DEADLINE.lessOrEqual(until))
                     .and(SKLADCHINAS.REMINDER_SENT_AT.isNull)
@@ -306,13 +311,21 @@ class JooqSkladchinaRepository(
     override fun cancelActiveByEventId(eventId: UUID): Int =
         cancelActive(SKLADCHINAS.EVENT_ID.eq(eventId))
 
-    /** Открытые долги прощаются ДО смены статуса, пока сборы ещё active и попадают в подзапрос. */
+    /**
+     * Сначала отклоняются неразобранные сальдо, куда вошли долги этих сборов (иначе сальдо повисло
+     * бы с суммой, куда входит прощённый долг), затем открытые долги прощаются, затем статус.
+     */
     private fun cancelActive(scope: Condition): Int {
+        val now = OffsetDateTime.now()
         val activeIds = dsl.select(SKLADCHINAS.ID).from(SKLADCHINAS)
             .where(scope.and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)))
-        val now = OffsetDateTime.now()
+            .fetch()
+            .mapNotNull { it.value1() }
+        if (activeIds.isEmpty()) return 0
+        activeIds.forEach { debtRepository.rejectSettlementsTouching(it, now) }
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.forgiven)
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.UPDATED_AT, now)
             .where(DEBTS.SKLADCHINA_ID.`in`(activeIds).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)))
             .execute()
@@ -320,7 +333,7 @@ class JooqSkladchinaRepository(
             .set(SKLADCHINAS.STATUS, SkladchinaStatus.cancelled)
             .set(SKLADCHINAS.CLOSED_AT, now)
             .set(SKLADCHINAS.UPDATED_AT, now)
-            .where(scope.and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)))
+            .where(SKLADCHINAS.ID.`in`(activeIds).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)))
             .execute()
     }
 

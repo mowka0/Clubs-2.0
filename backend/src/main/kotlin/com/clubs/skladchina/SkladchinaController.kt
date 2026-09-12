@@ -59,8 +59,11 @@ class SkladchinaController(
         ResponseEntity.ok(queryService.getDetail(id, user.userId))
 
     @GetMapping("/api/events/{eventId}/skladchina")
-    fun getEventSkladchina(@PathVariable eventId: UUID): ResponseEntity<EventSplitStateDto> =
-        ResponseEntity.ok(queryService.findEventSplitState(eventId))
+    fun getEventSkladchina(
+        @PathVariable eventId: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventSplitStateDto> =
+        ResponseEntity.ok(queryService.findEventSplitState(eventId, user.userId))
 
     @PostMapping("/api/skladchinas/{id}/join")
     fun join(
