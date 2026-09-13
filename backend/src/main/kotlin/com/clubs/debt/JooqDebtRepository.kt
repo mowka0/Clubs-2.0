@@ -414,6 +414,28 @@ class JooqDebtRepository(
         dsl.update(DEBTS).set(DEBTS.REPUTATION_MINUS_AT, at).where(DEBTS.ID.eq(id)).execute()
     }
 
+    override fun findMinusWarningDue(now: OffsetDateTime, pointBefore: OffsetDateTime, dayWarning: Boolean): List<DebtWithContext> =
+        contextSelect()
+            .where(
+                sharedRealDebt()
+                    .and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised))
+                    .and(DEBTS.REPUTATION_MINUS_AT.isNull)
+                    .and(DEBTS.DUE_AT.isNotNull)
+                    // Предупреждаем только уже просроченный долг — иначе при коротком окне на staging
+                    // «через неделю −40» пришло бы раньше самого срока.
+                    .and(DEBTS.DUE_AT.le(now))
+                    .and(DSL.greatest(DEBTS.DUE_AT, DEBTS.REJECTED_AT).le(pointBefore))
+                    .and((if (dayWarning) DEBTS.MINUS_DAY_REMINDED_AT else DEBTS.MINUS_WEEK_REMINDED_AT).isNull)
+            )
+            .fetch(::toContext)
+
+    override fun markMinusWarned(id: UUID, at: OffsetDateTime, dayWarning: Boolean) {
+        dsl.update(DEBTS)
+            .set(if (dayWarning) DEBTS.MINUS_DAY_REMINDED_AT else DEBTS.MINUS_WEEK_REMINDED_AT, at)
+            .where(DEBTS.ID.eq(id))
+            .execute()
+    }
+
     override fun findDueSoon(now: OffsetDateTime, until: OffsetDateTime): List<DebtWithContext> =
         contextSelect()
             .where(

@@ -252,6 +252,21 @@ open class Debts(
      */
     val QUANTITY: TableField<DebtsRecord, Int?> = createField(DSL.name("quantity"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("1"), SQLDataType.INTEGER)), this, "Сколько штук берёт должник (per_head: билеты, футболки). У shared/voluntary всегда 1. amount_kopecks = quantity × цена за штуку на момент «Беру».")
 
+    /**
+     * The column <code>public.debts.minus_week_reminded_at</code>. Когда
+     * должнику ушло DM «через неделю −40» (за 7 дней до момента списания =
+     * greatest(due_at, rejected_at) + debts.overdue-weeks). NULL = не
+     * отправлялось.
+     */
+    val MINUS_WEEK_REMINDED_AT: TableField<DebtsRecord, OffsetDateTime?> = createField(DSL.name("minus_week_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда должнику ушло DM «через неделю −40» (за 7 дней до момента списания = greatest(due_at, rejected_at) + debts.overdue-weeks). NULL = не отправлялось.")
+
+    /**
+     * The column <code>public.debts.minus_day_reminded_at</code>. Когда
+     * должнику ушло DM «завтра −40» (за 1 день до момента списания). NULL = не
+     * отправлялось.
+     */
+    val MINUS_DAY_REMINDED_AT: TableField<DebtsRecord, OffsetDateTime?> = createField(DSL.name("minus_day_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда должнику ушло DM «завтра −40» (за 1 день до момента списания). NULL = не отправлялось.")
+
     private constructor(alias: Name, aliased: Table<DebtsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<DebtsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<DebtsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

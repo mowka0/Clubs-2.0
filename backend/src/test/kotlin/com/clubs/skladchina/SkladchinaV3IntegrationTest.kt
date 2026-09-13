@@ -73,6 +73,7 @@ class SkladchinaV3IntegrationTest {
     @Autowired lateinit var dsl: DSLContext
     @Autowired lateinit var objectMapper: ObjectMapper
     @Autowired lateinit var debtReputationService: DebtReputationService
+    @Autowired lateinit var debtReminderService: com.clubs.debt.DebtReminderService
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
     private lateinit var ownerId: UUID
@@ -490,6 +491,26 @@ class SkladchinaV3IntegrationTest {
         assertEquals(ReputationKind.skladchina_expired, soleKind(bobId))
         assertEquals(0, ledgerRows(carolId), "claimed останавливает часы")
         assertEquals(0, ledgerRows(ownerId), "владелец клуба очков не получает")
+    }
+
+    @Test
+    fun `before the minus the debtor gets a warning a week and a day ahead, even while promising, once each`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        postJson("/api/debts/$bobDebt/promise", bob, """{"date":"${LocalDate.now().plusDays(5)}"}""").andExpect(status().isOk)
+        val now = OffsetDateTime.now()
+
+        // Просрочка 15 дней при окне 3 недели: до −40 неделя → одно предупреждение, повтор молчит.
+        dsl.execute("UPDATE debts SET due_at = now() - interval '15 days 1 hour' WHERE id = ?", UUID.fromString(bobDebt))
+        val week = debtReminderService.collect(now).filter { it.debt.debt.id.toString() == bobDebt }
+        assertEquals(listOf(com.clubs.debt.DebtReminderKind.MINUS_IN_WEEK), week.map { it.kind })
+        assertTrue(debtReminderService.collect(now).none { it.debt.debt.id.toString() == bobDebt })
+
+        // Просрочка 20 дней: до −40 день → второе предупреждение; сам минус ещё не списан.
+        dsl.execute("UPDATE debts SET due_at = now() - interval '20 days 1 hour' WHERE id = ?", UUID.fromString(bobDebt))
+        val day = debtReminderService.collect(now).filter { it.debt.debt.id.toString() == bobDebt }
+        assertEquals(listOf(com.clubs.debt.DebtReminderKind.MINUS_TOMORROW), day.map { it.kind })
+        assertEquals(0, ledgerRows(bobId))
     }
 
     // --- AC-12: чужие долги невидимы ---

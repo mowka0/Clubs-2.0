@@ -43,7 +43,9 @@ data class Debts(
     var claimRemindedAt: OffsetDateTime? = null,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
-    var quantity: Int? = null
+    var quantity: Int? = null,
+    var minusWeekRemindedAt: OffsetDateTime? = null,
+    var minusDayRemindedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -183,6 +185,18 @@ data class Debts(
         }
         else if (this.quantity != o.quantity)
             return false
+        if (this.minusWeekRemindedAt == null) {
+            if (o.minusWeekRemindedAt != null)
+                return false
+        }
+        else if (this.minusWeekRemindedAt != o.minusWeekRemindedAt)
+            return false
+        if (this.minusDayRemindedAt == null) {
+            if (o.minusDayRemindedAt != null)
+                return false
+        }
+        else if (this.minusDayRemindedAt != o.minusDayRemindedAt)
+            return false
         return true
     }
 
@@ -213,6 +227,8 @@ data class Debts(
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.quantity == null) 0 else this.quantity.hashCode())
+        result = prime * result + (if (this.minusWeekRemindedAt == null) 0 else this.minusWeekRemindedAt.hashCode())
+        result = prime * result + (if (this.minusDayRemindedAt == null) 0 else this.minusDayRemindedAt.hashCode())
         return result
     }
 
@@ -243,6 +259,8 @@ data class Debts(
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(quantity)
+        sb.append(", ").append(minusWeekRemindedAt)
+        sb.append(", ").append(minusDayRemindedAt)
 
         sb.append(")")
         return sb.toString()

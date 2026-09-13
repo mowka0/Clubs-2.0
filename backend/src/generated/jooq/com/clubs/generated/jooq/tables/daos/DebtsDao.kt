@@ -302,4 +302,26 @@ open class DebtsDao(configuration: Configuration?) : DAOImpl<DebtsRecord, com.cl
      * Fetch records that have <code>quantity IN (values)</code>
      */
     fun fetchByQuantity(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetch(Debts.DEBTS.QUANTITY, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>minus_week_reminded_at BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfMinusWeekRemindedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetchRange(Debts.DEBTS.MINUS_WEEK_REMINDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>minus_week_reminded_at IN (values)</code>
+     */
+    fun fetchByMinusWeekRemindedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetch(Debts.DEBTS.MINUS_WEEK_REMINDED_AT, *values)
+
+    /**
+     * Fetch records that have <code>minus_day_reminded_at BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfMinusDayRemindedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetchRange(Debts.DEBTS.MINUS_DAY_REMINDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>minus_day_reminded_at IN (values)</code>
+     */
+    fun fetchByMinusDayRemindedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetch(Debts.DEBTS.MINUS_DAY_REMINDED_AT, *values)
 }

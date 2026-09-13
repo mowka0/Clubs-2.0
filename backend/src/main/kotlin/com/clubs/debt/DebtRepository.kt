@@ -149,5 +149,14 @@ interface DebtRepository {
     /** claimed вне сальдо дольше [claimedBefore]: получателю ещё не напоминали или напоминали раньше [remindedBefore]. */
     fun findClaimedStale(claimedBefore: OffsetDateTime, remindedBefore: OffsetDateTime): List<DebtWithContext>
 
+    /**
+     * Предупреждения перед −40 (shared, открытый, уже просроченный долг): момент списания —
+     * greatest(due_at, rejected_at) + overdue-weeks; [pointBefore] — граница «точка отсчёта раньше
+     * этого» для нужного горизонта (за неделю / за день). [dayWarning] выбирает штамп.
+     */
+    fun findMinusWarningDue(now: OffsetDateTime, pointBefore: OffsetDateTime, dayWarning: Boolean): List<DebtWithContext>
+
+    fun markMinusWarned(id: UUID, at: OffsetDateTime, dayWarning: Boolean)
+
     fun markClaimReminded(id: UUID, at: OffsetDateTime)
 }

@@ -167,7 +167,22 @@ class DebtBotNotifier(
             DebtReminderKind.CLAIM_STALE -> sendDebtDecision(
                 d, "⏳ ${d.debtor.firstName} говорит, что отдал $amount за «${d.skladchinaTitle}» ещё ${d.debt.claimedAt?.format(dateFmt)}. Ответьте:"
             )
+            DebtReminderKind.MINUS_IN_WEEK -> sendToDebtor(
+                d, "⚠️ Долг $amount для ${d.creditor.firstName} за «${d.skladchinaTitle}» просрочен. " +
+                    "Через неделю, ${penaltyDate(d)}, репутация в клубе «${d.clubName}» снизится на 40. " +
+                    "Отдайте или нажмите «Отдал», если уже перевели."
+            )
+            DebtReminderKind.MINUS_TOMORROW -> sendToDebtor(
+                d, "⚠️ Завтра, ${penaltyDate(d)}, за долг $amount для ${d.creditor.firstName} за «${d.skladchinaTitle}» " +
+                    "репутация в клубе «${d.clubName}» снизится на 40. Ещё можно успеть: отдайте и нажмите «Отдал»."
+            )
         }
+    }
+
+    /** Момент списания −40: greatest(due_at, rejected_at) + overdue-weeks — та же формула, что в DebtReputationService. */
+    private fun penaltyDate(d: DebtWithContext): String {
+        val start = listOfNotNull(d.debt.dueAt, d.debt.rejectedAt).max()
+        return start.plusWeeks(overdueWeeks).format(dateFmt)
     }
 
     fun sendPenalty(penalty: DebtPenalty) {
