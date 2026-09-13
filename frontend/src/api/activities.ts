@@ -43,27 +43,23 @@ export interface EventActivityDto extends ActivityBase {
   actionRequired: boolean;
 }
 
-export type SkladchinaActivityStatus =
-  | 'active'
-  | 'closed_success'
-  | 'closed_failed'
-  | 'cancelled';
+export type SkladchinaActivityStatus = 'active' | 'collected' | 'cancelled';
 
-export type SkladchinaActivityMode =
-  | 'fixed_equal'
-  | 'fixed_individual'
-  | 'voluntary';
+export type SkladchinaActivityKind = 'shared' | 'per_head' | 'voluntary';
 
+/** Карточка сбора в ленте клуба (skladchina-v3 § 9): вид, «получено X из Y», «оплатили N из M». */
 export interface SkladchinaActivityDto extends ActivityBase {
   type: 'skladchina';
-  paymentMode: SkladchinaActivityMode;
-  totalGoalKopecks: number | null;
-  collectedKopecks: number;
-  deadline: string;
-  participantCount: number;
-  paidCount: number;
+  kind: SkladchinaActivityKind;
+  amountKopecks: number | null;
+  targetKopecks: number | null;
+  receivedKopecks: number;
+  // null у «По желанию» без срока.
+  deadline: string | null;
+  debtCount: number;
+  receivedCount: number;
+  enrolledCount: number;
   status: SkladchinaActivityStatus;
-  affectsReputation: boolean;
   photoUrl: string | null;
 }
 

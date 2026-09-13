@@ -214,13 +214,20 @@ disputed/null attendance.
 > **Решение 2026-06-12 — веса пересмотрены** (редизайн репутации складчины,
 > `docs/backlog/skladchina-reputation-redesign.md`; имплементация — пакет 3 реестра багов):
 
-| `skladchina_participant_status` | kind | points |
+> **Сборы v3 (2026-09-12, ветка `feature/skladchina-rethink`, `docs/modules/skladchina-v3.md` § 4):**
+> источник исхода — долг (`debts`) сбора вида `shared`, а не статус участника; таблица ниже
+> заменяет прежнюю по `skladchina_participant_status` (таблица и enum удалены в V90).
+
+| Долг `shared`-сбора (`debts`) | kind | points |
 |---|---|---|
-| paid | `skladchina_paid` | **+10** |
-| declined | — **строки нет** (kind `skladchina_declined` больше не эмитится: `financeKind(declined) → null`) | 0 |
-| expired_no_response | `skladchina_expired` | **−40** (было −25) |
-| released *(новый статус: сбор закрыт досрочно, `closed_at < deadline`)* | — **строки нет** | 0 |
-| pending | — (строки нет) |
+| `received` вовремя: `coalesce(claimed_at, confirmed_at) <= due_at` | `skladchina_paid` | **+10**, штамп `reputation_plus_at` |
+| `received` с опозданием, `forgiven`, `dropped` | — **строки нет** | 0 |
+| просрочка: `waiting`/`promised` дольше `debts.overdue-weeks` (3 нед.) после `max(due_at, rejected_at)` | `skladchina_expired` | **−40**, один раз, штамп `reputation_minus_at`; `claimed` часы останавливает |
+| оплата после минуса | — (минус остаётся) | 0 |
+| зачтено по сальдо пары | как `received`: моментом оплаты считается `claimed_at` сальдо | +10 если вовремя |
+
+Начисляет `DebtReputationService` из `DebtScheduler`; `occurred_at` = момент оплаты (плюс) или
+`due_at` долга (минус); владелец клуба в своём клубе очков не получает. `financeKind(...)` удалена.
 
 - Отказ без строки, а не 0-строкой — иначе инфлируется `outcome_count`
   (три отказа = выход из «Новичка» без обязательств). Kind `skladchina_declined`
@@ -615,10 +622,10 @@ UI: 3 кольца-доната в один ряд — **Надёжность** 
   **Каскад тоже исключает finalized** (`deleteByUserAndClubAndActiveEvents` фильтрует `NOT attendance_finalized`):
   событие бывает finalized, пока статус ещё `stage_2` (finalize ставит флаг, статус → `completed` ставит
   отдельный sweep). Реальный исход finalized-события пишет reputation-пайплайн — выход его не трогает и не стирает.
-- **type-2** = `pending` участия в активных `affects_reputation` складчинах → **−40** (kind `skladchina_expired`,
-  `occurred_at = deadline`). **Дедлайн НЕ фильтруется** (уточнение к исходному дизайну «не прошедшим дедлайном»):
-  каскад удаляет pending-участие независимо от дедлайна, поэтому участие с уже прошедшим дедлайном иначе
-  ускользнуло бы и от выхода, и от естественного expiry. Натуральный исход тот же (−40), при коллизии выигрывает первая строка.
+- **type-2 (складчины) — упразднён сборами v3 (2026-09-12, `skladchina-v3.md` § 13 п. 2):** долг
+  живёт между людьми, выход из клуба его не удаляет и не штрафует; просрочку в свой срок спишет
+  `DebtScheduler`. `penalizeExit` получает `skladchinaExpiries = emptyList()`, в превью выхода
+  `skladchinaObligations` всегда 0.
 - Переиспользуем существующие kinds (без новой миграции); идемпотентность через
   `UNIQUE(user_id, source_type, source_id)` (ON CONFLICT DO NOTHING — natural-строка при закрытии события/складчины
   не задвоит). Owner не leaving (`leaveClub` режет owner). **Paid-клуб не штрафует сразу** (доступ до конца подписки).

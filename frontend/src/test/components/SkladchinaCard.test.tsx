@@ -7,35 +7,41 @@ import type { MySkladchinaListItemDto } from '../../types/api';
 function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchinaListItemDto {
   return {
     id: 's-1',
-    title: 'Сбор на баню',
+    title: 'Ужин после игры',
     clubId: 'club-1',
-    clubName: 'Клуб',
+    clubName: 'Партия',
     clubAvatarUrl: null,
-    template: 'custom',
-    paymentMode: 'fixed_equal',
-    totalGoalKopecks: 500000,
-    collectedKopecks: 100000,
-    participantCount: 5,
-    paidCount: 1,
+    kind: 'shared',
+    amountKopecks: 600000,
+    targetKopecks: 600000,
+    receivedKopecks: 100000,
+    debtCount: 6,
+    receivedCount: 1,
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status: 'active',
-    isOrganizerView: false,
-    myStatus: 'pending',
+    isCreator: false,
+    myDebtStatus: 'waiting',
     actionRequired: true,
-    affectsReputation: false,
+    photoUrl: null,
     ...overrides,
   };
 }
 
-describe('SkladchinaCard — «Важный сбор» badge', () => {
-  it('показывает «⚠️ Важный сбор» когда affectsReputation = true', () => {
-    render(<SkladchinaCard skladchina={buildItem({ affectsReputation: true })} onClick={vi.fn()} />);
-    expect(screen.getByText('⚠️ Важный сбор')).toBeInTheDocument();
-    expect(screen.queryByText('⚠️ Репутация')).not.toBeInTheDocument();
+describe('SkladchinaCard — сборы v3', () => {
+  it('показывает «Оплатили N из M», деньги «X из Y» и бейдж «Ждёт вас»', () => {
+    render(<SkladchinaCard skladchina={buildItem()} onClick={vi.fn()} />);
+    expect(screen.getByText('Оплатили 1 из 6')).toBeInTheDocument();
+    expect(screen.getByText(/1\s?000 ₽ из 6\s?000 ₽/)).toBeInTheDocument();
+    expect(screen.getByText('Ждёт вас')).toBeInTheDocument();
+    expect(screen.getByText('СКИНУТЬСЯ')).toBeInTheDocument();
   });
 
-  it('не показывает бейдж когда affectsReputation = false', () => {
-    render(<SkladchinaCard skladchina={buildItem({ affectsReputation: false })} onClick={vi.fn()} />);
-    expect(screen.queryByText('⚠️ Важный сбор')).not.toBeInTheDocument();
+  it('у закрытого сбора бейдж — итог, у «По желанию» без срока — «без срока»', () => {
+    render(<SkladchinaCard skladchina={buildItem({ status: 'collected', actionRequired: false })} onClick={vi.fn()} />);
+    expect(screen.getByText('Собран')).toBeInTheDocument();
+
+    render(<SkladchinaCard skladchina={buildItem({ id: 's-2', kind: 'voluntary', deadline: null, targetKopecks: null, amountKopecks: null, actionRequired: false, myDebtStatus: null })} onClick={vi.fn()} />);
+    expect(screen.getByText(/без срока/)).toBeInTheDocument();
+    expect(screen.getByText(/1\s?000 ₽ получено/)).toBeInTheDocument();
   });
 });

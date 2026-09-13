@@ -6,9 +6,9 @@ import com.clubs.event.Event
 import com.clubs.event.EventRepository
 import com.clubs.event.EventWithGoingCount
 import com.clubs.generated.jooq.enums.EventStatus
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.debt.DebtTotals
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.skladchina.Skladchina
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.skladchina.SkladchinaWithAggregates
@@ -61,9 +61,9 @@ class ActivityServiceTest {
             EventWithGoingCount(event1, goingCount = 3),
             EventWithGoingCount(event2, goingCount = 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(sklad1, 100, 4, 1),
-            SkladchinaWithAggregates(sklad2, 50, 2, 1)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(sklad1, DebtTotals.EMPTY, 0),
+            SkladchinaWithAggregates(sklad2, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, null)
@@ -85,8 +85,8 @@ class ActivityServiceTest {
             EventWithGoingCount(actionEvent, 0),
             EventWithGoingCount(plainEvent, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(sklad, 0, 0, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(sklad, DebtTotals.EMPTY, 0)
         )
         every { eventRepository.findActionRequiredEventIds(clubId, userId, any()) } returns setOf(actionEventId)
 
@@ -105,19 +105,19 @@ class ActivityServiceTest {
             status = EventStatus.cancelled, eventDatetime = now.minusDays(8), title = "Event -8d"
         )
         val sklad1 = makeSkladchina(
-            status = SkladchinaStatus.closed_success, deadline = now.minusDays(1), title = "Sklad -1d"
+            status = SkladchinaStatus.collected, deadline = now.minusDays(1), title = "Sklad -1d"
         )
         val sklad2 = makeSkladchina(
-            status = SkladchinaStatus.closed_failed, deadline = now.minusDays(5), title = "Sklad -5d"
+            status = SkladchinaStatus.cancelled, deadline = now.minusDays(5), title = "Sklad -5d"
         )
 
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event1, 0),
             EventWithGoingCount(event2, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(sklad1, 0, 0, 0),
-            SkladchinaWithAggregates(sklad2, 0, 0, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(sklad1, DebtTotals.EMPTY, 0),
+            SkladchinaWithAggregates(sklad2, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, null)
@@ -133,16 +133,16 @@ class ActivityServiceTest {
         val completedEvent = makeEvent(status = EventStatus.completed, eventDatetime = now.minusDays(2))
         val cancelledEvent = makeEvent(status = EventStatus.cancelled, eventDatetime = now.minusDays(3))
         val activeSklad = makeSkladchina(status = SkladchinaStatus.active, deadline = now.plusDays(1))
-        val closedSklad = makeSkladchina(status = SkladchinaStatus.closed_success, deadline = now.minusDays(1))
+        val closedSklad = makeSkladchina(status = SkladchinaStatus.collected, deadline = now.minusDays(1))
 
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(upcomingEvent, 0),
             EventWithGoingCount(completedEvent, 0),
             EventWithGoingCount(cancelledEvent, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(activeSklad, 0, 0, 0),
-            SkladchinaWithAggregates(closedSklad, 0, 0, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(activeSklad, DebtTotals.EMPTY, 0),
+            SkladchinaWithAggregates(closedSklad, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, null)
@@ -161,7 +161,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(startedButNotCompleted, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
 
@@ -176,7 +176,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, goingCount = 7, confirmedCount = 4)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, ActivityType.EVENT)
 
@@ -199,8 +199,8 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(firstActivity, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(secondActivity, 0, 0, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(secondActivity, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, null)
@@ -229,11 +229,11 @@ class ActivityServiceTest {
     fun `type filter skladchina returns only skladchinas without hitting event repository`() {
         val activeSklad = makeSkladchina(deadline = now.plusDays(2), title = "Active")
         val closedSklad = makeSkladchina(
-            status = SkladchinaStatus.closed_failed, deadline = now.minusDays(2), title = "Closed"
+            status = SkladchinaStatus.cancelled, deadline = now.minusDays(2), title = "Closed"
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(activeSklad, 0, 2, 0),
-            SkladchinaWithAggregates(closedSklad, 0, 2, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(activeSklad, DebtTotals.EMPTY, 0),
+            SkladchinaWithAggregates(closedSklad, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, ActivityType.SKLADCHINA)
@@ -247,7 +247,7 @@ class ActivityServiceTest {
     @Test
     fun `empty club returns both arrays empty`() {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns emptyList()
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
 
@@ -261,7 +261,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -275,7 +275,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -289,7 +289,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -304,7 +304,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -319,7 +319,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -333,7 +333,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns emptyList()
 
         val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
@@ -345,8 +345,8 @@ class ActivityServiceTest {
     fun `skladchina photoUrl propagates from domain to activity dto`() {
         val sklad = makeSkladchina(deadline = now.plusDays(1), photoUrl = "https://cdn.example.com/sklad.jpg")
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns emptyList()
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(sklad, 0, 0, 0)
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(sklad, DebtTotals.EMPTY, 0)
         )
 
         val result = service.getClubActivities(clubId, userId, null)
@@ -399,17 +399,21 @@ class ActivityServiceTest {
         description = null,
         rules = null,
         photoUrl = photoUrl,
-        template = SkladchinaTemplate.custom,
-        paymentMode = SkladchinaMode.fixed_equal,
-        totalGoalKopecks = 100000L,
+        kind = SkladchinaKind.shared,
+        amountKopecks = 100000L,
         paymentLink = "https://pay.me",
         paymentMethodNote = null,
         eventId = null,
         deadline = deadline,
-        affectsReputation = false,
+        enrollmentUntil = null,
+        minParticipants = null,
+        lockedAt = null,
+        orderedAt = null,
+        hiddenFromUserId = null,
         status = status,
         closedAt = null,
-        closedBy = null,
+        reminderSentAt = null,
+        orderRemindedAt = null,
         createdAt = createdAt,
         updatedAt = createdAt
     )

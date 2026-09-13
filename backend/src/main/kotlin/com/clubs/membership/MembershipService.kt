@@ -227,17 +227,17 @@ class MembershipService(
     private fun leaveFreeClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
         // Перечислить ДО любого удаления — каскад ниже удалит именно эти исходные строки.
         val eventObligations = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId)
-        val skladchinaObligations = skladchinaRepository.findPendingReputationObligations(userId, clubId)
 
-        // Сначала штрафы: подтверждённая бронь → no_show (−200), складчина с ожидающей репутацией →
-        // skladchina_expired (−40). Идемпотентно через UNIQUE в ledger — более поздний естественный
-        // исход для того же источника конфликтует, и строка выхода побеждает, так что двойной выход
-        // никогда не засчитывается дважды. Открытые встречи (V62) из штрафов исключены — их бронь
-        // не дефицитна и отказ свободен, — но в каскаде/перерисовке закрепа ниже они участвуют.
+        // Сначала штрафы: подтверждённая бронь → no_show (−200). Идемпотентно через UNIQUE в ledger —
+        // более поздний естественный исход для того же источника конфликтует, и строка выхода
+        // побеждает, так что двойной выход никогда не засчитывается дважды. Открытые встречи (V62)
+        // из штрафов исключены — их бронь не дефицитна и отказ свободен, — но в каскаде/перерисовке
+        // закрепа ниже они участвуют. Долги по сборам выход не трогает: долг живёт между людьми, а
+        // не в клубе (skladchina-v3 § 2.2), просрочку по нему спишет DebtScheduler в свой срок.
         reputationService.penalizeExit(
             userId, clubId,
             eventObligations.filterNot { it.isOpenEvent }.map { ExitObligation(it.eventId, it.eventDatetime) },
-            skladchinaObligations.map { ExitObligation(it.skladchinaId, it.deadline) }
+            skladchinaExpiries = emptyList()
         )
 
         // Держим блокировку слотов по каждому событию (отсортировано → без deadlock, снимается при
@@ -246,9 +246,8 @@ class MembershipService(
         val freedEventIds = eventObligations.map { it.eventId }.sorted()
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
 
-        val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
-        // Живой статус сбора: состав складчины изменился — перерисовать пост в чате (ушедший
-        // не должен оставаться в «Ждём:»).
+        // Этап «Кто в деле?»: ушедший больше не в списке — доля на него не посчитается; пост перерисовать.
+        val cascadedSkladchinas = skladchinaRepository.removeEnrollmentsForUserInClub(userId, clubId)
         cascadedSkladchinas.forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
         // Освобождение места — общий путь с отказом (RosterService.releaseSeat): повышение из
@@ -260,9 +259,9 @@ class MembershipService(
         membershipRepository.cancel(membership.id)
 
         log.info(
-            "User left free club: clubId={} userId={} eventNoShows={} skladchinaExpiries={} promotedWaitlist={} " +
+            "User left free club: clubId={} userId={} eventNoShows={} promotedWaitlist={} " +
                 "cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}",
-            clubId, userId, eventObligations.size, skladchinaObligations.size, promotedWaitlist,
+            clubId, userId, eventObligations.size, promotedWaitlist,
             cascadedSkladchinas.size, cascadedEventResponses, cascadedApplications
         )
         publishRevokedIfNoLiveWindow(membership, clubId, userId)
@@ -289,7 +288,8 @@ class MembershipService(
         // бронь открытой встречи (V62) удаляется каскадом, но репутацию не трогает — в счёт не входит.
         val events = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId)
             .count { !it.isOpenEvent }
-        val skladchinas = skladchinaRepository.findPendingReputationObligations(userId, clubId).size
+        // Долги переживают выход из клуба (skladchina-v3 § 2.2) — нарушать нечего.
+        val skladchinas = 0
         return LeavePreviewDto(
             eventObligations = events,
             skladchinaObligations = skladchinas,

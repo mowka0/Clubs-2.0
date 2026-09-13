@@ -7,6 +7,7 @@ import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.UploadedImageUrls
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.RosterService
 import com.clubs.generated.jooq.enums.MembershipStatus
@@ -283,9 +284,9 @@ class AccessGateService(
             .map { it.eventId }
             .sorted()
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
-        // Живой статус сбора: кикнутый не должен публично висеть «должником» в «Ждём:» —
-        // перерисовываем пост каждой затронутой складчины.
-        skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId)
+        // Долги кикнутого остаются (долг между людьми, skladchina-v3 § 2.2), но из ещё не замороженной
+        // записи «Кто в деле?» он выбывает — доля на него не посчитается; пост перерисовать.
+        skladchinaRepository.removeEnrollmentsForUserInClub(targetUserId, clubId)
             .forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
         // Освобождение места — общий путь с отказом и выходом (RosterService.releaseSeat): повышение
@@ -350,15 +351,8 @@ class AccessGateService(
      * URL И произвольные внешние хосты (например, evil.com/uploads/x.png) от попадания в кликабельную
      * ссылку организатора — доказательство должно приходить из нашего собственного хранилища.
      */
-    private fun isUploadedImageUrl(url: String): Boolean {
-        val prefix = storageBaseUrl.trimEnd('/')
-        val relative = when {
-            prefix.isNotEmpty() && url.startsWith("$prefix/") -> url.removePrefix("$prefix/")
-            prefix.isEmpty() && url.startsWith("/") -> url.removePrefix("/")
-            else -> return false
-        }
-        return UPLOADS_PATH.matches(relative)
-    }
+    private fun isUploadedImageUrl(url: String): Boolean =
+        UploadedImageUrls.isUploadedImageUrl(url, storageBaseUrl)
 
     companion object {
         // Статусы «без доступа», из которых участник может заявить об оплате взноса в любой момент:
@@ -379,7 +373,5 @@ class AccessGateService(
         const val CLAIM_CASH = "cash"
         // Отражает RemoveMemberRequest @Size(min=5); перепроверяется после trim в removeMember.
         private const val MIN_REASON_LENGTH = 5
-        // Путь внутри хранилища, куда пишет наш загрузчик: "uploads/{uuid}.{ext}" (StorageController).
-        private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png)$", RegexOption.IGNORE_CASE)
     }
 }

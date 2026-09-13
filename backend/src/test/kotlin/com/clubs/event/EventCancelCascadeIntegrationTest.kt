@@ -64,7 +64,7 @@ class EventCancelCascadeIntegrationTest {
 
     @BeforeEach
     fun setUp() {
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
@@ -106,32 +106,32 @@ class EventCancelCascadeIntegrationTest {
     }
 
     @Test
-    fun `cancelActiveByEventId cancels the linked active split and releases pending, leaving the rest intact`() {
+    fun `cancelActiveByEventId cancels the linked active split and forgives open debts, leaving the rest intact`() {
         val event = insertEvent(club, "stage_2", OffsetDateTime.now().plusDays(2))
         val activeSplit = insertSkladchina(club, "active", event)
-        val pendingUser = newUser()
+        val waitingUser = newUser()
         val paidUser = newUser()
-        insertParticipant(activeSplit, pendingUser, "pending")
-        insertParticipant(activeSplit, paidUser, "paid")
+        insertDebt(activeSplit, waitingUser, "waiting")
+        insertDebt(activeSplit, paidUser, "received")
 
-        // A successfully-closed split for the SAME event must be left intact (money already collected).
-        val closedSplit = insertSkladchina(club, "closed_success", event)
+        // A collected split for the SAME event must be left intact (money already collected).
+        val closedSplit = insertSkladchina(club, "collected", event)
         // An active split on ANOTHER event must not be touched.
         val otherEvent = insertEvent(club, "stage_2", OffsetDateTime.now().plusDays(2))
         val otherSplit = insertSkladchina(club, "active", otherEvent)
-        val otherPending = newUser()
-        insertParticipant(otherSplit, otherPending, "pending")
+        val otherWaiting = newUser()
+        insertDebt(otherSplit, otherWaiting, "waiting")
 
         val cancelled = skladchinaRepository.cancelActiveByEventId(event)
 
         assertEquals(1, cancelled)
         assertEquals("cancelled", statusOf("skladchinas", activeSplit))
-        // pending → released (reputation-neutral), NOT expired_no_response (which would penalize).
-        assertEquals("released", participantStatusOf(activeSplit, pendingUser))
-        assertEquals("paid", participantStatusOf(activeSplit, paidUser))
-        assertEquals("closed_success", statusOf("skladchinas", closedSplit))
+        // Открытый долг прощён (без репутации), полученный не трогаем.
+        assertEquals("forgiven", debtStatusOf(activeSplit, waitingUser))
+        assertEquals("received", debtStatusOf(activeSplit, paidUser))
+        assertEquals("collected", statusOf("skladchinas", closedSplit))
         assertEquals("active", statusOf("skladchinas", otherSplit))
-        assertEquals("pending", participantStatusOf(otherSplit, otherPending))
+        assertEquals("waiting", debtStatusOf(otherSplit, otherWaiting))
     }
 
     // ---- helpers ----
@@ -170,18 +170,18 @@ class EventCancelCascadeIntegrationTest {
         val eventValue = eventId?.let { "'$it'" } ?: "NULL"
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, status, event_id)
-            VALUES ('$id', '$clubId', '$ownerId', 'Sklad', 'voluntary'::skladchina_mode, 'http://pay', '$deadline', '$status'::skladchina_status, $eventValue)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link, deadline, status, event_id)
+            VALUES ('$id', '$clubId', '$ownerId', 'Sklad', 'shared'::skladchina_kind, 'http://pay', '$deadline', '$status'::skladchina_status, $eventValue)
             """.trimIndent()
         )
         return id
     }
 
-    private fun insertParticipant(skladchinaId: UUID, userId: UUID, status: String) {
+    private fun insertDebt(skladchinaId: UUID, userId: UUID, status: String) {
         dsl.execute(
             """
-            INSERT INTO skladchina_participants (skladchina_id, user_id, status)
-            VALUES ('$skladchinaId', '$userId', '$status'::skladchina_participant_status)
+            INSERT INTO debts (skladchina_id, debtor_id, creditor_id, amount_kopecks, status)
+            VALUES ('$skladchinaId', '$userId', '$ownerId', 1000, '$status'::debt_status)
             """.trimIndent()
         )
     }
@@ -192,9 +192,9 @@ class EventCancelCascadeIntegrationTest {
     private fun reasonOf(id: UUID): String? =
         dsl.fetchOne("SELECT cancellation_reason FROM events WHERE id = ?", id)?.get(0, String::class.java)
 
-    private fun participantStatusOf(skladchinaId: UUID, userId: UUID): String? =
+    private fun debtStatusOf(skladchinaId: UUID, userId: UUID): String? =
         dsl.fetchOne(
-            "SELECT status FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            "SELECT status FROM debts WHERE skladchina_id = ? AND debtor_id = ?",
             skladchinaId, userId
         )?.get(0, String::class.java)
 }

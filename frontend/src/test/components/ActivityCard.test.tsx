@@ -58,14 +58,15 @@ function buildSkladchina(
     title: 'Sauna booking',
     createdAt: '2026-05-23T10:00:00Z',
     isCompleted: false,
-    paymentMode: 'fixed_equal',
-    totalGoalKopecks: 500000,
-    collectedKopecks: 100000,
+    kind: 'shared',
+    amountKopecks: 500000,
+    targetKopecks: 500000,
+    receivedKopecks: 100000,
     deadline: '2026-05-28T12:00:00Z',
-    participantCount: 5,
-    paidCount: 1,
+    debtCount: 5,
+    receivedCount: 1,
+    enrolledCount: 0,
     status: 'active',
-    affectsReputation: false,
     photoUrl: null,
     ...overrides,
   };
@@ -207,33 +208,25 @@ describe('ActivityCard (full)', () => {
     expect(screen.getByText('Sauna booking')).toBeInTheDocument();
     // 100000 / 500000 kopecks = 20% collected.
     expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('20%');
-    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('собрано');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('получено');
     expect(screen.getByText(/1\s?000\s?₽/)).toBeInTheDocument();
     expect(screen.getByText(/5\s?000\s?₽/)).toBeInTheDocument();
   });
 
-  it('renders voluntary skladchina as "<amount> собрано" without goal', () => {
+  it('renders voluntary skladchina as "<amount> получено" without a target', () => {
     render(
       <ActivityCard
         activity={buildSkladchina({
-          paymentMode: 'voluntary',
-          totalGoalKopecks: null,
-          collectedKopecks: 200000,
+          kind: 'voluntary',
+          amountKopecks: null,
+          targetKopecks: null,
+          receivedKopecks: 200000,
         })}
         onClick={vi.fn()}
       />,
     );
-    expect(screen.getByText(/собрано/)).toBeInTheDocument();
-  });
-
-  it('renders ⚠️ Важный сбор when affectsReputation', () => {
-    render(
-      <ActivityCard
-        activity={buildSkladchina({ affectsReputation: true })}
-        onClick={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/Важный сбор/)).toBeInTheDocument();
+    expect(screen.getByText(/получено/)).toBeInTheDocument();
+    expect(screen.getByText(/по желанию/)).toBeInTheDocument();
   });
 
   it('calls onClick when the card is tapped', async () => {

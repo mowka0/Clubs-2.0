@@ -1,6 +1,6 @@
 # Module: Telegram Bot
 
-**Источник:** `backend/src/main/kotlin/com/clubs/bot/` (`ClubsBot.kt`, `NotificationService.kt`, `BotConfig.kt`; event-листенеры `EventBotNotifier`, `Stage2StartedListener`, `AttendanceMarkedListener`, `AttendanceDisputedListener`, `SkladchinaBotNotifier`; шедулеры `EventReminderScheduler`, `SkladchinaReminderScheduler`).
+**Источник:** `backend/src/main/kotlin/com/clubs/bot/` (`ClubsBot.kt`, `NotificationService.kt`, `BotConfig.kt`; event-листенеры `EventBotNotifier`, `Stage2StartedListener`, `AttendanceMarkedListener`, `AttendanceDisputedListener`, `SkladchinaBotNotifier`, `DebtBotNotifier`; callback-кнопки `RosterCallbackService`, `DebtCallbackService` («Получил / Не получил» по долгу и сальдо — `skladchina-v3.md` § 5); шедулеры `EventReminderScheduler`, `DebtScheduler`).
 **PRD:** §4.6 (Telegram-бот), §4.7.3 (платежи — pre_checkout / successful_payment).
 
 Этот модуль описывает **реальное** поведение бота после рефакторинга `feature/refactor-bot` (2026-05-12). Расхождения с PRD §4.6 зафиксированы как gap'ы в `docs/backlog/telegram-bot-prd-gaps.md` — на них здесь стоят ссылки `[GAP-N]`.

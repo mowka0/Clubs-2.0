@@ -1,5 +1,7 @@
 import { FC } from 'react';
 import type { MySkladchinaListItemDto } from '../../types/api';
+import { formatRub } from '../../utils/money';
+import { DATE_FMT, KIND_LABEL, initials, statusLabel } from '../../utils/skladchinaKind';
 
 interface SkladchinaCardProps {
   skladchina: MySkladchinaListItemDto;
@@ -11,66 +13,36 @@ interface Badge {
   accent: boolean;
 }
 
-const DEADLINE_FMT = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function getInitials(name: string): string {
-  return name
-    .replace(/[«»"']/g, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
-}
-
-function formatRubles(kopecks: number): string {
-  const rub = Math.floor(kopecks / 100);
-  return rub.toLocaleString('ru-RU');
-}
-
 function pickBadge(s: MySkladchinaListItemDto): Badge | null {
-  // Для закрытых складчин показываем финальный статус, а не персональный myStatus
-  if (s.status !== 'active') {
-    switch (s.status) {
-      case 'closed_success': return { text: 'Завершён', accent: false };
-      case 'closed_failed':  return { text: 'Не собран', accent: false };
-      case 'cancelled':      return { text: 'Отменён',  accent: false };
-    }
+  // У закрытых — итог, а не персональное состояние.
+  if (s.status !== 'active') return { text: statusLabel(s.status), accent: false };
+  if (s.actionRequired) return { text: 'Ждёт вас', accent: true };
+  switch (s.myDebtStatus) {
+    case 'received': return { text: 'Оплачено', accent: false };
+    case 'claimed': return { text: 'Ждём подтверждения', accent: false };
+    case 'promised': return { text: 'Обещали', accent: false };
+    case 'forgiven': return { text: 'Прощён', accent: false };
+    case 'dropped': return { text: 'Выбыли', accent: false };
+    default: break;
   }
-  if (s.actionRequired) return { text: 'Требует оплаты', accent: true };
-  switch (s.myStatus) {
-    case 'paid':                 return { text: 'Оплачено', accent: false };
-    case 'declined':             return { text: 'Отказался', accent: false };
-    case 'expired_no_response':  return { text: 'Не успел', accent: false };
-    default:                     break;
-  }
-  if (s.isOrganizerView) return { text: 'Ваш сбор', accent: false };
+  if (s.isCreator) return { text: 'Ваш сбор', accent: false };
   return null;
 }
 
 export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick }) => {
   const badge = pickBadge(skladchina);
-  const clubInitials = getInitials(skladchina.clubName);
-  const deadlineStr = DEADLINE_FMT.format(new Date(skladchina.deadline));
-
-  const hasGoal = skladchina.totalGoalKopecks != null && skladchina.totalGoalKopecks > 0;
-  // A-5: прогресс по людям — главная строка; деньги — приглушённая вторичная строка.
-  const peoplePercent = skladchina.participantCount > 0
-    ? Math.round((skladchina.paidCount / skladchina.participantCount) * 100)
-    : 0;
-  const moneyLine = hasGoal
-    ? `${formatRubles(skladchina.collectedKopecks)} ₽ из ${formatRubles(skladchina.totalGoalKopecks!)} ₽`
-    : `${formatRubles(skladchina.collectedKopecks)} ₽ собрано`;
+  const clubInitials = initials(skladchina.clubName);
+  const target = skladchina.targetKopecks ?? skladchina.amountKopecks;
+  const moneyPct = target && target > 0 ? Math.min(100, Math.round((skladchina.receivedKopecks / target) * 100)) : 0;
+  const moneyLine = target && target > 0
+    ? `${formatRub(skladchina.receivedKopecks)} из ${formatRub(target)}`
+    : `${formatRub(skladchina.receivedKopecks)} получено`;
+  const deadlineLine = skladchina.deadline ? `до ${DATE_FMT.format(new Date(skladchina.deadline))}` : 'без срока';
 
   return (
     <button type="button" className="rd-activity-card" onClick={onClick}>
       <div className="rd-act-cover rd-c-coin">
-        <span className="rd-type-badge">СБОР</span>
+        <span className="rd-type-badge">{KIND_LABEL[skladchina.kind].toUpperCase()}</span>
       </div>
       <div className="rd-act-body">
         <div className="rd-act-club-row">
@@ -81,20 +53,17 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
         </div>
         <div className="rd-act-ttl">{skladchina.title}</div>
         <div className="rd-act-meta" style={{ fontWeight: 600, color: 'var(--text)' }}>
-          Скинулись {skladchina.paidCount} из {skladchina.participantCount}
+          Оплатили {skladchina.receivedCount} из {skladchina.debtCount}
         </div>
         <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
-          <span className="rd-fill" style={{ width: `${peoplePercent}%`, display: 'block', height: '100%' }} />
+          <span className="rd-fill" style={{ width: `${moneyPct}%`, display: 'block', height: '100%' }} />
         </div>
         <div className="rd-act-meta">
-          {moneyLine} · до {deadlineStr}
+          {moneyLine} · {deadlineLine}
         </div>
-        {(badge || skladchina.affectsReputation) && (
+        {badge && (
           <div className="rd-badges-row">
-            {badge && <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>}
-            {skladchina.affectsReputation && (
-              <span className="rd-badge rd-rep" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
-            )}
+            <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>
           </div>
         )}
       </div>

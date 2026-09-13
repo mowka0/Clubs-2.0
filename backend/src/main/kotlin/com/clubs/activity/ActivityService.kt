@@ -74,7 +74,7 @@ class ActivityService(
         val skladchinas: List<ActivityItemDto.SkladchinaActivity> = if (typeFilter == ActivityType.EVENT) {
             emptyList()
         } else {
-            loadSkladchinas(clubId)
+            loadSkladchinas(clubId, userId)
         }
 
         val all: List<ActivityItemDto> = events + skladchinas
@@ -94,21 +94,22 @@ class ActivityService(
         return ClubActivityFeedDto(upcoming = sortedUpcoming, past = sortedPast)
     }
 
-    private fun loadSkladchinas(clubId: UUID): List<ActivityItemDto.SkladchinaActivity> {
+    // Скрытый от вызывающего тихий сбор в ленту не попадает (viewerId).
+    private fun loadSkladchinas(clubId: UUID, userId: UUID): List<ActivityItemDto.SkladchinaActivity> {
         val raw: List<SkladchinaWithAggregates> =
-            skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = true)
+            skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = true, viewerId = userId)
         return raw.map(activityMapper::toSkladchinaActivity)
     }
 
     companion object {
         /**
-         * Ключ сортировки для элемента: собственный datetime события или deadline складчины.
-         * Исчерпывающий `when` по sealed-подтипу — компилятор требует ветку
-         * для каждого будущего типа активности.
+         * Ключ сортировки для элемента: собственный datetime события или срок сбора («По желанию»
+         * без срока — дата создания). Исчерпывающий `when` по sealed-подтипу — компилятор требует
+         * ветку для каждого будущего типа активности.
          */
         private fun relevantDate(item: ActivityItemDto): OffsetDateTime = when (item) {
             is ActivityItemDto.EventActivity -> item.eventDatetime
-            is ActivityItemDto.SkladchinaActivity -> item.deadline
+            is ActivityItemDto.SkladchinaActivity -> item.deadline ?: item.createdAt
         }
 
         /** Ближайшие первыми; ничья разрешается через `id ASC` для детерминированного порядка. */

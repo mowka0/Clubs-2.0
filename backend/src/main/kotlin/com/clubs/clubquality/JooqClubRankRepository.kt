@@ -6,7 +6,6 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.MembershipEvent
-import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.generated.jooq.tables.references.APPLICATIONS
@@ -16,7 +15,7 @@ import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIP_HISTORY
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
-import com.clubs.generated.jooq.tables.references.SKLADCHINA_PARTICIPANTS
+import com.clubs.generated.jooq.tables.references.DEBTS
 import com.clubs.generated.jooq.tables.references.TRANSACTIONS
 import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.DSLContext
@@ -280,16 +279,16 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .fetch()
             .groupBy({ it.value1()!! }, { it.value2()!! })
 
+    /** «Призрак» сбора = долг, за который списано −40 (skladchina-v3 § 4); момент — штамп списания. */
     private fun skladchinaGhostsByClub(hardCutoff: OffsetDateTime): Map<UUID, List<OffsetDateTime>> =
-        dsl.select(SKLADCHINAS.CLUB_ID, SKLADCHINAS.CLOSED_AT)
-            .from(SKLADCHINA_PARTICIPANTS)
-            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
+        dsl.select(SKLADCHINAS.CLUB_ID, DEBTS.REPUTATION_MINUS_AT)
+            .from(DEBTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(DEBTS.SKLADCHINA_ID))
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
             .where(
                 CLUBS.IS_ACTIVE.isTrue
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.expired_no_response))
-                    .and(SKLADCHINAS.CLOSED_AT.isNotNull)
-                    .and(SKLADCHINAS.CLOSED_AT.ge(hardCutoff)),
+                    .and(DEBTS.REPUTATION_MINUS_AT.isNotNull)
+                    .and(DEBTS.REPUTATION_MINUS_AT.ge(hardCutoff)),
             )
             .fetch()
             .groupBy({ it.value1()!! }, { it.value2()!! })

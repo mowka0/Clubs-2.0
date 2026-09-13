@@ -436,7 +436,7 @@ class AccessGateServiceTest {
         // через общий путь RosterService.releaseSeat (промоут, отмена при нуле, порог MIN),
         // и строго ПОСЛЕ удаления строки: иначе метод повысил бы очередь на ещё занятое место.
         verify { eventResponseRepository.lockEventSlots(eventId) }
-        verify { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId) }
+        verify { skladchinaRepository.removeEnrollmentsForUserInClub(targetUserId, clubId) }
         io.mockk.verifyOrder {
             eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
             rosterService.releaseSeat(eventId)

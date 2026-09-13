@@ -15,9 +15,10 @@ function formatShortDate(iso: string): string {
   return DATE_FMT.format(new Date(iso));
 }
 
+// У сбора «По желанию» срока может не быть — тогда строка показывает дату создания.
 function activityDate(activity: ActivityItemDto): string {
   const iso =
-    activity.type === 'event' ? activity.eventDatetime : activity.deadline;
+    activity.type === 'event' ? activity.eventDatetime : activity.deadline ?? activity.createdAt;
   return formatShortDate(iso);
 }
 

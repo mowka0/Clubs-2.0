@@ -1,186 +1,225 @@
-import { FC, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { FC, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { AvatarUpload } from '../components/AvatarUpload';
+import { PhotoAttach } from '../components/PhotoAttach';
 import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
-import { useCreateSkladchinaMutation } from '../queries/skladchina';
-import type { CreateSkladchinaRequest, MemberListItemDto, SkladchinaMode } from '../types/api';
+import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
+import { useAuthStore } from '../store/useAuthStore';
+import type { CreateSkladchinaRequest, MemberListItemDto } from '../types/api';
+import { rubToKopecks } from '../utils/money';
+import { DATE_FMT, FLOW_EMOJI, FLOW_KIND, FLOW_LABEL, FLOW_SUBTITLE, isSkladchinaFlow, type SkladchinaFlow } from '../utils/skladchinaKind';
 
-const MODE_LABELS: Record<SkladchinaMode, string> = {
-  fixed_equal: 'Поровну между всеми',
-  fixed_individual: 'Индивидуальная сумма каждому',
-  voluntary: 'По желанию (без фикс. суммы)',
+const TITLE_PLACEHOLDER: Record<SkladchinaFlow, string> = {
+  split: 'Ужин после игры',
+  enroll: 'Тренер на субботу',
+  per_head: 'Билеты на матч',
+  voluntary: 'Подарок Маше',
 };
 
-const MODE_DESCRIPTIONS: Record<SkladchinaMode, string> = {
-  fixed_equal: 'Общая сумма делится поровну. Каждый видит свою долю.',
-  fixed_individual: 'Вы задаёте сумму для каждого участника отдельно.',
-  voluntary: 'Без фиксированной суммы. Участник вводит свою сумму при оплате.',
-};
-
-const CalendarIcon: FC = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <path d="M16 2v4M8 2v4M3 10h18" />
-  </svg>
-);
-
-function rubToKopecks(rub: string): number | null {
-  const v = Number(rub.replace(',', '.').trim());
-  if (!Number.isFinite(v) || v <= 0) return null;
-  return Math.round(v * 100);
+function toLocalInput(d: Date): string {
+  const c = new Date(d);
+  c.setMinutes(c.getMinutes() - c.getTimezoneOffset());
+  return c.toISOString().slice(0, 16);
 }
 
-function defaultDeadlineLocal(): string {
+function plusDays(days: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + 3);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+  d.setDate(d.getDate() + days);
+  return toLocalInput(d);
 }
-
-// Правило anti-ambush из редизайна репутации: важный сбор обязан давать участникам
-// не менее 24 часов на реакцию, прежде чем сработает штраф −40.
-const IMPORTANT_MIN_DEADLINE_HOURS = 24;
-
-const REPUTATION_HELPER_TEXT =
-  'Влияет на репутацию участников: оплата +10, отказ — без штрафа, молчание до дедлайна −40';
 
 function createErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
-    // Бизнес-гейты складчины (дедлайн 24ч, ≤3 важных за 7 дней и т.п.)
-    // возвращаются как 400/409 с готовым русским сообщением для пользователя — показываем его как есть.
-    if ((e.status === 400 || e.status === 409) && e.message) {
-      return e.message;
-    }
-    if (e.status === 429) {
-      return 'Слишком много запросов. Подождите немного и попробуйте снова.';
-    }
+    // Бизнес-правила бэкенда возвращаются как 400/403/404/409 с готовым русским сообщением.
+    if ((e.status === 400 || e.status === 403 || e.status === 404 || e.status === 409) && e.message) return e.message;
+    if (e.status === 429) return 'Слишком много запросов. Подождите немного и попробуйте снова.';
   }
   return 'Не удалось создать сбор. Проверьте поля и попробуйте снова.';
 }
 
+/** `?flow=` — четыре входа; старые ссылки `?kind=` (страница встречи, закладки) читаются как раньше. */
+function resolveFlow(params: URLSearchParams): SkladchinaFlow {
+  const flow = params.get('flow');
+  if (isSkladchinaFlow(flow)) return flow;
+  const kind = params.get('kind');
+  if (kind === 'per_head' || kind === 'voluntary') return kind;
+  return 'split';
+}
+
+/**
+ * Одна форма на четыре входа в сбор (skladchina-v3 § 9, § 13 п. 32–33): «Кто сколько должен?»,
+ * «Кто в деле?», «Кто берёт?», «Кто сколько хочет?». Каждый вход — плоская форма без
+ * переключателей режима; единственный выбор внутри — «поровну / суммы по людям». Встреча в форму
+ * приходит только ссылкой со страницы встречи (`eventId`) и показывается строкой контекста.
+ * Создать может любой участник клуба.
+ */
 export const CreateSkladchinaPage: FC = () => {
   useBackButton(true);
   const { id: clubId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const membersQuery = useClubMembersQuery(clubId);
+  const myId = useAuthStore((st) => st.user?.id);
   const createMut = useCreateSkladchinaMutation();
 
-  // De-Stars: у участника без доступа — frozen (первый взнос не подтверждён) или expired (просрочил
-  // продление) — нет доступа к клубу, поэтому включить его в новую складчину нельзя. Он остаётся
-  // видимым (чтобы организатор понимал почему), но неактивным, и сортируется в конец списка —
-  // чтобы активный состав читался первым.
-  const eligibleMembers = useMemo(
-    () => {
-      const rows = membersQuery.data ?? [];
-      const locked = (m: MemberListItemDto) =>
-        m.accessStatus === 'frozen' || m.accessStatus === 'expired' ? 1 : 0;
-      return [...rows].sort((a, b) => locked(a) - locked(b));
-    },
-    [membersQuery.data],
-  );
+  const flow = resolveFlow(searchParams);
+  const kind = FLOW_KIND[flow];
+  const presetEventId = searchParams.get('eventId');
+  // Список людей есть у двух входов: «кто сколько должен» и «кто сколько хочет».
+  const usesPeople = flow === 'split' || flow === 'voluntary';
+
+  const membersQuery = useClubMembersQuery(clubId);
+  const splittableQuery = useSplittableEventsQuery(presetEventId ? clubId : undefined);
+
+  // Без доступа (frozen/expired) в сбор не попадают: видны, но неактивны, и уходят в конец списка.
+  const members = useMemo(() => {
+    const rows = membersQuery.data ?? [];
+    const locked = (m: MemberListItemDto) => (m.accessStatus === 'frozen' || m.accessStatus === 'expired' ? 1 : 0);
+    return [...rows].sort((a, b) => locked(a) - locked(b));
+  }, [membersQuery.data]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [rules, setRules] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [mode, setMode] = useState<SkladchinaMode>('fixed_equal');
-  const [totalRub, setTotalRub] = useState('');
+  const [amountRub, setAmountRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
-  const [deadline, setDeadline] = useState(defaultDeadlineLocal());
-  const [affectsReputation, setAffectsReputation] = useState(false);
+  const [deadline, setDeadline] = useState(plusDays(flow === 'per_head' ? 5 : 3));
+  const [noDeadline, setNoDeadline] = useState(flow === 'voluntary');
+  const eventId = presetEventId;
+  const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
+  const [minParticipants, setMinParticipants] = useState('');
+  const [enrollCreator, setEnrollCreator] = useState(true);
+  const [takeCreator, setTakeCreator] = useState(true);
+  const [creatorQuantity, setCreatorQuantity] = useState('1');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [individualAmounts, setIndividualAmounts] = useState<Record<string, string>>({});
+  const [perPerson, setPerPerson] = useState(false);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [hiddenFrom, setHiddenFrom] = useState<string | null>(null);
+  const [ownContribution, setOwnContribution] = useState(false);
+  const [ownContributionRub, setOwnContributionRub] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const events = splittableQuery.data ?? [];
+  const selectedEvent = events.find((ev) => ev.eventId === eventId);
+  const attendedIds = useMemo(() => new Set(selectedEvent?.attendedUserIds ?? []), [selectedEvent]);
+  // После встречи: сначала пришедшие, ниже остальные участники клуба; своей строки у создателя нет.
+  const orderedMembers = useMemo(() => {
+    const others = members.filter((m) => m.userId !== myId);
+    if (attendedIds.size === 0) return others;
+    return [...others.filter((m) => attendedIds.has(m.userId)), ...others.filter((m) => !attendedIds.has(m.userId))];
+  }, [members, attendedIds, myId]);
+
+  // Встреча задана ссылкой со страницы встречи: явка подтягивается, когда список встреч загрузился.
+  const prefilledEventRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedEvent || prefilledEventRef.current === selectedEvent.eventId) return;
+    prefilledEventRef.current = selectedEvent.eventId;
+    setSelectedIds(new Set(selectedEvent.attendedUserIds));
+  }, [selectedEvent]);
 
   if (!clubId) {
     return (
       <div className="rd-page">
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
-          Клуб не найден
-        </div>
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>Клуб не найден</div>
       </div>
     );
   }
-
-  const toggleParticipant = (userId: string) => {
-    const member = eligibleMembers.find((m) => m.userId === userId);
-    if (member?.accessStatus === 'frozen' || member?.accessStatus === 'expired') return;
-    haptic.select();
-    const next = new Set(selectedIds);
-    if (next.has(userId)) next.delete(userId);
-    else next.add(userId);
-    setSelectedIds(next);
-  };
 
   const fail = (msg: string) => {
     haptic.notify('error');
     setSubmitError(msg);
   };
 
-  // Добровольная складчина никогда не влияет на репутацию («добровольно, но со штрафом
-  // за молчание» — противоречие) — сбрасываем флаг при переключении в этот режим.
-  const handleModeChange = (next: SkladchinaMode) => {
-    setMode(next);
-    if (next === 'voluntary') setAffectsReputation(false);
+  const perPersonMode = flow === 'split' && perPerson;
+  const includeMe = Boolean(myId && selectedIds.has(myId));
+
+  const toggleMember = (m: MemberListItemDto) => {
+    if (m.accessStatus === 'frozen' || m.accessStatus === 'expired') return;
+    haptic.select();
+    const next = new Set(selectedIds);
+    if (next.has(m.userId)) next.delete(m.userId);
+    else next.add(m.userId);
+    setSelectedIds(next);
+  };
+
+  const toggleMe = () => {
+    if (!myId) return;
+    haptic.select();
+    const next = new Set(selectedIds);
+    if (next.has(myId)) next.delete(myId);
+    else next.add(myId);
+    setSelectedIds(next);
+  };
+
+  // Поле суммы видно у всех, и введённая сумма сама отмечает человека — иначе набитая сумма
+  // у невыбранного молча пропадала бы при отправке.
+  const setPersonAmount = (m: MemberListItemDto, value: string) => {
+    setAmounts((prev) => ({ ...prev, [m.userId]: value }));
+    if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
   };
 
   const handleSubmit = async () => {
     setSubmitError(null);
-    if (!title.trim()) return fail('Введите название сбора');
-    if (!paymentLink.trim()) return fail('Укажите платёжную ссылку');
-    if (selectedIds.size === 0) return fail('Выберите хотя бы одного участника');
+    if (!title.trim()) return fail('Введите название');
+    if (!paymentLink.trim()) return fail('Укажите реквизиты — ссылку или номер для перевода');
+    // «Суммы по людям»: общая сумма = сумма долей, отдельное поле не нужно.
+    const perPersonTotal = perPersonMode ? Array.from(selectedIds).reduce((acc, id) => acc + (rubToKopecks(amounts[id] ?? '') ?? 0), 0) : 0;
+    const amountKopecks = perPersonMode ? (perPersonTotal > 0 ? perPersonTotal : null) : amountRub.trim() ? rubToKopecks(amountRub) : null;
+    if (!perPersonMode && amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
+    if (!perPersonMode && kind !== 'voluntary' && amountKopecks === null) return fail(flow === 'per_head' ? 'Укажите цену за штуку' : 'Укажите сумму');
+    const withDeadline = kind !== 'voluntary' || !noDeadline;
+    if (withDeadline && !deadline) return fail('Укажите срок');
 
-    let totalKopecks: number | null = null;
-    if (mode === 'fixed_equal') {
-      totalKopecks = rubToKopecks(totalRub);
-      if (totalKopecks === null) return fail('Укажите общую сумму (₽)');
-    } else if (mode === 'voluntary' && totalRub.trim() !== '') {
-      // Опциональная ориентировочная цель для добровольных сборов (например, цель на подарок).
-      totalKopecks = rubToKopecks(totalRub);
-      if (totalKopecks === null) return fail('Целевая сумма должна быть числом больше нуля');
-    }
-
-    const participants = Array.from(selectedIds).map((userId) => {
-      if (mode === 'fixed_individual') {
-        const amount = rubToKopecks(individualAmounts[userId] ?? '');
-        return { userId, expectedAmountKopecks: amount };
-      }
-      return { userId, expectedAmountKopecks: null };
-    });
-
-    if (mode === 'fixed_individual') {
-      const missing = participants.find((p) => p.expectedAmountKopecks === null);
-      if (missing) return fail('Укажите сумму для каждого участника');
-    }
-
-    if (affectsReputation) {
-      const minDeadline = Date.now() + IMPORTANT_MIN_DEADLINE_HOURS * 60 * 60 * 1000;
-      if (new Date(deadline).getTime() < minDeadline) {
-        // Та же формулировка, что и в бэкенд-гейте (SkladchinaService.validateReputationGates).
-        return fail('Для важного сбора дедлайн должен быть не раньше чем через 24 часа');
-      }
-    }
-
-    const deadlineIso = new Date(deadline).toISOString();
     const body: CreateSkladchinaRequest = {
       title: title.trim(),
       description: description.trim() || null,
-      rules: rules.trim() || null,
       photoUrl,
-      paymentMode: mode,
-      totalGoalKopecks: mode === 'fixed_individual' ? null : totalKopecks,
+      kind,
+      amountKopecks,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
-      deadline: deadlineIso,
-      affectsReputation,
-      participants,
+      deadline: withDeadline ? new Date(deadline).toISOString() : null,
     };
+
+    if (flow === 'split') {
+      if (eventId) body.eventId = eventId;
+      if (Array.from(selectedIds).every((id) => id === myId)) return fail('Выберите хотя бы одного человека кроме себя');
+      const debtors = Array.from(selectedIds).map((userId) => ({
+        userId,
+        amountKopecks: perPerson ? rubToKopecks(amounts[userId] ?? '') : null,
+      }));
+      if (perPerson && debtors.some((d) => d.amountKopecks === null)) return fail('Укажите сумму каждому');
+      body.debtors = debtors;
+    }
+    if (flow === 'enroll') {
+      if (!enrollmentUntil) return fail('Укажите, до когда открыта запись');
+      body.enrollmentUntil = new Date(enrollmentUntil).toISOString();
+      const min = minParticipants.trim() ? Number(minParticipants) : null;
+      if (min !== null && (!Number.isInteger(min) || min < 1)) return fail('Минимум — целое число от 1');
+      body.minParticipants = min;
+      body.enrollCreator = enrollCreator;
+    }
+    if (flow === 'per_head') {
+      const qty = Number(creatorQuantity);
+      if (takeCreator && (!/^\d+$/.test(creatorQuantity.trim()) || qty < 1 || qty > 50)) return fail('Сколько штук берёте себе: от 1 до 50');
+      body.takeCreator = takeCreator;
+      body.creatorQuantity = takeCreator ? qty : 1;
+    }
+    if (flow === 'voluntary') {
+      if (eventId) body.eventId = eventId;
+      // Никого не выбрали — зовём всех участников клуба (бэк так и читает пустой список).
+      body.invitedUserIds = Array.from(selectedIds).filter((id) => id !== myId);
+      body.hiddenFromUserId = eventId ? null : hiddenFrom;
+      if (ownContribution) {
+        const own = rubToKopecks(ownContributionRub);
+        if (own === null) return fail('Укажите, сколько скидываетесь сами');
+        body.creatorContributionKopecks = own;
+      }
+    }
 
     try {
       haptic.impact('medium');
@@ -194,191 +233,229 @@ export const CreateSkladchinaPage: FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    haptic.impact('light');
-    navigate(-1);
-  };
+  const perPersonHint = (() => {
+    if (flow !== 'split' || perPerson) return null;
+    const total = rubToKopecks(amountRub);
+    const n = selectedIds.size;
+    if (!total || n === 0) return null;
+    return `≈ по ${Math.round(total / n / 100).toLocaleString('ru-RU')} ₽ с каждого (${n} чел.)`;
+  })();
+
+  const amountLabel = flow === 'per_head' ? 'Цена за штуку (₽)' : flow === 'voluntary' ? (eventId ? 'Всего потратили (₽)' : 'Ориентир (₽)') : 'Сумма (₽)';
+
+  // Встреча приходит только со страницы встречи (§ 13 п. 33): в форме она строка контекста, не поле.
+  const eventLine = presetEventId && (
+    <div className="rd-field">
+      <span className="rd-label">За встречу</span>
+      <div className="rd-hint">
+        {selectedEvent
+          ? `${selectedEvent.title} · ${DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли ${selectedEvent.attendedCount} — они отмечены ниже, состав можно поправить`
+          : 'Пришедшие будут отмечены ниже, состав можно поправить'}
+      </div>
+    </div>
+  );
+
+  const peopleList = (
+    <div className="rd-field">
+      <span className="rd-label">
+        {flow === 'split' ? 'Люди' : 'Кого позвать'}
+        {flow === 'split' && <> <span className="rd-req">*</span></>}
+        <span className="rd-count"> · выбрано {selectedIds.size}</span>
+      </span>
+      {flow === 'split' && (
+        <label className="rd-check" style={{ marginBottom: 8 }}>
+          <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} />
+          <span>Суммы по людям (иначе поровну)</span>
+        </label>
+      )}
+      {membersQuery.isPending && <Spinner size="s" />}
+      {!membersQuery.isPending && orderedMembers.length === 0 && <div className="rd-hint">В клубе пока нет других участников.</div>}
+      {orderedMembers.length > 0 && (
+        <div className="rd-pick-list">
+          {orderedMembers.map((m) => {
+            const isSelected = selectedIds.has(m.userId);
+            const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
+            return (
+              <div key={m.userId} className="rd-debtor-row">
+                <button type="button" className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`} onClick={() => toggleMember(m)} disabled={isFrozen} aria-disabled={isFrozen}>
+                  <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
+                  <span className="rd-pick-name">{m.firstName}{m.lastName ? ` ${m.lastName}` : ''}</span>
+                  {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
+                  {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
+                </button>
+                {!isFrozen && perPersonMode && (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="1"
+                    placeholder="₽"
+                    className="rd-input rd-pick-amount"
+                    aria-label={`Сумма для ${m.firstName}`}
+                    value={amounts[m.userId] ?? ''}
+                    onChange={(e) => setPersonAmount(m, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {flow === 'voluntary' && <span className="rd-hint">Никого не выбрали — позовём всех участников клуба.</span>}
+
+      {/* Создатель — одной фразой во всех входах; рядом только то, что нужно входу. */}
+      {flow === 'split' ? (
+        <>
+          <label className="rd-check" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={includeMe} disabled={!myId} onChange={toggleMe} />
+            <span>Я тоже участвую · моя доля сразу считается полученной</span>
+          </label>
+          {includeMe && perPersonMode && myId && (
+            <label className="rd-take-row">
+              <span className="rd-hint">Моя сумма (₽)</span>
+              <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Моя сумма (₽)" placeholder="₽" value={amounts[myId] ?? ''} onChange={(e) => setAmounts((prev) => ({ ...prev, [myId]: e.target.value }))} />
+            </label>
+          )}
+        </>
+      ) : (
+        <>
+          <label className="rd-check" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
+            <span>Я тоже участвую · мой взнос сразу считается полученным</span>
+          </label>
+          {ownContribution && (
+            <label className="rd-take-row">
+              <span className="rd-hint">Сколько (₽)</span>
+              <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
+            </label>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div className="rd-page">
-      <div className="rd-ft-eyebrow">Создание</div>
-      <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Новый сбор</h1>
+      <div className="rd-ft-eyebrow">Новый сбор</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 6 }}>{FLOW_EMOJI[flow]} {FLOW_LABEL[flow]}</h1>
+      <div className="rd-hint" style={{ marginBottom: 18 }}>{FLOW_SUBTITLE[flow]}</div>
 
       <div className="rd-form">
         <label className="rd-field">
           <span className="rd-label">Название <span className="rd-req">*</span></span>
-          <input className="rd-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
+          <input className="rd-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} placeholder={TITLE_PLACEHOLDER[flow]} />
         </label>
 
         <label className="rd-field">
           <span className="rd-label">Описание</span>
-          <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </label>
 
-        <label className="rd-field">
-          <span className="rd-label">Правила (опц.)</span>
-          <textarea className="rd-textarea" value={rules} onChange={(e) => setRules(e.target.value)} rows={2} />
-        </label>
-
-        <div className="rd-field">
-          <span className="rd-label">Фото (опц.)</span>
-          <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
-        </div>
-
-        <div className="rd-field">
-          <span className="rd-label">Порядок сбора <span className="rd-req">*</span></span>
-          <div className="rd-mode-list">
-            {(Object.keys(MODE_LABELS) as SkladchinaMode[]).map((m) => (
-              <label key={m} className={mode === m ? 'rd-mode-option rd-active' : 'rd-mode-option'}>
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === m}
-                  onChange={() => handleModeChange(m)}
-                />
-                <div>
-                  <div className="rd-mo-title">{MODE_LABELS[m]}</div>
-                  <div className="rd-mo-desc">{MODE_DESCRIPTIONS[m]}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {mode !== 'fixed_individual' && (
+        {!perPersonMode && (
           <label className="rd-field">
             <span className="rd-label">
-              {mode === 'fixed_equal'
-                ? <>Общая сумма (₽) <span className="rd-req">*</span></>
-                : 'Целевая сумма (₽)'}
+              {amountLabel}
+              {kind !== 'voluntary' && <> <span className="rd-req">*</span></>}
             </span>
-            <input
-              className="rd-input"
-              type="number"
-              inputMode="decimal"
-              min="1"
-              value={totalRub}
-              onChange={(e) => setTotalRub(e.target.value)}
-              placeholder="Например, 5000"
-            />
-            {mode === 'voluntary' && (
-              <span className="rd-hint">Необязательно: участники увидят прогресс сбора к цели</span>
-            )}
+            <input className="rd-input" type="number" inputMode="decimal" min="1" value={amountRub} onChange={(e) => setAmountRub(e.target.value)} placeholder="Например, 6000" />
+            {perPersonHint && <span className="rd-hint">{perPersonHint}</span>}
+            {kind === 'voluntary' && <span className="rd-hint">Необязательно: люди увидят, сколько получено и сколько всего</span>}
           </label>
         )}
 
-        <label className="rd-field">
-          <span className="rd-label">Платёжная ссылка <span className="rd-req">*</span></span>
-          <input
-            className="rd-input"
-            value={paymentLink}
-            onChange={(e) => setPaymentLink(e.target.value)}
-            placeholder="https://www.tinkoff.ru/cf/…"
-          />
-          <span className="rd-hint">⚠️ Ссылка будет видна всем участникам сбора</span>
-        </label>
+        {eventLine}
 
-        <label className="rd-field">
-          <span className="rd-label">Банк / способ (опц.)</span>
-          <input
-            className="rd-input"
-            value={paymentMethodNote}
-            onChange={(e) => setPaymentMethodNote(e.target.value)}
-            placeholder="Тинькофф, СБП, ВТБ…"
-          />
-        </label>
+        {flow === 'enroll' && (
+          <>
+            <label className="rd-field">
+              <span className="rd-label">Отметиться до <span className="rd-req">*</span></span>
+              <input className="rd-input" type="datetime-local" value={enrollmentUntil} onChange={(e) => setEnrollmentUntil(e.target.value)} />
+              <span className="rd-hint">Потом список замораживается, сумма делится поровну между теми, кто в деле.</span>
+            </label>
+            <label className="rd-check">
+              <input type="checkbox" checked={enrollCreator} onChange={(e) => setEnrollCreator(e.target.checked)} />
+              <span>Я тоже участвую · доля посчитается вместе со всеми и сразу считается полученной</span>
+            </label>
+            <label className="rd-field">
+              <span className="rd-label">Минимум людей</span>
+              <input className="rd-input" type="number" inputMode="numeric" min="1" value={minParticipants} onChange={(e) => setMinParticipants(e.target.value)} placeholder="Необязательно" />
+              <span className="rd-hint">Не наберётся — сбор отменится сам, денег никто не переводит.</span>
+            </label>
+          </>
+        )}
 
-        <label className="rd-field">
-          <span className="rd-label">Срок до <span className="rd-req">*</span></span>
-          <div className="rd-datetime">
-            <input
-              className="rd-input"
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
-            <span className="rd-dt-ico" aria-hidden="true"><CalendarIcon /></span>
+        {usesPeople && peopleList}
+
+        {flow === 'voluntary' && !presetEventId && (
+          <div className="rd-field">
+            <span className="rd-label">Скрыть от</span>
+            {membersQuery.isPending && <Spinner size="s" />}
+            {members.length > 0 && (
+              <div className="rd-pick-list">
+                {members.filter((m) => m.userId !== myId).map((m) => (
+                  <button key={m.userId} type="button" className={`rd-pick-toggle${hiddenFrom === m.userId ? ' rd-selected' : ''}`} onClick={() => { haptic.select(); setHiddenFrom(hiddenFrom === m.userId ? null : m.userId); }} style={{ width: '100%' }}>
+                    <span className="rd-check-box">{hiddenFrom === m.userId ? '✓' : ''}</span>
+                    <span className="rd-pick-name">{m.firstName}{m.lastName ? ` ${m.lastName}` : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <span className="rd-hint">Тихий сбор: в чат не постится, скрытый не увидит его нигде.</span>
           </div>
+        )}
+
+        <label className="rd-field">
+          <span className="rd-label">Реквизиты <span className="rd-req">*</span></span>
+          <input className="rd-input" value={paymentLink} onChange={(e) => setPaymentLink(e.target.value)} placeholder="Ссылка СБП или номер телефона" />
+          <span className="rd-hint">Увидят все, кому вы собираете</span>
         </label>
 
-        <label className="rd-check" style={mode === 'voluntary' ? { opacity: 0.55, cursor: 'default' } : undefined}>
-          <input
-            type="checkbox"
-            checked={affectsReputation}
-            disabled={mode === 'voluntary'}
-            onChange={(e) => setAffectsReputation(e.target.checked)}
-          />
-          <span>
-            <span style={{ display: 'block', fontWeight: 600, color: 'var(--text)' }}>Важный сбор</span>
-            {mode === 'voluntary'
-              ? 'Добровольный сбор не влияет на репутацию'
-              : REPUTATION_HELPER_TEXT}
-          </span>
+        <label className="rd-field">
+          <span className="rd-label">Банк / способ</span>
+          <input className="rd-input" value={paymentMethodNote} onChange={(e) => setPaymentMethodNote(e.target.value)} placeholder="Тинькофф, СБП, ВТБ…" />
         </label>
+
+        {kind === 'voluntary' && (
+          <label className="rd-check">
+            <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
+            <span>Без срока</span>
+          </label>
+        )}
+        {(kind !== 'voluntary' || !noDeadline) && (
+          <label className="rd-field">
+            <span className="rd-label">
+              {flow === 'per_head' ? 'Покупаю' : 'Срок оплаты'} <span className="rd-req">*</span>
+            </span>
+            <input className="rd-input" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            {kind === 'shared' && <span className="rd-hint">Срок не стена: заплатить можно и после, но просрочка дольше 3 недель стоит −40 к репутации.</span>}
+            {flow === 'per_head' && <span className="rd-hint">Автозаказа нет: в срок бот напомнит вам нажать «Заказываю».</span>}
+          </label>
+        )}
+
+        {flow === 'per_head' && (
+          <div className="rd-field">
+            <label className="rd-check">
+              <input type="checkbox" checked={takeCreator} onChange={(e) => setTakeCreator(e.target.checked)} />
+              <span>Я тоже участвую · моя доля сразу считается полученной</span>
+            </label>
+            {takeCreator && (
+              <label className="rd-take-row">
+                <span className="rd-hint">Сколько штук себе</span>
+                <input className="rd-input rd-take-qty" type="number" inputMode="numeric" min="1" max="50" aria-label="Сколько штук себе" value={creatorQuantity} onChange={(e) => setCreatorQuantity(e.target.value)} />
+              </label>
+            )}
+          </div>
+        )}
 
         <div className="rd-field">
-          <span className="rd-label">
-            Участники <span className="rd-req">*</span> <span className="rd-count">· выбрано {selectedIds.size}</span>
-          </span>
-          {membersQuery.isPending && <Spinner size="s" />}
-          {!membersQuery.isPending && eligibleMembers.length === 0 && (
-            <div className="rd-hint">В клубе пока нет активных участников.</div>
-          )}
-          {eligibleMembers.length > 0 && (
-            <div className="rd-pick-list">
-              {eligibleMembers.map((m) => {
-                const isSelected = selectedIds.has(m.userId);
-                // Без доступа = вне складчины: frozen (первый взнос) и expired (просрочка продления).
-                const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
-                return (
-                  <div key={m.userId} className="rd-pick-row">
-                    <button
-                      type="button"
-                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`}
-                      onClick={() => toggleParticipant(m.userId)}
-                      disabled={isFrozen}
-                      aria-disabled={isFrozen}
-                    >
-                      <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
-                      <span className="rd-pick-name">
-                        {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
-                      </span>
-                      {isFrozen && (
-                        <span className="rd-pick-note">
-                          {m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}
-                        </span>
-                      )}
-                    </button>
-                    {!isFrozen && mode === 'fixed_individual' && isSelected && (
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min="1"
-                        placeholder="₽"
-                        className="rd-input rd-pick-amount"
-                        value={individualAmounts[m.userId] ?? ''}
-                        onChange={(e) =>
-                          setIndividualAmounts((prev) => ({ ...prev, [m.userId]: e.target.value }))
-                        }
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <span className="rd-label">Фото / чек</span>
+          <PhotoAttach value={photoUrl} onChange={setPhotoUrl} addLabel="Прикрепить фото" />
         </div>
 
         {submitError && <div className="rd-error">{submitError}</div>}
 
         <div className="rd-form-actions">
-          <button type="button" className="rd-btn-outline" onClick={handleCancel}>Отмена</button>
-          <button
-            type="button"
-            className="rd-btn-primary"
-            onClick={handleSubmit}
-            disabled={createMut.isPending}
-          >
+          <button type="button" className="rd-btn-outline" onClick={() => { haptic.impact('light'); navigate(-1); }}>Отмена</button>
+          <button type="button" className="rd-btn-primary" disabled={createMut.isPending} onClick={handleSubmit}>
             {createMut.isPending ? 'Создаём…' : 'Создать сбор'}
           </button>
         </div>

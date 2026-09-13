@@ -328,7 +328,7 @@ members **и** organizer (organizer всегда active member клуба по �
 
 **Партиционирование (backend):**
 - `past` = `isCompleted == true` (event.status ∈ `completed`/`cancelled`;
-  skladchina.status ∈ `closed_success`/`closed_failed`/`cancelled`)
+  skladchina.status ∈ `collected`/`cancelled` — сборы v3)
 - `upcoming` = всё остальное (`isCompleted == false`)
 
 **Сортировка по `relevantDate`** (own-date активности, не `createdAt`):
@@ -476,16 +476,17 @@ interface EventActivityDto extends ActivityBase {
   photoUrl: string | null;            // event cover (V15) — итерация 4
 }
 
-interface SkladchinaActivityDto extends ActivityBase {
+interface SkladchinaActivityDto extends ActivityBase {   // сборы v3 (skladchina-v3.md § 9)
   type: 'skladchina';
-  paymentMode: 'fixed_equal' | 'fixed_individual' | 'voluntary';
-  totalGoalKopecks: number | null;
-  collectedKopecks: number;
-  deadline: string;
-  participantCount: number;
-  paidCount: number;
-  status: 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
-  affectsReputation: boolean;
+  kind: 'shared' | 'per_head' | 'voluntary';
+  amountKopecks: number | null;
+  targetKopecks: number | null;       // знаменатель «получено X из Y»: живые долги, иначе amountKopecks
+  receivedKopecks: number;
+  deadline: string | null;            // null у «По желанию» без срока
+  debtCount: number;
+  receivedCount: number;
+  enrolledCount: number;
+  status: 'active' | 'collected' | 'cancelled';
   photoUrl: string | null;            // skladchina cover (existing) — итерация 4
 }
 
@@ -495,7 +496,7 @@ type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;
 ### `isCompleted` computation (backend)
 
 - **Event:** `status IN ('completed', 'cancelled')`
-- **Skladchina:** `status IN ('closed_success', 'closed_failed', 'cancelled')`
+- **Skladchina:** `status IN ('collected', 'cancelled')` (сборы v3)
 
 Поле вычисляется маппером — UI не должен дублировать enum-логику. `isCompleted`
 определяет, в какую группу попадёт активность: `true` → `past`, `false` →
@@ -892,11 +893,7 @@ class ActivityMapper {
             clubId = s.clubId,
             title = s.title,
             createdAt = s.createdAt,
-            isCompleted = s.status in setOf(
-                SkladchinaStatus.closed_success,
-                SkladchinaStatus.closed_failed,
-                SkladchinaStatus.cancelled
-            ),
+            isCompleted = s.status in setOf(SkladchinaStatus.collected, SkladchinaStatus.cancelled),
             paymentMode = s.paymentMode.literal,
             totalGoalKopecks = s.totalGoalKopecks,
             collectedKopecks = item.collectedKopecks,
@@ -1217,7 +1214,7 @@ navigate на `/clubs/{id}/skladchina/new` (существующая стран�
 completion больше нет)
 
 ### AC-19: API — завершённые всегда в `past`, незавершённые в `upcoming`
-**GIVEN** клуб с 3 предстоящими events + 2 completed events + 1 active skladchina + 1 closed_success skladchina
+**GIVEN** клуб с 3 предстоящими events + 2 completed events + 1 active skladchina + 1 collected skladchina
 **WHEN** member делает `GET /api/clubs/{id}/activities`
 **THEN** `upcoming` содержит 3 events + 1 skladchina (все `isCompleted=false`)
 **AND** `past` содержит 2 events + 1 skladchina (все `isCompleted=true`)

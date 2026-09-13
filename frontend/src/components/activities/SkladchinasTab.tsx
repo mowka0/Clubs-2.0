@@ -15,36 +15,33 @@ import foxErrorArt from '../../assets/mascot/fox-error.png';
 import type { MySkladchinaListItemDto, SkladchinaStatus } from '../../types/api';
 
 interface Group {
-  key: 'action_required' | 'active' | 'history';
+  key: 'active' | 'history';
   title: string;
   items: MySkladchinaListItemDto[];
 }
 
+// Вкладки «Требует оплаты» больше нет (skladchina-v3 § 10): её роль забрала плитка «Долги» в
+// профиле; здесь «ждёт вас» — только бейдж на карточке (фид и так отдаёт такие сборы первыми).
 function groupSkladchinas(list: readonly MySkladchinaListItemDto[]): Group[] {
-  const action: MySkladchinaListItemDto[] = [];
   const active: MySkladchinaListItemDto[] = [];
   const history: MySkladchinaListItemDto[] = [];
   for (const s of list) {
     if (s.status !== 'active') history.push(s);
-    else if (s.actionRequired) action.push(s);
     else active.push(s);
   }
   const result: Group[] = [];
-  if (action.length > 0) result.push({ key: 'action_required', title: 'Требует оплаты', items: action });
   if (active.length > 0) result.push({ key: 'active', title: 'Активные сборы', items: active });
   if (history.length > 0) result.push({ key: 'history', title: 'История', items: history });
   return result;
 }
 
-// Финальный статус закрытого сбора для подстроки истории (тексты синхронны pickBadge
-// в SkladchinaCard). В группу «История» попадают только не-active сборы, поэтому 'active'
-// сюда не приходит — на всякий случай отдаём пустую строку, чтобы switch был исчерпывающим.
+// Финальный статус закрытого сбора для подстроки истории. В группу «История» попадают только
+// не-active сборы, поэтому 'active' сюда не приходит — пустая строка ради исчерпывающего switch.
 function finalStatusLabel(status: SkladchinaStatus): string {
   switch (status) {
-    case 'closed_success': return 'Завершён';
-    case 'closed_failed':  return 'Не собран';
-    case 'cancelled':      return 'Отменён';
-    case 'active':         return '';
+    case 'collected': return 'Собран';
+    case 'cancelled': return 'Отменён';
+    case 'active':    return '';
   }
 }
 
@@ -130,7 +127,7 @@ export const SkladchinasTab: FC = () => {
             art={foxSkladchinaArt}
             soonIcon={hasHistory ? undefined : '💰'}
             title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
-            description="Когда организатор клуба создаст сбор и добавит тебя — он появится здесь."
+            description="Когда в клубе создадут сбор и добавят тебя — он появится здесь."
           />
         )
       )}
@@ -147,7 +144,7 @@ export const SkladchinasTab: FC = () => {
             group.key === 'history' ? (
               <HistoryCard
                 key={s.id}
-                dateISO={s.deadline}
+                dateISO={s.deadline ?? ''}
                 title={s.title}
                 subtitle={
                   finalStatusLabel(s.status)

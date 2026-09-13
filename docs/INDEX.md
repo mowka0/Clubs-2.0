@@ -45,7 +45,7 @@
 | `membership` | `membership.md`, `membership-lifecycle.md` |
 | `payment` | `payment.md`, `payment-v2.md` |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
-| `skladchina` | `skladchina.md` |
+| `skladchina`, `debt` | `skladchina-v3.md` (действующая с 2026-09-13; `skladchina.md` — архив до чистки) |
 | `storage` | `infrastructure.md` |
 | `subscription` | `payment-v2.md`, `membership-lifecycle.md` |
 | `user` | `profile.md`, `profile-quest.md` |
@@ -64,7 +64,7 @@
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
 | `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md` |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
-| `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
+| `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `DebtsPage.tsx`, `DebtPairPage.tsx` (+ `components/debt/DebtRow.tsx`) | `skladchina-v3.md` § 9 |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
@@ -127,7 +127,8 @@
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
 | `unified-activity-creation.md` | единое создание активностей через «+» | 2026-08-12 |
-| `skladchina.md` | складчины и сборы внутри клуба | 2026-09-07 |
+| `skladchina.md` | ⛔ архив: сборы до v3 (MVP, Фаза A, сплит) | 2026-09-13 |
+| `skladchina-v3.md` | сборы и долги: три вида, долг как сущность, экран «Долги», V90–V93 — в проде | 2026-09-13 |
 
 ### Чат, бот, репутация
 | Файл | О чём | Правлен |

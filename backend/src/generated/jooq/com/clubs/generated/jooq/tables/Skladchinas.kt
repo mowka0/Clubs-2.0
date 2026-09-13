@@ -5,23 +5,24 @@ package com.clubs.generated.jooq.tables
 
 
 import com.clubs.generated.jooq.Public
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_CLUB_ID
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_EVENT_ID
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_STATUS_DEADLINE
+import com.clubs.generated.jooq.keys.DEBTS__DEBTS_SKLADCHINA_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS_PKEY
-import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_HIDDEN_FROM_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_CHAT_POSTS__SKLADCHINA_CHAT_POSTS_SKLADCHINA_ID_FKEY
-import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINA_ENROLLMENTS__SKLADCHINA_ENROLLMENTS_SKLADCHINA_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
+import com.clubs.generated.jooq.tables.Debts.DebtsPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts.SkladchinaChatPostsPath
-import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
+import com.clubs.generated.jooq.tables.SkladchinaEnrollments.SkladchinaEnrollmentsPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
 
@@ -57,9 +58,10 @@ import org.jooq.impl.TableImpl
 
 
 /**
- * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта и
- * т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую (СБП)
- * мимо платформы, приложение ведёт учёт статусов и напоминания.
+ * Сбор денег внутри клуба: повод и обёртка над долгами (название, вид, срок,
+ * реквизиты, чат-пост, пачка долгов в debts). Создать может любой активный
+ * участник клуба; отменить — создатель или владелец клуба. Спека:
+ * docs/modules/skladchina-v3.md.
  */
 @Suppress("UNCHECKED_CAST")
 open class Skladchinas(
@@ -78,7 +80,7 @@ open class Skladchinas(
     parentPath,
     aliased,
     parameters,
-    DSL.comment("Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта и т.п.). Honor-system: деньги идут участник -> организатор напрямую (СБП) мимо платформы, приложение ведёт учёт статусов и напоминания."),
+    DSL.comment("Сбор денег внутри клуба: повод и обёртка над долгами (название, вид, срок, реквизиты, чат-пост, пачка долгов в debts). Создать может любой активный участник клуба; отменить — создатель или владелец клуба. Спека: docs/modules/skladchina-v3.md."),
     TableOptions.table(),
     where,
 ) {
@@ -108,10 +110,11 @@ open class Skladchinas(
     val CLUB_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("club_id"), SQLDataType.UUID.nullable(false), this, "Клуб, в котором объявлен сбор (FK clubs.id).")
 
     /**
-     * The column <code>public.skladchinas.creator_id</code>. Создатель сбора —
-     * организатор клуба (FK users.id). Только он управляет сбором.
+     * The column <code>public.skladchinas.creator_id</code>. Создатель сбора
+     * (FK users.id) — получатель денег по всем его долгам (debts.creditor_id).
+     * Любой активный участник клуба.
      */
-    val CREATOR_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("creator_id"), SQLDataType.UUID.nullable(false), this, "Создатель сбора — организатор клуба (FK users.id). Только он управляет сбором.")
+    val CREATOR_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("creator_id"), SQLDataType.UUID.nullable(false), this, "Создатель сбора (FK users.id) — получатель денег по всем его долгам (debts.creditor_id). Любой активный участник клуба.")
 
     /**
      * The column <code>public.skladchinas.title</code>. Название сбора, до 255
@@ -138,20 +141,12 @@ open class Skladchinas(
     val PHOTO_URL: TableField<SkladchinasRecord, String?> = createField(DSL.name("photo_url"), SQLDataType.VARCHAR(500), this, "URL фото для карточки сбора в ленте активностей (NULL = без фото).")
 
     /**
-     * The column <code>public.skladchinas.payment_mode</code>. Режим взносов
-     * (enum skladchina_mode): fixed_equal = цель делится поровну между
-     * участниками (доля считается сервером); fixed_individual = организатор
-     * задаёт долю каждому участнику; voluntary = добровольные взносы, сумму
-     * указывает сам участник.
+     * The column <code>public.skladchinas.amount_kopecks</code>. Сумма в
+     * КОПЕЙКАХ по виду: shared = общая сумма сбора; per_head = цена за
+     * человека; voluntary = ориентир (NULL = без ориентира). Бывший
+     * total_goal_kopecks.
      */
-    val PAYMENT_MODE: TableField<SkladchinasRecord, SkladchinaMode?> = createField(DSL.name("payment_mode"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(SkladchinaMode::class.java), this, "Режим взносов (enum skladchina_mode): fixed_equal = цель делится поровну между участниками (доля считается сервером); fixed_individual = организатор задаёт долю каждому участнику; voluntary = добровольные взносы, сумму указывает сам участник.")
-
-    /**
-     * The column <code>public.skladchinas.total_goal_kopecks</code>. Целевая
-     * сумма сбора в КОПЕЙКАХ (NULL = без цели, типично для voluntary). Для
-     * fixed_individual = сумма назначенных долей.
-     */
-    val TOTAL_GOAL_KOPECKS: TableField<SkladchinasRecord, Long?> = createField(DSL.name("total_goal_kopecks"), SQLDataType.BIGINT, this, "Целевая сумма сбора в КОПЕЙКАХ (NULL = без цели, типично для voluntary). Для fixed_individual = сумма назначенных долей.")
+    val AMOUNT_KOPECKS: TableField<SkladchinasRecord, Long?> = createField(DSL.name("amount_kopecks"), SQLDataType.BIGINT, this, "Сумма в КОПЕЙКАХ по виду: shared = общая сумма сбора; per_head = цена за человека; voluntary = ориентир (NULL = без ориентира). Бывший total_goal_kopecks.")
 
     /**
      * The column <code>public.skladchinas.payment_link</code>. Реквизиты для
@@ -167,41 +162,26 @@ open class Skladchinas(
     val PAYMENT_METHOD_NOTE: TableField<SkladchinasRecord, String?> = createField(DSL.name("payment_method_note"), SQLDataType.CLOB, this, "Подсказка к реквизитам, например «Тинькофф, СБП по номеру» (NULL = без подсказки).")
 
     /**
-     * The column <code>public.skladchinas.deadline</code>. Срок, до которого
-     * участник должен ответить (оплатить или отказаться). После дедлайна
-     * молчавшие переводятся в expired_no_response.
+     * The column <code>public.skladchinas.deadline</code>. Срок оплаты.
+     * Обязателен для shared и per_head (CHECK
+     * chk_skladchinas_deadline_by_kind), у voluntary необязателен. Копируется в
+     * debts.due_at при создании долга. Срок не стена: платить после него можно.
      */
-    val DEADLINE: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("deadline"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Срок, до которого участник должен ответить (оплатить или отказаться). После дедлайна молчавшие переводятся в expired_no_response.")
-
-    /**
-     * The column <code>public.skladchinas.affects_reputation</code>. TRUE =
-     * исходы участия влияют на финансовую репутацию (paid +10,
-     * expired_no_response -40; отказ нейтрален). FALSE = сбор без репутационных
-     * последствий.
-     */
-    val AFFECTS_REPUTATION: TableField<SkladchinasRecord, Boolean?> = createField(DSL.name("affects_reputation"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = исходы участия влияют на финансовую репутацию (paid +10, expired_no_response -40; отказ нейтрален). FALSE = сбор без репутационных последствий.")
+    val DEADLINE: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("deadline"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Срок оплаты. Обязателен для shared и per_head (CHECK chk_skladchinas_deadline_by_kind), у voluntary необязателен. Копируется в debts.due_at при создании долга. Срок не стена: платить после него можно.")
 
     /**
      * The column <code>public.skladchinas.status</code>. Статус сбора (enum
-     * skladchina_status): active = сбор идёт; closed_success = закрыт успешно
-     * (цель достигнута / все ответили); closed_failed = закрыт неуспешно;
-     * cancelled = отменён создателем.
+     * skladchina_status): active = идёт; collected = собран (нет открытых
+     * долгов); cancelled = отменён.
      */
-    val STATUS: TableField<SkladchinasRecord, SkladchinaStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::skladchina_status"), SQLDataType.VARCHAR)).asEnumDataType(SkladchinaStatus::class.java), this, "Статус сбора (enum skladchina_status): active = сбор идёт; closed_success = закрыт успешно (цель достигнута / все ответили); closed_failed = закрыт неуспешно; cancelled = отменён создателем.")
+    val STATUS: TableField<SkladchinasRecord, SkladchinaStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::skladchina_status"), SQLDataType.VARCHAR)).asEnumDataType(SkladchinaStatus::class.java), this, "Статус сбора (enum skladchina_status): active = идёт; collected = собран (нет открытых долгов); cancelled = отменён.")
 
     /**
      * The column <code>public.skladchinas.closed_at</code>. Когда сбор закрыт
-     * (NULL = ещё активен). Якорь occurred_at для финансовых строк
-     * репутационного леджера.
+     * (collected или cancelled). NULL = ещё активен. Окно статистики клуба
+     * считает сборы по этому моменту.
      */
-    val CLOSED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("closed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда сбор закрыт (NULL = ещё активен). Якорь occurred_at для финансовых строк репутационного леджера.")
-
-    /**
-     * The column <code>public.skladchinas.closed_by</code>. Кто закрыл сбор (FK
-     * users.id). NULL = не закрыт либо закрыт автоматически (по дедлайну или
-     * достижению цели).
-     */
-    val CLOSED_BY: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("closed_by"), SQLDataType.UUID, this, "Кто закрыл сбор (FK users.id). NULL = не закрыт либо закрыт автоматически (по дедлайну или достижению цели).")
+    val CLOSED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("closed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда сбор закрыт (collected или cancelled). NULL = ещё активен. Окно статистики клуба считает сборы по этому моменту.")
 
     /**
      * The column <code>public.skladchinas.created_at</code>. Когда сбор создан.
@@ -215,28 +195,71 @@ open class Skladchinas(
     val UPDATED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда сбор последний раз менялся.")
 
     /**
-     * The column <code>public.skladchinas.reminder_sent_at</code>. Когда
-     * отправлено DM-напоминание о дедлайне ожидающим участникам, ~за 24 часа
-     * (NULL = ещё не отправлялось). Timestamp вместо boolean — момент отправки
-     * аудируем; штраф за молчание легитимен только после двух предупреждений.
+     * The column <code>public.skladchinas.reminder_sent_at</code>. Когда в чат
+     * клуба ушло напоминание за 24 часа до срока с упоминаниями тех, кто ещё не
+     * оплатил (NULL = ещё не отправлялось). Штамп дедупликации.
      */
-    val REMINDER_SENT_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("reminder_sent_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда отправлено DM-напоминание о дедлайне ожидающим участникам, ~за 24 часа (NULL = ещё не отправлялось). Timestamp вместо boolean — момент отправки аудируем; штраф за молчание легитимен только после двух предупреждений.")
+    val REMINDER_SENT_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("reminder_sent_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда в чат клуба ушло напоминание за 24 часа до срока с упоминаниями тех, кто ещё не оплатил (NULL = ещё не отправлялось). Штамп дедупликации.")
 
     /**
-     * The column <code>public.skladchinas.template</code>. Шаблон сбора (enum
-     * skladchina_template): custom = обычная складчина; split_bill = деление
-     * счёта прошедшего события (отказ — только через запрос с одобрением); gear
-     * = инвентарь, booking = бронирование, birthday = день рождения —
-     * зарезервированы под фазы B-D роадмапа.
+     * The column <code>public.skladchinas.event_id</code>. shared «после
+     * встречи»: встреча-источник, список должников = пришедшие (FK events.id).
+     * NULL у остальных сборов.
      */
-    val TEMPLATE: TableField<SkladchinasRecord, SkladchinaTemplate?> = createField(DSL.name("template"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'custom'::skladchina_template"), SQLDataType.VARCHAR)).asEnumDataType(SkladchinaTemplate::class.java), this, "Шаблон сбора (enum skladchina_template): custom = обычная складчина; split_bill = деление счёта прошедшего события (отказ — только через запрос с одобрением); gear = инвентарь, booking = бронирование, birthday = день рождения — зарезервированы под фазы B-D роадмапа.")
+    val EVENT_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("event_id"), SQLDataType.UUID, this, "shared «после встречи»: встреча-источник, список должников = пришедшие (FK events.id). NULL у остальных сборов.")
 
     /**
-     * The column <code>public.skladchinas.event_id</code>. Событие-источник для
-     * template = split_bill — чей счёт делим (FK events.id). NULL для остальных
-     * шаблонов.
+     * The column <code>public.skladchinas.kind</code>. Вид сбора (enum
+     * skladchina_kind): shared «Скинуться», per_head «Кто берёт?», voluntary
+     * «По желанию». Заменяет пару template + payment_mode; влияние на репутацию
+     * следует из вида (только shared).
      */
-    val EVENT_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("event_id"), SQLDataType.UUID, this, "Событие-источник для template = split_bill — чей счёт делим (FK events.id). NULL для остальных шаблонов.")
+    val KIND: TableField<SkladchinasRecord, SkladchinaKind?> = createField(DSL.name("kind"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(SkladchinaKind::class.java), this, "Вид сбора (enum skladchina_kind): shared «Скинуться», per_head «Кто берёт?», voluntary «По желанию». Заменяет пару template + payment_mode; влияние на репутацию следует из вида (только shared).")
+
+    /**
+     * The column <code>public.skladchinas.enrollment_until</code>. shared до
+     * события: до когда открыт этап «Кто в деле?» (участники отмечаются в
+     * skladchina_enrollments, долгов ещё нет). NULL = этапа нет, список задаёт
+     * создатель, долги создаются сразу.
+     */
+    val ENROLLMENT_UNTIL: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("enrollment_until"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "shared до события: до когда открыт этап «Кто в деле?» (участники отмечаются в skladchina_enrollments, долгов ещё нет). NULL = этапа нет, список задаёт создатель, долги создаются сразу.")
+
+    /**
+     * The column <code>public.skladchinas.min_participants</code>. shared с
+     * этапом: минимум людей в деле, иначе при заморозке сбор отменяется сам
+     * («не набрали», денег никто не переводил). NULL = минимума нет.
+     */
+    val MIN_PARTICIPANTS: TableField<SkladchinasRecord, Int?> = createField(DSL.name("min_participants"), SQLDataType.INTEGER, this, "shared с этапом: минимум людей в деле, иначе при заморозке сбор отменяется сам («не набрали», денег никто не переводил). NULL = минимума нет.")
+
+    /**
+     * The column <code>public.skladchinas.locked_at</code>. shared с этапом:
+     * момент заморозки списка (по enrollment_until шедулером или раньше рукой
+     * создателя) — доли посчитаны, долги созданы. NULL = запись ещё открыта.
+     */
+    val LOCKED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("locked_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "shared с этапом: момент заморозки списка (по enrollment_until шедулером или раньше рукой создателя) — доли посчитаны, долги созданы. NULL = запись ещё открыта.")
+
+    /**
+     * The column <code>public.skladchinas.ordered_at</code>. per_head:
+     * «Заказываю» нажато — приём закрыт, «Беру» недоступно, неоплатившие
+     * waiting/promised переведены в dropped. NULL = заказ ещё не сделан.
+     */
+    val ORDERED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("ordered_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "per_head: «Заказываю» нажато — приём закрыт, «Беру» недоступно, неоплатившие waiting/promised переведены в dropped. NULL = заказ ещё не сделан.")
+
+    /**
+     * The column <code>public.skladchinas.hidden_from_user_id</code>.
+     * voluntary: от кого скрыть сбор (именинник, FK users.id). Скрытый сбор
+     * тихий: чат-поста нет, DM всем участникам клуба кроме скрытого; скрытый не
+     * видит сбор нигде (лента, прямая ссылка → 404).
+     */
+    val HIDDEN_FROM_USER_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("hidden_from_user_id"), SQLDataType.UUID, this, "voluntary: от кого скрыть сбор (именинник, FK users.id). Скрытый сбор тихий: чат-поста нет, DM всем участникам клуба кроме скрытого; скрытый не видит сбор нигде (лента, прямая ссылка → 404).")
+
+    /**
+     * The column <code>public.skladchinas.order_reminded_at</code>. per_head:
+     * когда создателю в последний раз ушло напоминание «пора заказывать» (в
+     * срок и раз в день после, пока нет ordered_at). Штамп дедупликации
+     * шедулера.
+     */
+    val ORDER_REMINDED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("order_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "per_head: когда создателю в последний раз ушло напоминание «пора заказывать» (в срок и раз в день после, пока нет ordered_at). Штамп дедупликации шедулера.")
 
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -272,23 +295,7 @@ open class Skladchinas(
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
     override fun getIndexes(): List<Index> = listOf(IDX_SKLADCHINAS_CLUB_ID, IDX_SKLADCHINAS_EVENT_ID, IDX_SKLADCHINAS_STATUS_DEADLINE)
     override fun getPrimaryKey(): UniqueKey<SkladchinasRecord> = SKLADCHINAS_PKEY
-    override fun getReferences(): List<ForeignKey<SkladchinasRecord, *>> = listOf(SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY, SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY, SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY, SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY)
-
-    private lateinit var _skladchinasClosedByFkey: UsersPath
-
-    /**
-     * Get the implicit join path to the <code>public.users</code> table, via
-     * the <code>skladchinas_closed_by_fkey</code> key.
-     */
-    fun skladchinasClosedByFkey(): UsersPath {
-        if (!this::_skladchinasClosedByFkey.isInitialized)
-            _skladchinasClosedByFkey = UsersPath(this, SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY, null)
-
-        return _skladchinasClosedByFkey;
-    }
-
-    val skladchinasClosedByFkey: UsersPath
-        get(): UsersPath = skladchinasClosedByFkey()
+    override fun getReferences(): List<ForeignKey<SkladchinasRecord, *>> = listOf(SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY, SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY, SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY, SKLADCHINAS__SKLADCHINAS_HIDDEN_FROM_USER_ID_FKEY)
 
     private lateinit var _clubs: ClubsPath
 
@@ -336,6 +343,37 @@ open class Skladchinas(
     val events: EventsPath
         get(): EventsPath = events()
 
+    private lateinit var _skladchinasHiddenFromUserIdFkey: UsersPath
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>skladchinas_hidden_from_user_id_fkey</code> key.
+     */
+    fun skladchinasHiddenFromUserIdFkey(): UsersPath {
+        if (!this::_skladchinasHiddenFromUserIdFkey.isInitialized)
+            _skladchinasHiddenFromUserIdFkey = UsersPath(this, SKLADCHINAS__SKLADCHINAS_HIDDEN_FROM_USER_ID_FKEY, null)
+
+        return _skladchinasHiddenFromUserIdFkey;
+    }
+
+    val skladchinasHiddenFromUserIdFkey: UsersPath
+        get(): UsersPath = skladchinasHiddenFromUserIdFkey()
+
+    private lateinit var _debts: DebtsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.debts</code> table
+     */
+    fun debts(): DebtsPath {
+        if (!this::_debts.isInitialized)
+            _debts = DebtsPath(this, null, DEBTS__DEBTS_SKLADCHINA_ID_FKEY.inverseKey)
+
+        return _debts;
+    }
+
+    val debts: DebtsPath
+        get(): DebtsPath = debts()
+
     private lateinit var _skladchinaChatPosts: SkladchinaChatPostsPath
 
     /**
@@ -352,30 +390,39 @@ open class Skladchinas(
     val skladchinaChatPosts: SkladchinaChatPostsPath
         get(): SkladchinaChatPostsPath = skladchinaChatPosts()
 
-    private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
+    private lateinit var _skladchinaEnrollments: SkladchinaEnrollmentsPath
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.skladchina_participants</code> table
+     * <code>public.skladchina_enrollments</code> table
      */
-    fun skladchinaParticipants(): SkladchinaParticipantsPath {
-        if (!this::_skladchinaParticipants.isInitialized)
-            _skladchinaParticipants = SkladchinaParticipantsPath(this, null, SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY.inverseKey)
+    fun skladchinaEnrollments(): SkladchinaEnrollmentsPath {
+        if (!this::_skladchinaEnrollments.isInitialized)
+            _skladchinaEnrollments = SkladchinaEnrollmentsPath(this, null, SKLADCHINA_ENROLLMENTS__SKLADCHINA_ENROLLMENTS_SKLADCHINA_ID_FKEY.inverseKey)
 
-        return _skladchinaParticipants;
+        return _skladchinaEnrollments;
     }
 
-    val skladchinaParticipants: SkladchinaParticipantsPath
-        get(): SkladchinaParticipantsPath = skladchinaParticipants()
+    val skladchinaEnrollments: SkladchinaEnrollmentsPath
+        get(): SkladchinaEnrollmentsPath = skladchinaEnrollments()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.users</code>
-     * table
+     * table, via the <code>debts_debtor_id_fkey</code> key
      */
-    val users: UsersPath
-        get(): UsersPath = skladchinaParticipants().users()
+    val debtsDebtorIdFkey: UsersPath
+        get(): UsersPath = debts().debtsDebtorIdFkey()
+
+    /**
+     * Get the implicit many-to-many join path to the <code>public.users</code>
+     * table, via the <code>skladchina_enrollments_user_id_fkey</code> key
+     */
+    val skladchinaEnrollmentsUserIdFkey: UsersPath
+        get(): UsersPath = skladchinaEnrollments().users()
     override fun getChecks(): List<Check<SkladchinasRecord>> = listOf(
-        Internal.createCheck(this, DSL.name("skladchinas_total_goal_kopecks_check"), "(((total_goal_kopecks IS NULL) OR (total_goal_kopecks > 0)))", true)
+        Internal.createCheck(this, DSL.name("chk_skladchinas_deadline_by_kind"), "(((kind = 'voluntary'::skladchina_kind) OR (deadline IS NOT NULL)))", true),
+        Internal.createCheck(this, DSL.name("skladchinas_min_participants_check"), "(((min_participants IS NULL) OR (min_participants >= 1)))", true),
+        Internal.createCheck(this, DSL.name("skladchinas_total_goal_kopecks_check"), "(((amount_kopecks IS NULL) OR (amount_kopecks > 0)))", true)
     )
     override fun `as`(alias: String): Skladchinas = Skladchinas(DSL.name(alias), this)
     override fun `as`(alias: Name): Skladchinas = Skladchinas(alias, this)

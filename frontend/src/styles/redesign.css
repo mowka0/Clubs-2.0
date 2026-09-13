@@ -1711,7 +1711,8 @@
 .rd-resolve-no { background: rgba(255, 139, 139, 0.14); border-color: rgba(255, 139, 139, 0.35); color: var(--danger); }
 .rd-dispute-note { font-size: 13px; color: var(--text-dim); padding: 0 2px; line-height: 1.4; }
 
-.rd-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+/* flex: две заливки (получено + «говорит, что отдал») встают в ряд; inline-block ставил их на базовую линию строки и полоса высотой 8px их обрезала. */
+.rd-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: flex; }
 .rd-progress .rd-fill { height: 100%; border-radius: 4px; background: var(--accent-grad); transition: width 0.3s ease; }
 .rd-stat-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
 .rd-badge { display: inline-block; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -1834,7 +1835,8 @@
 
 /* пикер участников */
 .rd-pick-list { display: flex; flex-direction: column; gap: 6px; }
-.rd-pick-row { display: flex; align-items: center; gap: 8px; }
+/* Строка пикера должников: свой класс, потому что у `.rd-pick-row` есть поздняя версия для пикера активностей с padding 12px 16px — она раздувала строки списка людей. */
+.rd-debtor-row { display: flex; align-items: center; gap: 8px; }
 .rd-pick-toggle {
   flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;
   padding: 11px 12px; border-radius: 12px;
@@ -3512,4 +3514,76 @@
   border-top: 1px solid var(--hairline);
   margin: 11px -16px 0; padding: 11px 16px 0;
   font-size: 12.5px; color: var(--text-dim);
+}
+
+/* ---- Сборы и долги v3 (docs/modules/skladchina-v3.md § 9): строка долга, книга долгов, пара ---- */
+/* Полоса прогресса сбора из двух заливок: получено (акцент) и «говорят, что отдали» (мягкий акцент). */
+/* «Говорит, что отдал»: штрихованный оранжевый — деньги заявлены, но не подтверждены. */
+.rd-progress .rd-fill-claimed { background: repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 8px); }
+.rd-debt-row { padding: 10px 4px; }
+.rd-debt-row + .rd-debt-row { border-top: 1px solid var(--hairline); }
+.rd-debt-row.rd-debt-done { opacity: 0.7; }
+.rd-debt-head { display: flex; align-items: center; gap: 10px; }
+.rd-debt-av {
+  width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #ff7b4a, #c43a2a);
+}
+.rd-debt-av img { width: 100%; height: 100%; object-fit: cover; }
+.rd-debt-av-lg { width: 44px; height: 44px; font-size: 15px; }
+.rd-debt-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rd-debt-who b { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-debt-handle { font-size: 11.5px; color: var(--text-faint); }
+.rd-debt-amount { font-size: 15px; font-weight: 800; color: var(--text); flex-shrink: 0; }
+.rd-debt-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.rd-debt-overdue { color: var(--danger); }
+.rd-debt-flag { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 3px; }
+/* Разбор по долгу: реплики сторон с аватаром и именем, чек миниатюрой (тап → лайтбокс). */
+.rd-debt-thread { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.rd-debt-msg { display: flex; gap: 8px; align-items: flex-start; }
+.rd-debt-msg .rd-debt-av { width: 22px; height: 22px; font-size: 9px; margin-top: 1px; }
+.rd-debt-msg-body { flex: 1; min-width: 0; background: var(--surface-2); border-radius: 10px; padding: 7px 10px; }
+.rd-debt-msg-who { font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.rd-debt-msg-who span { font-weight: 500; color: var(--text-faint); }
+.rd-debt-msg-text { font-size: 13px; color: var(--text); margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+.rd-debt-msg-receipt { display: block; width: 72px; height: 72px; margin-top: 6px; padding: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: var(--surface); cursor: pointer; }
+.rd-debt-msg-receipt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-confirm-sheet { padding-top: 8px; }
+.rd-order-promised { margin: -6px 2px 14px; display: flex; flex-direction: column; gap: 4px; }
+.rd-confirm-text { font-size: 15px; line-height: 1.45; color: var(--text); margin: 4px 2px 16px; }
+/* Кнопки долга в один ряд без переносов (PO 2026-09-13): ужаты по отступам и шрифту, текст не рвётся. */
+.rd-debt-actions { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 10px; }
+.rd-debt-actions .rd-btn-primary, .rd-debt-actions .rd-btn-outline {
+  width: auto; flex: 1 1 auto; min-width: 0; padding: 8px 8px; border-radius: 12px;
+  font-size: 12.5px; white-space: nowrap; box-shadow: none;
+}
+.rd-debt-actions .rd-ghost-btn { flex: 1 1 auto; min-width: 0; padding: 8px 8px; font-size: 12.5px; white-space: nowrap; }
+.rd-debt-inline { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.rd-debt-summary { display: flex; gap: 12px; padding: 14px 16px; margin-bottom: 14px; }
+.rd-debt-sum-col { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rd-debt-sum-col b { font-size: 20px; font-weight: 800; color: var(--text); }
+.rd-debt-sum-lbl { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
+.rd-debt-pos { color: var(--live); }
+.rd-debt-neg { color: var(--danger); }
+.rd-debt-list { display: flex; flex-direction: column; gap: 10px; }
+.rd-enrolled-row { padding: 8px 0; }
+/* «Беру»: число штук рядом с кнопкой; по умолчанию 1, править не обязательно. */
+.rd-take-row { display: flex; align-items: center; gap: 10px; }
+.rd-take-row .rd-btn-primary { flex: 1; }
+.rd-take-qty { width: 72px; flex-shrink: 0; text-align: center; }
+.rd-debt-qty { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.rd-enrolled-row + .rd-enrolled-row { border-top: 1px solid var(--hairline); }
+.rd-debt-plate {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;
+  border: none; font: inherit; text-align: left; cursor: pointer;
+}
+.rd-debt-balance { font-size: 14px; font-weight: 800; flex-shrink: 0; color: var(--text); }
+.rd-debt-pair-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.rd-debt-balance-box { padding: 14px 16px; margin-bottom: 14px; }
+.rd-debt-balance-big { font-size: 18px; font-weight: 800; margin: 4px 0 10px; color: var(--text); }
+.rd-ostat-ico.rd-ost-debts { background: rgba(232, 160, 90, 0.16); }
+.rd-debt-flag-pill {
+  display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 12px; text-align: center;
 }

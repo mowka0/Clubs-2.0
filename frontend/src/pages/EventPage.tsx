@@ -14,6 +14,7 @@ import { eventToTemplateBody } from '../utils/eventTemplate';
 import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
+import { ChoiceSheet } from '../components/ConfirmSheet';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import { formatBadge } from '../utils/eventFormat';
@@ -231,6 +232,8 @@ export const EventPage: FC = () => {
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
   // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
   const eventSplitQuery = useEventSplitStateQuery(isAuthenticated ? id : undefined);
+  // «Скинуться» со страницы встречи: встреча — точка входа, а не поле формы (§ 13 п. 33).
+  const [splitAsk, setSplitAsk] = useState(false);
   // F5-04: собственная явка вызывающего — управляет контролами спора даже у участника, вышедшего
   // из клуба (member-gated запрос responders отдаёт ему 403). Нужна только пока открыто окно спора;
   // 404 (организатор / не-участник) ожидаем и трактуется как «UI спора не показываем».
@@ -1653,8 +1656,8 @@ export const EventPage: FC = () => {
             </div>
           </div>
           {myAttendanceBlock}
-          {/* Вход в split_bill. Один сплит на событие: активный — открываем, успешно закрытый —
-              показываем («счёт уже собран»); иначе кнопка создаёт новый сплит. */}
+          {/* «Скинуться» после встречи (skladchina-v3 § 3.1). Один сбор на встречу: активный —
+              открываем, собранный — показываем («уже собрано»); иначе кнопка создаёт новый. */}
           {(() => {
             const split = eventSplitQuery.data;
             const openExisting = () => {
@@ -1664,14 +1667,14 @@ export const EventPage: FC = () => {
             if (split?.skladchinaId && split.status === 'active') {
               return (
                 <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
-                  🧾 Открыть сбор по счёту ›
+                  💰 Открыть сбор ›
                 </button>
               );
             }
-            if (split?.skladchinaId && split.status === 'closed_success') {
+            if (split?.skladchinaId && split.status === 'collected') {
               return (
                 <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
-                  🧾 Счёт уже собран ›
+                  💰 Уже собрано ›
                 </button>
               );
             }
@@ -1682,10 +1685,10 @@ export const EventPage: FC = () => {
                 style={{ marginBottom: 14 }}
                 onClick={() => {
                   haptic.impact('medium');
-                  navigate(`/clubs/${event.clubId}/skladchina/split?eventId=${event.id}`);
+                  setSplitAsk(true);
                 }}
               >
-                🧾 Разделить счёт
+                💰 Скинуться
               </button>
             );
           })()}
@@ -2157,6 +2160,17 @@ export const EventPage: FC = () => {
       )}
 
       {/* Подтверждённые участники */}
+      {splitAsk && event && (
+        <ChoiceSheet
+          title={`Скинуться за «${event.title}»`}
+          options={[
+            // Со страницы встречи важно одно различие: кто решает, сколько с каждого (PO 2026-09-13).
+            { label: 'Я распределю, кто сколько должен', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`); } },
+            { label: 'Каждый сам решит, сколько скинуть', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
+          ]}
+          onCancel={() => setSplitAsk(false)}
+        />
+      )}
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );

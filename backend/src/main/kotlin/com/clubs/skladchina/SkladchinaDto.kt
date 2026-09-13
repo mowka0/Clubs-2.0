@@ -1,7 +1,10 @@
 package com.clubs.skladchina
 
+import com.clubs.debt.DebtDto
+import com.clubs.debt.DebtPersonDto
 import jakarta.validation.Valid
-import jakarta.validation.constraints.Future
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
@@ -9,77 +12,103 @@ import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 import java.util.UUID
 
+/**
+ * Создание сбора любого вида (docs/modules/skladchina-v3.md § 7, § 9). Какие поля обязательны,
+ * решает вид — проверяет сервис создания, а не аннотации: у voluntary срок и сумма необязательны,
+ * у shared сумма обязательна, у per_head это цена за человека.
+ */
 data class CreateSkladchinaRequest(
     @field:NotBlank @field:Size(max = 255)
     val title: String,
 
+    @field:Size(max = 2000)
     val description: String? = null,
+    @field:Size(max = 2000)
     val rules: String? = null,
     val photoUrl: String? = null,
 
-    // Выбирает стратегию шаблона. По умолчанию "custom" = поведение Фазы A.
-    val template: String = "custom",               // "custom" | "split_bill" | "gear" | "booking" | "birthday"
-    // split_bill: исходное событие, чей счёт делится. Игнорируется другими шаблонами.
-    val eventId: UUID? = null,
-    // split_bill: исключить организатора из числа участников, с которых берут деньги (он не должен долю).
-    // Режим "поровну" затем делит счёт между оставшимися участниками. Игнорируется другими шаблонами.
-    val excludeSelf: Boolean = false,
-    // split_bill: сколько организатор уже внёс сам (копейки) — работает только вместе с excludeSelf.
-    // Сумма зачитывается в сбор, организатор сразу помечается оплатившим, остальные делят остаток чека.
-    // null = ничего не вносил (прежнее поведение: весь чек делится на остальных).
-    @field:Positive
-    val selfPaidKopecks: Long? = null,
-
-    @field:NotNull
-    val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"
+    @field:NotBlank
+    val kind: String,                              // shared | per_head | voluntary
 
     @field:Positive
-    val totalGoalKopecks: Long? = null,            // цель для fixed_equal; для split_bill: сумма счёта
+    val amountKopecks: Long? = null,
 
     @field:NotBlank @field:Size(max = 1000)
     val paymentLink: String,
-
+    @field:Size(max = 500)
     val paymentMethodNote: String? = null,
 
-    @field:NotNull @field:Future
-    val deadline: OffsetDateTime,
+    val deadline: OffsetDateTime? = null,
 
-    val affectsReputation: Boolean = false,
+    // shared после встречи: список = пришедшие на встречу.
+    val eventId: UUID? = null,
+    // shared до события: этап «Кто в деле?» до этого момента; минимум людей, иначе сбор отменится сам.
+    val enrollmentUntil: OffsetDateTime? = null,
+    @field:Positive
+    val minParticipants: Int? = null,
+    // Этап «Кто в деле?»: отмечать ли создателя в деле сразу (чекбокс формы, по умолчанию да).
+    val enrollCreator: Boolean = true,
+    // per_head: создатель берёт и себе — его долг ложится сразу received; кнопки «Беру» у него нет.
+    val takeCreator: Boolean = true,
+    @field:Min(1) @field:Max(MAX_QUANTITY.toLong())
+    val creatorQuantity: Int = 1,
 
-    // Обязательно для режимов custom/fixed; игнорируется в split_bill (участники берутся из посещаемости).
-    // Валидация по конкретному шаблону живёт в стратегии, а не в DTO.
+    // voluntary: от кого скрыть (тихий сбор).
+    val hiddenFromUserId: UUID? = null,
+    // voluntary: создатель тоже скидывается — его взнос ложится сразу received (null = не скидывается).
+    @field:Positive
+    val creatorContributionKopecks: Long? = null,
+    // voluntary «каждый сколько считает нужным»: кого позвали скинуться (DM только им, на экране
+    // «Скидываются»); пусто = зовём всех участников клуба. Можно вместе с eventId.
+    val invitedUserIds: List<UUID> = emptyList(),
+
+    // shared без встречи и без этапа: список должников. Суммы либо у всех (по людям), либо ни у кого (поровну).
     @field:Valid
-    val participants: List<CreateSkladchinaParticipantRequest> = emptyList()
+    val debtors: List<DebtorRequest> = emptyList()
 )
 
-data class CreateSkladchinaParticipantRequest(
+data class DebtorRequest(
     @field:NotNull
     val userId: UUID,
     @field:Positive
-    val expectedAmountKopecks: Long? = null        // обязателен для fixed_individual
+    val amountKopecks: Long? = null
 )
 
-data class MarkPaidRequest(
-    // Nullable начиная с Фазы A (A-1): в fixed-режимах сервер сам записывает назначенную
-    // долю, и клиент ничего не присылает. Обязателен только для voluntary (валидируется
-    // в сервисе, по режиму). @Positive применяется только когда значение присутствует.
-    @field:Positive
-    val declaredAmountKopecks: Long? = null
+/** «В деле» / «Беру»: заметка необязательна (размер футболки и т.п.). */
+data class JoinSkladchinaRequest(
+    @field:Size(max = 200)
+    val note: String? = null,
+    // per_head: сколько штук берёт (по умолчанию 1); у этапа записи игнорируется.
+    @field:Min(1) @field:Max(MAX_QUANTITY.toLong())
+    val quantity: Int = 1
 )
 
-// V28: запрос участника на отказ (шаблоны REQUIRES_APPROVAL) — причина обязательна.
-data class RequestDeclineRequest(
-    @field:NotBlank @field:Size(max = 500)
-    val reason: String
+// Верхняя граница «штук на человека» в per_head: защита от опечатки, не бизнес-ограничение.
+const val MAX_QUANTITY = 50
+
+/** «Заказываю» (per_head): брать ли в долг тех, кто нажал «Оплачу позже» (иначе они выбывают, обещание аннулируется). */
+data class OrderSkladchinaRequest(
+    val includePromised: Boolean = false
 )
 
-// V28/V29: организатор разрешает запрос на отказ. Отклонение (approve=false) требует причины
-// (почему участник всё же должен заплатить) — валидируется в сервисе, т.к. условно от approve.
-data class ResolveDeclineRequest(
+/** «Перевёл N ₽» (voluntary). */
+data class ContributeRequest(
+    @field:NotNull @field:Positive
+    val amountKopecks: Long
+)
+
+/** Добавить человека в shared-сбор; сумма по умолчанию = доля последнего добавленного. */
+data class AddDebtorRequest(
     @field:NotNull
-    val approve: Boolean,
-    @field:Size(max = 500)
-    val rejectReason: String? = null
+    val userId: UUID,
+    @field:Positive
+    val amountKopecks: Long? = null
+)
+
+/** Заменить должника другим человеком с той же суммой. */
+data class ReplaceDebtorRequest(
+    @field:NotNull
+    val userId: UUID
 )
 
 data class SkladchinaDetailDto(
@@ -88,75 +117,73 @@ data class SkladchinaDetailDto(
     val clubName: String,
     val clubAvatarUrl: String?,
     val creatorId: UUID,
+    val creatorName: String,
 
     val title: String,
     val description: String?,
     val rules: String?,
     val photoUrl: String?,
 
-    val template: String,                          // custom | split_bill | gear | booking | birthday
-    val eventId: UUID?,                            // split_bill: исходное событие (иначе null)
-    // Встреча, счёт которой делится: экран сбора показывает её отдельным блоком «за что скидываемся»,
-    // поэтому названия и даты недостаточно иметь по eventId — иначе фронту нужен второй запрос.
-    val eventTitle: String?,
-    val eventDatetime: OffsetDateTime?,
-    val paymentMode: String,
-    val totalGoalKopecks: Long?,
-    val collectedKopecks: Long,
+    val kind: String,
+    val amountKopecks: Long?,
+    // Знаменатель «получено X из Y»: сумма живых долгов, а до их появления — amountKopecks.
+    val targetKopecks: Long?,
+    val receivedKopecks: Long,
+    val claimedKopecks: Long,
     val paymentLink: String,
     val paymentMethodNote: String?,
 
-    val deadline: OffsetDateTime,
-    val affectsReputation: Boolean,
+    val deadline: OffsetDateTime?,
+    val enrollmentUntil: OffsetDateTime?,
+    val minParticipants: Int?,
+    val lockedAt: OffsetDateTime?,
+    val orderedAt: OffsetDateTime?,
+
+    val eventId: UUID?,
+    val eventTitle: String?,
+    val eventDatetime: OffsetDateTime?,
+
     val status: String,
     val closedAt: OffsetDateTime?,
 
-    val isOrganizerView: Boolean,                  // вызывающий == создатель
-    val myStatus: String?,                         // pending|paid|declined|expired_no_response|released или null
-    val myExpectedAmountKopecks: Long?,
-    val myDeclaredAmountKopecks: Long?,
+    val isCreator: Boolean,
+    // Отменить может создатель или владелец клуба (PO 2026-09-12; со-организаторы нет).
+    val canCancel: Boolean,
 
-    // V28 отказ-с-подтверждением
-    val declineRequiresApproval: Boolean,          // политика шаблона — фронтенд использует флоу запроса
-    val myDeclineRequested: Boolean,               // у вызывающего открытый запрос на отказ, ждёт организатора
-    val myDeclineRejected: Boolean,                // отказ вызывающего отклонён — должен заплатить
-    val myDeclineRejectNote: String?,              // V29: причина организатора для отклонения отказа
+    val isEnrolling: Boolean,
+    val enrolledCount: Int,
+    val myEnrolled: Boolean,
 
-    val participants: List<SkladchinaParticipantDto>?,   // не-null ТОЛЬКО для организатора
-    val participantCount: Int,
-    val paidCount: Int,
-    val pendingCount: Int                          // #3: видно всем, чтобы последний pending видел, что осталось
+    val debtCount: Int,
+    val receivedCount: Int,
+    val openCount: Int,
+    val claimedCount: Int,
+    // per_head: штук оплачено (сумма quantity по received) — «куплено N».
+    val receivedItems: Int,
+
+    // Кто отметился «В деле» на этапе записи (всем участникам); вне этапа пустой список.
+    val enrolled: List<DebtPersonDto>,
+
+    // Мой долг как должника (null = у меня долга в этом сборе нет).
+    val myDebt: DebtDto?,
+    // Список долгов сбора — ТОЛЬКО создателю; остальным null.
+    val debts: List<DebtDto>?
 )
 
-/** Строка списка «по какой встрече делим счёт»: только события, которые примет создание сплита. */
+/** Строка списка «по какой встрече скидываемся»: только события, которые примет создание. */
 data class SplittableEventDto(
     val eventId: UUID,
     val title: String,
     val eventDatetime: OffsetDateTime,
-    val attendedCount: Int
+    val attendedCount: Int,
+    val attendedUserIds: List<UUID>
 )
 
-// Состояние сплита, привязанного к событию — управляет кнопкой "Разделить счёт" на EventPage.
-// Оба null = сплита ещё нет (кнопка создаёт). status active → открыть его; closed_success → уже собрано.
+// Состояние сбора, привязанного к встрече — управляет кнопкой «Скинуться» на EventPage.
+// Оба null = сбора ещё нет (кнопка создаёт). active → открыть его; collected → уже собрано.
 data class EventSplitStateDto(
     val skladchinaId: UUID?,
     val status: String?
-)
-
-data class SkladchinaParticipantDto(
-    val userId: UUID,
-    val firstName: String,
-    val lastName: String?,
-    val avatarUrl: String?,
-    val expectedAmountKopecks: Long?,
-    val declaredAmountKopecks: Long?,
-    val status: String,
-    val paidAt: OffsetDateTime?,
-    // V28: открытый запрос на отказ (вид организатора) — показать заметку + кнопки approve/reject.
-    val declineRequested: Boolean,
-    val declineNote: String?,
-    val declineRejected: Boolean,
-    val declineRejectNote: String?                 // V29: причина организатора, если отказ отклонён
 )
 
 data class MySkladchinaListItemDto(
@@ -165,20 +192,20 @@ data class MySkladchinaListItemDto(
     val clubId: UUID,
     val clubName: String,
     val clubAvatarUrl: String?,
-    val template: String,
-    val paymentMode: String,
-    val totalGoalKopecks: Long?,
-    val collectedKopecks: Long,
-    val participantCount: Int,
-    val paidCount: Int,
-    val deadline: OffsetDateTime,
+    val kind: String,
+    val amountKopecks: Long?,
+    val targetKopecks: Long?,
+    val receivedKopecks: Long,
+    val debtCount: Int,
+    val receivedCount: Int,
+    val deadline: OffsetDateTime?,
     val status: String,
-    val isOrganizerView: Boolean,
-    val myStatus: String?,
+    val isCreator: Boolean,
+    val myDebtStatus: String?,
+    // Мне нужно действовать: открытый долг как должнику или «Отдал» ждёт моего ответа как получателя.
     val actionRequired: Boolean,
-    val affectsReputation: Boolean
+    val photoUrl: String?
 )
 
-data class SkladchinaUploadResponse(
-    val photoUrl: String
-)
+/** Число сборов, где от пользователя ждут действия (бейдж таба). */
+data class ActionRequiredCountDto(val count: Int)

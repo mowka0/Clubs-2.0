@@ -22,8 +22,11 @@ const SkladchinaPage = lazy(() =>
 const CreateSkladchinaPage = lazy(() =>
   import('./pages/CreateSkladchinaPage').then((m) => ({ default: m.CreateSkladchinaPage })),
 );
-const CreateSplitBillPage = lazy(() =>
-  import('./pages/CreateSplitBillPage').then((m) => ({ default: m.CreateSplitBillPage })),
+const DebtsPage = lazy(() =>
+  import('./pages/DebtsPage').then((m) => ({ default: m.DebtsPage })),
+);
+const DebtPairPage = lazy(() =>
+  import('./pages/DebtPairPage').then((m) => ({ default: m.DebtPairPage })),
 );
 const CreateEventPage = lazy(() =>
   import('./pages/CreateEventPage').then((m) => ({ default: m.CreateEventPage })),
@@ -134,8 +137,13 @@ export const router = createBrowserRouter([
         element: <CreateSkladchinaPage />,
       },
       {
-        path: '/clubs/:id/skladchina/split',
-        element: <CreateSplitBillPage />,
+        // Личная книга долгов через все клубы — вход из профиля (skladchina-v3 § 9).
+        path: '/debts',
+        element: <DebtsPage />,
+      },
+      {
+        path: '/debts/with/:userId',
+        element: <DebtPairPage />,
       },
       {
         path: '/invite/:code',

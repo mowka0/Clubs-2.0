@@ -6,6 +6,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useMyReputationQuery, useMyGamificationQuery } from '../queries/members';
 import { useMyInterestsQuery } from '../queries/profile';
+import { useDebtsOverviewQuery } from '../queries/debts';
+import { formatRub } from '../utils/money';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
@@ -51,6 +53,8 @@ export const ProfilePage: FC = () => {
   const reputationQuery = useMyReputationQuery();
   const gamificationQuery = useMyGamificationQuery();
   const interestsQuery = useMyInterestsQuery();
+  const debtsQuery = useDebtsOverviewQuery();
+  const debts = debtsQuery.data;
 
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
@@ -312,6 +316,30 @@ export const ProfilePage: FC = () => {
                 {activeClubs.length > 0
                   ? <b>{activeClubs.length}</b>
                   : <span className="rd-ostat-lupa" aria-label="Найти клубы">🔍</span>}
+              </span>
+            </button>
+            {/* Долги (skladchina-v3 § 9): две цифры и бейдж «ждут подтверждения»; тап → личная книга. */}
+            <button
+              type="button"
+              className="rd-ostat-row rd-ostat-link"
+              onClick={() => {
+                haptic.impact('light');
+                navigate('/debts');
+              }}
+            >
+              <span className="rd-ostat-ico rd-ost-debts" aria-hidden="true">📒</span>
+              <span>
+                <span className="rd-ostat-lbl">Долги</span>
+                <div className="rd-ostat-sub">
+                  {debts && (debts.oweKopecks > 0 || debts.owedKopecks > 0)
+                    ? `вы должны ${formatRub(debts.oweKopecks)} · вам должны ${formatRub(debts.owedKopecks)}`
+                    : 'долгов нет'}
+                </div>
+              </span>
+              <span className="rd-ostat-val">
+                {debts && debts.awaitingMyConfirmation > 0
+                  ? <b className="rd-debt-flag-pill" aria-label={`Ждут подтверждения: ${debts.awaitingMyConfirmation}`}>{debts.awaitingMyConfirmation}</b>
+                  : <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>}
               </span>
             </button>
             {(rep?.visits?.totalEventsAttended ?? 0) > 0 && (
