@@ -351,6 +351,14 @@ class SkladchinaV3IntegrationTest {
         val closed = json(post("/api/skladchinas/$id/close", owner).andExpect(status().isOk))
         assertEquals("collected", closed["status"].asText())
         assertEquals(50_000L, closed["receivedKopecks"].asLong())
+
+        // Создатель тоже скидывается: взнос из формы ложится сразу received, ориентир остаётся знаменателем.
+        val withOwn = json(postJson("/api/clubs/$clubId/skladchinas", owner, voluntaryBody(hiddenFrom = null).replace("\"kind\": \"voluntary\",", "\"kind\": \"voluntary\", \"creatorContributionKopecks\": 30000,")).andExpect(status().isCreated))
+        val ownRow = withOwn["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals("received", ownRow["status"].asText())
+        assertEquals(30_000L, withOwn["receivedKopecks"].asLong())
+        assertEquals(50_000L, withOwn["targetKopecks"].asLong())
+        assertTrue(withOwn["myDebt"].isNull)
     }
 
     // --- AC-10: сальдо пары ---

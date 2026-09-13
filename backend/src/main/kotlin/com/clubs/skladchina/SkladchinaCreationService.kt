@@ -223,7 +223,12 @@ class SkladchinaCreationService(
             }
         }
         val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId && it != hidden }
-        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrolling = false)
+        // Создатель тоже скидывается: свой взнос сразу received, как своя доля в других видах.
+        val own = request.creatorContributionKopecks?.let { amount ->
+            if (amount > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+            mapOf(creatorId to amount)
+        } ?: emptyMap()
+        return CreationPlan(own, request.amountKopecks, null, members, enrolling = false)
     }
 
     /** Пришедшие на встречу активные участники; те же условия, что отбирают встречи в списке «Скинуться после встречи». */

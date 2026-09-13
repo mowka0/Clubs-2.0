@@ -55,6 +55,9 @@ data class CreateSkladchinaRequest(
 
     // voluntary: от кого скрыть (тихий сбор).
     val hiddenFromUserId: UUID? = null,
+    // voluntary: создатель тоже скидывается — его взнос ложится сразу received (null = не скидывается).
+    @field:Positive
+    val creatorContributionKopecks: Long? = null,
 
     // shared без встречи и без этапа: список должников. Суммы либо у всех (по людям), либо ни у кого (поровну).
     @field:Valid

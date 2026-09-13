@@ -908,6 +908,8 @@ export interface CreateSkladchinaRequest {
   creatorQuantity?: number;
   /** voluntary: от кого скрыть (тихий сбор). */
   hiddenFromUserId?: string | null;
+  /** voluntary: создатель тоже скидывается — взнос сразу получен (null = не скидывается). */
+  creatorContributionKopecks?: number | null;
   /** shared со списком: суммы либо у всех (по людям), либо ни у кого (поровну). */
   debtors?: DebtorInput[];
 }

@@ -92,6 +92,8 @@ export const CreateSkladchinaPage: FC = () => {
   const [perPerson, setPerPerson] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [hiddenFrom, setHiddenFrom] = useState<string | null>(null);
+  const [ownContribution, setOwnContribution] = useState(false);
+  const [ownContributionRub, setOwnContributionRub] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!clubId) {
@@ -165,7 +167,14 @@ export const CreateSkladchinaPage: FC = () => {
         body.debtors = debtors;
       }
     }
-    if (kind === 'voluntary') body.hiddenFromUserId = hiddenFrom;
+    if (kind === 'voluntary') {
+      body.hiddenFromUserId = hiddenFrom;
+      if (ownContribution) {
+        const own = rubToKopecks(ownContributionRub);
+        if (own === null) return fail('Укажите, сколько скидываетесь сами');
+        body.creatorContributionKopecks = own;
+      }
+    }
     if (kind === 'per_head') {
       const qty = Number(creatorQuantity);
       if (takeCreator && (!/^\d+$/.test(creatorQuantity.trim()) || qty < 1 || qty > 50)) return fail('Сколько штук берёте себе: от 1 до 50');
@@ -322,6 +331,21 @@ export const CreateSkladchinaPage: FC = () => {
               </div>
             )}
             <span className="rd-hint">Себя добавлять можно: ваша доля сразу считается полученной.</span>
+          </div>
+        )}
+
+        {kind === 'voluntary' && (
+          <div className="rd-field">
+            <label className="rd-check">
+              <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
+              <span>Я тоже скидываюсь: мой взнос считается сразу полученным</span>
+            </label>
+            {ownContribution && (
+              <label className="rd-take-row">
+                <span className="rd-hint">Сколько (₽)</span>
+                <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
+              </label>
+            )}
           </div>
         )}
 
