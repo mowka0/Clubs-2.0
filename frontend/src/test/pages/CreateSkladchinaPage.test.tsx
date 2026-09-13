@@ -122,6 +122,40 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(sent!.debtors).toEqual([{ userId: 'u-1', amountKopecks: 70000 }, { userId: 'u-2', amountKopecks: 30000 }]);
   });
 
+  it('«Каждый скидывает, сколько считает нужным»: уходит как voluntary с eventId, приглашёнными и суммой чека', async () => {
+    let sent: CreateSkladchinaRequest | null = null;
+    const OLEG: MemberListItemDto = { ...MEMBER, userId: 'u-2', firstName: 'Олег' };
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/members`, () => HttpResponse.json([OLEG, MEMBER])),
+      http.get(`*/api/clubs/${CLUB_ID}/skladchinas/splittable-events`, () => HttpResponse.json([
+        { eventId: 'ev-1', title: 'Ужин в ресторане', eventDatetime: new Date().toISOString(), attendedCount: 1, attendedUserIds: ['u-1'] },
+      ])),
+      http.post(`*/api/clubs/${CLUB_ID}/skladchinas`, async ({ request }) => {
+        sent = (await request.json()) as CreateSkladchinaRequest;
+        return HttpResponse.json({ id: 's-new', clubId: CLUB_ID }, { status: 201 });
+      }),
+    );
+    const { user } = renderPage('?kind=shared&eventId=ev-1');
+    await user.type(await screen.findByLabelText(/Название/), 'Ужин');
+    await user.type(screen.getByPlaceholderText('Ссылка СБП или номер телефона'), 'https://pay.example/x');
+    // Пришедшая Анна отмечена и стоит первой, Олег ниже.
+    const names = (await screen.findAllByText(/Анна|Олег/)).map((el) => el.textContent);
+    expect(names.indexOf('Анна')).toBeLessThan(names.indexOf('Олег'));
+    await user.click(screen.getByLabelText('Каждый скидывает, сколько считает нужным'));
+    expect(screen.queryByLabelText('Суммы по людям (иначе поровну)')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Всего потратили (₽)'), '6000');
+    await user.click(screen.getByLabelText('Без срока'));
+    await user.click(screen.getByRole('button', { name: 'Создать сбор' }));
+
+    expect(await screen.findByTestId('detail')).toBeInTheDocument();
+    expect(sent!.kind).toBe('voluntary');
+    expect(sent!.eventId).toBe('ev-1');
+    expect(sent!.amountKopecks).toBe(600000);
+    expect(sent!.invitedUserIds).toEqual(['u-1']);
+    expect(sent!.debtors).toBeUndefined();
+    expect(sent!.deadline).toBeNull();
+  });
+
   it('«Кто берёт?» просит цену за человека; «По желанию» позволяет обойтись без срока', async () => {
     server.use(http.get(`*/api/clubs/${CLUB_ID}/members`, () => HttpResponse.json([MEMBER])));
     renderPage('?kind=per_head');

@@ -53,7 +53,9 @@ class SkladchinaCreationService(
         val enrolling: Boolean,
         val enrollCreator: Boolean = false,
         // per_head: штук у создателя (иначе 1 у каждого).
-        val quantities: Map<UUID, Int> = emptyMap()
+        val quantities: Map<UUID, Int> = emptyMap(),
+        // voluntary: кого позвали скинуться — пишем в skladchina_enrollments как «в деле».
+        val invited: List<UUID> = emptyList()
     )
 
     @Transactional
@@ -106,6 +108,7 @@ class SkladchinaCreationService(
             debtRepository.insertAll(plan.shares.map { (userId, amount) -> newDebt(created, userId, amount, plan.quantities[userId] ?: 1, now) })
         }
         if (plan.enrollCreator) skladchinaRepository.addEnrollment(id, creatorId)
+        plan.invited.forEach { skladchinaRepository.addEnrollment(id, it) }
 
         log.info(
             "Skladchina created: id={} clubId={} creatorId={} kind={} amount={} debts={} enrolling={} hidden={}",
@@ -125,6 +128,7 @@ class SkladchinaCreationService(
                 amountKopecks = created.amountKopecks,
                 deadline = created.deadline,
                 enrollmentUntil = created.enrollmentUntil,
+                eventId = created.eventId,
                 hiddenFromUserId = created.hiddenFromUserId,
                 recipientUserIds = plan.recipientUserIds,
                 debtorShares = plan.shares.filterKeys { it != creatorId }
@@ -157,8 +161,12 @@ class SkladchinaCreationService(
         if (kind != SkladchinaKind.voluntary && request.hiddenFromUserId != null) {
             throw ValidationException("Скрыть от кого-то можно только сбор «По желанию»")
         }
-        if (kind != SkladchinaKind.shared && (request.eventId != null || request.enrollmentUntil != null || request.debtors.isNotEmpty())) {
-            throw ValidationException("Встреча, этап «Кто в деле?» и список людей есть только у сбора «Скинуться»")
+        // eventId допустим и у «По желанию» после встречи (§ 13 п. 28); этап записи и список долгов — только shared.
+        if (kind != SkladchinaKind.shared && (request.enrollmentUntil != null || request.debtors.isNotEmpty())) {
+            throw ValidationException("Этап «Кто в деле?» и список людей есть только у сбора «Скинуться»")
+        }
+        if (kind == SkladchinaKind.per_head && request.eventId != null) {
+            throw ValidationException("Встречу можно привязать к сбору «Скинуться» или «По желанию»")
         }
     }
 
@@ -225,13 +233,19 @@ class SkladchinaCreationService(
                 throw ValidationException("Скрыть можно только от участника клуба")
             }
         }
-        val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId && it != hidden }
+        // «Каждый сколько считает нужным» после встречи: встреча даёт привязку, список — кого позвали.
+        val eventId = request.eventId?.also { resolveAttended(clubId, it, OffsetDateTime.now()) }
+        val invited = request.invitedUserIds.distinct().filter { it != creatorId && it != hidden }
+        if (invited.isNotEmpty() && skladchinaRepository.findNonActiveMembers(clubId, invited).isNotEmpty()) {
+            throw ForbiddenException("В списке есть не участники клуба")
+        }
+        val members = invited.ifEmpty { skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId && it != hidden } }
         // Создатель тоже скидывается: свой взнос сразу received, как своя доля в других видах.
         val own = request.creatorContributionKopecks?.let { amount ->
             if (amount > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
             mapOf(creatorId to amount)
         } ?: emptyMap()
-        return CreationPlan(own, request.amountKopecks, null, members, enrolling = false)
+        return CreationPlan(own, request.amountKopecks, eventId, members, enrolling = false, invited = invited)
     }
 
     /** Пришедшие на встречу активные участники; те же условия, что отбирают встречи в списке «Скинуться после встречи». */

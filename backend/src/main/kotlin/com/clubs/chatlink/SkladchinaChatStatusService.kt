@@ -5,6 +5,7 @@ import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.bot.UserChatState
 import com.clubs.debt.DebtRepository
 import com.clubs.generated.jooq.enums.DebtStatus
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.skladchina.Skladchina
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.user.UserRepository
@@ -199,7 +200,8 @@ class SkladchinaChatStatusService(
         val waitingIds = debtRepository.findBySkladchina(skladchina.id)
             .filter { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
             .map { it.debt.debtorId }
-        val enrolledIds = if (skladchina.enrollmentUntil != null) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
+        // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
+        val enrolledIds = if (skladchina.enrollmentUntil != null || skladchina.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
         return ChatStatusView(
             skladchina = skladchina,
             totals = totals,

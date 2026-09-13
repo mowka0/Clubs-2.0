@@ -6,6 +6,7 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.debt.DebtMapper
 import com.clubs.debt.DebtRepository
 import com.clubs.event.EventRepository
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.membership.MembershipRepository
 import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
@@ -80,7 +81,8 @@ class SkladchinaQueryService(
             totals = debtRepository.totals(skladchinaId),
             enrolledCount = if (s.enrollmentUntil != null) skladchinaRepository.countEnrolled(skladchinaId) else 0,
             myEnrolled = s.isEnrolling && skladchinaRepository.isEnrolled(skladchinaId, callerId),
-            enrolled = if (s.isEnrolling) skladchinaRepository.findEnrolledPersons(skladchinaId).map(debtMapper::toPersonDto) else emptyList(),
+            // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
+            enrolled = if (s.isEnrolling || s.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledPersons(skladchinaId).map(debtMapper::toPersonDto) else emptyList(),
             debts = debts,
             event = event
         )

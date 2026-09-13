@@ -178,6 +178,34 @@ class SkladchinaV3IntegrationTest {
         assertEquals("active", json(get("/api/events/$eventId/skladchina", alice))["status"].asText())
     }
 
+    @Test
+    fun `free contributions after an event go as voluntary with invited people, event link and total bill`() {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Бар', 'Бар', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        listOf(ownerId, aliceId).forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        val body = """
+            {
+              "title": "Бар", "kind": "voluntary", "amountKopecks": 600000, "paymentLink": "https://pay.example/owner",
+              "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId", "$ownerId"]
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        assertEquals("voluntary", created["kind"].asText())
+        assertEquals(eventId.toString(), created["eventId"].asText())
+        assertEquals(listOf("Alice", "Bob"), created["enrolled"].map { it["firstName"].asText() }, "позвали без создателя")
+        assertEquals(600_000L, created["targetKopecks"].asLong(), "общий чек — знаменатель")
+        assertEquals("active", json(get("/api/events/$eventId/skladchina", alice))["status"].asText())
+        // Скидывается любой участник клуба, не только приглашённый; сумму выбирает сам.
+        postJson("/api/skladchinas/${created["id"].asText()}/contribute", carol, """{"amountKopecks":15000}""").andExpect(status().isOk)
+    }
+
     // --- AC-2, AC-4: Отдал → Получил, сбор закрывается сам ---
 
     @Test

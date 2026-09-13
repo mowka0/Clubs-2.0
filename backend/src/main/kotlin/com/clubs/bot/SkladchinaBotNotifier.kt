@@ -93,7 +93,7 @@ class SkladchinaBotNotifier(
             }
             SkladchinaKind.voluntary -> {
                 append("🎁 «${e.title}» в клубе «${e.clubName}» — по желанию")
-                e.amountKopecks?.let { append(", ориентир ").append(Money.rub(it)) }
+                e.amountKopecks?.let { append(if (e.eventId != null) ", всего потратили " else ", ориентир ").append(Money.rub(it)) }
                 e.deadline?.let { append(", до ").append(it.format(fmt)) }
                 append(". Собирает $creatorName.")
                 e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }

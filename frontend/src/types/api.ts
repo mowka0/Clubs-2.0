@@ -912,6 +912,8 @@ export interface CreateSkladchinaRequest {
   hiddenFromUserId?: string | null;
   /** voluntary: создатель тоже скидывается — взнос сразу получен (null = не скидывается). */
   creatorContributionKopecks?: number | null;
+  /** voluntary «каждый сколько считает нужным»: кого позвали (DM и «Скидываются»); пусто = всех. */
+  invitedUserIds?: string[];
   /** shared со списком: суммы либо у всех (по людям), либо ни у кого (поровну). */
   debtors?: DebtorInput[];
 }

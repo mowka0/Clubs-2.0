@@ -93,6 +93,9 @@ export const CreateSkladchinaPage: FC = () => {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [hiddenFrom, setHiddenFrom] = useState<string | null>(null);
   const [ownContribution, setOwnContribution] = useState(false);
+  // «Каждый скидывает, сколько считает нужным»: на бэке это «По желанию» со списком приглашённых.
+  const [freeAmount, setFreeAmount] = useState(false);
+  const [billRub, setBillRub] = useState('');
   const [ownContributionRub, setOwnContributionRub] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -125,7 +128,8 @@ export const CreateSkladchinaPage: FC = () => {
     if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
   };
 
-  const perPersonMode = kind === 'shared' && perPerson && source !== 'enroll';
+  const perPersonMode = kind === 'shared' && perPerson && !freeAmount && source !== 'enroll';
+  const freeMode = kind === 'shared' && freeAmount && source !== 'enroll';
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -135,22 +139,29 @@ export const CreateSkladchinaPage: FC = () => {
     const perPersonTotal = perPersonMode ? Array.from(selectedIds).reduce((acc, id) => acc + (rubToKopecks(amounts[id] ?? '') ?? 0), 0) : 0;
     const amountKopecks = perPersonMode ? (perPersonTotal > 0 ? perPersonTotal : null) : amountRub.trim() ? rubToKopecks(amountRub) : null;
     if (!perPersonMode && amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
-    if (!perPersonMode && kind !== 'voluntary' && amountKopecks === null) return fail(kind === 'per_head' ? 'Укажите цену за человека' : 'Укажите сумму');
-    const withDeadline = kind !== 'voluntary' || !noDeadline;
+    if (!perPersonMode && !freeMode && kind !== 'voluntary' && amountKopecks === null) return fail(kind === 'per_head' ? 'Укажите цену за человека' : 'Укажите сумму');
+    const billKopecks = freeMode && billRub.trim() ? rubToKopecks(billRub) : null;
+    if (freeMode && billRub.trim() && billKopecks === null) return fail('Сумма чека должна быть числом больше нуля');
+    const withDeadline = (kind !== 'voluntary' && !freeMode) || !noDeadline;
     if (withDeadline && !deadline) return fail('Укажите срок');
 
     const body: CreateSkladchinaRequest = {
       title: title.trim(),
       description: description.trim() || null,
       photoUrl,
-      kind,
-      amountKopecks,
+      kind: freeMode ? 'voluntary' : kind,
+      amountKopecks: freeMode ? billKopecks : amountKopecks,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
       deadline: withDeadline ? new Date(deadline).toISOString() : null,
     };
 
-    if (kind === 'shared') {
+    if (freeMode) {
+      if (source === 'event' && !eventId) return fail('Выберите встречу');
+      if (source === 'event') body.eventId = eventId;
+      if (selectedIds.size === 0) return fail('Выберите хотя бы одного человека');
+      body.invitedUserIds = Array.from(selectedIds);
+    } else if (kind === 'shared') {
       if (source === 'event' && !eventId) return fail('Выберите встречу');
       if (source === 'event') body.eventId = eventId;
       if (source === 'enroll') {
@@ -200,6 +211,11 @@ export const CreateSkladchinaPage: FC = () => {
   const events = splittableQuery.data ?? [];
   const selectedEvent = events.find((ev) => ev.eventId === eventId);
   const attendedIds = useMemo(() => new Set(source === 'event' ? selectedEvent?.attendedUserIds ?? [] : []), [source, selectedEvent]);
+  // После встречи: сначала пришедшие, ниже остальные участники клуба.
+  const orderedMembers = useMemo(
+    () => (attendedIds.size === 0 ? members : [...members.filter((m) => attendedIds.has(m.userId)), ...members.filter((m) => !attendedIds.has(m.userId))]),
+    [members, attendedIds],
+  );
 
   // Выбор встречи предзаполняет список людей пришедшими; дальше состав правится руками.
   const pickEvent = (ev: SplittableEventDto) => {
@@ -238,7 +254,7 @@ export const CreateSkladchinaPage: FC = () => {
           <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </label>
 
-        {!perPersonMode && (
+        {!perPersonMode && !freeMode && (
         <label className="rd-field">
           <span className="rd-label">
             {kind === 'shared' ? 'Сумма (₽)' : kind === 'per_head' ? 'Цена за человека (₽)' : 'Ориентир (₽)'}
@@ -312,15 +328,26 @@ export const CreateSkladchinaPage: FC = () => {
             <span className="rd-label">
               Люди <span className="rd-req">*</span> <span className="rd-count">· выбрано {selectedIds.size}</span>
             </span>
-            <label className="rd-check" style={{ marginBottom: 8 }}>
-              <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} />
-              <span>Суммы по людям (иначе поровну)</span>
+            <label className="rd-check">
+              <input type="checkbox" checked={freeAmount} onChange={(e) => setFreeAmount(e.target.checked)} />
+              <span>Каждый скидывает, сколько считает нужным</span>
             </label>
+            {freeMode ? (
+              <label className="rd-take-row" style={{ marginBottom: 8 }}>
+                <span className="rd-hint">Всего потратили (₽), необязательно</span>
+                <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Всего потратили (₽)" placeholder="6000" value={billRub} onChange={(e) => setBillRub(e.target.value)} />
+              </label>
+            ) : (
+              <label className="rd-check" style={{ marginBottom: 8 }}>
+                <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} />
+                <span>Суммы по людям (иначе поровну)</span>
+              </label>
+            )}
             {membersQuery.isPending && <Spinner size="s" />}
             {!membersQuery.isPending && members.length === 0 && <div className="rd-hint">В клубе пока нет активных участников.</div>}
             {members.length > 0 && (
               <div className="rd-pick-list">
-                {members.map((m) => {
+                {orderedMembers.map((m) => {
                   const isSelected = selectedIds.has(m.userId);
                   const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
                   return (
@@ -333,7 +360,7 @@ export const CreateSkladchinaPage: FC = () => {
                         {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
                         {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
                       </button>
-                      {!isFrozen && perPerson && (
+                      {!isFrozen && perPersonMode && (
                         <input
                           type="number"
                           inputMode="decimal"
@@ -398,13 +425,13 @@ export const CreateSkladchinaPage: FC = () => {
           <input className="rd-input" value={paymentMethodNote} onChange={(e) => setPaymentMethodNote(e.target.value)} placeholder="Тинькофф, СБП, ВТБ…" />
         </label>
 
-        {kind === 'voluntary' && (
+        {(kind === 'voluntary' || freeMode) && (
           <label className="rd-check">
             <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
             <span>Без срока</span>
           </label>
         )}
-        {(kind !== 'voluntary' || !noDeadline) && (
+        {((kind !== 'voluntary' && !freeMode) || !noDeadline) && (
           <label className="rd-field">
             <span className="rd-label">
               {kind === 'per_head' ? 'Покупаю' : 'Срок оплаты'} <span className="rd-req">*</span>

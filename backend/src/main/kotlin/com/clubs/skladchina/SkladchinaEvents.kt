@@ -29,6 +29,8 @@ data class SkladchinaCreatedEvent(
     val amountKopecks: Long?,
     val deadline: OffsetDateTime?,
     val enrollmentUntil: OffsetDateTime?,
+    // Привязка к встрече: у «По желанию» после встречи ориентир читается как «всего потратили».
+    val eventId: UUID?,
     val hiddenFromUserId: UUID?,
     val recipientUserIds: List<UUID>,
     val debtorShares: Map<UUID, Long>

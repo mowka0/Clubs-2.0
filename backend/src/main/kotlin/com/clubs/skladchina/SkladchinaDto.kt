@@ -58,6 +58,9 @@ data class CreateSkladchinaRequest(
     // voluntary: создатель тоже скидывается — его взнос ложится сразу received (null = не скидывается).
     @field:Positive
     val creatorContributionKopecks: Long? = null,
+    // voluntary «каждый сколько считает нужным»: кого позвали скинуться (DM только им, на экране
+    // «Скидываются»); пусто = зовём всех участников клуба. Можно вместе с eventId.
+    val invitedUserIds: List<UUID> = emptyList(),
 
     // shared без встречи и без этапа: список должников. Суммы либо у всех (по людям), либо ни у кого (поровну).
     @field:Valid

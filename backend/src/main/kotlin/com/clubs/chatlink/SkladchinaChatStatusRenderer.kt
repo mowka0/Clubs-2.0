@@ -152,9 +152,11 @@ class SkladchinaChatStatusRenderer(
         val sb = StringBuilder()
         sb.append("🎁 ").append(escapeHtml(s.title)).append("\n")
         sb.append("по желанию")
-        s.amountKopecks?.let { sb.append(" · ориентир ").append(Money.rub(it)) }
+        // После встречи ориентир — это общий чек: людям важно знать, сколько потратили.
+        s.amountKopecks?.let { sb.append(if (s.eventId != null) " · всего потратили " else " · ориентир ").append(Money.rub(it)) }
         s.deadline?.let { sb.append(" · до ").append(it.format(fmt)) }
         sb.append(" · собирает ").append(escapeHtml(view.creatorName)).append("\n")
+        mentionsLine(view.enrolled)?.let { sb.append("Скидываются: ").append(it).append("\n") }
         // Ориентир — знаменатель полосы, как на экране сбора (PO 2026-09-13); без ориентира просто «получено».
         val target = s.amountKopecks
         if (target != null && target > 0) {

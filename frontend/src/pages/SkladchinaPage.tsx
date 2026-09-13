@@ -318,22 +318,27 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {/* Этап записи: кто в деле — всем, вместо списка долгов (их ещё нет). */}
-      {s.isEnrolling && (
+      {/* Этап записи — кто в деле; «По желанию» — кого позвали скинуться (создателю видно, кто уже перевёл). */}
+      {(s.isEnrolling || (s.kind === 'voluntary' && s.enrolled.length > 0)) && (
         <>
           <div className="rd-section-sub-h">
-            В деле <span className="rd-count">· {s.enrolled.length}</span>
+            {s.isEnrolling ? 'В деле' : 'Скидываются'} <span className="rd-count">· {s.enrolled.length}</span>
           </div>
           <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
             {s.enrolled.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
-            {s.enrolled.map((p) => (
-              <div className="rd-debt-head rd-enrolled-row" key={p.id}>
-                <span className="rd-av rd-debt-av">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(personName(p))}</span>
-                <span className="rd-debt-who">
-                  <b>{personName(p)}{p.id === viewerId ? ' (вы)' : ''}</b>
-                  {p.username && <span className="rd-debt-handle">@{p.username}</span>}
-                </span>
-              </div>
-            ))}
+            {s.enrolled.map((p) => {
+              const paid = (s.debts ?? []).find((d) => d.debtor.id === p.id);
+              return (
+                <div className="rd-debt-head rd-enrolled-row" key={p.id}>
+                  <span className="rd-av rd-debt-av">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(personName(p))}</span>
+                  <span className="rd-debt-who">
+                    <b>{personName(p)}{p.id === viewerId ? ' (вы)' : ''}</b>
+                    {p.username && <span className="rd-debt-handle">@{p.username}</span>}
+                  </span>
+                  {paid && <span className="rd-debt-meta">{paid.status === 'received' ? `${formatRub(paid.amountKopecks)} ✅` : paid.status === 'claimed' ? `${formatRub(paid.amountKopecks)} · ждёт` : ''}</span>}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
