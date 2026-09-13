@@ -25,6 +25,17 @@ data class DebtRejectedEvent(
     val dropped: Boolean
 )
 
+/** Должник нажал «Оплачу позже» — получателю DM с датой (PO 2026-09-13). */
+data class DebtPromisedEvent(
+    val debt: DebtWithContext
+)
+
+/** Должник ответил по долгу («Не согласен»: заметка и/или чек) — получателю DM. */
+data class DebtReplyEvent(
+    val debt: DebtWithContext,
+    val withReceipt: Boolean
+)
+
 /** Получатель изменил сумму shared-долга. */
 data class DebtAmountChangedEvent(
     val debt: DebtWithContext,

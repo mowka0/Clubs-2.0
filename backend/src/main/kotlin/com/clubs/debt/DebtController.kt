@@ -84,23 +84,16 @@ class DebtController(
         return ResponseEntity.ok(debtService.changeAmount(id, user.userId, request.amountKopecks))
     }
 
-    @PostMapping("/{id}/receipt")
-    fun receipt(
-        @PathVariable id: UUID,
-        @RequestBody @Valid request: DebtReceiptRequest,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<DebtDto> {
-        log.info("Debt receipt: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(debtService.setReceipt(id, user.userId, request.url))
-    }
 
     @PostMapping("/{id}/note")
     fun note(
         @PathVariable id: UUID,
         @RequestBody @Valid request: DebtNoteRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<DebtDto> =
-        ResponseEntity.ok(debtService.setNote(id, user.userId, request.note))
+    ): ResponseEntity<DebtDto> {
+        log.info("Debt note: id={} userId={} receipt={}", id, user.userId, request.receiptUrl != null)
+        return ResponseEntity.ok(debtService.reply(id, user.userId, request.note, request.receiptUrl))
+    }
 
     @PostMapping("/with/{userId}/settle")
     fun settle(

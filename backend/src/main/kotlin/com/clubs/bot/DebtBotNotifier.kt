@@ -5,10 +5,12 @@ import com.clubs.debt.DebtAmountChangedEvent
 import com.clubs.debt.DebtClaimedEvent
 import com.clubs.debt.DebtCreatedEvent
 import com.clubs.debt.DebtPenalty
+import com.clubs.debt.DebtPromisedEvent
 import com.clubs.debt.DebtRejectedEvent
 import com.clubs.debt.DebtReminder
 import com.clubs.debt.DebtReminderKind
 import com.clubs.debt.DebtReplacedEvent
+import com.clubs.debt.DebtReplyEvent
 import com.clubs.debt.DebtSettlement
 import com.clubs.debt.DebtTotals
 import com.clubs.debt.DebtWithContext
@@ -27,7 +29,8 @@ import java.util.UUID
 
 /**
  * DM по долгу (skladchina-v3 § 5, § 6): новый долг, «Отдал» с кнопками «Получил / Не получил»,
- * «Не получил», смена суммы, замена, сальдо пары, напоминания шедулера и −40 за просрочку.
+ * «Не получил», «Оплачу позже», ответ должника (заметка/чек), смена суммы, замена, сальдо пары,
+ * напоминания шедулера и −40 за просрочку.
  * Слушатели работают после коммита; методы напоминаний зовёт [DebtScheduler].
  */
 @Component
@@ -68,6 +71,29 @@ class DebtBotNotifier(
             append("\n\nПриложите чек в приложении, чтобы разобраться.")
         }
         notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/debts/with/${d.debt.creditorId}", OPEN_DEBTS_BUTTON)
+    }
+
+    /** «Оплачу позже»: получатель должен знать дату, а не гадать, почему тишина. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onDebtPromised(event: DebtPromisedEvent) {
+        val d = event.debt
+        val telegramId = telegramIdOf(d.debt.creditorId) ?: return
+        val text = "📅 ${d.debtor.firstName} обещает отдать ${Money.rub(d.debt.amountKopecks)} за «${d.skladchinaTitle}» " +
+            "к ${d.debt.promisedAt?.format(dateFmt)}."
+        notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${d.debt.skladchinaId}", OPEN_SKLADCHINA_BUTTON)
+    }
+
+    /** Ответ должника («Не согласен»: заметка и/или чек) — получателю, чтобы разбор не завис. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onDebtReply(event: DebtReplyEvent) {
+        val d = event.debt
+        val telegramId = telegramIdOf(d.debt.creditorId) ?: return
+        val text = buildString {
+            append("💬 ${d.debtor.firstName} по долгу ${Money.rub(d.debt.amountKopecks)} за «${d.skladchinaTitle}»")
+            d.debt.note?.takeIf { it.isNotBlank() }?.let { append(": «").append(it).append("»") }
+            if (event.withReceipt) append("\nПриложил чек.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${d.debt.skladchinaId}", OPEN_SKLADCHINA_BUTTON)
     }
 
     @TransactionalEventListener(fallbackExecution = true)

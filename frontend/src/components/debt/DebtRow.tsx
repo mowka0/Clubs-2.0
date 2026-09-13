@@ -1,4 +1,6 @@
 import { FC, useState } from 'react';
+import { ConfirmSheet } from '../ConfirmSheet';
+import { ImageLightbox } from '../ImageLightbox';
 import { PhotoAttach } from '../PhotoAttach';
 import type { DebtAction } from '../../queries/debts';
 import type { DebtDto } from '../../types/api';
@@ -17,7 +19,7 @@ interface DebtRowProps {
   onAction: (action: DebtAction) => void;
 }
 
-type Inline = 'none' | 'promise' | 'reject' | 'note' | 'receipt';
+type Inline = 'none' | 'promise' | 'reject' | 'note';
 
 function defaultPromiseDate(): string {
   const d = new Date();
@@ -34,6 +36,9 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const [inline, setInline] = useState<Inline>('none');
   const [promiseDate, setPromiseDate] = useState(defaultPromiseDate);
   const [text, setText] = useState('');
+  const [receiptDraft, setReceiptDraft] = useState<string | null>(null);
+  const [claimAsk, setClaimAsk] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const isDebtor = debt.debtor.id === viewerId;
   const isCreditor = debt.creditor.id === viewerId;
@@ -47,7 +52,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
     if (own) return 'своя доля';
     switch (debt.status) {
       case 'waiting':
-        if (debt.rejectedAt) return `не получил${debt.rejectNote ? `: «${debt.rejectNote}»` : ''} · приложите чек`;
+        if (debt.rejectedAt) return 'не получил · ответьте через «Не согласен»';
         if (!debt.dueAt) return 'без срока';
         return debt.isOverdue ? `срок вышел ${DAY_FMT.format(new Date(debt.dueAt))}` : `до ${DATE_FMT.format(new Date(debt.dueAt))}`;
       case 'promised':
@@ -62,10 +67,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   })();
 
   // «Отдал» необратим (решение PO 2026-09-13: отменять перевод нечего), поэтому спрашиваем до отправки.
-  const confirmClaim = () => {
-    if (!window.confirm(`Отдали ${formatRub(debt.amountKopecks)}? ${debt.creditor.firstName} получит уведомление и подтвердит.`)) return;
-    onAction({ type: 'claim' });
-  };
+  const claimText = `Отдали ${formatRub(debt.amountKopecks)}? ${debt.creditor.firstName} получит уведомление и подтвердит.`;
 
   const submitInline = () => {
     const note = text.trim();
@@ -77,17 +79,35 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
         onAction({ type: 'reject', note: note || null });
         break;
       case 'note':
-        if (!note) return;
-        onAction({ type: 'note', note });
+        if (!note && !receiptDraft) return;
+        onAction({ type: 'note', note: note || null, receiptUrl: receiptDraft });
         break;
       default:
         return;
     }
     setInline('none');
     setText('');
+    setReceiptDraft(null);
   };
 
   const nameLine = personName(counterparty);
+  // Разбор по долгу: «Не получил» получателя и ответ должника — как реплики, с автором.
+  const thread = [
+    debt.rejectedAt && {
+      key: 'reject',
+      author: debt.creditor,
+      when: DAY_FMT.format(new Date(debt.rejectedAt)),
+      text: `Не получил${debt.rejectNote ? `: «${debt.rejectNote}»` : ''}`,
+      receiptUrl: null as string | null,
+    },
+    (debt.note || debt.receiptUrl) && {
+      key: 'reply',
+      author: debt.debtor,
+      when: null as string | null,
+      text: debt.note ? `«${debt.note}»` : 'Приложил чек',
+      receiptUrl: debt.receiptUrl,
+    },
+  ].filter((m): m is Exclude<typeof m, false | null | '' | undefined> => Boolean(m));
 
   return (
     <div className={`rd-debt-row${debt.status === 'received' ? ' rd-debt-done' : ''}`} data-testid={`debt-${debt.id}`}>
@@ -103,22 +123,35 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
       </div>
       {showContext && <div className="rd-debt-meta">{debt.skladchinaTitle} · {debt.clubName}</div>}
       <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>
-      {debt.note && <div className="rd-debt-meta">Заметка: «{debt.note}»</div>}
-      {debt.receiptUrl && (
-        <a className="rd-debt-receipt" href={debt.receiptUrl} target="_blank" rel="noopener noreferrer">
-          Чек приложен ›
-        </a>
+      {thread.length > 0 && (
+        <div className="rd-debt-thread">
+          {thread.map((m) => (
+            <div className="rd-debt-msg" key={m.key}>
+              <span className="rd-av rd-debt-av">
+                {m.author.avatarUrl ? <img src={m.author.avatarUrl} alt="" /> : initials(personName(m.author))}
+              </span>
+              <div className="rd-debt-msg-body">
+                <div className="rd-debt-msg-who">
+                  {m.author.id === viewerId ? 'Вы' : m.author.firstName}{m.when && <span> · {m.when}</span>}
+                </div>
+                <div className="rd-debt-msg-text">{m.text}</div>
+                {m.receiptUrl && (
+                  <button type="button" className="rd-debt-msg-receipt" aria-label="Открыть чек" onClick={() => setReceiptOpen(true)}>
+                    <img src={m.receiptUrl} alt="Чек" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {canAct && inline === 'none' && (
         <div className="rd-debt-actions">
           {isDebtor && (debt.status === 'waiting' || debt.status === 'promised') && (
             <>
-              <button type="button" className="rd-btn-primary" onClick={confirmClaim}>Отдал</button>
+              <button type="button" className="rd-btn-primary" onClick={() => setClaimAsk(true)}>Отдал</button>
               <button type="button" className="rd-btn-outline" onClick={() => setInline('promise')}>Оплачу позже</button>
-              {debt.rejectedAt && (
-                <button type="button" className="rd-btn-outline" onClick={() => setInline('receipt')}>Приложить чек</button>
-              )}
               <button type="button" className="rd-ghost-btn" onClick={() => setInline('note')}>Не согласен</button>
             </>
           )}
@@ -154,28 +187,20 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
+          {inline === 'note' && <PhotoAttach value={receiptDraft} onChange={setReceiptDraft} addLabel="Приложить чек" />}
           <div className="rd-form-actions">
-            <button type="button" className="rd-btn-primary" onClick={submitInline}>
+            <button type="button" className="rd-btn-primary" onClick={submitInline} disabled={inline === 'note' && !text.trim() && !receiptDraft}>
               {inline === 'reject' ? 'Не получил' : 'Отправить'}
             </button>
-            <button type="button" className="rd-btn-outline" onClick={() => { setInline('none'); setText(''); }}>Отмена</button>
+            <button type="button" className="rd-btn-outline" onClick={() => { setInline('none'); setText(''); setReceiptDraft(null); }}>Отмена</button>
           </div>
         </div>
       )}
 
-      {canAct && inline === 'receipt' && (
-        <div className="rd-debt-inline">
-          <PhotoAttach
-            value={null}
-            onChange={(url) => {
-              if (url) onAction({ type: 'receipt', url });
-              setInline('none');
-            }}
-            addLabel="Загрузить чек"
-          />
-          <button type="button" className="rd-ghost-btn" onClick={() => setInline('none')}>Отмена</button>
-        </div>
+      {claimAsk && (
+        <ConfirmSheet text={claimText} onConfirm={() => { setClaimAsk(false); onAction({ type: 'claim' }); }} onCancel={() => setClaimAsk(false)} />
       )}
+      <ImageLightbox src={receiptOpen ? debt.receiptUrl : null} alt="Чек" onClose={() => setReceiptOpen(false)} />
     </div>
   );
 };

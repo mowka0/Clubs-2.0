@@ -180,10 +180,12 @@ class SkladchinaV3IntegrationTest {
         assertEquals("в выписке нет", rejected["rejectNote"].asText())
         assertTrue(!rejected["rejectedAt"].isNull)
 
-        postJson("/api/debts/$debtId/receipt", alice, """{"url":"https://evil.com/uploads/x.png"}""")
+        postJson("/api/debts/$debtId/note", alice, """{"receiptUrl":"https://evil.com/uploads/x.png"}""")
             .andExpect(status().isBadRequest)
-        val withReceipt = json(postJson("/api/debts/$debtId/receipt", alice, """{"url":"http://localhost:9000/test-bucket/uploads/abc.png"}""").andExpect(status().isOk))
+        postJson("/api/debts/$debtId/note", alice, """{}""").andExpect(status().isBadRequest)
+        val withReceipt = json(postJson("/api/debts/$debtId/note", alice, """{"note":"перевёл на старый номер","receiptUrl":"http://localhost:9000/test-bucket/uploads/abc.png"}""").andExpect(status().isOk))
         assertEquals("http://localhost:9000/test-bucket/uploads/abc.png", withReceipt["receiptUrl"].asText())
+        assertEquals("перевёл на старый номер", withReceipt["note"].asText())
         // Получатель видит чек в строке долга сбора.
         val creatorView = json(get("/api/skladchinas/$skladchinaId", owner))
         assertEquals("http://localhost:9000/test-bucket/uploads/abc.png", creatorView["debts"].first { it["id"].asText() == debtId }["receiptUrl"].asText())

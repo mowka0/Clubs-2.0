@@ -44,6 +44,7 @@ class DebtService(
         if (date.isAfter(today.plusDays(MAX_PROMISE_DAYS))) throw ValidationException("Не дальше $MAX_PROMISE_DAYS дней")
         applied(debtRepository.promise(debtId, date))
         log.info("Debt promised: id={} debtor={} date={}", debtId, callerId, date)
+        eventPublisher.publishEvent(DebtPromisedEvent(debtRepository.findWithContext(debtId)!!))
         return refreshed(debtId, d.debt.skladchinaId)
     }
 
@@ -117,24 +118,23 @@ class DebtService(
         return mapper.toDto(updated)
     }
 
+    /** «Не согласен» / ответ на «Не получил»: заметка и/или чек одним действием; получателю DM. */
     @Transactional
-    fun setReceipt(debtId: UUID, callerId: UUID, url: String): DebtDto {
+    fun reply(debtId: UUID, callerId: UUID, note: String?, receiptUrl: String?): DebtDto {
         val d = requireAsDebtor(debtId, callerId)
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised, DebtStatus.claimed)
-        if (!UploadedImageUrls.isUploadedImageUrl(url.trim(), storageBaseUrl)) {
+        val text = note?.trim()?.takeIf { it.isNotEmpty() }
+        val url = receiptUrl?.trim()?.takeIf { it.isNotEmpty() }
+        if (text == null && url == null) throw ValidationException("Напишите, что не так, или приложите чек")
+        if (url != null && !UploadedImageUrls.isUploadedImageUrl(url, storageBaseUrl)) {
             throw ValidationException("Чек должен быть загружен через приложение")
         }
-        applied(debtRepository.setReceipt(debtId, url.trim()))
-        log.info("Debt receipt attached: id={} debtor={}", debtId, callerId)
-        return mapper.toDto(debtRepository.findWithContext(debtId)!!)
-    }
-
-    @Transactional
-    fun setNote(debtId: UUID, callerId: UUID, note: String): DebtDto {
-        val d = requireAsDebtor(debtId, callerId)
-        requireStatus(d, DebtStatus.waiting, DebtStatus.promised, DebtStatus.claimed)
-        applied(debtRepository.setNote(debtId, note.trim()))
-        return mapper.toDto(debtRepository.findWithContext(debtId)!!)
+        text?.let { applied(debtRepository.setNote(debtId, it)) }
+        url?.let { applied(debtRepository.setReceipt(debtId, it)) }
+        log.info("Debt reply: id={} debtor={} note={} receipt={}", debtId, callerId, text != null, url != null)
+        val updated = debtRepository.findWithContext(debtId)!!
+        eventPublisher.publishEvent(DebtReplyEvent(updated, withReceipt = url != null))
+        return mapper.toDto(updated)
     }
 
     private fun requireAsDebtor(debtId: UUID, callerId: UUID): DebtWithContext {

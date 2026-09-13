@@ -3518,7 +3518,8 @@
 
 /* ---- Сборы и долги v3 (docs/modules/skladchina-v3.md § 9): строка долга, книга долгов, пара ---- */
 /* Полоса прогресса сбора из двух заливок: получено (акцент) и «говорят, что отдали» (мягкий акцент). */
-.rd-progress .rd-fill-claimed { background: var(--accent-soft); }
+/* «Говорит, что отдал»: штрихованный оранжевый — деньги заявлены, но не подтверждены. */
+.rd-progress .rd-fill-claimed { background: repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 8px); }
 .rd-debt-row { padding: 10px 4px; }
 .rd-debt-row + .rd-debt-row { border-top: 1px solid var(--hairline); }
 .rd-debt-row.rd-debt-done { opacity: 0.7; }
@@ -3538,7 +3539,18 @@
 .rd-debt-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .rd-debt-overdue { color: var(--danger); }
 .rd-debt-flag { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 3px; }
-.rd-debt-receipt { display: inline-block; font-size: 12px; color: var(--accent); margin-top: 4px; }
+/* Разбор по долгу: реплики сторон с аватаром и именем, чек миниатюрой (тап → лайтбокс). */
+.rd-debt-thread { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.rd-debt-msg { display: flex; gap: 8px; align-items: flex-start; }
+.rd-debt-msg .rd-debt-av { width: 22px; height: 22px; font-size: 9px; margin-top: 1px; }
+.rd-debt-msg-body { flex: 1; min-width: 0; background: var(--surface-2); border-radius: 10px; padding: 7px 10px; }
+.rd-debt-msg-who { font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.rd-debt-msg-who span { font-weight: 500; color: var(--text-faint); }
+.rd-debt-msg-text { font-size: 13px; color: var(--text); margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+.rd-debt-msg-receipt { display: block; width: 72px; height: 72px; margin-top: 6px; padding: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: var(--surface); cursor: pointer; }
+.rd-debt-msg-receipt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-confirm-sheet { padding-top: 8px; }
+.rd-confirm-text { font-size: 15px; line-height: 1.45; color: var(--text); margin: 4px 2px 16px; }
 .rd-debt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .rd-debt-actions .rd-btn-primary, .rd-debt-actions .rd-btn-outline { width: auto; flex: 1 1 auto; padding: 9px 12px; font-size: 13px; }
 .rd-debt-actions .rd-ghost-btn { flex: 1 1 auto; }

@@ -9,6 +9,7 @@ import { useSkladchinaActionMutation, useSkladchinaQuery, type SkladchinaAction 
 import { useDebtActionMutation, type DebtAction } from '../queries/debts';
 import { ApiError } from '../api/apiClient';
 import { Toast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmSheet';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { SkladchinaDetailDto } from '../types/api';
@@ -47,6 +48,7 @@ export const SkladchinaPage: FC = () => {
   const debtMut = useDebtActionMutation();
 
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm, confirmSheet } = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -77,7 +79,7 @@ export const SkladchinaPage: FC = () => {
   const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((s.claimedKopecks / target) * 100)) : 0;
 
   const run = async (action: SkladchinaAction, done: string, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText && !(await confirm(confirmText))) return;
     setError(null);
     try {
       haptic.impact('medium');
@@ -347,6 +349,7 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {confirmSheet}
     </div>
   );
 };

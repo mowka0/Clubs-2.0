@@ -43,14 +43,9 @@ export function changeDebtAmount(id: string, amountKopecks: number): Promise<Deb
   return apiClient.patch<DebtDto>(`/api/debts/${id}`, { amountKopecks });
 }
 
-/** Чек должника — только URL нашей загрузки. */
-export function attachDebtReceipt(id: string, url: string): Promise<DebtDto> {
-  return apiClient.post<DebtDto>(`/api/debts/${id}/receipt`, { url });
-}
-
-/** Заметка должника («не согласен с суммой»). */
-export function setDebtNote(id: string, note: string): Promise<DebtDto> {
-  return apiClient.post<DebtDto>(`/api/debts/${id}/note`, { note });
+/** Ответ должника («Не согласен»): заметка и/или чек — только URL нашей загрузки. */
+export function replyDebt(id: string, note: string | null, receiptUrl: string | null): Promise<DebtDto> {
+  return apiClient.post<DebtDto>(`/api/debts/${id}/note`, { note, receiptUrl });
 }
 
 /** Сальдо «Отдал Σ» — по всем открытым долгам пары разом. */

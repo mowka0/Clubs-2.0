@@ -159,16 +159,16 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     );
     const { user } = renderPage();
 
-    // «Отдал» необратим — перед отправкой стоит подтверждение.
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    // «Отдал» необратим — перед отправкой своя шторка «Подтвердить / Отмена».
     await user.click(await screen.findByRole('button', { name: 'Отдал' }));
+    expect(screen.getByRole('dialog', { name: /^Отдали 1.000 ₽\? Иван получит/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Отмена' }));
     expect(claimed).toBe(false);
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/^Отдали 1.000 ₽\? Иван получит/));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    confirmSpy.mockReturnValue(true);
-    await user.click(await screen.findByRole('button', { name: 'Отдал' }));
+    await user.click(screen.getByRole('button', { name: 'Отдал' }));
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
     expect(claimed).toBe(true);
-    confirmSpy.mockRestore();
     // После инвалидации деталка перечитывается тем же моком — проверяем только сам вызов.
   });
 

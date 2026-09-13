@@ -8,6 +8,7 @@ import { useDebtActionMutation, useDebtPairQuery, useSettlementMutation, type De
 import { ApiError } from '../api/apiClient';
 import { DebtRow } from '../components/debt/DebtRow';
 import { Toast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmSheet';
 import { formatRub } from '../utils/money';
 import { initials, personName } from '../utils/skladchinaKind';
 
@@ -30,6 +31,7 @@ export const DebtPairPage: FC = () => {
   const settlementMut = useSettlementMutation();
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm, confirmSheet } = useConfirm();
 
   if (query.isPending) {
     return <div className="rd-page"><div className="rd-spinner-row" style={{ paddingTop: 60 }}><Spinner size="m" /></div></div>;
@@ -64,7 +66,7 @@ export const DebtPairPage: FC = () => {
   };
 
   const runSettlement = async (action: SettlementAction, done: string, confirmText: string) => {
-    if (!window.confirm(confirmText)) return;
+    if (!(await confirm(confirmText))) return;
     setError(null);
     try {
       haptic.impact('heavy');
@@ -152,6 +154,7 @@ export const DebtPairPage: FC = () => {
       )}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {confirmSheet}
     </div>
   );
 };

@@ -103,12 +103,10 @@ data class ChangeDebtAmountRequest(
     val amountKopecks: Long
 )
 
-data class DebtReceiptRequest(
-    @field:NotBlank @field:Size(max = 500)
-    val url: String
-)
-
+/** Ответ должника по долгу: заметка и/или чек одним запросом (форма «Не согласен»). Хотя бы одно поле. */
 data class DebtNoteRequest(
-    @field:NotBlank @field:Size(max = 500)
-    val note: String
+    @field:Size(max = 500)
+    val note: String? = null,
+    @field:Size(max = 500)
+    val receiptUrl: String? = null
 )

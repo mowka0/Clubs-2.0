@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  attachDebtReceipt,
   changeDebtAmount,
   claimDebt,
   confirmDebt,
@@ -11,7 +10,7 @@ import {
   promiseDebt,
   rejectDebt,
   rejectSettlement,
-  setDebtNote,
+  replyDebt,
   settleWith,
 } from '../api/debts';
 import type { DebtDto, DebtPairDto } from '../types/api';
@@ -42,8 +41,7 @@ export type DebtAction =
   | { type: 'promise'; date: string }
   | { type: 'reject'; note: string | null }
   | { type: 'amount'; amountKopecks: number }
-  | { type: 'receipt'; url: string }
-  | { type: 'note'; note: string };
+  | { type: 'note'; note: string | null; receiptUrl: string | null };
 
 function runDebtAction(debtId: string, action: DebtAction): Promise<DebtDto> {
   switch (action.type) {
@@ -53,8 +51,7 @@ function runDebtAction(debtId: string, action: DebtAction): Promise<DebtDto> {
     case 'promise': return promiseDebt(debtId, action.date);
     case 'reject': return rejectDebt(debtId, action.note);
     case 'amount': return changeDebtAmount(debtId, action.amountKopecks);
-    case 'receipt': return attachDebtReceipt(debtId, action.url);
-    case 'note': return setDebtNote(debtId, action.note);
+    case 'note': return replyDebt(debtId, action.note, action.receiptUrl);
   }
 }
 
