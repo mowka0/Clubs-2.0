@@ -134,6 +134,9 @@ class SkladchinaChatStatusRenderer(
         sb.append("🎫 ").append(escapeHtml(s.title)).append("\n")
         if (s.orderedAt != null) {
             sb.append("✅ Куплено ").append(t.receivedItems).append(" · ").append(Money.rub(t.receivedKopecks)).append(" · приём закрыт")
+            // Создатель купил в долг обещавшим: сбор ещё идёт, в чате видно, кого ждём.
+            if (t.openCount > 0) sb.append("\n⏳ Ждём оплату: ").append(t.openCount)
+            mentionsLine(view.waiting)?.let { sb.append(" · ").append(it) }
             return sb.toString()
         }
         sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" за штуку · ").append(escapeHtml(view.creatorName))

@@ -93,7 +93,7 @@ export type SkladchinaAction =
   | { type: 'leave' }
   | { type: 'contribute'; amountKopecks: number }
   | { type: 'lock' }
-  | { type: 'order' }
+  | { type: 'order'; includePromised: boolean }
   | { type: 'close' }
   | { type: 'cancel' }
   | { type: 'addDebtor'; userId: string; amountKopecks?: number | null }
@@ -105,7 +105,7 @@ function runSkladchinaAction(id: string, action: SkladchinaAction): Promise<Skla
     case 'leave': return leaveSkladchina(id);
     case 'contribute': return contributeSkladchina(id, action.amountKopecks);
     case 'lock': return lockSkladchina(id);
-    case 'order': return orderSkladchina(id);
+    case 'order': return orderSkladchina(id, action.includePromised);
     case 'close': return closeSkladchina(id);
     case 'cancel': return cancelSkladchina(id);
     case 'addDebtor': return addSkladchinaDebtor(id, action.userId, action.amountKopecks);

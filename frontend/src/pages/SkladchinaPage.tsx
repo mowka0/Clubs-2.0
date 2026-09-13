@@ -9,12 +9,12 @@ import { useSkladchinaActionMutation, useSkladchinaQuery, type SkladchinaAction 
 import { useDebtActionMutation, type DebtAction } from '../queries/debts';
 import { ApiError } from '../api/apiClient';
 import { Toast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmSheet';
+import { ConfirmSheet, useConfirm } from '../components/ConfirmSheet';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { DATE_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
+import { DATE_FMT, DAY_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
 
 function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof ApiError && (e.status === 400 || e.status === 403 || e.status === 409) && e.message) return e.message;
@@ -27,7 +27,7 @@ function stageLine(s: SkladchinaDetailDto): string {
     return `В деле ${s.enrolledCount}${s.minParticipants ? ` · нужно ${s.minParticipants}` : ''} · отметиться до ${DATE_FMT.format(new Date(s.enrollmentUntil!))}`;
   }
   const parts: string[] = [];
-  if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
+  if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт${s.openCount > 0 ? ` · ждём оплату ${s.openCount}` : ''}` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
   else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
   if (s.deadline && s.status === 'active' && !s.orderedAt) {
     const past = new Date(s.deadline).getTime() < Date.now();
@@ -53,6 +53,9 @@ export const SkladchinaPage: FC = () => {
   const [amountInput, setAmountInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
   const [quantityInput, setQuantityInput] = useState('1');
+  // «Заказываю»: шторка со списком обещавших и выбором, брать ли их в долг.
+  const [orderAsk, setOrderAsk] = useState(false);
+  const [includePromised, setIncludePromised] = useState(true);
   const [photoZoomed, setPhotoZoomed] = useState(false);
 
   if (query.isPending) {
@@ -75,6 +78,10 @@ export const SkladchinaPage: FC = () => {
   const s = query.data;
   const isActive = s.status === 'active';
   const busy = actionMut.isPending || debtMut.isPending;
+  const promisedRows = (s.debts ?? []).filter((d) => d.status === 'promised');
+  const waitingRows = (s.debts ?? []).filter((d) => d.status === 'waiting' && d.debtor.id !== d.creditor.id);
+  const orderText = `Заказываю: оплатили ${s.receivedCount}, говорят, что отдали ${s.claimedCount}` +
+    (waitingRows.length > 0 ? `, не оплатили ${waitingRows.length} — они выбывают.` : '.');
   const takeQuantity = /^\d+$/.test(quantityInput.trim()) && Number(quantityInput) >= 1 && Number(quantityInput) <= 50 ? Number(quantityInput) : null;
   const target = s.targetKopecks ?? s.amountKopecks;
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
@@ -362,7 +369,7 @@ export const SkladchinaPage: FC = () => {
               type="button"
               className="rd-btn-primary"
               disabled={busy}
-              onClick={() => run({ type: 'order' }, 'Заказ сделан.', `Заказываю: получено ${s.receivedCount}, не оплатили ${s.openCount - s.claimedCount} — они выбывают.`)}
+              onClick={() => setOrderAsk(true)}
             >
               Заказываю
             </button>
@@ -392,6 +399,32 @@ export const SkladchinaPage: FC = () => {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       {confirmSheet}
+      {orderAsk && (
+        <ConfirmSheet
+          text={orderText}
+          confirmLabel="Заказываю"
+          onCancel={() => setOrderAsk(false)}
+          onConfirm={() => {
+            setOrderAsk(false);
+            void run({ type: 'order', includePromised: promisedRows.length > 0 && includePromised }, 'Заказ сделан.');
+          }}
+        >
+          {promisedRows.length > 0 && (
+            <div className="rd-order-promised">
+              <div className="rd-debt-meta">Обещали позже:</div>
+              {promisedRows.map((d) => (
+                <div className="rd-debt-meta" key={d.id}>
+                  {personName(d.debtor)} — {formatRub(d.amountKopecks)} к {d.promisedAt ? DAY_FMT.format(new Date(d.promisedAt)) : '—'}
+                </div>
+              ))}
+              <label className="rd-check" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={includePromised} onChange={(e) => setIncludePromised(e.target.checked)} />
+                <span>Купить и на них в долг. Без галочки они выбывают, обещание аннулируется.</span>
+              </label>
+            </div>
+          )}
+        </ConfirmSheet>
+      )}
     </div>
   );
 };

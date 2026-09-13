@@ -246,6 +246,33 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByText('Приём закрыт: заказ уже сделан.')).toBeInTheDocument();
   });
 
+  it('«Заказываю»: шторка перечисляет обещавших, галочка решает, брать ли их в долг', async () => {
+    useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
+    let body: unknown = null;
+    mockDetail(buildDetail({
+      kind: 'per_head', isCreator: true, canCancel: true, myDebt: null, receivedCount: 1, claimedCount: 0, openCount: 2,
+      debts: [
+        buildDebt({ id: 'd-own', debtor: creator, creditor: creator, status: 'received', confirmedAt: FUTURE }),
+        buildDebt({ id: 'd-p', debtor: { ...me, firstName: 'Оля' }, status: 'promised', promisedAt: '2026-09-16' }),
+        buildDebt({ id: 'd-w', debtor: { ...me, id: 'u-3', firstName: 'Петя' }, status: 'waiting' }),
+      ],
+    }));
+    server.use(http.post(`*/api/skladchinas/${SKLADCHINA_ID}/order`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json(buildDetail({ kind: 'per_head', isCreator: true, orderedAt: FUTURE, myDebt: null, debts: [] }));
+    }));
+    const { user } = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Заказываю' }));
+    const dialog = screen.getByRole('dialog', { name: /Заказываю: оплатили 1, говорят, что отдали 0, не оплатили 1 — они выбывают\./ });
+    expect(dialog).toHaveTextContent(/Оля — 1.000 ₽ к 16 сентября/);
+    const keep = screen.getByRole('checkbox', { name: /Купить и на них в долг/ });
+    expect(keep).toBeChecked();
+    await user.click(keep);
+    const orderButtons = screen.getAllByRole('button', { name: 'Заказываю' });
+    await user.click(orderButtons[orderButtons.length - 1]!);
+    expect(body).toEqual({ includePromised: false });
+  });
+
   it('«Кто берёт?»: у создателя нет «Беру» — он берёт себе чекбоксом при создании; «Заказываю» на месте', async () => {
     useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
     mockDetail(buildDetail({

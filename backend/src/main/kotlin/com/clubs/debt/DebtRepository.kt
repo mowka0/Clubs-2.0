@@ -72,7 +72,8 @@ interface DebtRepository {
     fun setNote(id: UUID, note: String): Int
 
     /** «Заказываю»: все waiting/promised долги сбора → dropped. Возвращает выбывших. */
-    fun dropWaitingBySkladchina(skladchinaId: UUID): List<Debt>
+    /** «Заказываю»: неоплатившие выбывают; [keepPromised] — обещавших создатель берёт в долг, они остаются. */
+    fun dropWaitingBySkladchina(skladchinaId: UUID, keepPromised: Boolean): List<Debt>
 
     /** Отмена сбора: все открытые долги → forgiven. */
     fun forgiveOpenBySkladchina(skladchinaId: UUID): Int

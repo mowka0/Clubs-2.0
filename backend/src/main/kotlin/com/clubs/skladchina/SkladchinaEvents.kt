@@ -1,5 +1,6 @@
 package com.clubs.skladchina
 
+import com.clubs.debt.Debt
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import java.time.OffsetDateTime
@@ -65,7 +66,10 @@ data class SkladchinaOrderedEvent(
     val skladchinaId: UUID,
     val clubName: String,
     val title: String,
-    val droppedUserIds: List<UUID>
+    val creatorName: String,
+    val droppedUserIds: List<UUID>,
+    // Обещавшие, которых создатель взял в долг: им DM «купил и на вас, отдайте к дате».
+    val keptPromised: List<Debt>
 )
 
 /**

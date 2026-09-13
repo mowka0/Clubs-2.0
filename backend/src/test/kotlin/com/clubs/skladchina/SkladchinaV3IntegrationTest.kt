@@ -300,6 +300,35 @@ class SkladchinaV3IntegrationTest {
         assertEquals(0, dsl.fetchCount(REPUTATION_LEDGER))
     }
 
+    @Test
+    fun `order keeps those who promised when the creator agrees, otherwise they drop and the promise is void`() {
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_000)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$id/join", alice).andExpect(status().isOk)
+        post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
+        val aliceDebt = myDebtId(id, alice)
+        postJson("/api/debts/$aliceDebt/promise", alice, """{"date":"${LocalDate.now().plusDays(3)}"}""").andExpect(status().isOk)
+
+        val ordered = json(postJson("/api/skladchinas/$id/order", owner, """{"includePromised":true}""").andExpect(status().isOk))
+        assertEquals("active", ordered["status"].asText(), "обещавшую взяли в долг — сбор ещё идёт")
+        val rows = ordered["debts"].associate { it["debtor"]["id"].asText() to it["status"].asText() }
+        assertEquals("promised", rows[aliceId.toString()])
+        assertEquals("dropped", rows[bobId.toString()])
+        post("/api/skladchinas/$id/leave", alice).andExpect(status().isBadRequest)
+        post("/api/debts/$aliceDebt/claim", alice).andExpect(status().isOk)
+        post("/api/debts/$aliceDebt/confirm", owner).andExpect(status().isOk)
+        assertEquals("collected", json(get("/api/skladchinas/$id", owner))["status"].asText())
+
+        // Без согласия: обещавший выбывает, обещание аннулировано.
+        val id2 = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_000)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$id2/join", alice).andExpect(status().isOk)
+        postJson("/api/debts/${myDebtId(id2, alice)}/promise", alice, """{"date":"${LocalDate.now().plusDays(3)}"}""").andExpect(status().isOk)
+        val ordered2 = json(post("/api/skladchinas/$id2/order", owner).andExpect(status().isOk))
+        val aliceRow = ordered2["debts"].first { it["debtor"]["id"].asText() == aliceId.toString() }
+        assertEquals("dropped", aliceRow["status"].asText())
+        assertTrue(aliceRow["promisedAt"].isNull)
+        assertEquals("collected", ordered2["status"].asText())
+    }
+
     // --- AC-9: тихий сбор ---
 
     @Test

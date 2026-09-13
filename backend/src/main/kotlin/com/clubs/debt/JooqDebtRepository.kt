@@ -240,13 +240,14 @@ class JooqDebtRepository(
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)))
             .execute()
 
-    override fun dropWaitingBySkladchina(skladchinaId: UUID): List<Debt> =
+    override fun dropWaitingBySkladchina(skladchinaId: UUID, keepPromised: Boolean): List<Debt> =
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.dropped)
+            .setNull(DEBTS.PROMISED_AT)
             .set(DEBTS.UPDATED_AT, OffsetDateTime.now())
             .where(
                 DEBTS.SKLADCHINA_ID.eq(skladchinaId)
-                    .and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised))
+                    .and(DEBTS.STATUS.`in`(if (keepPromised) listOf(DebtStatus.waiting) else listOf(DebtStatus.waiting, DebtStatus.promised)))
                     .and(DEBTS.SETTLEMENT_ID.isNull)
             )
             .returning()

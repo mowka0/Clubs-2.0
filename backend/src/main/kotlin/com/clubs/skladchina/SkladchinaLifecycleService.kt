@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
+import com.clubs.user.UserRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -27,6 +28,7 @@ class SkladchinaLifecycleService(
     private val skladchinaRepository: SkladchinaRepository,
     private val debtRepository: DebtRepository,
     private val clubRepository: ClubRepository,
+    private val userRepository: UserRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService
 ) {
@@ -95,17 +97,23 @@ class SkladchinaLifecycleService(
             cancelledForShortfall = cancelled, debtorShares = shares
         )
 
-    /** «Заказываю» (per_head): приём закрыт, неоплатившие выбывают без долга, claimed остаются на разбор. */
+    /**
+     * «Заказываю» (per_head): приём закрыт, неоплатившие выбывают без долга, claimed остаются на
+     * разбор. Обещавших («Оплачу позже») создатель решает сам (PO 2026-09-13): [includePromised] —
+     * покупает и на них в долг, долги остаются открытыми; иначе они выбывают, обещание аннулируется.
+     */
     @Transactional
-    fun order(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
+    fun order(skladchinaId: UUID, callerId: UUID, includePromised: Boolean = false): SkladchinaDetailDto {
         val s = requireActiveAsCreator(skladchinaId, callerId)
         if (s.kind != SkladchinaKind.per_head) throw ValidationException("«Заказываю» есть только у сбора «Кто берёт?»")
         val now = OffsetDateTime.now()
         if (!skladchinaRepository.claimOrder(skladchinaId, now)) throw ConflictException("Заказ уже сделан — обновите экран")
-        val dropped = debtRepository.dropWaitingBySkladchina(skladchinaId)
+        val kept = if (includePromised) debtRepository.findBySkladchina(skladchinaId).map { it.debt }.filter { it.status == DebtStatus.promised } else emptyList()
+        val dropped = debtRepository.dropWaitingBySkladchina(skladchinaId, keepPromised = includePromised)
         val clubName = clubRepository.findById(s.clubId)?.name ?: ""
-        log.info("Skladchina ordered: id={} dropped={}", skladchinaId, dropped.size)
-        eventPublisher.publishEvent(SkladchinaOrderedEvent(skladchinaId, clubName, s.title, dropped.map { it.debtorId }))
+        val creatorName = userRepository.findById(s.creatorId)?.firstName ?: "Организатор"
+        log.info("Skladchina ordered: id={} dropped={} keptPromised={}", skladchinaId, dropped.size, kept.size)
+        eventPublisher.publishEvent(SkladchinaOrderedEvent(skladchinaId, clubName, s.title, creatorName, dropped.map { it.debtorId }, kept))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         maybeComplete(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)

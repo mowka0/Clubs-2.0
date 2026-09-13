@@ -80,6 +80,11 @@ data class JoinSkladchinaRequest(
 // Верхняя граница «штук на человека» в per_head: защита от опечатки, не бизнес-ограничение.
 const val MAX_QUANTITY = 50
 
+/** «Заказываю» (per_head): брать ли в долг тех, кто нажал «Оплачу позже» (иначе они выбывают, обещание аннулируется). */
+data class OrderSkladchinaRequest(
+    val includePromised: Boolean = false
+)
+
 /** «Перевёл N ₽» (voluntary). */
 data class ContributeRequest(
     @field:NotNull @field:Positive

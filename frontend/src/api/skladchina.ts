@@ -63,8 +63,8 @@ export function lockSkladchina(id: string): Promise<SkladchinaDetailDto> {
 }
 
 /** «Заказываю» (per_head). */
-export function orderSkladchina(id: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/order`);
+export function orderSkladchina(id: string, includePromised = false): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/order`, { includePromised });
 }
 
 /** «Закрыть сбор» (voluntary). */

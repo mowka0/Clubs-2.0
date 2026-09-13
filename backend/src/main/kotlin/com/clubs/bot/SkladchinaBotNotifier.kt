@@ -34,6 +34,7 @@ class SkladchinaBotNotifier(
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
     private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm 'МСК'").withZone(ZoneId.of("Europe/Moscow"))
+    private val dateFmt = DateTimeFormatter.ofPattern("dd.MM")
 
     // @Async: пост в чат + DM-цикл — Telegram I/O не место на потоке коммита.
     @Async
@@ -142,16 +143,23 @@ class SkladchinaBotNotifier(
         log.info("Skladchina-locked DM sent: id={} debtors={}", event.skladchinaId, event.debtorShares.size)
     }
 
-    /** «Заказываю»: выбывшим без долга. */
+    /** «Заказываю»: выбывшим — без долга; обещавшим, кого взяли в долг, — что купили и на них. */
     @TransactionalEventListener(fallbackExecution = true)
     fun onOrdered(event: SkladchinaOrderedEvent) {
-        if (event.droppedUserIds.isEmpty()) return
-        val text = "🛒 «${event.title}» в клубе «${event.clubName}»: заказ сделан. " +
-            "Вы не оплатили до заказа — вы выбыли, долга нет."
-        userRepository.findTelegramIds(event.droppedUserIds).forEach {
-            notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+        if (event.droppedUserIds.isNotEmpty()) {
+            val text = "🛒 «${event.title}» в клубе «${event.clubName}»: заказ сделан. " +
+                "Вы не оплатили до заказа — вы выбыли, долга нет."
+            userRepository.findTelegramIds(event.droppedUserIds).forEach {
+                notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+            }
         }
-        log.info("Skladchina-ordered DM sent: id={} dropped={}", event.skladchinaId, event.droppedUserIds.size)
+        event.keptPromised.forEach { debt ->
+            val telegramId = userRepository.findById(debt.debtorId)?.telegramId ?: return@forEach
+            val text = "🛒 «${event.title}» в клубе «${event.clubName}»: заказ сделан, ${event.creatorName} купил и на вас. " +
+                "Вы обещали отдать ${Money.rub(debt.amountKopecks)} к ${debt.promisedAt?.format(dateFmt)} — после перевода нажмите «Отдал»."
+            notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+        }
+        log.info("Skladchina-ordered DM sent: id={} dropped={} keptPromised={}", event.skladchinaId, event.droppedUserIds.size, event.keptPromised.size)
     }
 
     /** Итог создателю: собран — суммы; отменён — кому вернуть уже полученное. */

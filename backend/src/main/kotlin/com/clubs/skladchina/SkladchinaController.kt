@@ -106,10 +106,12 @@ class SkladchinaController(
     @PostMapping("/api/skladchinas/{id}/order")
     fun order(
         @PathVariable id: UUID,
+        @RequestBody(required = false) request: OrderSkladchinaRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina order: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(lifecycleService.order(id, user.userId))
+        val includePromised = request?.includePromised ?: false
+        log.info("Skladchina order: id={} userId={} includePromised={}", id, user.userId, includePromised)
+        return ResponseEntity.ok(lifecycleService.order(id, user.userId, includePromised))
     }
 
     @PostMapping("/api/skladchinas/{id}/close")
