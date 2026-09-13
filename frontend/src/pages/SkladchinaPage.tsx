@@ -168,8 +168,8 @@ export const SkladchinaPage: FC = () => {
         </div>
         {!s.isEnrolling && (
           <div className="rd-progress" aria-hidden="true">
-            <div className="rd-fill" style={{ width: `${receivedPct}%`, display: 'inline-block' }} />
-            <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%`, display: 'inline-block' }} />
+            <div className="rd-fill" style={{ width: `${receivedPct}%` }} />
+            <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%` }} />
           </div>
         )}
         <div className="rd-sklad-stats">{stageLine(s)}</div>

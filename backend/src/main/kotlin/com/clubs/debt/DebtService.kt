@@ -59,15 +59,6 @@ class DebtService(
         return mapper.toDto(updated)
     }
 
-    @Transactional
-    fun unclaim(debtId: UUID, callerId: UUID): DebtDto {
-        val d = requireAsDebtor(debtId, callerId)
-        requireStatus(d, DebtStatus.claimed)
-        applied(debtRepository.unclaim(debtId))
-        log.info("Debt unclaimed: id={} debtor={}", debtId, callerId)
-        return refreshed(debtId, d.debt.skladchinaId)
-    }
-
     /** «Получил»: из любого открытого состояния; без «Отдал» это наличные. Последний долг закрывает сбор. */
     @Transactional
     fun confirm(debtId: UUID, callerId: UUID): DebtDto {

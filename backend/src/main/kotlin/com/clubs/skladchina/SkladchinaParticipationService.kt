@@ -86,7 +86,7 @@ class SkladchinaParticipationService(
                 if (s.orderedAt != null) throw ValidationException("Заказ уже сделан — передумать нельзя")
                 val debt = debtRepository.findBySkladchinaAndDebtor(skladchinaId, callerId)
                     ?: throw ValidationException("Вы не брали")
-                if (debt.status == DebtStatus.claimed) throw ValidationException("Сначала отмените «Отдал»")
+                if (debt.status == DebtStatus.claimed) throw ValidationException("Вы уже отметили «Отдал» — дождитесь ответа получателя")
                 if (debtRepository.drop(debt.id, setOf(DebtStatus.waiting, DebtStatus.promised)) == 0) {
                     throw ConflictException("Долг уже изменился — обновите экран")
                 }

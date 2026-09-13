@@ -159,18 +159,25 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     );
     const { user } = renderPage();
 
+    // «Отдал» необратим — перед отправкой стоит подтверждение.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     await user.click(await screen.findByRole('button', { name: 'Отдал' }));
+    expect(claimed).toBe(false);
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/^Отдали 1.000 ₽\? Иван получит/));
 
+    confirmSpy.mockReturnValue(true);
+    await user.click(await screen.findByRole('button', { name: 'Отдал' }));
     expect(claimed).toBe(true);
+    confirmSpy.mockRestore();
     // После инвалидации деталка перечитывается тем же моком — проверяем только сам вызов.
   });
 
-  it('claimed-долг: «ждём подтверждения» и кнопка «Отменить», без «Отдал»', async () => {
+  it('claimed-долг: «ждём подтверждения», без «Отдал» и без отмены — перевод не отзывается', async () => {
     mockDetail(buildDetail({ myDebt: buildDebt({ status: 'claimed', claimedAt: FUTURE }) }));
     renderPage();
 
     expect(await screen.findByText('ждём подтверждения')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отдал' })).not.toBeInTheDocument();
   });
 

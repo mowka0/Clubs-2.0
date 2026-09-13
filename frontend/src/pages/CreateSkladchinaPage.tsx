@@ -113,6 +113,13 @@ export const CreateSkladchinaPage: FC = () => {
     setSelectedIds(next);
   };
 
+  // Поле суммы видно у всех, и введённая сумма сама отмечает человека — иначе набитая сумма
+  // у невыбранного молча пропадала бы при отправке.
+  const setPersonAmount = (m: MemberListItemDto, value: string) => {
+    setAmounts((prev) => ({ ...prev, [m.userId]: value }));
+    if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
+  };
+
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!title.trim()) return fail('Введите название');
@@ -275,7 +282,7 @@ export const CreateSkladchinaPage: FC = () => {
                   const isSelected = selectedIds.has(m.userId);
                   const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
                   return (
-                    <div key={m.userId} className="rd-pick-row">
+                    <div key={m.userId} className="rd-debtor-row">
                       <button type="button" className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`} onClick={() => toggleMember(m)} disabled={isFrozen} aria-disabled={isFrozen}>
                         <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
                         <span className="rd-pick-name">
@@ -283,8 +290,17 @@ export const CreateSkladchinaPage: FC = () => {
                         </span>
                         {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
                       </button>
-                      {!isFrozen && perPerson && isSelected && (
-                        <input type="number" inputMode="decimal" min="1" placeholder="₽" className="rd-input rd-pick-amount" value={amounts[m.userId] ?? ''} onChange={(e) => setAmounts((prev) => ({ ...prev, [m.userId]: e.target.value }))} />
+                      {!isFrozen && perPerson && (
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="1"
+                          placeholder="₽"
+                          className="rd-input rd-pick-amount"
+                          aria-label={`Сумма для ${m.firstName}`}
+                          value={amounts[m.userId] ?? ''}
+                          onChange={(e) => setPersonAmount(m, e.target.value)}
+                        />
                       )}
                     </div>
                   );

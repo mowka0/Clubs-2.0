@@ -22,34 +22,33 @@ import java.util.UUID
 /**
  * DM по жизненному циклу сбора (skladchina-v3 § 6): создание по виду, заморозка списка «Кто в деле?»,
  * «Заказываю», итог. Слушает доменные события ПОСЛЕ коммита (`@TransactionalEventListener`).
- * Создание дополнительно оркестрирует чат-пост: сначала живой статус в чат, затем DM только
- * тем, кого пост не покрыл ([ChatAwareBroadcast]); тихий сбор в чат не идёт.
+ * Создание дополнительно оркестрирует чат-пост: живой статус в чат и DM каждому адресату
+ * независимо от чата (решение PO 2026-09-13); тихий сбор в чат не идёт.
  */
 @Component
 class SkladchinaBotNotifier(
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
-    private val skladchinaChatStatusService: SkladchinaChatStatusService,
-    private val chatAwareBroadcast: ChatAwareBroadcast
+    private val skladchinaChatStatusService: SkladchinaChatStatusService
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
     private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm 'МСК'").withZone(ZoneId.of("Europe/Moscow"))
 
-    // @Async: пост в чат + N getChatMember + DM-цикл — Telegram I/O не место на потоке коммита.
+    // @Async: пост в чат + DM-цикл — Telegram I/O не место на потоке коммита.
     @Async
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaCreated(event: SkladchinaCreatedEvent) {
-        // Сначала чат: решение «кому DM» зависит от ФАКТА выхода поста — шаги последовательны.
-        val chatPostChatId = if (event.hiddenFromUserId == null) {
-            skladchinaChatStatusService.onSkladchinaCreated(event.clubId, event.skladchinaId)
-        } else null
+        // Пост в чат и DM каждому — без маршрутизации «в чате → без DM» (решение PO 2026-09-13):
+        // долг личный, реквизиты и кнопка должны быть у человека в личке, даже если он в чате.
+        val chatPosted = if (event.hiddenFromUserId == null) {
+            skladchinaChatStatusService.onSkladchinaCreated(event.clubId, event.skladchinaId) != null
+        } else false
         val recipients = userRepository.findByIds(event.recipientUserIds)
-        val dmTelegramIds = chatAwareBroadcast.dmTargets(chatPostChatId, recipients.map { it.telegramId }).toSet()
-        log.info("Skladchina-created DM: id={} kind={} recipients={} chatPost={} dmTargets={}",
-            event.skladchinaId, event.kind, recipients.size, chatPostChatId != null, dmTelegramIds.size)
+        log.info("Skladchina-created DM: id={} kind={} recipients={} chatPost={}",
+            event.skladchinaId, event.kind, recipients.size, chatPosted)
 
         val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
-        recipients.filter { it.telegramId in dmTelegramIds }.forEach { user ->
+        recipients.forEach { user ->
             val text = createdText(event, creatorName, share = event.debtorShares[user.id])
             notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
         }

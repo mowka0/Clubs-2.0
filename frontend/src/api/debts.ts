@@ -22,9 +22,6 @@ export function claimDebt(id: string): Promise<DebtDto> {
 }
 
 /** «Отменить» своё «Отдал». */
-export function unclaimDebt(id: string): Promise<DebtDto> {
-  return apiClient.post<DebtDto>(`/api/debts/${id}/unclaim`);
-}
 
 /** «Получил» — получатель. */
 export function confirmDebt(id: string): Promise<DebtDto> {

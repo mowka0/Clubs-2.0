@@ -51,11 +51,6 @@ class DebtController(
         return ResponseEntity.ok(debtService.claim(id, user.userId))
     }
 
-    @PostMapping("/{id}/unclaim")
-    fun unclaim(@PathVariable id: UUID, @AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<DebtDto> {
-        log.info("Debt unclaim: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(debtService.unclaim(id, user.userId))
-    }
 
     @PostMapping("/{id}/confirm")
     fun confirm(@PathVariable id: UUID, @AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<DebtDto> {

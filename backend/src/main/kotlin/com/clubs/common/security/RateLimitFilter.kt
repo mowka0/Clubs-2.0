@@ -195,8 +195,8 @@ class RateLimitFilter : OncePerRequestFilter() {
         private const val GEO_LIMIT_PER_MIN = 12L
         // Жёсткий лимит на «Отдал» / «Передумал» / «Перевёл» / «Отдал Σ» по долгам — каждое такое
         // действие превращается в DM с кнопками получателю; под общим лимитом 120/мин один человек
-        // мог бы заспамить чужую личку переключением «Отдал ↔ Передумал» (security-ревью v3).
+        // мог бы заспамить чужую личку серией «Перевёл» / «Отдал Σ» (security-ревью v3).
         private const val MONEY_CLAIM_LIMIT_PER_MIN = 10L
-        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/(claim|unclaim)|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute)$")
+        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute)$")
     }
 }

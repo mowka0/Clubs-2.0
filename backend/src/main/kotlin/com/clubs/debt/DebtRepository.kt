@@ -48,8 +48,6 @@ interface DebtRepository {
     /** waiting/promised → claimed (только вне сальдо). */
     fun claim(id: UUID, at: OffsetDateTime): Int
 
-    /** claimed → waiting по воле должника (только вне сальдо). */
-    fun unclaim(id: UUID): Int
 
     /** waiting/promised/claimed → received (только вне сальдо). */
     fun confirm(id: UUID, at: OffsetDateTime): Int

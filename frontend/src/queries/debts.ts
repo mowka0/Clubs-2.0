@@ -13,7 +13,6 @@ import {
   rejectSettlement,
   setDebtNote,
   settleWith,
-  unclaimDebt,
 } from '../api/debts';
 import type { DebtDto, DebtPairDto } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -38,7 +37,6 @@ export function useDebtPairQuery(userId: string | undefined) {
 /** Переходы одиночного долга (§ 2.2). Кто может — проверяет сервер, кнопки лишь не показываются. */
 export type DebtAction =
   | { type: 'claim' }
-  | { type: 'unclaim' }
   | { type: 'confirm' }
   | { type: 'forgive' }
   | { type: 'promise'; date: string }
@@ -50,7 +48,6 @@ export type DebtAction =
 function runDebtAction(debtId: string, action: DebtAction): Promise<DebtDto> {
   switch (action.type) {
     case 'claim': return claimDebt(debtId);
-    case 'unclaim': return unclaimDebt(debtId);
     case 'confirm': return confirmDebt(debtId);
     case 'forgive': return forgiveDebt(debtId);
     case 'promise': return promiseDebt(debtId, action.date);

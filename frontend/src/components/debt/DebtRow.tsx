@@ -61,6 +61,12 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
     }
   })();
 
+  // «Отдал» необратим (решение PO 2026-09-13: отменять перевод нечего), поэтому спрашиваем до отправки.
+  const confirmClaim = () => {
+    if (!window.confirm(`Отдали ${formatRub(debt.amountKopecks)}? ${debt.creditor.firstName} получит уведомление и подтвердит.`)) return;
+    onAction({ type: 'claim' });
+  };
+
   const submitInline = () => {
     const note = text.trim();
     switch (inline) {
@@ -108,16 +114,13 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
         <div className="rd-debt-actions">
           {isDebtor && (debt.status === 'waiting' || debt.status === 'promised') && (
             <>
-              <button type="button" className="rd-btn-primary" onClick={() => onAction({ type: 'claim' })}>Отдал</button>
+              <button type="button" className="rd-btn-primary" onClick={confirmClaim}>Отдал</button>
               <button type="button" className="rd-btn-outline" onClick={() => setInline('promise')}>Оплачу позже</button>
               {debt.rejectedAt && (
                 <button type="button" className="rd-btn-outline" onClick={() => setInline('receipt')}>Приложить чек</button>
               )}
               <button type="button" className="rd-ghost-btn" onClick={() => setInline('note')}>Не согласен</button>
             </>
-          )}
-          {isDebtor && debt.status === 'claimed' && (
-            <button type="button" className="rd-btn-outline" onClick={() => onAction({ type: 'unclaim' })}>Отменить</button>
           )}
           {isCreditor && (
             <>

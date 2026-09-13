@@ -164,14 +164,6 @@ class JooqDebtRepository(
             .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised)).and(DEBTS.SETTLEMENT_ID.isNull))
             .execute()
 
-    override fun unclaim(id: UUID): Int =
-        dsl.update(DEBTS)
-            .set(DEBTS.STATUS, DebtStatus.waiting)
-            .setNull(DEBTS.CLAIMED_AT)
-            .set(DEBTS.UPDATED_AT, OffsetDateTime.now())
-            .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.eq(DebtStatus.claimed)).and(DEBTS.SETTLEMENT_ID.isNull))
-            .execute()
-
     override fun confirm(id: UUID, at: OffsetDateTime): Int =
         dsl.update(DEBTS)
             .set(DEBTS.STATUS, DebtStatus.received)
