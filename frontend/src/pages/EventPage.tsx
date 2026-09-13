@@ -14,6 +14,8 @@ import { eventToTemplateBody } from '../utils/eventTemplate';
 import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
+import { ChoiceSheet } from '../components/ConfirmSheet';
+import { FLOW_LABEL, FLOW_SUBTITLE } from '../utils/skladchinaKind';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import { formatBadge } from '../utils/eventFormat';
@@ -231,6 +233,8 @@ export const EventPage: FC = () => {
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
   // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
   const eventSplitQuery = useEventSplitStateQuery(isAuthenticated ? id : undefined);
+  // «Скинуться» со страницы встречи: встреча — точка входа, а не поле формы (§ 13 п. 33).
+  const [splitAsk, setSplitAsk] = useState(false);
   // F5-04: собственная явка вызывающего — управляет контролами спора даже у участника, вышедшего
   // из клуба (member-gated запрос responders отдаёт ему 403). Нужна только пока открыто окно спора;
   // 404 (организатор / не-участник) ожидаем и трактуется как «UI спора не показываем».
@@ -1682,7 +1686,7 @@ export const EventPage: FC = () => {
                 style={{ marginBottom: 14 }}
                 onClick={() => {
                   haptic.impact('medium');
-                  navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`);
+                  setSplitAsk(true);
                 }}
               >
                 💰 Скинуться
@@ -2157,6 +2161,16 @@ export const EventPage: FC = () => {
       )}
 
       {/* Подтверждённые участники */}
+      {splitAsk && event && (
+        <ChoiceSheet
+          title={`Скинуться за «${event.title}»`}
+          options={[
+            { label: FLOW_LABEL.split, hint: FLOW_SUBTITLE.split, onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`); } },
+            { label: FLOW_LABEL.voluntary, hint: FLOW_SUBTITLE.voluntary, onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
+          ]}
+          onCancel={() => setSplitAsk(false)}
+        />
+      )}
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );

@@ -8,7 +8,7 @@ import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
 import { useAuthStore } from '../store/useAuthStore';
-import type { CreateSkladchinaRequest, MemberListItemDto, SplittableEventDto } from '../types/api';
+import type { CreateSkladchinaRequest, MemberListItemDto } from '../types/api';
 import { rubToKopecks } from '../utils/money';
 import { DATE_FMT, FLOW_EMOJI, FLOW_KIND, FLOW_LABEL, FLOW_SUBTITLE, isSkladchinaFlow, type SkladchinaFlow } from '../utils/skladchinaKind';
 
@@ -50,9 +50,10 @@ function resolveFlow(params: URLSearchParams): SkladchinaFlow {
 }
 
 /**
- * Одна форма на четыре входа в сбор (skladchina-v3 § 9, § 13 п. 32): «Делим известную сумму»,
- * «Сначала запись, потом доли», «Цена за штуку», «Каждый сколько хочет». Каждый вход — плоская
- * форма без переключателей режима; единственный выбор внутри — «поровну / суммы по людям».
+ * Одна форма на четыре входа в сбор (skladchina-v3 § 9, § 13 п. 32–33): «Кто сколько должен?»,
+ * «Кто в деле?», «Кто берёт?», «Кто сколько хочет?». Каждый вход — плоская форма без
+ * переключателей режима; единственный выбор внутри — «поровну / суммы по людям». Встреча в форму
+ * приходит только ссылкой со страницы встречи (`eventId`) и показывается строкой контекста.
  * Создать может любой участник клуба.
  */
 export const CreateSkladchinaPage: FC = () => {
@@ -67,11 +68,11 @@ export const CreateSkladchinaPage: FC = () => {
   const flow = resolveFlow(searchParams);
   const kind = FLOW_KIND[flow];
   const presetEventId = searchParams.get('eventId');
-  // Встреча и список людей есть у двух входов: «делим сумму» и «каждый сколько хочет».
+  // Список людей есть у двух входов: «кто сколько должен» и «кто сколько хочет».
   const usesPeople = flow === 'split' || flow === 'voluntary';
 
   const membersQuery = useClubMembersQuery(clubId);
-  const splittableQuery = useSplittableEventsQuery(usesPeople ? clubId : undefined);
+  const splittableQuery = useSplittableEventsQuery(presetEventId ? clubId : undefined);
 
   // Без доступа (frozen/expired) в сбор не попадают: видны, но неактивны, и уходят в конец списка.
   const members = useMemo(() => {
@@ -88,7 +89,7 @@ export const CreateSkladchinaPage: FC = () => {
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
   const [deadline, setDeadline] = useState(plusDays(flow === 'per_head' ? 5 : 3));
   const [noDeadline, setNoDeadline] = useState(flow === 'voluntary');
-  const [eventId, setEventId] = useState<string | null>(presetEventId);
+  const eventId = presetEventId;
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
   const [minParticipants, setMinParticipants] = useState('');
   const [enrollCreator, setEnrollCreator] = useState(true);
@@ -159,13 +160,6 @@ export const CreateSkladchinaPage: FC = () => {
   const setPersonAmount = (m: MemberListItemDto, value: string) => {
     setAmounts((prev) => ({ ...prev, [m.userId]: value }));
     if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
-  };
-
-  // Выбор встречи предзаполняет список людей пришедшими; «Без встречи» оставляет отмеченных как есть.
-  const pickEvent = (ev: SplittableEventDto | null) => {
-    haptic.select();
-    setEventId(ev?.eventId ?? null);
-    if (ev) setSelectedIds(new Set(ev.attendedUserIds));
   };
 
   const handleSubmit = async () => {
@@ -249,36 +243,15 @@ export const CreateSkladchinaPage: FC = () => {
 
   const amountLabel = flow === 'per_head' ? 'Цена за штуку (₽)' : flow === 'voluntary' ? (eventId ? 'Всего потратили (₽)' : 'Ориентир (₽)') : 'Сумма (₽)';
 
-  const eventPicker = (
+  // Встреча приходит только со страницы встречи (§ 13 п. 33): в форме она строка контекста, не поле.
+  const eventLine = presetEventId && (
     <div className="rd-field">
-      <span className="rd-label">
-        {flow === 'split' ? 'За что' : 'После встречи'}
-        {flow === 'split' && <> <span className="rd-req">*</span></>}
-      </span>
-      {presetEventId && selectedEvent && (
-        <div className="rd-hint">{selectedEvent.title} · {DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли {selectedEvent.attendedCount}</div>
-      )}
-      {!presetEventId && splittableQuery.isPending && <Spinner size="s" />}
-      {!presetEventId && !splittableQuery.isPending && (
-        <div className="rd-pick-list">
-          <button type="button" className={`rd-pick-toggle${eventId === null ? ' rd-selected' : ''}`} onClick={() => pickEvent(null)} style={{ width: '100%' }}>
-            <span className="rd-check-box">{eventId === null ? '✓' : ''}</span>
-            <span className="rd-pick-name">Без встречи</span>
-          </button>
-          {events.map((ev) => (
-            <button key={ev.eventId} type="button" className={`rd-pick-toggle${eventId === ev.eventId ? ' rd-selected' : ''}`} onClick={() => pickEvent(ev)} style={{ width: '100%' }}>
-              <span className="rd-check-box">{eventId === ev.eventId ? '✓' : ''}</span>
-              <span className="rd-pick-name">{ev.title}</span>
-              <span className="rd-pick-note">{DATE_FMT.format(new Date(ev.eventDatetime))} · пришли {ev.attendedCount}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <span className="rd-hint">
-        {events.length === 0 && !splittableQuery.isPending
-          ? 'Встречи появятся здесь, когда пройдут и получат отметку явки (не старше 30 дней).'
-          : 'Выбрали встречу — пришедшие отмечены ниже, состав можно поправить.'}
-      </span>
+      <span className="rd-label">За встречу</span>
+      <div className="rd-hint">
+        {selectedEvent
+          ? `${selectedEvent.title} · ${DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли ${selectedEvent.attendedCount} — они отмечены ниже, состав можно поправить`
+          : 'Пришедшие будут отмечены ниже, состав можно поправить'}
+      </div>
     </div>
   );
 
@@ -389,7 +362,7 @@ export const CreateSkladchinaPage: FC = () => {
           </label>
         )}
 
-        {usesPeople && eventPicker}
+        {eventLine}
 
         {flow === 'enroll' && (
           <>
@@ -412,7 +385,7 @@ export const CreateSkladchinaPage: FC = () => {
 
         {usesPeople && peopleList}
 
-        {flow === 'voluntary' && !eventId && (
+        {flow === 'voluntary' && !presetEventId && (
           <div className="rd-field">
             <span className="rd-label">Скрыть от</span>
             {membersQuery.isPending && <Spinner size="s" />}

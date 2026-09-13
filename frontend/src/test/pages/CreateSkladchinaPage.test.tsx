@@ -88,7 +88,7 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(sent!.deadline).toBeTruthy();
   });
 
-  it('«После встречи»: выбор встречи отмечает пришедших с пометкой «был», состав правится, тело с eventId и debtors', async () => {
+  it('«Кто сколько должен?» со страницы встречи: пришедшие отмечены с пометкой «был», состав правится, тело с eventId и debtors', async () => {
     let sent: CreateSkladchinaRequest | null = null;
     const ANNA = MEMBER;
     const OLEG: MemberListItemDto = { ...MEMBER, userId: 'u-2', firstName: 'Олег' };
@@ -102,10 +102,10 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
         return HttpResponse.json({ id: 's-new', clubId: CLUB_ID }, { status: 201 });
       }),
     );
-    const { user } = renderPage('?kind=shared');
+    const { user } = renderPage('?flow=split&eventId=ev-1');
     await user.type(await screen.findByLabelText(/Название/), 'Ужин');
     await user.type(screen.getByPlaceholderText('Ссылка СБП или номер телефона'), 'https://pay.example/x');
-    await user.click(await screen.findByText('Ужин в ресторане'));
+    expect(await screen.findByText(/Ужин в ресторане · .* · пришли 1/)).toBeInTheDocument();
 
     // Анна была — отмечена сразу; Олег не был, но его можно добавить.
     expect(await screen.findByText('был')).toBeInTheDocument();
