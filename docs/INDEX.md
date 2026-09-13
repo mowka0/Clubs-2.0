@@ -45,7 +45,7 @@
 | `membership` | `membership.md`, `membership-lifecycle.md` |
 | `payment` | `payment.md`, `payment-v2.md` |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
-| `skladchina`, `debt` | `skladchina-v3.md` (ветка `feature/skladchina-rethink`; `skladchina.md` описывает master до мержа) |
+| `skladchina`, `debt` | `skladchina-v3.md` (действующая с 2026-09-13; `skladchina.md` — архив до чистки) |
 | `storage` | `infrastructure.md` |
 | `subscription` | `payment-v2.md`, `membership-lifecycle.md` |
 | `user` | `profile.md`, `profile-quest.md` |
@@ -127,8 +127,8 @@
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
 | `unified-activity-creation.md` | единое создание активностей через «+» | 2026-08-12 |
-| `skladchina.md` | складчины и сборы внутри клуба | 2026-09-07 |
-| `skladchina-v3.md` | сборы и долги заново: код написан, V90, ветка `feature/skladchina-rethink` на staging; после мержа заменяет `skladchina.md` | 2026-09-12 |
+| `skladchina.md` | ⛔ архив: сборы до v3 (MVP, Фаза A, сплит) | 2026-09-13 |
+| `skladchina-v3.md` | сборы и долги: три вида, долг как сущность, экран «Долги», V90–V93 — в проде | 2026-09-13 |
 
 ### Чат, бот, репутация
 | Файл | О чём | Правлен |

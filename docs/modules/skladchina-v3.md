@@ -1,9 +1,8 @@
 # Сборы и долги v3
 
-> **Статус:** спека в работе на ветке `feature/skladchina-rethink` (от `master`). Написана
-> 2026-09-12 по решениям PO того же дня. До мержа ветки действующее описание того, что в
-> `master`, остаётся в `skladchina.md`; после мержа этот файл заменяет её, а `skladchina.md`
-> уходит в `docs/backlog/`.
+> **Статус:** ✅ В ПРОДЕ с 2026-09-13 — ветка `feature/skladchina-rethink` смержена в `master`
+> после теста PO на staging (сценарии 1–4, правки § 13 п. 18–33). Действующее описание модуля;
+> `skladchina.md` — архив, чистка по `docs/backlog/skladchina-v3-cleanup-handoff.md`.
 >
 > **Источники:** `docs/design/skladchina-rethink/01-scenarios.md` (сценарии и принципы),
 > `02-design.md` (истории и правила), `03-debt.md` (долг как сущность, решения PO), мокапы
