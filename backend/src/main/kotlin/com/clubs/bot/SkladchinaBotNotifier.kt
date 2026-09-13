@@ -29,7 +29,8 @@ import java.util.UUID
 class SkladchinaBotNotifier(
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
-    private val skladchinaChatStatusService: SkladchinaChatStatusService
+    private val skladchinaChatStatusService: SkladchinaChatStatusService,
+    private val gateway: ChatTelegramGateway
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
     private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm 'МСК'").withZone(ZoneId.of("Europe/Moscow"))
@@ -50,7 +51,18 @@ class SkladchinaBotNotifier(
         val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
         recipients.forEach { user ->
             val text = createdText(event, creatorName, share = event.debtorShares[user.id])
-            notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+            if (event.enrollmentUntil != null) {
+                // Этап «Кто в деле?»: записаться прямо из DM, без перехода в приложение (PO 2026-09-13).
+                gateway.sendDmWithButtons(
+                    user.telegramId, text,
+                    listOf(
+                        listOf(DmButton("✅ В деле", callbackData = DebtCallbackService.ENROLL_PREFIX + event.skladchinaId)),
+                        listOf(DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}"))
+                    )
+                )
+            } else {
+                notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+            }
         }
     }
 

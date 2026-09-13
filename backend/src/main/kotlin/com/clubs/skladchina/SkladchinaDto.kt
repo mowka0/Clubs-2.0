@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.debt.DebtDto
+import com.clubs.debt.DebtPersonDto
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -43,6 +44,8 @@ data class CreateSkladchinaRequest(
     val enrollmentUntil: OffsetDateTime? = null,
     @field:Positive
     val minParticipants: Int? = null,
+    // Этап «Кто в деле?»: отмечать ли создателя в деле сразу (чекбокс формы, по умолчанию да).
+    val enrollCreator: Boolean = true,
 
     // voluntary: от кого скрыть (тихий сбор).
     val hiddenFromUserId: UUID? = null,
@@ -132,6 +135,9 @@ data class SkladchinaDetailDto(
     val receivedCount: Int,
     val openCount: Int,
     val claimedCount: Int,
+
+    // Кто отметился «В деле» на этапе записи (всем участникам); вне этапа пустой список.
+    val enrolled: List<DebtPersonDto>,
 
     // Мой долг как должника (null = у меня долга в этом сборе нет).
     val myDebt: DebtDto?,

@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.debt.DebtDto
+import com.clubs.debt.DebtPersonDto
 import com.clubs.debt.DebtTotals
 import com.clubs.event.Event
 import com.clubs.generated.jooq.enums.DebtStatus
@@ -48,6 +49,7 @@ class SkladchinaMapper {
         totals: DebtTotals,
         enrolledCount: Int,
         myEnrolled: Boolean,
+        enrolled: List<DebtPersonDto>,
         debts: List<DebtDto>,
         event: Event?
     ): SkladchinaDetailDto {
@@ -85,6 +87,7 @@ class SkladchinaMapper {
             isEnrolling = skladchina.isEnrolling,
             enrolledCount = enrolledCount,
             myEnrolled = myEnrolled,
+            enrolled = enrolled,
             debtCount = totals.debtCount,
             receivedCount = totals.receivedCount,
             openCount = totals.openCount,

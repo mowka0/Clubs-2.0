@@ -14,7 +14,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { DATE_FMT, KIND_EMOJI, KIND_LABEL, initials, statusLabel } from '../utils/skladchinaKind';
+import { DATE_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
 
 function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof ApiError && (e.status === 400 || e.status === 403 || e.status === 409) && e.message) return e.message;
@@ -78,14 +78,14 @@ export const SkladchinaPage: FC = () => {
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
   const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((s.claimedKopecks / target) * 100)) : 0;
 
-  const run = async (action: SkladchinaAction, done: string, confirmText?: string) => {
+  const run = async (action: SkladchinaAction, done: string | ((result: SkladchinaDetailDto) => string), confirmText?: string) => {
     if (confirmText && !(await confirm(confirmText))) return;
     setError(null);
     try {
       haptic.impact('medium');
-      await actionMut.mutateAsync({ id: s.id, action });
+      const result = await actionMut.mutateAsync({ id: s.id, action });
       haptic.notify('success');
-      setToast(done);
+      setToast(typeof done === 'function' ? done(result) : done);
     } catch (e) {
       console.error('skladchina action failed', action.type, e);
       haptic.notify('error');
@@ -293,8 +293,29 @@ export const SkladchinaPage: FC = () => {
         </div>
       )}
 
+      {/* Этап записи: кто в деле — всем, вместо списка долгов (их ещё нет). */}
+      {s.isEnrolling && (
+        <>
+          <div className="rd-section-sub-h">
+            В деле <span className="rd-count">· {s.enrolled.length}</span>
+          </div>
+          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+            {s.enrolled.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
+            {s.enrolled.map((p) => (
+              <div className="rd-debt-head rd-enrolled-row" key={p.id}>
+                <span className="rd-av rd-debt-av">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(personName(p))}</span>
+                <span className="rd-debt-who">
+                  <b>{personName(p)}{p.id === viewerId ? ' (вы)' : ''}</b>
+                  {p.username && <span className="rd-debt-handle">@{p.username}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Создатель: список долгов и кнопки стадии. */}
-      {s.isCreator && s.debts && (
+      {s.isCreator && s.debts && !s.isEnrolling && (
         <>
           <div className="rd-section-sub-h">
             {s.kind === 'per_head' ? 'Берут' : 'Кто должен'} <span className="rd-count">· {s.debts.length}</span>
@@ -311,7 +332,18 @@ export const SkladchinaPage: FC = () => {
       {isActive && (s.isCreator || s.canCancel) && (
         <div className="rd-form" style={{ marginTop: 4 }}>
           {s.isCreator && s.isEnrolling && (
-            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'lock' }, 'Список закрыт, долги созданы.', 'Закрыть запись сейчас? Доли посчитаются по тем, кто в деле.')}>
+            <button
+              type="button"
+              className="rd-btn-primary"
+              disabled={busy}
+              onClick={() => run(
+                { type: 'lock' },
+                (r) => (r.status === 'cancelled' ? 'Не набрали: сбор отменён, денег никто не переводил.' : 'Список закрыт, долги созданы.'),
+                s.minParticipants && s.enrolledCount < s.minParticipants
+                  ? `В деле ${s.enrolledCount}, нужно ${s.minParticipants}: сбор будет отменён как «не набрали». Закрыть запись?`
+                  : 'Закрыть запись сейчас? Доли посчитаются по тем, кто в деле.',
+              )}
+            >
               Закрыть запись
             </button>
           )}

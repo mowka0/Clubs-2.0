@@ -100,6 +100,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     isEnrolling: false,
     enrolledCount: 0,
     myEnrolled: false,
+    enrolled: [],
     debtCount: 6,
     receivedCount: 1,
     openCount: 5,
@@ -210,6 +211,7 @@ describe('SkladchinaPage — сборы и долги v3', () => {
       enrollmentUntil: FUTURE,
       minParticipants: 6,
       enrolledCount: 3,
+      enrolled: [creator, { ...me, id: 'u-2', firstName: 'Оля' }, me],
       debtCount: 0,
       receivedCount: 0,
       openCount: 0,
@@ -220,6 +222,10 @@ describe('SkladchinaPage — сборы и долги v3', () => {
 
     expect(await screen.findByRole('button', { name: 'В деле' })).toBeInTheDocument();
     expect(screen.getByText(/В деле 3 · нужно 6/)).toBeInTheDocument();
+    // Кто записался — видно всем вместо «Кто должен».
+    expect(screen.getByText('Оля')).toBeInTheDocument();
+    expect(screen.getByText('Саша (вы)')).toBeInTheDocument();
+    expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
 
     mockDetail(buildDetail({ isEnrolling: true, enrollmentUntil: FUTURE, enrolledCount: 4, myEnrolled: true, myDebt: null }));
     renderPage();

@@ -6,14 +6,15 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
+import com.clubs.skladchina.SkladchinaParticipationService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
 /**
- * Inline-кнопки «Получил / Не получил» в DM получателю (skladchina-v3 § 5): по долгу и по сальдо
- * пары. Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
+ * Inline-кнопки в DM (skladchina-v3 § 5): «Получил / Не получил» по долгу и по сальдо пары,
+ * «В деле» на этапе записи. Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
  * подделываема, и угадав `debt:confirm:<id>`, чужой не должен ничего сделать —
  * `query.from.id` резолвится в пользователя и идёт через обычную проверку стороны долга.
  *
@@ -23,7 +24,8 @@ import java.util.UUID
 class DebtCallbackService(
     private val userRepository: UserRepository,
     private val debtService: DebtService,
-    private val settlementService: DebtSettlementService
+    private val settlementService: DebtSettlementService,
+    private val participationService: SkladchinaParticipationService
 ) {
     private val log = LoggerFactory.getLogger(DebtCallbackService::class.java)
 
@@ -32,6 +34,16 @@ class DebtCallbackService(
         const val REJECT_PREFIX = "debt:reject:"
         const val SETTLE_CONFIRM_PREFIX = "settle:confirm:"
         const val SETTLE_REJECT_PREFIX = "settle:reject:"
+        const val ENROLL_PREFIX = "skladchina:enroll:"
+    }
+
+    /** «В деле» из DM о сборе с этапом записи — тот же join, что у кнопки в приложении. */
+    fun handleEnroll(fromTelegramId: Long, skladchinaId: UUID): String {
+        val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
+        return guarded(fromTelegramId, skladchinaId) {
+            val detail = participationService.join(skladchinaId, callerId, note = null)
+            "Вы в деле! Отметились ${detail.enrolledCount}" + (detail.minParticipants?.let { ", нужно $it" } ?: "") + "."
+        }
     }
 
     fun handleDebt(fromTelegramId: Long, debtId: UUID, confirm: Boolean): String {

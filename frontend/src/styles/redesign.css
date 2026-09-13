@@ -3562,6 +3562,8 @@
 .rd-debt-pos { color: var(--live); }
 .rd-debt-neg { color: var(--danger); }
 .rd-debt-list { display: flex; flex-direction: column; gap: 10px; }
+.rd-enrolled-row { padding: 8px 0; }
+.rd-enrolled-row + .rd-enrolled-row { border-top: 1px solid var(--hairline); }
 .rd-debt-plate {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;
   border: none; font: inherit; text-align: left; cursor: pointer;

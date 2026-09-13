@@ -44,12 +44,14 @@ class SkladchinaCreationService(
     private val log = LoggerFactory.getLogger(SkladchinaCreationService::class.java)
 
     /** Чем заканчивается разбор запроса по виду: доли (должник → сумма), адресаты DM, нужна ли запись создателя «В деле». */
+    // enrolling = сбор с этапом «Кто в деле?»; enrollCreator = отметить создателя сразу.
     private data class CreationPlan(
         val shares: Map<UUID, Long>,
         val amountKopecks: Long?,
         val eventId: UUID?,
         val recipientUserIds: List<UUID>,
-        val enrollCreator: Boolean
+        val enrolling: Boolean,
+        val enrollCreator: Boolean = false
     )
 
     @Transactional
@@ -85,8 +87,8 @@ class SkladchinaCreationService(
                 paymentMethodNote = request.paymentMethodNote?.trim()?.takeIf { it.isNotEmpty() },
                 eventId = plan.eventId,
                 deadline = request.deadline,
-                enrollmentUntil = if (plan.enrollCreator) request.enrollmentUntil else null,
-                minParticipants = if (plan.enrollCreator) request.minParticipants else null,
+                enrollmentUntil = if (plan.enrolling) request.enrollmentUntil else null,
+                minParticipants = if (plan.enrolling) request.minParticipants else null,
                 lockedAt = null,
                 orderedAt = null,
                 hiddenFromUserId = if (kind == SkladchinaKind.voluntary) request.hiddenFromUserId else null,
@@ -105,7 +107,7 @@ class SkladchinaCreationService(
 
         log.info(
             "Skladchina created: id={} clubId={} creatorId={} kind={} amount={} debts={} enrolling={} hidden={}",
-            id, clubId, creatorId, kind, plan.amountKopecks, plan.shares.size, plan.enrollCreator, request.hiddenFromUserId != null
+            id, clubId, creatorId, kind, plan.amountKopecks, plan.shares.size, plan.enrolling, request.hiddenFromUserId != null
         )
         eventPublisher.publishEvent(
             SkladchinaCreatedEvent(
@@ -182,18 +184,18 @@ class SkladchinaCreationService(
                 if (enrollmentUntil != null) throw ValidationException("У сбора после встречи этапа записи нет")
                 val attended = resolveAttended(clubId, eventId, now)
                 val shares = SkladchinaShares.equal(amount, attended).toMap()
-                CreationPlan(shares, amount, eventId, attended.filter { it != creatorId }, enrollCreator = false)
+                CreationPlan(shares, amount, eventId, attended.filter { it != creatorId }, enrolling = false)
             }
             enrollmentUntil != null -> {
                 if (!enrollmentUntil.isAfter(now)) throw ValidationException("Срок записи уже прошёл")
                 if (enrollmentUntil.isAfter(deadline)) throw ValidationException("Запись должна закрыться не позже срока оплаты")
                 if (request.debtors.isNotEmpty()) throw ValidationException("На этапе «Кто в деле?» список набирается сам")
                 val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
-                CreationPlan(emptyMap(), amount, null, members, enrollCreator = true)
+                CreationPlan(emptyMap(), amount, null, members, enrolling = true, enrollCreator = request.enrollCreator)
             }
             else -> {
                 val shares = resolveListedShares(clubId, creatorId, request, amount)
-                CreationPlan(shares, shares.values.sum(), null, shares.keys.filter { it != creatorId }, enrollCreator = false)
+                CreationPlan(shares, shares.values.sum(), null, shares.keys.filter { it != creatorId }, enrolling = false)
             }
         }
     }
@@ -201,7 +203,7 @@ class SkladchinaCreationService(
     /** per_head: долгов при создании нет, «Беру» жмут сами; сумма — цена за человека; знают о сборе все участники клуба. */
     private fun planPerHead(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): CreationPlan {
         val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
-        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrollCreator = false)
+        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrolling = false)
     }
 
     /** voluntary: без долгов; тихий сбор скрыт от одного человека — он не адресат. */
@@ -214,7 +216,7 @@ class SkladchinaCreationService(
             }
         }
         val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId && it != hidden }
-        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrollCreator = false)
+        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrolling = false)
     }
 
     /** Пришедшие на встречу активные участники; те же условия, что отбирают встречи в списке «Скинуться после встречи». */

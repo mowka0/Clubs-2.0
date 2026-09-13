@@ -233,6 +233,7 @@ class SkladchinaV3IntegrationTest {
         val afterBob = json(post("/api/skladchinas/$id/join", bob).andExpect(status().isOk))
         assertEquals(3, afterBob["enrolledCount"].asInt())
         assertTrue(afterBob["myEnrolled"].asBoolean())
+        assertEquals(listOf("Owner", "Alice", "Bob"), afterBob["enrolled"].map { it["firstName"].asText() }, "кто в деле виден всем, в порядке записи")
 
         post("/api/skladchinas/$id/lock", alice).andExpect(status().isForbidden)
         val locked = json(post("/api/skladchinas/$id/lock", owner).andExpect(status().isOk))
@@ -249,6 +250,12 @@ class SkladchinaV3IntegrationTest {
         val cancelled = json(post("/api/skladchinas/$shortId/lock", owner).andExpect(status().isOk))
         assertEquals("cancelled", cancelled["status"].asText())
         assertEquals(0, cancelled["debtCount"].asInt())
+        assertEquals(0, cancelled["enrolled"].size(), "вне этапа записи список пустой")
+
+        // Чекбокс «я в деле» снят: создатель не отмечен, список начинается с нуля.
+        val withoutCreator = json(postJson("/api/clubs/$clubId/skladchinas", owner, enrollingBody(amount = 3_000, min = 1).replace("\"minParticipants\"", "\"enrollCreator\": false, \"minParticipants\"")).andExpect(status().isCreated))
+        assertEquals(0, withoutCreator["enrolledCount"].asInt())
+        assertTrue(!withoutCreator["myEnrolled"].asBoolean())
     }
 
     // --- AC-8: Заказываю ---

@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.common.dto.PageResponse
+import com.clubs.debt.DebtPerson
 import com.clubs.debt.DebtRepository
 import com.clubs.debt.DebtTotals
 import com.clubs.debt.OPEN_DEBT_STATUSES
@@ -17,6 +18,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import com.clubs.generated.jooq.tables.references.SKLADCHINA_ENROLLMENTS
+import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -350,6 +352,14 @@ class JooqSkladchinaRepository(
         dsl.deleteFrom(SKLADCHINA_ENROLLMENTS)
             .where(SKLADCHINA_ENROLLMENTS.SKLADCHINA_ID.eq(skladchinaId).and(SKLADCHINA_ENROLLMENTS.USER_ID.eq(userId)))
             .execute()
+
+    override fun findEnrolledPersons(skladchinaId: UUID): List<DebtPerson> =
+        dsl.select(USERS.ID, USERS.FIRST_NAME, USERS.LAST_NAME, USERS.TELEGRAM_USERNAME, USERS.AVATAR_URL)
+            .from(SKLADCHINA_ENROLLMENTS)
+            .join(USERS).on(USERS.ID.eq(SKLADCHINA_ENROLLMENTS.USER_ID))
+            .where(SKLADCHINA_ENROLLMENTS.SKLADCHINA_ID.eq(skladchinaId))
+            .orderBy(SKLADCHINA_ENROLLMENTS.CREATED_AT.asc())
+            .fetch { DebtPerson(it.value1()!!, it.value2()!!, it.value3(), it.value4(), it.value5()) }
 
     override fun findEnrolledUserIds(skladchinaId: UUID): List<UUID> =
         dsl.select(SKLADCHINA_ENROLLMENTS.USER_ID)

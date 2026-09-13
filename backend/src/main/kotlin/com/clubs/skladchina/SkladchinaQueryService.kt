@@ -80,6 +80,7 @@ class SkladchinaQueryService(
             totals = debtRepository.totals(skladchinaId),
             enrolledCount = if (s.enrollmentUntil != null) skladchinaRepository.countEnrolled(skladchinaId) else 0,
             myEnrolled = s.isEnrolling && skladchinaRepository.isEnrolled(skladchinaId, callerId),
+            enrolled = if (s.isEnrolling) skladchinaRepository.findEnrolledPersons(skladchinaId).map(debtMapper::toPersonDto) else emptyList(),
             debts = debts,
             event = event
         )

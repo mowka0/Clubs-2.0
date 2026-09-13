@@ -828,6 +828,8 @@ export interface SkladchinaDetailDto {
   isEnrolling: boolean;
   enrolledCount: number;
   myEnrolled: boolean;
+  /** Кто отметился «В деле» на этапе записи (всем участникам); вне этапа пусто. */
+  enrolled: DebtPersonDto[];
   debtCount: number;
   receivedCount: number;
   openCount: number;
@@ -895,6 +897,8 @@ export interface CreateSkladchinaRequest {
   /** shared до события: этап «Кто в деле?» до этого момента + минимум людей. */
   enrollmentUntil?: string | null;
   minParticipants?: number | null;
+  /** Этап «Кто в деле?»: отметить создателя сразу (по умолчанию да). */
+  enrollCreator?: boolean;
   /** voluntary: от кого скрыть (тихий сбор). */
   hiddenFromUserId?: string | null;
   /** shared со списком: суммы либо у всех (по людям), либо ни у кого (поровну). */

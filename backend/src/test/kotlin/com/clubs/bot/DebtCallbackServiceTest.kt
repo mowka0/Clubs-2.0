@@ -7,6 +7,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
 import com.clubs.generated.jooq.tables.records.UsersRecord
+import com.clubs.skladchina.SkladchinaParticipationService
 import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -24,7 +25,8 @@ class DebtCallbackServiceTest {
     private val userRepository = mockk<UserRepository>()
     private val debtService = mockk<DebtService>()
     private val settlementService = mockk<DebtSettlementService>()
-    private val service = DebtCallbackService(userRepository, debtService, settlementService)
+    private val participationService = mockk<SkladchinaParticipationService>()
+    private val service = DebtCallbackService(userRepository, debtService, settlementService, participationService)
 
     private val debtId = UUID.randomUUID()
     private val settlementId = UUID.randomUUID()
@@ -65,6 +67,19 @@ class DebtCallbackServiceTest {
         assertEquals("Для этого долга такое действие недоступно", service.handleDebt(42L, debtId, confirm = true))
         every { debtService.confirm(debtId, userId) } throws NotFoundException("Долг не найден")
         assertEquals(RosterCallbackService.INVALID_REQUEST, service.handleDebt(42L, debtId, confirm = true))
+    }
+
+    @Test
+    fun `«В деле» from the DM joins through the participation service and reports the count`() {
+        stubCaller()
+        val skladchinaId = UUID.randomUUID()
+        every { participationService.join(skladchinaId, userId, null) } returns mockk {
+            every { enrolledCount } returns 3
+            every { minParticipants } returns 6
+        }
+        assertEquals("Вы в деле! Отметились 3, нужно 6.", service.handleEnroll(42L, skladchinaId))
+        every { participationService.join(skladchinaId, userId, null) } throws ValidationException("Сбор уже закрыт")
+        assertEquals("Сбор уже закрыт", service.handleEnroll(42L, skladchinaId))
     }
 
     @Test

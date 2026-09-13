@@ -1,5 +1,6 @@
 package com.clubs.skladchina
 
+import com.clubs.debt.DebtPerson
 import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import java.time.OffsetDateTime
@@ -96,6 +97,9 @@ interface SkladchinaRepository {
     fun removeEnrollment(skladchinaId: UUID, userId: UUID): Int
 
     fun findEnrolledUserIds(skladchinaId: UUID): List<UUID>
+
+    /** Отметившиеся «В деле» с именами, в порядке записи — для экрана сбора. */
+    fun findEnrolledPersons(skladchinaId: UUID): List<DebtPerson>
 
     fun countEnrolled(skladchinaId: UUID): Int
 

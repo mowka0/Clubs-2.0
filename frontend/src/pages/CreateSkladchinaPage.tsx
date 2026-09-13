@@ -85,6 +85,7 @@ export const CreateSkladchinaPage: FC = () => {
   const [eventId, setEventId] = useState<string | null>(presetEventId);
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
   const [minParticipants, setMinParticipants] = useState('');
+  const [enrollCreator, setEnrollCreator] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [perPerson, setPerPerson] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -151,6 +152,7 @@ export const CreateSkladchinaPage: FC = () => {
         const min = minParticipants.trim() ? Number(minParticipants) : null;
         if (min !== null && (!Number.isInteger(min) || min < 1)) return fail('Минимум — целое число от 1');
         body.minParticipants = min;
+        body.enrollCreator = enrollCreator;
       } else {
         if (selectedIds.size === 0) return fail('Выберите хотя бы одного человека');
         const debtors = Array.from(selectedIds).map((userId) => ({
@@ -255,7 +257,11 @@ export const CreateSkladchinaPage: FC = () => {
             <label className="rd-field">
               <span className="rd-label">Отметиться до <span className="rd-req">*</span></span>
               <input className="rd-input" type="datetime-local" value={enrollmentUntil} onChange={(e) => setEnrollmentUntil(e.target.value)} />
-              <span className="rd-hint">Потом список замораживается, сумма делится поровну между теми, кто в деле. Вы в деле по умолчанию.</span>
+              <span className="rd-hint">Потом список замораживается, сумма делится поровну между теми, кто в деле.</span>
+            </label>
+            <label className="rd-check">
+              <input type="checkbox" checked={enrollCreator} onChange={(e) => setEnrollCreator(e.target.checked)} />
+              <span>Я в деле: моя доля считается вместе со всеми и сразу получена</span>
             </label>
             <label className="rd-field">
               <span className="rd-label">Минимум людей</span>
