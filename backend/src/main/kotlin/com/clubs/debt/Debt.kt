@@ -39,6 +39,17 @@ data class Debt(
     val updatedAt: OffsetDateTime
 ) {
     val isOpen: Boolean get() = status in OPEN_DEBT_STATUSES
+
+    /**
+     * Дата, к которой ждут деньги на экранах «Долги»: обещанная должником (конец дня по Москве),
+     * а если обещания нет — срок сбора (PO 2026-09-13). На часы −40 не влияет: они идут от `dueAt`.
+     */
+    val effectiveDueAt: OffsetDateTime?
+        get() = promisedAt?.plusDays(1)?.atStartOfDay(MSK)?.minusSeconds(1)?.toOffsetDateTime() ?: dueAt
+
+    companion object {
+        private val MSK: java.time.ZoneId = java.time.ZoneId.of("Europe/Moscow")
+    }
 }
 
 /** Новый долг для вставки: статус и штампы задаёт создающий сценарий (доля создателя сразу received). */

@@ -421,6 +421,15 @@ class SkladchinaV3IntegrationTest {
         val pair = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
         assertEquals(listOf(200L, 300L, 100L), pair["owe"].map { it["amountKopecks"].asLong() })
         assertTrue(pair["owe"][2]["dueAt"].isNull)
+
+        // «Оплачу позже» на завтра по долгу 300 ₽: обещанная дата ближе срока сбора — строка поднимается,
+        // а на экране «Долги» ближайшая дата у Алисы становится завтрашней, не сроком сбора через 2 дня.
+        val debt300 = pair["owe"][1]["id"].asText()
+        postJson("/api/debts/$debt300/promise", bob, """{"date":"${LocalDate.now().plusDays(1)}"}""").andExpect(status().isOk)
+        val promised = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertEquals(listOf(300L, 200L, 100L), promised["owe"].map { it["amountKopecks"].asLong() })
+        val overview = json(get("/api/debts", bob).andExpect(status().isOk))
+        assertEquals(LocalDate.now().plusDays(1).toString(), overview["people"][0]["nearestDueAt"].asText().substring(0, 10))
     }
 
     // --- Замена и добавление должника ---

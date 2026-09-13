@@ -37,7 +37,7 @@ class DebtQueryService(
                     oweKopecks = owe,
                     owedKopecks = owed,
                     debtCount = debts.size,
-                    nearestDueAt = debts.mapNotNull { it.debt.dueAt }.minOrNull(),
+                    nearestDueAt = debts.mapNotNull { it.debt.effectiveDueAt }.minOrNull(),
                     awaitingMyConfirmation = debts.count { it.debt.creditorId == userId && it.debt.status == DebtStatus.claimed && it.debt.settlementId == null } +
                         (if (settlementWaitsForMe) 1 else 0),
                     awaitingTheirConfirmation = debts.count { it.debt.debtorId == userId && it.debt.status == DebtStatus.claimed && it.debt.settlementId == null } +
@@ -72,9 +72,10 @@ class DebtQueryService(
                 DebtPerson(it.id!!, it.firstName, it.lastName, it.telegramUsername, it.avatarUrl)
             }
             ?: throw NotFoundException("Пользователь не найден")
-        // Внутри группы ближайший срок сверху, NULL последними (AC-14); репозиторий уже так сортирует.
-        val owe = open.filter { it.debt.debtorId == userId }.map { mapper.toDto(it, now) }
-        val owed = open.filter { it.debt.creditorId == userId }.map { mapper.toDto(it, now) }
+        // Внутри группы ближайшая дата сверху, NULL последними (AC-14): обещанная дата важнее срока сбора.
+        val sorted = open.sortedWith(compareBy<DebtWithContext, OffsetDateTime?>(nullsLast()) { it.debt.effectiveDueAt }.thenBy { it.debt.createdAt })
+        val owe = sorted.filter { it.debt.debtorId == userId }.map { mapper.toDto(it, now) }
+        val owed = sorted.filter { it.debt.creditorId == userId }.map { mapper.toDto(it, now) }
         val oweKopecks = owe.sumOf { it.amountKopecks }
         val owedKopecks = owed.sumOf { it.amountKopecks }
         return DebtPairDto(
