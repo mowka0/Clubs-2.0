@@ -15,7 +15,6 @@ import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { ChoiceSheet } from '../components/ConfirmSheet';
-import { FLOW_LABEL, FLOW_SUBTITLE } from '../utils/skladchinaKind';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import { formatBadge } from '../utils/eventFormat';
@@ -2165,8 +2164,9 @@ export const EventPage: FC = () => {
         <ChoiceSheet
           title={`Скинуться за «${event.title}»`}
           options={[
-            { label: FLOW_LABEL.split, hint: FLOW_SUBTITLE.split, onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`); } },
-            { label: FLOW_LABEL.voluntary, hint: FLOW_SUBTITLE.voluntary, onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
+            // Со страницы встречи важно одно различие: кто решает, сколько с каждого (PO 2026-09-13).
+            { label: 'Я распределю, кто сколько должен', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`); } },
+            { label: 'Каждый сам решит, сколько скинуть', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
           ]}
           onCancel={() => setSplitAsk(false)}
         />
