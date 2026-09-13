@@ -878,6 +878,8 @@ export interface SplittableEventDto {
   title: string;
   eventDatetime: string;
   attendedCount: number;
+  /** Пришедшие активные участники — форма отмечает их в списке заранее. */
+  attendedUserIds: string[];
 }
 
 export interface DebtorInput {

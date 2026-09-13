@@ -84,5 +84,7 @@ data class SplittableEvent(
     val eventId: UUID,
     val title: String,
     val eventDatetime: OffsetDateTime,
-    val attendedCount: Int
+    val attendedCount: Int,
+    // Пришедшие активные участники — форма отмечает их в списке людей заранее.
+    val attendedUserIds: List<UUID>
 )

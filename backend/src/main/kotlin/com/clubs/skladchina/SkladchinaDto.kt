@@ -172,7 +172,8 @@ data class SplittableEventDto(
     val eventId: UUID,
     val title: String,
     val eventDatetime: OffsetDateTime,
-    val attendedCount: Int
+    val attendedCount: Int,
+    val attendedUserIds: List<UUID>
 )
 
 // Состояние сбора, привязанного к встрече — управляет кнопкой «Скинуться» на EventPage.

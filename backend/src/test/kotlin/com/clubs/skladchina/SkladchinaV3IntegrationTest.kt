@@ -146,6 +146,38 @@ class SkladchinaV3IntegrationTest {
         get("/api/skladchinas/${detail["id"].asText()}", outsider).andExpect(status().isForbidden)
     }
 
+    @Test
+    fun `after an event the attendees are the default list, but custom people and amounts are allowed with the event link kept`() {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Ужин', 'Ресторан', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        listOf(ownerId, aliceId, bobId).forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        val splittable = json(get("/api/clubs/$clubId/skladchinas/splittable-events", owner).andExpect(status().isOk))
+        assertEquals(setOf(ownerId, aliceId, bobId).map { it.toString() }.toSet(), splittable[0]["attendedUserIds"].map { it.asText() }.toSet())
+
+        // Свой состав и суммы: Bob не участвует, Carol не была, но платит; привязка к встрече остаётся.
+        val body = """
+            {
+              "title": "Ужин", "kind": "shared", "amountKopecks": 100000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}", "eventId": "$eventId",
+              "debtors": [{"userId":"$aliceId","amountKopecks":70000},{"userId":"$carolId","amountKopecks":30000},{"userId":"$ownerId","amountKopecks":50000}]
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        assertEquals(eventId.toString(), created["eventId"].asText())
+        assertEquals(150_000L, created["targetKopecks"].asLong(), "цель = сумма долей, не поле «Сумма»")
+        val rows = created["debts"].associate { it["debtor"]["id"].asText() to it["amountKopecks"].asLong() }
+        assertEquals(mapOf(aliceId.toString() to 70_000L, carolId.toString() to 30_000L, ownerId.toString() to 50_000L), rows)
+        assertEquals(50_000L, created["receivedKopecks"].asLong())
+        assertEquals("active", json(get("/api/events/$eventId/skladchina", alice))["status"].asText())
+    }
+
     // --- AC-2, AC-4: Отдал → Получил, сбор закрывается сам ---
 
     @Test

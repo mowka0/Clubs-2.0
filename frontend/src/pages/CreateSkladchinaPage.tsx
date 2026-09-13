@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from 'react';
+import { FC, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
@@ -8,7 +8,7 @@ import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
 import { useAuthStore } from '../store/useAuthStore';
-import type { CreateSkladchinaRequest, MemberListItemDto, SkladchinaKind } from '../types/api';
+import type { CreateSkladchinaRequest, MemberListItemDto, SkladchinaKind, SplittableEventDto } from '../types/api';
 import { rubToKopecks } from '../utils/money';
 import { DATE_FMT, KIND_EMOJI, KIND_LABEL } from '../utils/skladchinaKind';
 
@@ -125,13 +125,17 @@ export const CreateSkladchinaPage: FC = () => {
     if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
   };
 
+  const perPersonMode = kind === 'shared' && perPerson && source !== 'enroll';
+
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!title.trim()) return fail('Введите название');
     if (!paymentLink.trim()) return fail('Укажите реквизиты — ссылку или номер для перевода');
-    const amountKopecks = amountRub.trim() ? rubToKopecks(amountRub) : null;
-    if (amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
-    if (kind !== 'voluntary' && amountKopecks === null) return fail(kind === 'per_head' ? 'Укажите цену за человека' : 'Укажите сумму');
+    // «Суммы по людям»: общая сумма = сумма долей, отдельное поле не нужно.
+    const perPersonTotal = perPersonMode ? Array.from(selectedIds).reduce((acc, id) => acc + (rubToKopecks(amounts[id] ?? '') ?? 0), 0) : 0;
+    const amountKopecks = perPersonMode ? (perPersonTotal > 0 ? perPersonTotal : null) : amountRub.trim() ? rubToKopecks(amountRub) : null;
+    if (!perPersonMode && amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
+    if (!perPersonMode && kind !== 'voluntary' && amountKopecks === null) return fail(kind === 'per_head' ? 'Укажите цену за человека' : 'Укажите сумму');
     const withDeadline = kind !== 'voluntary' || !noDeadline;
     if (withDeadline && !deadline) return fail('Укажите срок');
 
@@ -147,10 +151,9 @@ export const CreateSkladchinaPage: FC = () => {
     };
 
     if (kind === 'shared') {
-      if (source === 'event') {
-        if (!eventId) return fail('Выберите встречу');
-        body.eventId = eventId;
-      } else if (source === 'enroll') {
+      if (source === 'event' && !eventId) return fail('Выберите встречу');
+      if (source === 'event') body.eventId = eventId;
+      if (source === 'enroll') {
         if (!enrollmentUntil) return fail('Укажите, до когда открыта запись');
         body.enrollmentUntil = new Date(enrollmentUntil).toISOString();
         const min = minParticipants.trim() ? Number(minParticipants) : null;
@@ -196,10 +199,24 @@ export const CreateSkladchinaPage: FC = () => {
 
   const events = splittableQuery.data ?? [];
   const selectedEvent = events.find((ev) => ev.eventId === eventId);
+  const attendedIds = useMemo(() => new Set(source === 'event' ? selectedEvent?.attendedUserIds ?? [] : []), [source, selectedEvent]);
+
+  // Выбор встречи предзаполняет список людей пришедшими; дальше состав правится руками.
+  const pickEvent = (ev: SplittableEventDto) => {
+    setEventId(ev.eventId);
+    setSelectedIds(new Set(ev.attendedUserIds));
+  };
+  // Встреча задана ссылкой со страницы встречи: явка подтягивается, когда список встреч загрузился.
+  const prefilledEventRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (source !== 'event' || !selectedEvent || prefilledEventRef.current === selectedEvent.eventId) return;
+    prefilledEventRef.current = selectedEvent.eventId;
+    setSelectedIds(new Set(selectedEvent.attendedUserIds));
+  }, [source, selectedEvent]);
   const perPersonHint = (() => {
     const total = rubToKopecks(amountRub);
     if (!total) return null;
-    const n = source === 'event' ? selectedEvent?.attendedCount ?? 0 : selectedIds.size;
+    const n = selectedIds.size;
     if (source === 'enroll' || n === 0 || perPerson) return null;
     return `≈ по ${Math.round(total / n / 100).toLocaleString('ru-RU')} ₽ с каждого (${n} чел.)`;
   })();
@@ -221,6 +238,7 @@ export const CreateSkladchinaPage: FC = () => {
           <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </label>
 
+        {!perPersonMode && (
         <label className="rd-field">
           <span className="rd-label">
             {kind === 'shared' ? 'Сумма (₽)' : kind === 'per_head' ? 'Цена за человека (₽)' : 'Ориентир (₽)'}
@@ -230,6 +248,7 @@ export const CreateSkladchinaPage: FC = () => {
           {perPersonHint && <span className="rd-hint">{perPersonHint}</span>}
           {kind === 'voluntary' && <span className="rd-hint">Необязательно: участники увидят, сколько получено</span>}
         </label>
+        )}
 
         {kind === 'shared' && !presetEventId && (
           <div className="rd-field">
@@ -257,7 +276,7 @@ export const CreateSkladchinaPage: FC = () => {
             {!presetEventId && events.length > 0 && (
               <div className="rd-pick-list">
                 {events.map((ev) => (
-                  <button key={ev.eventId} type="button" className={`rd-pick-toggle${eventId === ev.eventId ? ' rd-selected' : ''}`} onClick={() => { haptic.select(); setEventId(ev.eventId); }} style={{ width: '100%' }}>
+                  <button key={ev.eventId} type="button" className={`rd-pick-toggle${eventId === ev.eventId ? ' rd-selected' : ''}`} onClick={() => { haptic.select(); pickEvent(ev); }} style={{ width: '100%' }}>
                     <span className="rd-check-box">{eventId === ev.eventId ? '✓' : ''}</span>
                     <span className="rd-pick-name">{ev.title}</span>
                     <span className="rd-pick-note">{DATE_FMT.format(new Date(ev.eventDatetime))} · пришли {ev.attendedCount}</span>
@@ -265,7 +284,7 @@ export const CreateSkladchinaPage: FC = () => {
                 ))}
               </div>
             )}
-            <span className="rd-hint">Список — пришедшие на встречу, поровну. Ваша доля сразу считается полученной.</span>
+            <span className="rd-hint">Пришедшие уже отмечены ниже — состав и суммы можно поправить. Ваша доля сразу считается полученной.</span>
           </div>
         )}
 
@@ -288,7 +307,7 @@ export const CreateSkladchinaPage: FC = () => {
           </>
         )}
 
-        {kind === 'shared' && source === 'list' && (
+        {kind === 'shared' && (source === 'list' || (source === 'event' && eventId)) && (
           <div className="rd-field">
             <span className="rd-label">
               Люди <span className="rd-req">*</span> <span className="rd-count">· выбрано {selectedIds.size}</span>
@@ -312,6 +331,7 @@ export const CreateSkladchinaPage: FC = () => {
                           {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}{m.userId === myId ? ' (вы)' : ''}
                         </span>
                         {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
+                        {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
                       </button>
                       {!isFrozen && perPerson && (
                         <input

@@ -36,7 +36,7 @@ class SkladchinaQueryService(
             clubId = clubId,
             notOlderThan = OffsetDateTime.now().minusDays(SkladchinaCreationService.MAX_EVENT_AGE_DAYS),
             minAttended = SkladchinaCreationService.MIN_ATTENDED
-        ).map { SplittableEventDto(it.eventId, it.title, it.eventDatetime, it.attendedCount) }
+        ).map { SplittableEventDto(it.eventId, it.title, it.eventDatetime, it.attendedCount, it.attendedUserIds) }
     }
 
     /** Список активных сборов клуба для «Управления» (за @RequiresCapability(MANAGE_SKLADCHINA) на контроллере). */

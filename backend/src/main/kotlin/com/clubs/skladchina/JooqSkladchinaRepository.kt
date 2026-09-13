@@ -76,7 +76,8 @@ class JooqSkladchinaRepository(
 
     override fun findSplittableEvents(clubId: UUID, notOlderThan: OffsetDateTime, minAttended: Int): List<SplittableEvent> {
         val attendedCount = DSL.count()
-        return dsl.select(EVENTS.ID, EVENTS.TITLE, EVENTS.EVENT_DATETIME, attendedCount)
+        val attendedIds = DSL.arrayAgg(EVENT_RESPONSES.USER_ID)
+        return dsl.select(EVENTS.ID, EVENTS.TITLE, EVENTS.EVENT_DATETIME, attendedCount, attendedIds)
             .from(EVENTS)
             .join(EVENT_RESPONSES).on(EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID))
             // Пришедший, успевший покинуть клуб, не считается: его долю в сборе всё равно не собрать.
@@ -105,7 +106,8 @@ class JooqSkladchinaRepository(
                     eventId = it.value1()!!,
                     title = it.value2()!!,
                     eventDatetime = it.value3()!!,
-                    attendedCount = it.value4()
+                    attendedCount = it.value4(),
+                    attendedUserIds = it.value5()?.filterNotNull() ?: emptyList()
                 )
             }
     }

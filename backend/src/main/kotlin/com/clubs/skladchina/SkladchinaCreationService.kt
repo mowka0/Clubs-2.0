@@ -184,9 +184,12 @@ class SkladchinaCreationService(
         return when {
             eventId != null -> {
                 if (enrollmentUntil != null) throw ValidationException("У сбора после встречи этапа записи нет")
+                // Встреча даёт привязку и явку; состав и суммы — как в «Списке» (PO 2026-09-13: пришедшие
+                // предотмечены, можно поправить, «Суммы по людям» работает). Без списка — поровну между пришедшими.
                 val attended = resolveAttended(clubId, eventId, now)
-                val shares = SkladchinaShares.equal(amount, attended).toMap()
-                CreationPlan(shares, amount, eventId, attended.filter { it != creatorId }, enrolling = false)
+                val shares = if (request.debtors.isEmpty()) SkladchinaShares.equal(amount, attended).toMap()
+                else resolveListedShares(clubId, creatorId, request, amount)
+                CreationPlan(shares, shares.values.sum(), eventId, shares.keys.filter { it != creatorId }, enrolling = false)
             }
             enrollmentUntil != null -> {
                 if (!enrollmentUntil.isAfter(now)) throw ValidationException("Срок записи уже прошёл")
