@@ -224,6 +224,9 @@ describe('SkladchinaPage — сборы и долги v3', () => {
 
     expect(await screen.findByRole('button', { name: 'В деле' })).toBeInTheDocument();
     expect(screen.getByText(/В деле 3 · нужно 6/)).toBeInTheDocument();
+    // На этапе записи платить нечего — реквизитов и «Открыть в банке» нет.
+    expect(screen.queryByText('Реквизиты')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть в банке' })).not.toBeInTheDocument();
     // Кто записался — видно всем вместо «Кто должен».
     expect(screen.getByText('Оля')).toBeInTheDocument();
     expect(screen.getByText('Саша (вы)')).toBeInTheDocument();

@@ -202,7 +202,8 @@ export const SkladchinaPage: FC = () => {
         </>
       )}
 
-      {!s.isCreator && (
+      {/* На этапе записи платить ещё нечего: реквизиты появляются со второго этапа (PO 2026-09-13). */}
+      {!s.isCreator && !s.isEnrolling && (
         <>
           <div className="rd-section-sub-h">Реквизиты</div>
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>

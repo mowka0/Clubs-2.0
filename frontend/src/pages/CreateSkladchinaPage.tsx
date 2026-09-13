@@ -129,6 +129,14 @@ export const CreateSkladchinaPage: FC = () => {
   };
 
   const perPersonMode = kind === 'shared' && perPerson && !freeAmount && source !== 'enroll';
+  const includeMe = Boolean(myId && selectedIds.has(myId));
+  const toggleMe = () => {
+    if (!myId) return;
+    haptic.select();
+    const next = new Set(selectedIds);
+    if (next.has(myId)) next.delete(myId); else next.add(myId);
+    setSelectedIds(next);
+  };
   const freeMode = kind === 'shared' && freeAmount && source !== 'enroll';
 
   const handleSubmit = async () => {
@@ -159,8 +167,14 @@ export const CreateSkladchinaPage: FC = () => {
     if (freeMode) {
       if (source === 'event' && !eventId) return fail('Выберите встречу');
       if (source === 'event') body.eventId = eventId;
-      if (selectedIds.size === 0) return fail('Выберите хотя бы одного человека');
-      body.invitedUserIds = Array.from(selectedIds);
+      const invited = Array.from(selectedIds).filter((id) => id !== myId);
+      if (invited.length === 0) return fail('Выберите хотя бы одного человека');
+      body.invitedUserIds = invited;
+      if (ownContribution) {
+        const own = rubToKopecks(ownContributionRub);
+        if (own === null) return fail('Укажите, сколько скидываетесь сами');
+        body.creatorContributionKopecks = own;
+      }
     } else if (kind === 'shared') {
       if (source === 'event' && !eventId) return fail('Выберите встречу');
       if (source === 'event') body.eventId = eventId;
@@ -172,7 +186,7 @@ export const CreateSkladchinaPage: FC = () => {
         body.minParticipants = min;
         body.enrollCreator = enrollCreator;
       } else {
-        if (selectedIds.size === 0) return fail('Выберите хотя бы одного человека');
+        if (Array.from(selectedIds).every((id) => id === myId)) return fail('Выберите хотя бы одного человека кроме себя');
         const debtors = Array.from(selectedIds).map((userId) => ({
           userId,
           amountKopecks: perPerson ? rubToKopecks(amounts[userId] ?? '') : null,
@@ -313,7 +327,7 @@ export const CreateSkladchinaPage: FC = () => {
             </label>
             <label className="rd-check">
               <input type="checkbox" checked={enrollCreator} onChange={(e) => setEnrollCreator(e.target.checked)} />
-              <span>Я в деле: моя доля считается вместе со всеми и сразу получена</span>
+              <span>Я тоже участвую · доля посчитается вместе со всеми и сразу считается полученной</span>
             </label>
             <label className="rd-field">
               <span className="rd-label">Минимум людей</span>
@@ -347,7 +361,7 @@ export const CreateSkladchinaPage: FC = () => {
             {!membersQuery.isPending && members.length === 0 && <div className="rd-hint">В клубе пока нет активных участников.</div>}
             {members.length > 0 && (
               <div className="rd-pick-list">
-                {orderedMembers.map((m) => {
+                {orderedMembers.filter((m) => m.userId !== myId).map((m) => {
                   const isSelected = selectedIds.has(m.userId);
                   const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
                   return (
@@ -355,7 +369,7 @@ export const CreateSkladchinaPage: FC = () => {
                       <button type="button" className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`} onClick={() => toggleMember(m)} disabled={isFrozen} aria-disabled={isFrozen}>
                         <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
                         <span className="rd-pick-name">
-                          {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}{m.userId === myId ? ' (вы)' : ''}
+                          {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                         </span>
                         {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
                         {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
@@ -377,7 +391,34 @@ export const CreateSkladchinaPage: FC = () => {
                 })}
               </div>
             )}
-            <span className="rd-hint">Себя добавлять можно: ваша доля сразу считается полученной.</span>
+            {/* Создатель — одной фразой во всех видах; рядом только то, что нужно виду. */}
+            {freeMode ? (
+              <>
+                <label className="rd-check" style={{ marginTop: 8 }}>
+                  <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
+                  <span>Я тоже участвую · мой взнос сразу считается полученным</span>
+                </label>
+                {ownContribution && (
+                  <label className="rd-take-row">
+                    <span className="rd-hint">Сколько (₽)</span>
+                    <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
+                  </label>
+                )}
+              </>
+            ) : (
+              <>
+                <label className="rd-check" style={{ marginTop: 8 }}>
+                  <input type="checkbox" checked={includeMe} disabled={!myId} onChange={toggleMe} />
+                  <span>Я тоже участвую · моя доля сразу считается полученной</span>
+                </label>
+                {includeMe && perPersonMode && myId && (
+                  <label className="rd-take-row">
+                    <span className="rd-hint">Моя сумма (₽)</span>
+                    <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Моя сумма (₽)" placeholder="₽" value={amounts[myId] ?? ''} onChange={(e) => setAmounts((prev) => ({ ...prev, [myId]: e.target.value }))} />
+                  </label>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -385,7 +426,7 @@ export const CreateSkladchinaPage: FC = () => {
           <div className="rd-field">
             <label className="rd-check">
               <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
-              <span>Я тоже скидываюсь: мой взнос считается сразу полученным</span>
+              <span>Я тоже участвую · мой взнос сразу считается полученным</span>
             </label>
             {ownContribution && (
               <label className="rd-take-row">
@@ -446,7 +487,7 @@ export const CreateSkladchinaPage: FC = () => {
           <div className="rd-field">
             <label className="rd-check">
               <input type="checkbox" checked={takeCreator} onChange={(e) => setTakeCreator(e.target.checked)} />
-              <span>Беру и себе: моя доля считается сразу полученной</span>
+              <span>Я тоже участвую · моя доля сразу считается полученной</span>
             </label>
             {takeCreator && (
               <label className="rd-take-row">
