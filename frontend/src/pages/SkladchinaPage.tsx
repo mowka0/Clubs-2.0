@@ -84,6 +84,9 @@ export const SkladchinaPage: FC = () => {
     (waitingRows.length > 0 ? `, не оплатили ${waitingRows.length} — они выбывают.` : '.');
   const takeQuantity = /^\d+$/.test(quantityInput.trim()) && Number(quantityInput) >= 1 && Number(quantityInput) <= 50 ? Number(quantityInput) : null;
   const target = s.targetKopecks ?? s.amountKopecks;
+  // Знаменатель и полоса: у «По желанию» — ориентир создателя (есть с первой секунды), у остальных
+  // видов появляются с первым долгом, до него нет ни знаменателя, ни ожидания.
+  const showTarget = Boolean(target && target > 0 && (s.kind === 'voluntary' || s.debtCount > 0));
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
   // Штриховка = деньги ждём: у «Кто берёт?» это всё взятое и не оплаченное («Беру» — заявка),
   // у остальных видов только «говорит, что отдал» (PO 2026-09-13).
@@ -176,12 +179,11 @@ export const SkladchinaPage: FC = () => {
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
           {s.isEnrolling
             ? `${formatRub(s.amountKopecks ?? 0)} на группу, поровну между теми, кто в деле`
-            : s.debtCount > 0 && target && target > 0
-              ? `Получено ${formatRub(s.receivedKopecks)} из ${formatRub(target)}`
+            : showTarget
+              ? `Получено ${formatRub(s.receivedKopecks)} из ${formatRub(target ?? 0)}`
               : `Получено ${formatRub(s.receivedKopecks)}`}
         </div>
-        {/* Полоса появляется с первым долгом: до него нет ни знаменателя, ни ожидания. */}
-        {!s.isEnrolling && s.debtCount > 0 && (
+        {!s.isEnrolling && showTarget && (
           <div className="rd-progress" aria-hidden="true">
             <div className="rd-fill" style={{ width: `${receivedPct}%` }} />
             <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%` }} />
@@ -292,12 +294,17 @@ export const SkladchinaPage: FC = () => {
           {s.myDebt && s.myDebt.status !== 'dropped' && (
             <>
               <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Мой долг</div>
-              <DebtRow debt={s.myDebt} viewerId={viewerId} busy={busy} onAction={(a) => runDebt(s.myDebt!.id, a)} />
-              {s.kind === 'per_head' && !s.orderedAt && (s.myDebt.status === 'waiting' || s.myDebt.status === 'promised') && (
-                <button type="button" className="rd-ghost-btn" disabled={busy} style={{ marginTop: 8 }} onClick={() => run({ type: 'leave' }, 'Вы передумали.', 'Передумали брать? Долг снимется, взять снова можно до заказа.')}>
-                  Передумал
-                </button>
-              )}
+              <DebtRow
+                debt={s.myDebt}
+                viewerId={viewerId}
+                busy={busy}
+                onAction={(a) => runDebt(s.myDebt!.id, a)}
+                extraAction={s.kind === 'per_head' && !s.orderedAt && (s.myDebt.status === 'waiting' || s.myDebt.status === 'promised') ? (
+                  <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => run({ type: 'leave' }, 'Вы передумали.', 'Передумали брать? Долг снимется, взять снова можно до заказа.')}>
+                    Передумал
+                  </button>
+                ) : undefined}
+              />
             </>
           )}
           {error && <div className="rd-error" style={{ marginTop: 8 }}>{error}</div>}

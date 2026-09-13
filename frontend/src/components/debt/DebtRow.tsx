@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, ReactNode, useState } from 'react';
 import { ConfirmSheet } from '../ConfirmSheet';
 import { ImageLightbox } from '../ImageLightbox';
 import { PhotoAttach } from '../PhotoAttach';
@@ -17,6 +17,8 @@ interface DebtRowProps {
   readOnly?: boolean;
   busy?: boolean;
   onAction: (action: DebtAction) => void;
+  /** Кнопка сбора в том же ряду (например, «Передумал» у «Кто берёт?»), чтобы не переносить строку. */
+  extraAction?: ReactNode;
 }
 
 type Inline = 'none' | 'promise' | 'reject' | 'note';
@@ -32,7 +34,7 @@ function defaultPromiseDate(): string {
  * направлению: должнику «Отдал» / «Оплачу позже» / «Не согласен», получателю «Получил» /
  * «Не получил» / «Простить». Слова «свести», «засчитать», «не дошёл» не используются.
  */
-export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false, readOnly = false, busy = false, onAction }) => {
+export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false, readOnly = false, busy = false, onAction, extraAction }) => {
   const [inline, setInline] = useState<Inline>('none');
   const [promiseDate, setPromiseDate] = useState(defaultPromiseDate);
   const [text, setText] = useState('');
@@ -159,10 +161,11 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
               {/* «Кто берёт?»: человек сам нажал «Беру» и может «Передумать» до заказа — спорить не с чем;
                   кнопка остаётся только как ответ на «Не получил» (заметка и чек). */}
               {(debt.skladchinaKind !== 'per_head' || debt.rejectedAt) && (
-                <button type="button" className="rd-ghost-btn" onClick={() => setInline('note')}>
+                <button type="button" className="rd-btn-outline" onClick={() => setInline('note')}>
                   {debt.skladchinaKind === 'per_head' ? 'Ответить' : 'Не согласен'}
                 </button>
               )}
+              {extraAction}
             </>
           )}
           {isCreditor && (

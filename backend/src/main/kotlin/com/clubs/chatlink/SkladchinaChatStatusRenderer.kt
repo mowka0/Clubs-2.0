@@ -155,7 +155,14 @@ class SkladchinaChatStatusRenderer(
         s.amountKopecks?.let { sb.append(" · ориентир ").append(Money.rub(it)) }
         s.deadline?.let { sb.append(" · до ").append(it.format(fmt)) }
         sb.append(" · собирает ").append(escapeHtml(view.creatorName)).append("\n")
-        sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks))
+        // Ориентир — знаменатель полосы, как на экране сбора (PO 2026-09-13); без ориентира просто «получено».
+        val target = s.amountKopecks
+        if (target != null && target > 0) {
+            sb.append(progressBar(t, target, s.kind)).append("\n")
+            sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks)).append(" из ").append(Money.rub(target))
+        } else {
+            sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks))
+        }
         return sb.toString()
     }
 

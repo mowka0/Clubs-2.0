@@ -3552,9 +3552,13 @@
 .rd-confirm-sheet { padding-top: 8px; }
 .rd-order-promised { margin: -6px 2px 14px; display: flex; flex-direction: column; gap: 4px; }
 .rd-confirm-text { font-size: 15px; line-height: 1.45; color: var(--text); margin: 4px 2px 16px; }
-.rd-debt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.rd-debt-actions .rd-btn-primary, .rd-debt-actions .rd-btn-outline { width: auto; flex: 1 1 auto; padding: 9px 12px; font-size: 13px; }
-.rd-debt-actions .rd-ghost-btn { flex: 1 1 auto; }
+/* Кнопки долга в один ряд без переносов (PO 2026-09-13): ужаты по отступам и шрифту, текст не рвётся. */
+.rd-debt-actions { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 10px; }
+.rd-debt-actions .rd-btn-primary, .rd-debt-actions .rd-btn-outline {
+  width: auto; flex: 1 1 auto; min-width: 0; padding: 8px 8px; border-radius: 12px;
+  font-size: 12.5px; white-space: nowrap; box-shadow: none;
+}
+.rd-debt-actions .rd-ghost-btn { flex: 1 1 auto; min-width: 0; padding: 8px 8px; font-size: 12.5px; white-space: nowrap; }
 .rd-debt-inline { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .rd-debt-summary { display: flex; gap: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .rd-debt-sum-col { flex: 1; display: flex; flex-direction: column; gap: 2px; }

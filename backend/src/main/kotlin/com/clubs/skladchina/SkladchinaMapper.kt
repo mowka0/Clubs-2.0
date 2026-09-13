@@ -3,6 +3,7 @@ package com.clubs.skladchina
 import com.clubs.debt.DebtDto
 import com.clubs.debt.DebtPersonDto
 import com.clubs.debt.DebtTotals
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.event.Event
 import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
@@ -67,7 +68,7 @@ class SkladchinaMapper {
             photoUrl = skladchina.photoUrl,
             kind = skladchina.kind.literal,
             amountKopecks = skladchina.amountKopecks,
-            targetKopecks = totals.targetKopecks ?: skladchina.amountKopecks,
+            targetKopecks = targetOf(skladchina, totals),
             receivedKopecks = totals.receivedKopecks,
             claimedKopecks = totals.claimedKopecks,
             paymentLink = skladchina.paymentLink,
@@ -110,7 +111,7 @@ class SkladchinaMapper {
             clubAvatarUrl = item.clubAvatarUrl,
             kind = s.kind.literal,
             amountKopecks = s.amountKopecks,
-            targetKopecks = item.totals.targetKopecks ?: s.amountKopecks,
+            targetKopecks = targetOf(s, item.totals),
             receivedKopecks = item.totals.receivedKopecks,
             debtCount = item.totals.debtCount,
             receivedCount = item.totals.receivedCount,
@@ -121,5 +122,14 @@ class SkladchinaMapper {
             actionRequired = s.isActive && (myOpen || item.awaitingMyConfirmation),
             photoUrl = s.photoUrl
         )
+    }
+
+    companion object {
+        /**
+         * Знаменатель «получено X из Y»: у «По желанию» это ориентир создателя (null = без ориентира —
+         * просто «получено X»), у остальных сумма живых долгов, а пока долгов нет — сумма сбора.
+         */
+        fun targetOf(s: Skladchina, totals: DebtTotals): Long? =
+            if (s.kind == SkladchinaKind.voluntary) s.amountKopecks else totals.targetKopecks ?: s.amountKopecks
     }
 }
