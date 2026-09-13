@@ -78,7 +78,10 @@ export const SkladchinaPage: FC = () => {
   const takeQuantity = /^\d+$/.test(quantityInput.trim()) && Number(quantityInput) >= 1 && Number(quantityInput) <= 50 ? Number(quantityInput) : null;
   const target = s.targetKopecks ?? s.amountKopecks;
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
-  const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((s.claimedKopecks / target) * 100)) : 0;
+  // Штриховка = деньги ждём: у «Кто берёт?» это всё взятое и не оплаченное («Беру» — заявка),
+  // у остальных видов только «говорит, что отдал» (PO 2026-09-13).
+  const pendingKopecks = s.kind === 'per_head' && target ? Math.max(0, target - s.receivedKopecks) : s.claimedKopecks;
+  const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((pendingKopecks / target) * 100)) : 0;
 
   const run = async (action: SkladchinaAction, done: string | ((result: SkladchinaDetailDto) => string), confirmText?: string) => {
     if (confirmText && !(await confirm(confirmText))) return;

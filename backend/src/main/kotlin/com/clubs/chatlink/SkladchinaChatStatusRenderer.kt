@@ -106,7 +106,7 @@ class SkladchinaChatStatusRenderer(
         sb.append("💰 ").append(escapeHtml(s.title)).append("\n")
         if (t.debtCount > 0 && target > 0) sb.append("по ").append(Money.rub(target / t.debtCount)).append(" с человека · ")
         sb.append("собирает ").append(escapeHtml(view.creatorName)).append("\n")
-        sb.append(progressBar(t, target)).append("\n")
+        sb.append(progressBar(t, target, s.kind)).append("\n")
         sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks)).append(" из ").append(Money.rub(target))
             .append(" · оплатили ").append(t.receivedCount).append(" из ").append(t.debtCount).append("\n")
         appendDeadline(sb, s, view.now, t)
@@ -169,10 +169,12 @@ class SkladchinaChatStatusRenderer(
         s.deadline != null && !now.isBefore(s.deadline)
 
     /** Полоса из десяти ячеек по деньгам: 🟩 получено, 🟨 говорят, что отдали, ⬜ ждём. */
-    private fun progressBar(t: DebtTotals, target: Long): String {
+    /** 🟨 = деньги ждём: у per_head всё взятое и не оплаченное («Беру» — заявка), у остальных только claimed. */
+    private fun progressBar(t: DebtTotals, target: Long, kind: SkladchinaKind): String {
         if (target <= 0) return "⬜".repeat(BAR_CELLS)
+        val pending = if (kind == SkladchinaKind.per_head) (target - t.receivedKopecks).coerceAtLeast(0) else t.claimedKopecks
         val green = (t.receivedKopecks * BAR_CELLS / target).toInt().coerceIn(0, BAR_CELLS)
-        val yellow = ((t.receivedKopecks + t.claimedKopecks) * BAR_CELLS / target).toInt().coerceIn(green, BAR_CELLS) - green
+        val yellow = ((t.receivedKopecks + pending) * BAR_CELLS / target).toInt().coerceIn(green, BAR_CELLS) - green
         return "🟩".repeat(green) + "🟨".repeat(yellow) + "⬜".repeat(BAR_CELLS - green - yellow)
     }
 

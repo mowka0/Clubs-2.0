@@ -53,7 +53,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
     if (own) return 'своя доля';
     switch (debt.status) {
       case 'waiting':
-        if (debt.rejectedAt) return 'не получил · ответьте через «Не согласен»';
+        if (debt.rejectedAt) return `не получил · ответьте через «${debt.skladchinaKind === 'per_head' ? 'Ответить' : 'Не согласен'}»`;
         if (!debt.dueAt) return 'без срока';
         return debt.isOverdue ? `срок вышел ${DAY_FMT.format(new Date(debt.dueAt))}` : `до ${DATE_FMT.format(new Date(debt.dueAt))}`;
       case 'promised':
@@ -156,7 +156,13 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
             <>
               <button type="button" className="rd-btn-primary" onClick={() => setClaimAsk(true)}>Отдал</button>
               <button type="button" className="rd-btn-outline" onClick={() => setInline('promise')}>Оплачу позже</button>
-              <button type="button" className="rd-ghost-btn" onClick={() => setInline('note')}>Не согласен</button>
+              {/* «Кто берёт?»: человек сам нажал «Беру» и может «Передумать» до заказа — спорить не с чем;
+                  кнопка остаётся только как ответ на «Не получил» (заметка и чек). */}
+              {(debt.skladchinaKind !== 'per_head' || debt.rejectedAt) && (
+                <button type="button" className="rd-ghost-btn" onClick={() => setInline('note')}>
+                  {debt.skladchinaKind === 'per_head' ? 'Ответить' : 'Не согласен'}
+                </button>
+              )}
             </>
           )}
           {isCreditor && (
