@@ -83,6 +83,18 @@ class DebtCallbackServiceTest {
     }
 
     @Test
+    fun `«Беру» from the DM takes one item and reports the amount`() {
+        stubCaller()
+        val skladchinaId = UUID.randomUUID()
+        every { participationService.join(skladchinaId, userId, null, 1) } returns mockk {
+            every { myDebt } returns mockk { every { amountKopecks } returns 150_000L }
+            every { amountKopecks } returns 150_000L
+            every { debtCount } returns 4
+        }
+        assertEquals("Записали за вами: 1 500 ₽. Берут 4.", service.handleTake(42L, skladchinaId))
+    }
+
+    @Test
     fun `settlement buttons go through DebtSettlementService and keep the same guards`() {
         stubCaller()
         every { settlementService.confirm(settlementId, userId) } returns mockk()

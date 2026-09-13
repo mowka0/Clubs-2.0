@@ -33,12 +33,12 @@ class JooqDebtRepository(
         if (debts.isEmpty()) return emptyList()
         var step = dsl.insertInto(DEBTS)
             .columns(
-                DEBTS.SKLADCHINA_ID, DEBTS.DEBTOR_ID, DEBTS.CREDITOR_ID, DEBTS.AMOUNT_KOPECKS, DEBTS.DUE_AT,
+                DEBTS.SKLADCHINA_ID, DEBTS.DEBTOR_ID, DEBTS.CREDITOR_ID, DEBTS.AMOUNT_KOPECKS, DEBTS.QUANTITY, DEBTS.DUE_AT,
                 DEBTS.STATUS, DEBTS.CLAIMED_AT, DEBTS.CONFIRMED_AT, DEBTS.NOTE
             )
         debts.forEach {
             step = step.values(
-                it.skladchinaId, it.debtorId, it.creditorId, it.amountKopecks, it.dueAt,
+                it.skladchinaId, it.debtorId, it.creditorId, it.amountKopecks, it.quantity, it.dueAt,
                 it.status, it.claimedAt, it.confirmedAt, it.note
             )
         }
@@ -51,6 +51,7 @@ class JooqDebtRepository(
             .set(DEBTS.DEBTOR_ID, debt.debtorId)
             .set(DEBTS.CREDITOR_ID, debt.creditorId)
             .set(DEBTS.AMOUNT_KOPECKS, debt.amountKopecks)
+            .set(DEBTS.QUANTITY, debt.quantity)
             .set(DEBTS.DUE_AT, debt.dueAt)
             .set(DEBTS.STATUS, debt.status)
             .set(DEBTS.CLAIMED_AT, debt.claimedAt)
@@ -60,6 +61,22 @@ class JooqDebtRepository(
             .returning()
             .fetchOne()
             ?.let(mapper::toDomain)
+
+    override fun revive(id: UUID, amountKopecks: Long, quantity: Int, note: String?, dueAt: OffsetDateTime?): Int =
+        dsl.update(DEBTS)
+            .set(DEBTS.STATUS, DebtStatus.waiting)
+            .set(DEBTS.AMOUNT_KOPECKS, amountKopecks)
+            .set(DEBTS.QUANTITY, quantity)
+            .set(DEBTS.NOTE, note)
+            .set(DEBTS.DUE_AT, dueAt)
+            .setNull(DEBTS.CLAIMED_AT)
+            .setNull(DEBTS.PROMISED_AT)
+            .setNull(DEBTS.REJECTED_AT)
+            .setNull(DEBTS.REJECT_NOTE)
+            .setNull(DEBTS.RECEIPT_URL)
+            .set(DEBTS.UPDATED_AT, OffsetDateTime.now())
+            .where(DEBTS.ID.eq(id).and(DEBTS.STATUS.eq(DebtStatus.dropped)))
+            .execute()
 
     override fun findById(id: UUID): Debt? =
         dsl.selectFrom(DEBTS).where(DEBTS.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
@@ -95,7 +112,8 @@ class JooqDebtRepository(
             DSL.count().filterWhere(live),
             DSL.count().filterWhere(received),
             DSL.count().filterWhere(open),
-            DSL.count().filterWhere(claimed)
+            DSL.count().filterWhere(claimed),
+            DSL.sum(DEBTS.QUANTITY).filterWhere(received)
         )
             .from(DEBTS)
             .where(DEBTS.SKLADCHINA_ID.`in`(skladchinaIds))
@@ -110,7 +128,8 @@ class JooqDebtRepository(
                     debtCount = r.value5(),
                     receivedCount = r.value6(),
                     openCount = r.value7(),
-                    claimedCount = r.value8()
+                    claimedCount = r.value8(),
+                    receivedItems = r.value9()?.toInt() ?: 0
                 )
             }
     }

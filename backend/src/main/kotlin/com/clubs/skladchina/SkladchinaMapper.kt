@@ -92,6 +92,7 @@ class SkladchinaMapper {
             receivedCount = totals.receivedCount,
             openCount = totals.openCount,
             claimedCount = totals.claimedCount,
+            receivedItems = totals.receivedItems,
             // Своя доля создателя (received с первой секунды) — не «мой долг», а строка в его списке.
             myDebt = debts.firstOrNull { it.debtor.id == callerId && it.creditor.id != callerId },
             debts = if (isCreator) debts else null

@@ -51,7 +51,9 @@ class SkladchinaCreationService(
         val eventId: UUID?,
         val recipientUserIds: List<UUID>,
         val enrolling: Boolean,
-        val enrollCreator: Boolean = false
+        val enrollCreator: Boolean = false,
+        // per_head: штук у создателя (иначе 1 у каждого).
+        val quantities: Map<UUID, Int> = emptyMap()
     )
 
     @Transactional
@@ -101,7 +103,7 @@ class SkladchinaCreationService(
             )
         )
         if (plan.shares.isNotEmpty()) {
-            debtRepository.insertAll(plan.shares.map { (userId, amount) -> newDebt(created, userId, amount, now) })
+            debtRepository.insertAll(plan.shares.map { (userId, amount) -> newDebt(created, userId, amount, plan.quantities[userId] ?: 1, now) })
         }
         if (plan.enrollCreator) skladchinaRepository.addEnrollment(id, creatorId)
 
@@ -201,9 +203,14 @@ class SkladchinaCreationService(
     }
 
     /** per_head: долгов при создании нет, «Беру» жмут сами; сумма — цена за человека; знают о сборе все участники клуба. */
+    /** per_head: долгов нет до «Беру»; создатель берёт себе чекбоксом формы (доля сразу received). */
     private fun planPerHead(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): CreationPlan {
         val members = skladchinaRepository.findActiveMemberIds(clubId).filter { it != creatorId }
-        return CreationPlan(emptyMap(), request.amountKopecks, null, members, enrolling = false)
+        val price = request.amountKopecks!!
+        if (!request.takeCreator) return CreationPlan(emptyMap(), price, null, members, enrolling = false)
+        val ownAmount = price * request.creatorQuantity
+        if (ownAmount > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+        return CreationPlan(mapOf(creatorId to ownAmount), price, null, members, enrolling = false, quantities = mapOf(creatorId to request.creatorQuantity))
     }
 
     /** voluntary: без долгов; тихий сбор скрыт от одного человека — он не адресат. */
@@ -270,13 +277,14 @@ class SkladchinaCreationService(
     }
 
     /** Доля создателя сразу received: он не должен сам себе, но «получено X из Y» должно сходиться. */
-    private fun newDebt(s: Skladchina, userId: UUID, amount: Long, now: OffsetDateTime): NewDebt {
+    private fun newDebt(s: Skladchina, userId: UUID, amount: Long, quantity: Int, now: OffsetDateTime): NewDebt {
         val own = userId == s.creatorId
         return NewDebt(
             skladchinaId = s.id,
             debtorId = userId,
             creditorId = s.creatorId,
             amountKopecks = amount,
+            quantity = quantity,
             dueAt = s.deadline,
             status = if (own) DebtStatus.received else DebtStatus.waiting,
             confirmedAt = if (own) now else null

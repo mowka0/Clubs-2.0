@@ -51,14 +51,16 @@ class SkladchinaBotNotifier(
         val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
         recipients.forEach { user ->
             val text = createdText(event, creatorName, share = event.debtorShares[user.id])
-            if (event.enrollmentUntil != null) {
-                // Этап «Кто в деле?»: записаться прямо из DM, без перехода в приложение (PO 2026-09-13).
+            // Записаться / взять прямо из DM, без перехода в приложение (PO 2026-09-13).
+            val quickButton = when {
+                event.enrollmentUntil != null -> DmButton("✅ В деле", callbackData = DebtCallbackService.ENROLL_PREFIX + event.skladchinaId)
+                event.kind == SkladchinaKind.per_head -> DmButton("🎫 Беру", callbackData = DebtCallbackService.TAKE_PREFIX + event.skladchinaId)
+                else -> null
+            }
+            if (quickButton != null) {
                 gateway.sendDmWithButtons(
                     user.telegramId, text,
-                    listOf(
-                        listOf(DmButton("✅ В деле", callbackData = DebtCallbackService.ENROLL_PREFIX + event.skladchinaId)),
-                        listOf(DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}"))
-                    )
+                    listOf(listOf(quickButton), listOf(DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}")))
                 )
             } else {
                 notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
@@ -165,7 +167,7 @@ class SkladchinaBotNotifier(
                 append("✅ Сбор «${event.title}» собран")
                 append("\n\nПолучено: ").append(Money.rub(event.receivedKopecks))
                 event.targetKopecks?.let { append(" из ").append(Money.rub(it)) }
-                if (event.kind == SkladchinaKind.per_head) append("\nКуплено: ${event.receivedCount}")
+                if (event.kind == SkladchinaKind.per_head) append("\nКуплено: ${event.receivedItems}")
                 else append("\nОплатили: ${event.receivedCount} из ${event.debtCount}")
             }
             else -> buildString {

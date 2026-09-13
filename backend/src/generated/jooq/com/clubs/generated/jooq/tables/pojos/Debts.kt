@@ -42,7 +42,8 @@ data class Debts(
     var promiseRemindedAt: OffsetDateTime? = null,
     var claimRemindedAt: OffsetDateTime? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var quantity: Int? = null
 ): Serializable {
 
 
@@ -176,6 +177,12 @@ data class Debts(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.quantity == null) {
+            if (o.quantity != null)
+                return false
+        }
+        else if (this.quantity != o.quantity)
+            return false
         return true
     }
 
@@ -205,6 +212,7 @@ data class Debts(
         result = prime * result + (if (this.claimRemindedAt == null) 0 else this.claimRemindedAt.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.quantity == null) 0 else this.quantity.hashCode())
         return result
     }
 
@@ -234,6 +242,7 @@ data class Debts(
         sb.append(", ").append(claimRemindedAt)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(quantity)
 
         sb.append(")")
         return sb.toString()

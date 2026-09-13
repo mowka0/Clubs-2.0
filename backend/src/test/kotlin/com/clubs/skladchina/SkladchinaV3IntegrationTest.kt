@@ -264,13 +264,23 @@ class SkladchinaV3IntegrationTest {
     fun `per_head take then order drops unpaid, closes when nothing open and refuses new takes`() {
         val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_500)).andExpect(status().isCreated))
         val id = created["id"].asText()
-        assertEquals(0, created["debtCount"].asInt())
+        // Создатель берёт себе чекбоксом формы (по умолчанию 1 шт.): своя доля сразу received.
+        assertEquals(1, created["debtCount"].asInt())
+        assertEquals(1, created["receivedItems"].asInt())
+        post("/api/skladchinas/$id/join", owner).andExpect(status().isBadRequest)
 
-        val aliceTake = json(postJson("/api/skladchinas/$id/join", alice, """{"note":"размер M"}""").andExpect(status().isOk))
+        val aliceTake = json(postJson("/api/skladchinas/$id/join", alice, """{"note":"размер M","quantity":3}""").andExpect(status().isOk))
         assertEquals("waiting", aliceTake["myDebt"]["status"].asText())
-        assertEquals(1_500L, aliceTake["myDebt"]["amountKopecks"].asLong())
+        assertEquals(4_500L, aliceTake["myDebt"]["amountKopecks"].asLong(), "сумма = штуки × цена")
+        assertEquals(3, aliceTake["myDebt"]["quantity"].asInt())
         assertEquals("размер M", aliceTake["myDebt"]["note"].asText())
         post("/api/skladchinas/$id/join", alice).andExpect(status().isBadRequest)
+        // «Передумал» → снова «Беру» с другим числом штук: тот же долг оживает.
+        post("/api/skladchinas/$id/leave", alice).andExpect(status().isOk)
+        val retaken = json(postJson("/api/skladchinas/$id/join", alice, """{"quantity":2}""").andExpect(status().isOk))
+        assertEquals("waiting", retaken["myDebt"]["status"].asText())
+        assertEquals(3_000L, retaken["myDebt"]["amountKopecks"].asLong())
+        assertTrue(retaken["myDebt"]["note"].isNull)
 
         post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
         val bobDebt = myDebtId(id, bob)
@@ -283,7 +293,8 @@ class SkladchinaV3IntegrationTest {
         assertEquals("collected", ordered["status"].asText(), "после заказа открытых нет — собран")
         val aliceRow = ordered["debts"].first { it["debtor"]["id"].asText() == aliceId.toString() }
         assertEquals("dropped", aliceRow["status"].asText())
-        assertEquals(1, ordered["receivedCount"].asInt())
+        assertEquals(2, ordered["receivedCount"].asInt(), "создатель и Bob")
+        assertEquals(2, ordered["receivedItems"].asInt())
 
         post("/api/skladchinas/$id/join", carol).andExpect(status().isBadRequest)
         assertEquals(0, dsl.fetchCount(REPUTATION_LEDGER))
@@ -500,17 +511,24 @@ class SkladchinaV3IntegrationTest {
         post("/api/skladchinas/$perHead/order", owner).andExpect(status().isOk)
         val rejected = json(post("/api/debts/$bobDebt/reject", owner).andExpect(status().isOk))
         assertEquals("dropped", rejected["status"].asText(), "после заказа «Не получил» = выбыл, долга нет")
-        assertEquals("collected", json(get("/api/skladchinas/$perHead", owner))["status"].asText())
+        val closed = json(get("/api/skladchinas/$perHead", owner))
+        assertEquals("collected", closed["status"].asText())
+        assertEquals(1, closed["receivedItems"].asInt(), "куплено только создателю")
     }
 
     @Test
-    fun `creator may take in own per_head and the share is received at once`() {
-        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700)).andExpect(status().isCreated))["id"].asText()
-        val taken = json(post("/api/skladchinas/$id/join", owner).andExpect(status().isOk))
-        val ownRow = taken["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+    fun `creator takes for himself with the form checkbox, three items land received at once, unchecked means no own row`() {
+        val body = perHeadBody(price = 700).replace("\"kind\": \"per_head\",", "\"kind\": \"per_head\", \"creatorQuantity\": 3,")
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        val ownRow = created["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
         assertEquals("received", ownRow["status"].asText())
-        assertTrue(taken["myDebt"].isNull)
-        post("/api/skladchinas/$id/join", owner).andExpect(status().isBadRequest)
+        assertEquals(3, ownRow["quantity"].asInt())
+        assertEquals(2_100L, ownRow["amountKopecks"].asLong())
+        assertEquals(3, created["receivedItems"].asInt())
+        assertTrue(created["myDebt"].isNull)
+
+        val without = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700).replace("\"kind\": \"per_head\",", "\"kind\": \"per_head\", \"takeCreator\": false,")).andExpect(status().isCreated))
+        assertEquals(0, without["debtCount"].asInt())
     }
 
     // --- Security-ревью: лимит суммы, схема ссылки, чужая пара, встреча чужого клуба ---

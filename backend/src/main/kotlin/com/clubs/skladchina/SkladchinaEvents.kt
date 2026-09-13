@@ -83,5 +83,7 @@ data class SkladchinaClosedEvent(
     val targetKopecks: Long?,
     val receivedCount: Int,
     val debtCount: Int,
+    // per_head: штук оплачено — «Куплено N».
+    val receivedItems: Int,
     val refunds: Map<UUID, Long> = emptyMap()
 )

@@ -86,6 +86,8 @@ export const CreateSkladchinaPage: FC = () => {
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
   const [minParticipants, setMinParticipants] = useState('');
   const [enrollCreator, setEnrollCreator] = useState(true);
+  const [takeCreator, setTakeCreator] = useState(true);
+  const [creatorQuantity, setCreatorQuantity] = useState('1');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [perPerson, setPerPerson] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -164,6 +166,12 @@ export const CreateSkladchinaPage: FC = () => {
       }
     }
     if (kind === 'voluntary') body.hiddenFromUserId = hiddenFrom;
+    if (kind === 'per_head') {
+      const qty = Number(creatorQuantity);
+      if (takeCreator && (!/^\d+$/.test(creatorQuantity.trim()) || qty < 1 || qty > 50)) return fail('Сколько штук берёте себе: от 1 до 50');
+      body.takeCreator = takeCreator;
+      body.creatorQuantity = takeCreator ? qty : 1;
+    }
 
     try {
       haptic.impact('medium');
@@ -361,6 +369,21 @@ export const CreateSkladchinaPage: FC = () => {
             {kind === 'shared' && <span className="rd-hint">Срок не стена: заплатить можно и после, но просрочка дольше 3 недель стоит −40 к репутации.</span>}
             {kind === 'per_head' && <span className="rd-hint">Автозаказа нет: в срок бот напомнит вам нажать «Заказываю».</span>}
           </label>
+        )}
+
+        {kind === 'per_head' && (
+          <div className="rd-field">
+            <label className="rd-check">
+              <input type="checkbox" checked={takeCreator} onChange={(e) => setTakeCreator(e.target.checked)} />
+              <span>Беру и себе: моя доля считается сразу полученной</span>
+            </label>
+            {takeCreator && (
+              <label className="rd-take-row">
+                <span className="rd-hint">Сколько штук себе</span>
+                <input className="rd-input rd-take-qty" type="number" inputMode="numeric" min="1" max="50" aria-label="Сколько штук себе" value={creatorQuantity} onChange={(e) => setCreatorQuantity(e.target.value)} />
+              </label>
+            )}
+          </div>
         )}
 
         <div className="rd-field">

@@ -43,8 +43,8 @@ export function createSkladchina(clubId: string, body: CreateSkladchinaRequest):
 }
 
 /** «В деле» (shared с этапом) / «Беру» (per_head). */
-export function joinSkladchina(id: string, note?: string | null): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/join`, note ? { note } : {});
+export function joinSkladchina(id: string, note?: string | null, quantity = 1): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/join`, { note: note || null, quantity });
 }
 
 /** «Передумал» — до заморозки списка или до заказа. */

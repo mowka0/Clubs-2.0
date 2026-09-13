@@ -71,8 +71,8 @@ class SkladchinaController(
         @RequestBody(required = false) @Valid request: JoinSkladchinaRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina join: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(participationService.join(id, user.userId, request?.note))
+        log.info("Skladchina join: id={} userId={} quantity={}", id, user.userId, request?.quantity ?: 1)
+        return ResponseEntity.ok(participationService.join(id, user.userId, request?.note, request?.quantity ?: 1))
     }
 
     @PostMapping("/api/skladchinas/{id}/leave")

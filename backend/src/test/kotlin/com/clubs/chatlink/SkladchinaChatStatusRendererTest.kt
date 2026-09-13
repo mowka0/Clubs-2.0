@@ -86,7 +86,7 @@ class SkladchinaChatStatusRendererTest {
         assertEquals("Беру", renderer.buttonText(s))
 
         val ordered = rendererSkladchina(kind = SkladchinaKind.per_head, amountKopecks = 150_000, orderedAt = now)
-        val orderedText = renderer.statusText(view(ordered, totals = DebtTotals(300_000, 0, 300_000, 2, 2, 0, 0)))
+        val orderedText = renderer.statusText(view(ordered, totals = DebtTotals(300_000, 0, 300_000, 2, 2, 0, 0, receivedItems = 2)))
         assertTrue(orderedText.contains("Куплено 2 · 3 000 ₽ · приём закрыт"), orderedText)
         assertEquals("Открыть сбор", renderer.buttonText(ordered))
     }

@@ -245,6 +245,13 @@ open class Debts(
      */
     val UPDATED_AT: TableField<DebtsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда долг последний раз менялся.")
 
+    /**
+     * The column <code>public.debts.quantity</code>. Сколько штук берёт должник
+     * (per_head: билеты, футболки). У shared/voluntary всегда 1. amount_kopecks
+     * = quantity × цена за штуку на момент «Беру».
+     */
+    val QUANTITY: TableField<DebtsRecord, Int?> = createField(DSL.name("quantity"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("1"), SQLDataType.INTEGER)), this, "Сколько штук берёт должник (per_head: билеты, футболки). У shared/voluntary всегда 1. amount_kopecks = quantity × цена за штуку на момент «Беру».")
+
     private constructor(alias: Name, aliased: Table<DebtsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<DebtsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<DebtsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -345,7 +352,8 @@ open class Debts(
     val skladchinas: SkladchinasPath
         get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<DebtsRecord>> = listOf(
-        Internal.createCheck(this, DSL.name("debts_amount_kopecks_check"), "((amount_kopecks > 0))", true)
+        Internal.createCheck(this, DSL.name("debts_amount_kopecks_check"), "((amount_kopecks > 0))", true),
+        Internal.createCheck(this, DSL.name("debts_quantity_positive"), "((quantity >= 1))", true)
     )
     override fun `as`(alias: String): Debts = Debts(DSL.name(alias), this)
     override fun `as`(alias: Name): Debts = Debts(alias, this)

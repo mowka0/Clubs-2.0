@@ -774,6 +774,8 @@ export interface DebtDto {
   debtor: DebtPersonDto;
   creditor: DebtPersonDto;
   amountKopecks: number;
+  /** per_head: штук взял; у остальных 1. */
+  quantity: number;
   dueAt: string | null;
   status: DebtStatus;
   /** «Оплачу позже»: дата (YYYY-MM-DD). */
@@ -834,6 +836,8 @@ export interface SkladchinaDetailDto {
   receivedCount: number;
   openCount: number;
   claimedCount: number;
+  /** per_head: штук оплачено — «куплено N». */
+  receivedItems: number;
   /** Мой долг как должника (null = долга нет). */
   myDebt: DebtDto | null;
   /** Список долгов сбора — только создателю. */
@@ -899,6 +903,9 @@ export interface CreateSkladchinaRequest {
   minParticipants?: number | null;
   /** Этап «Кто в деле?»: отметить создателя сразу (по умолчанию да). */
   enrollCreator?: boolean;
+  /** per_head: создатель берёт и себе (доля сразу получена) и сколько штук. */
+  takeCreator?: boolean;
+  creatorQuantity?: number;
   /** voluntary: от кого скрыть (тихий сбор). */
   hiddenFromUserId?: string | null;
   /** shared со списком: суммы либо у всех (по людям), либо ни у кого (поровну). */

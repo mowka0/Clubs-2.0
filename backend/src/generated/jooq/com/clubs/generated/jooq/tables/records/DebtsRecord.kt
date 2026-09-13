@@ -116,6 +116,10 @@ open class DebtsRecord private constructor() : UpdatableRecordImpl<DebtsRecord>(
         set(value): Unit = set(22, value)
         get(): OffsetDateTime? = get(22) as OffsetDateTime?
 
+    open var quantity: Int?
+        set(value): Unit = set(23, value)
+        get(): Int? = get(23) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -125,7 +129,7 @@ open class DebtsRecord private constructor() : UpdatableRecordImpl<DebtsRecord>(
     /**
      * Create a detached, initialised DebtsRecord
      */
-    constructor(id: UUID? = null, skladchinaId: UUID, debtorId: UUID, creditorId: UUID, amountKopecks: Long, dueAt: OffsetDateTime? = null, status: DebtStatus? = null, promisedAt: LocalDate? = null, claimedAt: OffsetDateTime? = null, confirmedAt: OffsetDateTime? = null, rejectedAt: OffsetDateTime? = null, rejectNote: String? = null, note: String? = null, receiptUrl: String? = null, settlementId: UUID? = null, reputationPlusAt: OffsetDateTime? = null, reputationMinusAt: OffsetDateTime? = null, dueReminderSentAt: OffsetDateTime? = null, overdueRemindedAt: OffsetDateTime? = null, promiseRemindedAt: OffsetDateTime? = null, claimRemindedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, skladchinaId: UUID, debtorId: UUID, creditorId: UUID, amountKopecks: Long, dueAt: OffsetDateTime? = null, status: DebtStatus? = null, promisedAt: LocalDate? = null, claimedAt: OffsetDateTime? = null, confirmedAt: OffsetDateTime? = null, rejectedAt: OffsetDateTime? = null, rejectNote: String? = null, note: String? = null, receiptUrl: String? = null, settlementId: UUID? = null, reputationPlusAt: OffsetDateTime? = null, reputationMinusAt: OffsetDateTime? = null, dueReminderSentAt: OffsetDateTime? = null, overdueRemindedAt: OffsetDateTime? = null, promiseRemindedAt: OffsetDateTime? = null, claimRemindedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, quantity: Int? = null): this() {
         this.id = id
         this.skladchinaId = skladchinaId
         this.debtorId = debtorId
@@ -149,6 +153,7 @@ open class DebtsRecord private constructor() : UpdatableRecordImpl<DebtsRecord>(
         this.claimRemindedAt = claimRemindedAt
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.quantity = quantity
         resetChangedOnNotNull()
     }
 
@@ -180,6 +185,7 @@ open class DebtsRecord private constructor() : UpdatableRecordImpl<DebtsRecord>(
             this.claimRemindedAt = value.claimRemindedAt
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.quantity = value.quantity
             resetChangedOnNotNull()
         }
     }

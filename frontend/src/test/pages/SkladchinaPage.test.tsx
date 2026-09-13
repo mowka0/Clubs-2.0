@@ -48,6 +48,7 @@ function buildDebt(overrides: Partial<DebtDto> = {}): DebtDto {
     debtor: me,
     creditor: creator,
     amountKopecks: 100000,
+    quantity: 1,
     dueAt: FUTURE,
     status: 'waiting',
     promisedAt: null,
@@ -105,6 +106,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     receivedCount: 1,
     openCount: 5,
     claimedCount: 0,
+    receivedItems: 1,
     myDebt: buildDebt(),
     debts: null,
     ...overrides,
@@ -232,23 +234,20 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByRole('button', { name: 'Передумал' })).toBeInTheDocument();
   });
 
-  it('«Кто берёт?»: без долга — заметка и «Беру»; после заказа приём закрыт', async () => {
+  it('«Кто берёт?»: без долга — заметка и «Беру», полосы и «из» нет, пока никто не взял; после заказа приём закрыт', async () => {
     mockDetail(buildDetail({ kind: 'per_head', amountKopecks: 150000, targetKopecks: null, myDebt: null, debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
-    renderPage();
+    const { container } = renderPage();
     expect(await screen.findByRole('button', { name: 'Беру' })).toBeInTheDocument();
+    expect(screen.getByText('Получено 0 ₽')).toBeInTheDocument();
+    expect(container.querySelector('.rd-progress')).toBeNull();
 
     mockDetail(buildDetail({ kind: 'per_head', orderedAt: FUTURE, myDebt: null }));
     renderPage();
     expect(await screen.findByText('Приём закрыт: заказ уже сделан.')).toBeInTheDocument();
   });
 
-  it('«Кто берёт?»: создатель тоже может «Беру», пока сам не взял и заказ не сделан', async () => {
+  it('«Кто берёт?»: у создателя нет «Беру» — он берёт себе чекбоксом при создании; «Заказываю» на месте', async () => {
     useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
-    mockDetail(buildDetail({ kind: 'per_head', isCreator: true, canCancel: true, myDebt: null, debts: [], debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
-    const first = renderPage();
-    expect(await screen.findByRole('button', { name: 'Беру' })).toBeInTheDocument();
-    first.unmount();
-
     mockDetail(buildDetail({
       kind: 'per_head', isCreator: true, canCancel: true, myDebt: null,
       debts: [buildDebt({ debtor: creator, creditor: creator, status: 'received', confirmedAt: FUTURE })],
@@ -256,6 +255,33 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     renderPage();
     expect(await screen.findByText('Берут')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Беру' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Заказываю' })).toBeInTheDocument();
+  });
+
+  it('«Кто берёт?»: количество рядом с «Беру», подтверждение считает сумму, после «Передумал» можно взять снова', async () => {
+    let body: unknown = null;
+    mockDetail(buildDetail({ kind: 'per_head', amountKopecks: 150000, targetKopecks: null, myDebt: null, debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
+    server.use(http.post(`*/api/skladchinas/${SKLADCHINA_ID}/join`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json(buildDetail({ kind: 'per_head', myDebt: buildDebt({ skladchinaKind: 'per_head', amountKopecks: 450000, quantity: 3 }) }));
+    }));
+    const first = renderPage();
+    const { user } = first;
+    const qty = await screen.findByLabelText('Сколько штук');
+    expect(qty).toHaveValue(1);
+    await user.clear(qty);
+    await user.type(qty, '3');
+    await user.click(screen.getByRole('button', { name: 'Беру' }));
+    expect(screen.getByRole('dialog', { name: /Беру 3 × 1.500 ₽ = 4.500 ₽\?/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    expect(body).toEqual({ note: null, quantity: 3 });
+    first.unmount();
+
+    mockDetail(buildDetail({ kind: 'per_head', myDebt: buildDebt({ skladchinaKind: 'per_head', status: 'dropped' }), debtCount: 0, receivedCount: 0, openCount: 0, receivedKopecks: 0 }));
+    renderPage();
+    expect(await screen.findByText('Вы выбывали из этого сбора — можно взять снова.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Беру' }).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Мой долг')).not.toBeInTheDocument();
   });
 
   it('«По желанию»: поле суммы и «Перевёл»; создателю «Закрыть сбор» недоступна, пока есть переводы', async () => {

@@ -260,6 +260,10 @@ class ClubsBot(
                 parseCallbackId(data, DebtCallbackService.ENROLL_PREFIX)
                     ?.let { debtCallbackService.handleEnroll(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.TAKE_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.TAKE_PREFIX)
+                    ?.let { debtCallbackService.handleTake(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null

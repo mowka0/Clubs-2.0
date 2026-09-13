@@ -38,6 +38,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const [text, setText] = useState('');
   const [receiptDraft, setReceiptDraft] = useState<string | null>(null);
   const [claimAsk, setClaimAsk] = useState(false);
+  const [forgiveAsk, setForgiveAsk] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
 
   const isDebtor = debt.debtor.id === viewerId;
@@ -119,7 +120,10 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
           <b>{nameLine}</b>
           {counterparty.username && <span className="rd-debt-handle">@{counterparty.username}</span>}
         </span>
-        <span className="rd-debt-amount">{formatRub(debt.amountKopecks)}</span>
+        <span className="rd-debt-amount">
+          {debt.quantity > 1 && <span className="rd-debt-qty">{debt.quantity} шт. · </span>}
+          {formatRub(debt.amountKopecks)}
+        </span>
       </div>
       {showContext && <div className="rd-debt-meta">{debt.skladchinaTitle} · {debt.clubName}</div>}
       <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>
@@ -161,7 +165,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
               {debt.status === 'claimed' && (
                 <button type="button" className="rd-btn-outline" onClick={() => setInline('reject')}>Не получил</button>
               )}
-              <button type="button" className="rd-ghost-btn" onClick={() => onAction({ type: 'forgive' })}>Простить</button>
+              <button type="button" className="rd-ghost-btn" onClick={() => setForgiveAsk(true)}>Простить</button>
             </>
           )}
         </div>
@@ -199,6 +203,14 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
 
       {claimAsk && (
         <ConfirmSheet text={claimText} onConfirm={() => { setClaimAsk(false); onAction({ type: 'claim' }); }} onCancel={() => setClaimAsk(false)} />
+      )}
+      {forgiveAsk && (
+        <ConfirmSheet
+          text={`Простить ${formatRub(debt.amountKopecks)} ${debt.debtor.firstName}? Долг закроется без денег, вернуть нельзя.`}
+          confirmLabel="Простить"
+          onConfirm={() => { setForgiveAsk(false); onAction({ type: 'forgive' }); }}
+          onCancel={() => setForgiveAsk(false)}
+        />
       )}
       <ImageLightbox src={receiptOpen ? debt.receiptUrl : null} alt="Чек" onClose={() => setReceiptOpen(false)} />
     </div>

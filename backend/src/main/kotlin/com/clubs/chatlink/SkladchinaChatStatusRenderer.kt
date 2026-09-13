@@ -79,7 +79,7 @@ class SkladchinaChatStatusRenderer(
                     (s.minParticipants?.let { " из $it" } ?: "") + ". Сбор отменён, денег никто не переводил"
             s.status == SkladchinaStatus.cancelled -> header + "Сбор отменён"
             s.kind == SkladchinaKind.per_head ->
-                header + "✅ Куплено ${t.receivedCount} · ${Money.rub(t.receivedKopecks)} · приём закрыт"
+                header + "✅ Куплено ${t.receivedItems} · ${Money.rub(t.receivedKopecks)} · приём закрыт"
             else -> header + "✅ Собрано ${Money.rub(t.receivedKopecks)} · оплатили ${t.receivedCount} из ${t.debtCount}"
         }
     }
@@ -133,7 +133,7 @@ class SkladchinaChatStatusRenderer(
         val sb = StringBuilder()
         sb.append("🎫 ").append(escapeHtml(s.title)).append("\n")
         if (s.orderedAt != null) {
-            sb.append("✅ Куплено ").append(t.receivedCount).append(" · ").append(Money.rub(t.receivedKopecks)).append(" · приём закрыт")
+            sb.append("✅ Куплено ").append(t.receivedItems).append(" · ").append(Money.rub(t.receivedKopecks)).append(" · приём закрыт")
             return sb.toString()
         }
         sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" за штуку · ").append(escapeHtml(view.creatorName))

@@ -3563,6 +3563,11 @@
 .rd-debt-neg { color: var(--danger); }
 .rd-debt-list { display: flex; flex-direction: column; gap: 10px; }
 .rd-enrolled-row { padding: 8px 0; }
+/* «Беру»: число штук рядом с кнопкой; по умолчанию 1, править не обязательно. */
+.rd-take-row { display: flex; align-items: center; gap: 10px; }
+.rd-take-row .rd-btn-primary { flex: 1; }
+.rd-take-qty { width: 72px; flex-shrink: 0; text-align: center; }
+.rd-debt-qty { font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .rd-enrolled-row + .rd-enrolled-row { border-top: 1px solid var(--hairline); }
 .rd-debt-plate {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;

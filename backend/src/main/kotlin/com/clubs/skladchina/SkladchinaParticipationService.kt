@@ -37,9 +37,9 @@ class SkladchinaParticipationService(
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaParticipationService::class.java)
 
-    /** «В деле» (shared с этапом) или «Беру» (per_head). */
+    /** «В деле» (shared с этапом) или «Беру» {заметка, количество} (per_head). */
     @Transactional
-    fun join(skladchinaId: UUID, callerId: UUID, note: String?): SkladchinaDetailDto {
+    fun join(skladchinaId: UUID, callerId: UUID, note: String?, quantity: Int = 1): SkladchinaDetailDto {
         val s = requireActiveForMember(skladchinaId, callerId)
         when {
             s.isEnrolling -> {
@@ -48,23 +48,28 @@ class SkladchinaParticipationService(
             }
             s.kind == SkladchinaKind.per_head -> {
                 if (s.orderedAt != null) throw ValidationException("Приём закрыт: заказ уже сделан")
-                debtRepository.findBySkladchinaAndDebtor(skladchinaId, callerId)?.let { existing ->
-                    throw ValidationException(
-                        if (existing.status == DebtStatus.dropped) "Вы уже выбывали из этого сбора" else "Вы уже берёте"
-                    )
+                // Создатель берёт себе чекбоксом при создании — кнопки «Беру» у него нет (PO 2026-09-13).
+                if (callerId == s.creatorId) throw ValidationException("Создатель отмечает себя при создании сбора")
+                val amount = s.amountKopecks!! * quantity
+                if (amount > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+                val cleanNote = note?.trim()?.takeIf { it.isNotEmpty() }
+                val existing = debtRepository.findBySkladchinaAndDebtor(skladchinaId, callerId)
+                when {
+                    // «Передумал» → снова «Беру»: тот же долг оживает с новыми штуками и заметкой.
+                    existing?.status == DebtStatus.dropped -> {
+                        if (debtRepository.revive(existing.id, amount, quantity, cleanNote, s.deadline) == 0) {
+                            throw ConflictException("Долг уже изменился — обновите экран")
+                        }
+                    }
+                    existing != null -> throw ValidationException("Вы уже берёте")
+                    else -> debtRepository.insertIfAbsent(
+                        NewDebt(
+                            skladchinaId = skladchinaId, debtorId = callerId, creditorId = s.creatorId,
+                            amountKopecks = amount, quantity = quantity, dueAt = s.deadline, note = cleanNote
+                        )
+                    ) ?: throw ConflictException("Вы уже берёте — обновите экран")
                 }
-                val now = OffsetDateTime.now()
-                val own = callerId == s.creatorId
-                debtRepository.insertIfAbsent(
-                    NewDebt(
-                        skladchinaId = skladchinaId, debtorId = callerId, creditorId = s.creatorId,
-                        amountKopecks = s.amountKopecks!!, dueAt = s.deadline,
-                        status = if (own) DebtStatus.received else DebtStatus.waiting,
-                        confirmedAt = if (own) now else null,
-                        note = note?.trim()?.takeIf { it.isNotEmpty() }
-                    )
-                ) ?: throw ConflictException("Вы уже берёте — обновите экран")
-                log.info("Skladchina take: id={} userId={}", skladchinaId, callerId)
+                log.info("Skladchina take: id={} userId={} quantity={}", skladchinaId, callerId, quantity)
             }
             else -> throw ValidationException("В этом сборе нет записи")
         }

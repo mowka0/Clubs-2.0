@@ -27,6 +27,8 @@ data class DebtDto(
     val debtor: DebtPersonDto,
     val creditor: DebtPersonDto,
     val amountKopecks: Long,
+    // per_head: штук взял; у остальных 1.
+    val quantity: Int,
     val dueAt: OffsetDateTime?,
     val status: String,
     val promisedAt: LocalDate?,

@@ -3,6 +3,8 @@ package com.clubs.skladchina
 import com.clubs.debt.DebtDto
 import com.clubs.debt.DebtPersonDto
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
@@ -46,6 +48,10 @@ data class CreateSkladchinaRequest(
     val minParticipants: Int? = null,
     // Этап «Кто в деле?»: отмечать ли создателя в деле сразу (чекбокс формы, по умолчанию да).
     val enrollCreator: Boolean = true,
+    // per_head: создатель берёт и себе — его долг ложится сразу received; кнопки «Беру» у него нет.
+    val takeCreator: Boolean = true,
+    @field:Min(1) @field:Max(MAX_QUANTITY.toLong())
+    val creatorQuantity: Int = 1,
 
     // voluntary: от кого скрыть (тихий сбор).
     val hiddenFromUserId: UUID? = null,
@@ -65,8 +71,14 @@ data class DebtorRequest(
 /** «В деле» / «Беру»: заметка необязательна (размер футболки и т.п.). */
 data class JoinSkladchinaRequest(
     @field:Size(max = 200)
-    val note: String? = null
+    val note: String? = null,
+    // per_head: сколько штук берёт (по умолчанию 1); у этапа записи игнорируется.
+    @field:Min(1) @field:Max(MAX_QUANTITY.toLong())
+    val quantity: Int = 1
 )
+
+// Верхняя граница «штук на человека» в per_head: защита от опечатки, не бизнес-ограничение.
+const val MAX_QUANTITY = 50
 
 /** «Перевёл N ₽» (voluntary). */
 data class ContributeRequest(
@@ -135,6 +147,8 @@ data class SkladchinaDetailDto(
     val receivedCount: Int,
     val openCount: Int,
     val claimedCount: Int,
+    // per_head: штук оплачено (сумма quantity по received) — «куплено N».
+    val receivedItems: Int,
 
     // Кто отметился «В деле» на этапе записи (всем участникам); вне этапа пустой список.
     val enrolled: List<DebtPersonDto>,

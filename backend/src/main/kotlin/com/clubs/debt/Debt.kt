@@ -23,6 +23,8 @@ data class Debt(
     val debtorId: UUID,
     val creditorId: UUID,
     val amountKopecks: Long,
+    // per_head: сколько штук взял (сумма = quantity × цена); у остальных видов 1.
+    val quantity: Int,
     val dueAt: OffsetDateTime?,
     val status: DebtStatus,
     val promisedAt: LocalDate?,
@@ -59,6 +61,7 @@ data class NewDebt(
     val creditorId: UUID,
     val amountKopecks: Long,
     val dueAt: OffsetDateTime?,
+    val quantity: Int = 1,
     val status: DebtStatus = DebtStatus.waiting,
     val claimedAt: OffsetDateTime? = null,
     val confirmedAt: OffsetDateTime? = null,
@@ -103,10 +106,12 @@ data class DebtTotals(
     val debtCount: Int,
     val receivedCount: Int,
     val openCount: Int,
-    val claimedCount: Int
+    val claimedCount: Int,
+    // Штук оплачено (сумма quantity по received) — «куплено N» у per_head.
+    val receivedItems: Int = 0
 ) {
     companion object {
-        val EMPTY = DebtTotals(0, 0, null, 0, 0, 0, 0)
+        val EMPTY = DebtTotals(0, 0, null, 0, 0, 0, 0, 0)
     }
 }
 

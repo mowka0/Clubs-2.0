@@ -89,7 +89,7 @@ export function useCreateSkladchinaMutation() {
 
 /** Действия над сбором (§ 7): участник — «В деле» / «Беру» / «Перевёл» / «Передумал»; создатель — стадии и список. */
 export type SkladchinaAction =
-  | { type: 'join'; note?: string | null }
+  | { type: 'join'; note?: string | null; quantity?: number }
   | { type: 'leave' }
   | { type: 'contribute'; amountKopecks: number }
   | { type: 'lock' }
@@ -101,7 +101,7 @@ export type SkladchinaAction =
 
 function runSkladchinaAction(id: string, action: SkladchinaAction): Promise<SkladchinaDetailDto> {
   switch (action.type) {
-    case 'join': return joinSkladchina(id, action.note);
+    case 'join': return joinSkladchina(id, action.note, action.quantity ?? 1);
     case 'leave': return leaveSkladchina(id);
     case 'contribute': return contributeSkladchina(id, action.amountKopecks);
     case 'lock': return lockSkladchina(id);

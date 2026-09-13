@@ -27,7 +27,7 @@ function stageLine(s: SkladchinaDetailDto): string {
     return `В деле ${s.enrolledCount}${s.minParticipants ? ` · нужно ${s.minParticipants}` : ''} · отметиться до ${DATE_FMT.format(new Date(s.enrollmentUntil!))}`;
   }
   const parts: string[] = [];
-  if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedCount} · приём закрыт` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
+  if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
   else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
   if (s.deadline && s.status === 'active' && !s.orderedAt) {
     const past = new Date(s.deadline).getTime() < Date.now();
@@ -52,6 +52,7 @@ export const SkladchinaPage: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
+  const [quantityInput, setQuantityInput] = useState('1');
   const [photoZoomed, setPhotoZoomed] = useState(false);
 
   if (query.isPending) {
@@ -74,6 +75,7 @@ export const SkladchinaPage: FC = () => {
   const s = query.data;
   const isActive = s.status === 'active';
   const busy = actionMut.isPending || debtMut.isPending;
+  const takeQuantity = /^\d+$/.test(quantityInput.trim()) && Number(quantityInput) >= 1 && Number(quantityInput) <= 50 ? Number(quantityInput) : null;
   const target = s.targetKopecks ?? s.amountKopecks;
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
   const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((s.claimedKopecks / target) * 100)) : 0;
@@ -113,7 +115,7 @@ export const SkladchinaPage: FC = () => {
       setError('Введите сумму');
       return;
     }
-    void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.').then(() => setAmountInput(''));
+    void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.', `Перевели ${formatRub(kopecks)}? ${s.creatorName} получит уведомление и подтвердит.`).then(() => setAmountInput(''));
   };
 
   const clubInitials = initials(s.clubName);
@@ -164,11 +166,12 @@ export const SkladchinaPage: FC = () => {
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
           {s.isEnrolling
             ? `${formatRub(s.amountKopecks ?? 0)} на группу, поровну между теми, кто в деле`
-            : target && target > 0
+            : s.debtCount > 0 && target && target > 0
               ? `Получено ${formatRub(s.receivedKopecks)} из ${formatRub(target)}`
               : `Получено ${formatRub(s.receivedKopecks)}`}
         </div>
-        {!s.isEnrolling && (
+        {/* Полоса появляется с первым долгом: до него нет ни знаменателя, ни ожидания. */}
+        {!s.isEnrolling && s.debtCount > 0 && (
           <div className="rd-progress" aria-hidden="true">
             <div className="rd-fill" style={{ width: `${receivedPct}%` }} />
             <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%` }} />
@@ -207,14 +210,14 @@ export const SkladchinaPage: FC = () => {
             s.myEnrolled ? (
               <>
                 <div className="rd-debt-meta" style={{ marginBottom: 10 }}>Вы в деле. Доля посчитается, когда список закроется.</div>
-                <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => run({ type: 'leave' }, 'Вы вышли из списка.')}>Передумал</button>
+                <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => run({ type: 'leave' }, 'Вы вышли из списка.', 'Выйти из списка «В деле»?')}>Передумал</button>
               </>
             ) : (
-              <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join' }, 'Вы в деле!')}>В деле</button>
+              <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join' }, 'Вы в деле!', 'Отметиться «В деле»? Доля посчитается, когда список закроется.')}>В деле</button>
             )
           )}
 
-          {s.kind === 'per_head' && !s.myDebt && !s.orderedAt && (
+          {s.kind === 'per_head' && (!s.myDebt || s.myDebt.status === 'dropped') && !s.orderedAt && (
             <>
               <input
                 className="rd-input"
@@ -224,12 +227,34 @@ export const SkladchinaPage: FC = () => {
                 maxLength={200}
                 style={{ marginBottom: 10 }}
               />
-              <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join', note: noteInput.trim() || null }, 'Записали за вами.')}>
-                Беру
-              </button>
+              <div className="rd-take-row">
+                <input
+                  className="rd-input rd-take-qty"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="50"
+                  aria-label="Сколько штук"
+                  value={quantityInput}
+                  onChange={(e) => setQuantityInput(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  disabled={busy || takeQuantity === null}
+                  onClick={() => run(
+                    { type: 'join', note: noteInput.trim() || null, quantity: takeQuantity ?? 1 },
+                    'Записали за вами.',
+                    `Беру ${takeQuantity ?? 1} × ${formatRub(s.amountKopecks ?? 0)} = ${formatRub((s.amountKopecks ?? 0) * (takeQuantity ?? 1))}?`,
+                  )}
+                >
+                  Беру
+                </button>
+              </div>
+              {s.myDebt?.status === 'dropped' && <div className="rd-debt-meta" style={{ marginTop: 8 }}>Вы выбывали из этого сбора — можно взять снова.</div>}
             </>
           )}
-          {s.kind === 'per_head' && !s.myDebt && s.orderedAt && (
+          {s.kind === 'per_head' && (!s.myDebt || s.myDebt.status === 'dropped') && s.orderedAt && (
             <div className="rd-debt-meta">Приём закрыт: заказ уже сделан.</div>
           )}
 
@@ -254,12 +279,12 @@ export const SkladchinaPage: FC = () => {
             </>
           )}
 
-          {s.myDebt && (
+          {s.myDebt && s.myDebt.status !== 'dropped' && (
             <>
               <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Мой долг</div>
               <DebtRow debt={s.myDebt} viewerId={viewerId} busy={busy} onAction={(a) => runDebt(s.myDebt!.id, a)} />
               {s.kind === 'per_head' && !s.orderedAt && (s.myDebt.status === 'waiting' || s.myDebt.status === 'promised') && (
-                <button type="button" className="rd-ghost-btn" disabled={busy} style={{ marginTop: 8 }} onClick={() => run({ type: 'leave' }, 'Вы передумали.')}>
+                <button type="button" className="rd-ghost-btn" disabled={busy} style={{ marginTop: 8 }} onClick={() => run({ type: 'leave' }, 'Вы передумали.', 'Передумали брать? Долг снимется, взять снова можно до заказа.')}>
                   Передумал
                 </button>
               )}
@@ -272,24 +297,6 @@ export const SkladchinaPage: FC = () => {
       {!s.isCreator && !isActive && s.myDebt && (
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
           <DebtRow debt={s.myDebt} viewerId={viewerId} readOnly onAction={() => undefined} />
-        </div>
-      )}
-
-      {/* Создатель тоже может «взять» вещь как все — его долг ляжет сразу received (§ 2.1); своя доля
-          в myDebt не попадает, поэтому смотрим список долгов. */}
-      {s.isCreator && isActive && s.kind === 'per_head' && !s.orderedAt && !(s.debts ?? []).some((d) => d.debtor.id === viewerId) && (
-        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
-          <input
-            className="rd-input"
-            placeholder="Заметка: размер, вариант (необязательно)"
-            value={noteInput}
-            onChange={(e) => setNoteInput(e.target.value)}
-            maxLength={200}
-            style={{ marginBottom: 10 }}
-          />
-          <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run({ type: 'join', note: noteInput.trim() || null }, 'Записали и за вами.')}>
-            Беру
-          </button>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.Money
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
 import com.clubs.skladchina.SkladchinaParticipationService
@@ -14,7 +15,7 @@ import java.util.UUID
 
 /**
  * Inline-кнопки в DM (skladchina-v3 § 5): «Получил / Не получил» по долгу и по сальдо пары,
- * «В деле» на этапе записи. Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
+ * «В деле» на этапе записи, «Беру» в «Кто берёт?». Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
  * подделываема, и угадав `debt:confirm:<id>`, чужой не должен ничего сделать —
  * `query.from.id` резолвится в пользователя и идёт через обычную проверку стороны долга.
  *
@@ -35,6 +36,16 @@ class DebtCallbackService(
         const val SETTLE_CONFIRM_PREFIX = "settle:confirm:"
         const val SETTLE_REJECT_PREFIX = "settle:reject:"
         const val ENROLL_PREFIX = "skladchina:enroll:"
+        const val TAKE_PREFIX = "skladchina:take:"
+    }
+
+    /** «Беру» из DM о сборе «Кто берёт?»: одна штука, без заметки — как кнопка в приложении по умолчанию. */
+    fun handleTake(fromTelegramId: Long, skladchinaId: UUID): String {
+        val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
+        return guarded(fromTelegramId, skladchinaId) {
+            val detail = participationService.join(skladchinaId, callerId, note = null, quantity = 1)
+            "Записали за вами: ${Money.rub(detail.myDebt?.amountKopecks ?: detail.amountKopecks ?: 0L)}. Берут ${detail.debtCount}."
+        }
     }
 
     /** «В деле» из DM о сборе с этапом записи — тот же join, что у кнопки в приложении. */

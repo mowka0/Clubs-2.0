@@ -18,6 +18,9 @@ interface DebtRepository {
     /** Вставка «только если долга (сбор, должник) ещё нет» — ON CONFLICT DO NOTHING; null = уже есть (второй тап). */
     fun insertIfAbsent(debt: NewDebt): Debt?
 
+    /** Повторный «Беру» после «Передумал»: dropped → waiting с новой суммой/количеством/заметкой, штампы разбора сброшены. */
+    fun revive(id: UUID, amountKopecks: Long, quantity: Int, note: String?, dueAt: OffsetDateTime?): Int
+
     fun findById(id: UUID): Debt?
 
     fun findWithContext(id: UUID): DebtWithContext?

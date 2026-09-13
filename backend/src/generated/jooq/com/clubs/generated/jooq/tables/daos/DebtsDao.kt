@@ -291,4 +291,15 @@ open class DebtsDao(configuration: Configuration?) : DAOImpl<DebtsRecord, com.cl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetch(Debts.DEBTS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>quantity BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfQuantity(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetchRange(Debts.DEBTS.QUANTITY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>quantity IN (values)</code>
+     */
+    fun fetchByQuantity(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Debts> = fetch(Debts.DEBTS.QUANTITY, *values.toTypedArray())
 }

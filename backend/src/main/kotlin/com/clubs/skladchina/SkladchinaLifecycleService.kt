@@ -180,7 +180,7 @@ class SkladchinaLifecycleService(
                 skladchinaId = s.id, creatorId = s.creatorId, clubName = clubName, title = s.title, kind = s.kind,
                 finalStatus = finalStatus, receivedKopecks = totals.receivedKopecks,
                 targetKopecks = totals.targetKopecks ?: s.amountKopecks,
-                receivedCount = totals.receivedCount, debtCount = totals.debtCount, refunds = refunds
+                receivedCount = totals.receivedCount, debtCount = totals.debtCount, receivedItems = totals.receivedItems, refunds = refunds
             )
         )
     }
