@@ -1,4 +1,4 @@
-import { FC, useMemo, useState, useEffect, useRef } from 'react';
+import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
@@ -8,17 +8,15 @@ import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
 import { useAuthStore } from '../store/useAuthStore';
-import type { CreateSkladchinaRequest, MemberListItemDto, SkladchinaKind, SplittableEventDto } from '../types/api';
+import type { CreateSkladchinaRequest, MemberListItemDto, SplittableEventDto } from '../types/api';
 import { rubToKopecks } from '../utils/money';
-import { DATE_FMT, KIND_EMOJI, KIND_LABEL } from '../utils/skladchinaKind';
+import { DATE_FMT, FLOW_EMOJI, FLOW_KIND, FLOW_LABEL, FLOW_SUBTITLE, isSkladchinaFlow, type SkladchinaFlow } from '../utils/skladchinaKind';
 
-/** Откуда берётся список должников у «Скинуться» (§ 3.1–3.2). */
-type SharedSource = 'list' | 'enroll' | 'event';
-
-const KIND_HINT: Record<SkladchinaKind, string> = {
-  shared: 'Сумма делится на людей, каждому — свой долг до срока. Влияет на репутацию.',
-  per_head: 'Цена за штуку. Каждый жмёт «Беру», при «Заказываю» неоплатившие выбывают без долга.',
-  voluntary: 'Сколько хотите, без срока и долгов. Можно скрыть от одного человека (подарок).',
+const TITLE_PLACEHOLDER: Record<SkladchinaFlow, string> = {
+  split: 'Ужин после игры',
+  enroll: 'Тренер на субботу',
+  per_head: 'Билеты на матч',
+  voluntary: 'Подарок Маше',
 };
 
 function toLocalInput(d: Date): string {
@@ -42,13 +40,20 @@ function createErrorMessage(e: unknown): string {
   return 'Не удалось создать сбор. Проверьте поля и попробуйте снова.';
 }
 
-function isKind(v: string | null): v is SkladchinaKind {
-  return v === 'shared' || v === 'per_head' || v === 'voluntary';
+/** `?flow=` — четыре входа; старые ссылки `?kind=` (страница встречи, закладки) читаются как раньше. */
+function resolveFlow(params: URLSearchParams): SkladchinaFlow {
+  const flow = params.get('flow');
+  if (isSkladchinaFlow(flow)) return flow;
+  const kind = params.get('kind');
+  if (kind === 'per_head' || kind === 'voluntary') return kind;
+  return 'split';
 }
 
 /**
- * Одна форма на три вида сбора (skladchina-v3 § 9): `?kind=shared|per_head|voluntary`, у
- * «Скинуться» ещё `&eventId=` со страницы встречи. Создать может любой участник клуба.
+ * Одна форма на четыре входа в сбор (skladchina-v3 § 9, § 13 п. 32): «Делим известную сумму»,
+ * «Сначала запись, потом доли», «Цена за штуку», «Каждый сколько хочет». Каждый вход — плоская
+ * форма без переключателей режима; единственный выбор внутри — «поровну / суммы по людям».
+ * Создать может любой участник клуба.
  */
 export const CreateSkladchinaPage: FC = () => {
   useBackButton(true);
@@ -59,12 +64,14 @@ export const CreateSkladchinaPage: FC = () => {
   const myId = useAuthStore((st) => st.user?.id);
   const createMut = useCreateSkladchinaMutation();
 
-  const kindParam = searchParams.get('kind');
-  const kind: SkladchinaKind = isKind(kindParam) ? kindParam : 'shared';
+  const flow = resolveFlow(searchParams);
+  const kind = FLOW_KIND[flow];
   const presetEventId = searchParams.get('eventId');
+  // Встреча и список людей есть у двух входов: «делим сумму» и «каждый сколько хочет».
+  const usesPeople = flow === 'split' || flow === 'voluntary';
 
   const membersQuery = useClubMembersQuery(clubId);
-  const splittableQuery = useSplittableEventsQuery(kind === 'shared' ? clubId : undefined);
+  const splittableQuery = useSplittableEventsQuery(usesPeople ? clubId : undefined);
 
   // Без доступа (frozen/expired) в сбор не попадают: видны, но неактивны, и уходят в конец списка.
   const members = useMemo(() => {
@@ -79,9 +86,8 @@ export const CreateSkladchinaPage: FC = () => {
   const [amountRub, setAmountRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
-  const [deadline, setDeadline] = useState(plusDays(kind === 'per_head' ? 5 : 3));
-  const [noDeadline, setNoDeadline] = useState(kind === 'voluntary');
-  const [source, setSource] = useState<SharedSource>(presetEventId ? 'event' : 'list');
+  const [deadline, setDeadline] = useState(plusDays(flow === 'per_head' ? 5 : 3));
+  const [noDeadline, setNoDeadline] = useState(flow === 'voluntary');
   const [eventId, setEventId] = useState<string | null>(presetEventId);
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
   const [minParticipants, setMinParticipants] = useState('');
@@ -93,11 +99,26 @@ export const CreateSkladchinaPage: FC = () => {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [hiddenFrom, setHiddenFrom] = useState<string | null>(null);
   const [ownContribution, setOwnContribution] = useState(false);
-  // «Каждый скидывает, сколько считает нужным»: на бэке это «По желанию» со списком приглашённых.
-  const [freeAmount, setFreeAmount] = useState(false);
-  const [billRub, setBillRub] = useState('');
   const [ownContributionRub, setOwnContributionRub] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const events = splittableQuery.data ?? [];
+  const selectedEvent = events.find((ev) => ev.eventId === eventId);
+  const attendedIds = useMemo(() => new Set(selectedEvent?.attendedUserIds ?? []), [selectedEvent]);
+  // После встречи: сначала пришедшие, ниже остальные участники клуба; своей строки у создателя нет.
+  const orderedMembers = useMemo(() => {
+    const others = members.filter((m) => m.userId !== myId);
+    if (attendedIds.size === 0) return others;
+    return [...others.filter((m) => attendedIds.has(m.userId)), ...others.filter((m) => !attendedIds.has(m.userId))];
+  }, [members, attendedIds, myId]);
+
+  // Встреча задана ссылкой со страницы встречи: явка подтягивается, когда список встреч загрузился.
+  const prefilledEventRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedEvent || prefilledEventRef.current === selectedEvent.eventId) return;
+    prefilledEventRef.current = selectedEvent.eventId;
+    setSelectedIds(new Set(selectedEvent.attendedUserIds));
+  }, [selectedEvent]);
 
   if (!clubId) {
     return (
@@ -112,12 +133,24 @@ export const CreateSkladchinaPage: FC = () => {
     setSubmitError(msg);
   };
 
+  const perPersonMode = flow === 'split' && perPerson;
+  const includeMe = Boolean(myId && selectedIds.has(myId));
+
   const toggleMember = (m: MemberListItemDto) => {
     if (m.accessStatus === 'frozen' || m.accessStatus === 'expired') return;
     haptic.select();
     const next = new Set(selectedIds);
     if (next.has(m.userId)) next.delete(m.userId);
     else next.add(m.userId);
+    setSelectedIds(next);
+  };
+
+  const toggleMe = () => {
+    if (!myId) return;
+    haptic.select();
+    const next = new Set(selectedIds);
+    if (next.has(myId)) next.delete(myId);
+    else next.add(myId);
     setSelectedIds(next);
   };
 
@@ -128,16 +161,12 @@ export const CreateSkladchinaPage: FC = () => {
     if (value.trim() && !selectedIds.has(m.userId)) setSelectedIds(new Set(selectedIds).add(m.userId));
   };
 
-  const perPersonMode = kind === 'shared' && perPerson && !freeAmount && source !== 'enroll';
-  const includeMe = Boolean(myId && selectedIds.has(myId));
-  const toggleMe = () => {
-    if (!myId) return;
+  // Выбор встречи предзаполняет список людей пришедшими; «Без встречи» оставляет отмеченных как есть.
+  const pickEvent = (ev: SplittableEventDto | null) => {
     haptic.select();
-    const next = new Set(selectedIds);
-    if (next.has(myId)) next.delete(myId); else next.add(myId);
-    setSelectedIds(next);
+    setEventId(ev?.eventId ?? null);
+    if (ev) setSelectedIds(new Set(ev.attendedUserIds));
   };
-  const freeMode = kind === 'shared' && freeAmount && source !== 'enroll';
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -147,67 +176,55 @@ export const CreateSkladchinaPage: FC = () => {
     const perPersonTotal = perPersonMode ? Array.from(selectedIds).reduce((acc, id) => acc + (rubToKopecks(amounts[id] ?? '') ?? 0), 0) : 0;
     const amountKopecks = perPersonMode ? (perPersonTotal > 0 ? perPersonTotal : null) : amountRub.trim() ? rubToKopecks(amountRub) : null;
     if (!perPersonMode && amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
-    if (!perPersonMode && !freeMode && kind !== 'voluntary' && amountKopecks === null) return fail(kind === 'per_head' ? 'Укажите цену за человека' : 'Укажите сумму');
-    const billKopecks = freeMode && billRub.trim() ? rubToKopecks(billRub) : null;
-    if (freeMode && billRub.trim() && billKopecks === null) return fail('Сумма чека должна быть числом больше нуля');
-    const withDeadline = (kind !== 'voluntary' && !freeMode) || !noDeadline;
+    if (!perPersonMode && kind !== 'voluntary' && amountKopecks === null) return fail(flow === 'per_head' ? 'Укажите цену за штуку' : 'Укажите сумму');
+    const withDeadline = kind !== 'voluntary' || !noDeadline;
     if (withDeadline && !deadline) return fail('Укажите срок');
 
     const body: CreateSkladchinaRequest = {
       title: title.trim(),
       description: description.trim() || null,
       photoUrl,
-      kind: freeMode ? 'voluntary' : kind,
-      amountKopecks: freeMode ? billKopecks : amountKopecks,
+      kind,
+      amountKopecks,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
       deadline: withDeadline ? new Date(deadline).toISOString() : null,
     };
 
-    if (freeMode) {
-      if (source === 'event' && !eventId) return fail('Выберите встречу');
-      if (source === 'event') body.eventId = eventId;
-      const invited = Array.from(selectedIds).filter((id) => id !== myId);
-      if (invited.length === 0) return fail('Выберите хотя бы одного человека');
-      body.invitedUserIds = invited;
-      if (ownContribution) {
-        const own = rubToKopecks(ownContributionRub);
-        if (own === null) return fail('Укажите, сколько скидываетесь сами');
-        body.creatorContributionKopecks = own;
-      }
-    } else if (kind === 'shared') {
-      if (source === 'event' && !eventId) return fail('Выберите встречу');
-      if (source === 'event') body.eventId = eventId;
-      if (source === 'enroll') {
-        if (!enrollmentUntil) return fail('Укажите, до когда открыта запись');
-        body.enrollmentUntil = new Date(enrollmentUntil).toISOString();
-        const min = minParticipants.trim() ? Number(minParticipants) : null;
-        if (min !== null && (!Number.isInteger(min) || min < 1)) return fail('Минимум — целое число от 1');
-        body.minParticipants = min;
-        body.enrollCreator = enrollCreator;
-      } else {
-        if (Array.from(selectedIds).every((id) => id === myId)) return fail('Выберите хотя бы одного человека кроме себя');
-        const debtors = Array.from(selectedIds).map((userId) => ({
-          userId,
-          amountKopecks: perPerson ? rubToKopecks(amounts[userId] ?? '') : null,
-        }));
-        if (perPerson && debtors.some((d) => d.amountKopecks === null)) return fail('Укажите сумму каждому');
-        body.debtors = debtors;
-      }
+    if (flow === 'split') {
+      if (eventId) body.eventId = eventId;
+      if (Array.from(selectedIds).every((id) => id === myId)) return fail('Выберите хотя бы одного человека кроме себя');
+      const debtors = Array.from(selectedIds).map((userId) => ({
+        userId,
+        amountKopecks: perPerson ? rubToKopecks(amounts[userId] ?? '') : null,
+      }));
+      if (perPerson && debtors.some((d) => d.amountKopecks === null)) return fail('Укажите сумму каждому');
+      body.debtors = debtors;
     }
-    if (kind === 'voluntary') {
-      body.hiddenFromUserId = hiddenFrom;
-      if (ownContribution) {
-        const own = rubToKopecks(ownContributionRub);
-        if (own === null) return fail('Укажите, сколько скидываетесь сами');
-        body.creatorContributionKopecks = own;
-      }
+    if (flow === 'enroll') {
+      if (!enrollmentUntil) return fail('Укажите, до когда открыта запись');
+      body.enrollmentUntil = new Date(enrollmentUntil).toISOString();
+      const min = minParticipants.trim() ? Number(minParticipants) : null;
+      if (min !== null && (!Number.isInteger(min) || min < 1)) return fail('Минимум — целое число от 1');
+      body.minParticipants = min;
+      body.enrollCreator = enrollCreator;
     }
-    if (kind === 'per_head') {
+    if (flow === 'per_head') {
       const qty = Number(creatorQuantity);
       if (takeCreator && (!/^\d+$/.test(creatorQuantity.trim()) || qty < 1 || qty > 50)) return fail('Сколько штук берёте себе: от 1 до 50');
       body.takeCreator = takeCreator;
       body.creatorQuantity = takeCreator ? qty : 1;
+    }
+    if (flow === 'voluntary') {
+      if (eventId) body.eventId = eventId;
+      // Никого не выбрали — зовём всех участников клуба (бэк так и читает пустой список).
+      body.invitedUserIds = Array.from(selectedIds).filter((id) => id !== myId);
+      body.hiddenFromUserId = eventId ? null : hiddenFrom;
+      if (ownContribution) {
+        const own = rubToKopecks(ownContributionRub);
+        if (own === null) return fail('Укажите, сколько скидываетесь сами');
+        body.creatorContributionKopecks = own;
+      }
     }
 
     try {
@@ -222,45 +239,137 @@ export const CreateSkladchinaPage: FC = () => {
     }
   };
 
-  const events = splittableQuery.data ?? [];
-  const selectedEvent = events.find((ev) => ev.eventId === eventId);
-  const attendedIds = useMemo(() => new Set(source === 'event' ? selectedEvent?.attendedUserIds ?? [] : []), [source, selectedEvent]);
-  // После встречи: сначала пришедшие, ниже остальные участники клуба.
-  const orderedMembers = useMemo(
-    () => (attendedIds.size === 0 ? members : [...members.filter((m) => attendedIds.has(m.userId)), ...members.filter((m) => !attendedIds.has(m.userId))]),
-    [members, attendedIds],
-  );
-
-  // Выбор встречи предзаполняет список людей пришедшими; дальше состав правится руками.
-  const pickEvent = (ev: SplittableEventDto) => {
-    setEventId(ev.eventId);
-    setSelectedIds(new Set(ev.attendedUserIds));
-  };
-  // Встреча задана ссылкой со страницы встречи: явка подтягивается, когда список встреч загрузился.
-  const prefilledEventRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (source !== 'event' || !selectedEvent || prefilledEventRef.current === selectedEvent.eventId) return;
-    prefilledEventRef.current = selectedEvent.eventId;
-    setSelectedIds(new Set(selectedEvent.attendedUserIds));
-  }, [source, selectedEvent]);
   const perPersonHint = (() => {
+    if (flow !== 'split' || perPerson) return null;
     const total = rubToKopecks(amountRub);
-    if (!total) return null;
     const n = selectedIds.size;
-    if (source === 'enroll' || n === 0 || perPerson) return null;
+    if (!total || n === 0) return null;
     return `≈ по ${Math.round(total / n / 100).toLocaleString('ru-RU')} ₽ с каждого (${n} чел.)`;
   })();
+
+  const amountLabel = flow === 'per_head' ? 'Цена за штуку (₽)' : flow === 'voluntary' ? (eventId ? 'Всего потратили (₽)' : 'Ориентир (₽)') : 'Сумма (₽)';
+
+  const eventPicker = (
+    <div className="rd-field">
+      <span className="rd-label">
+        {flow === 'split' ? 'За что' : 'После встречи'}
+        {flow === 'split' && <> <span className="rd-req">*</span></>}
+      </span>
+      {presetEventId && selectedEvent && (
+        <div className="rd-hint">{selectedEvent.title} · {DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли {selectedEvent.attendedCount}</div>
+      )}
+      {!presetEventId && splittableQuery.isPending && <Spinner size="s" />}
+      {!presetEventId && !splittableQuery.isPending && (
+        <div className="rd-pick-list">
+          <button type="button" className={`rd-pick-toggle${eventId === null ? ' rd-selected' : ''}`} onClick={() => pickEvent(null)} style={{ width: '100%' }}>
+            <span className="rd-check-box">{eventId === null ? '✓' : ''}</span>
+            <span className="rd-pick-name">Без встречи</span>
+          </button>
+          {events.map((ev) => (
+            <button key={ev.eventId} type="button" className={`rd-pick-toggle${eventId === ev.eventId ? ' rd-selected' : ''}`} onClick={() => pickEvent(ev)} style={{ width: '100%' }}>
+              <span className="rd-check-box">{eventId === ev.eventId ? '✓' : ''}</span>
+              <span className="rd-pick-name">{ev.title}</span>
+              <span className="rd-pick-note">{DATE_FMT.format(new Date(ev.eventDatetime))} · пришли {ev.attendedCount}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <span className="rd-hint">
+        {events.length === 0 && !splittableQuery.isPending
+          ? 'Встречи появятся здесь, когда пройдут и получат отметку явки (не старше 30 дней).'
+          : 'Выбрали встречу — пришедшие отмечены ниже, состав можно поправить.'}
+      </span>
+    </div>
+  );
+
+  const peopleList = (
+    <div className="rd-field">
+      <span className="rd-label">
+        {flow === 'split' ? 'Люди' : 'Кого позвать'}
+        {flow === 'split' && <> <span className="rd-req">*</span></>}
+        <span className="rd-count"> · выбрано {selectedIds.size}</span>
+      </span>
+      {flow === 'split' && (
+        <label className="rd-check" style={{ marginBottom: 8 }}>
+          <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} />
+          <span>Суммы по людям (иначе поровну)</span>
+        </label>
+      )}
+      {membersQuery.isPending && <Spinner size="s" />}
+      {!membersQuery.isPending && orderedMembers.length === 0 && <div className="rd-hint">В клубе пока нет других участников.</div>}
+      {orderedMembers.length > 0 && (
+        <div className="rd-pick-list">
+          {orderedMembers.map((m) => {
+            const isSelected = selectedIds.has(m.userId);
+            const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
+            return (
+              <div key={m.userId} className="rd-debtor-row">
+                <button type="button" className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`} onClick={() => toggleMember(m)} disabled={isFrozen} aria-disabled={isFrozen}>
+                  <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
+                  <span className="rd-pick-name">{m.firstName}{m.lastName ? ` ${m.lastName}` : ''}</span>
+                  {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
+                  {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
+                </button>
+                {!isFrozen && perPersonMode && (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="1"
+                    placeholder="₽"
+                    className="rd-input rd-pick-amount"
+                    aria-label={`Сумма для ${m.firstName}`}
+                    value={amounts[m.userId] ?? ''}
+                    onChange={(e) => setPersonAmount(m, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {flow === 'voluntary' && <span className="rd-hint">Никого не выбрали — позовём всех участников клуба.</span>}
+
+      {/* Создатель — одной фразой во всех входах; рядом только то, что нужно входу. */}
+      {flow === 'split' ? (
+        <>
+          <label className="rd-check" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={includeMe} disabled={!myId} onChange={toggleMe} />
+            <span>Я тоже участвую · моя доля сразу считается полученной</span>
+          </label>
+          {includeMe && perPersonMode && myId && (
+            <label className="rd-take-row">
+              <span className="rd-hint">Моя сумма (₽)</span>
+              <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Моя сумма (₽)" placeholder="₽" value={amounts[myId] ?? ''} onChange={(e) => setAmounts((prev) => ({ ...prev, [myId]: e.target.value }))} />
+            </label>
+          )}
+        </>
+      ) : (
+        <>
+          <label className="rd-check" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
+            <span>Я тоже участвую · мой взнос сразу считается полученным</span>
+          </label>
+          {ownContribution && (
+            <label className="rd-take-row">
+              <span className="rd-hint">Сколько (₽)</span>
+              <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
+            </label>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div className="rd-page">
       <div className="rd-ft-eyebrow">Новый сбор</div>
-      <h1 className="rd-page-h" style={{ marginBottom: 6 }}>{KIND_EMOJI[kind]} {KIND_LABEL[kind]}</h1>
-      <div className="rd-hint" style={{ marginBottom: 18 }}>{KIND_HINT[kind]}</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 6 }}>{FLOW_EMOJI[flow]} {FLOW_LABEL[flow]}</h1>
+      <div className="rd-hint" style={{ marginBottom: 18 }}>{FLOW_SUBTITLE[flow]}</div>
 
       <div className="rd-form">
         <label className="rd-field">
           <span className="rd-label">Название <span className="rd-req">*</span></span>
-          <input className="rd-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} placeholder={kind === 'per_head' ? 'Билеты на матч' : kind === 'voluntary' ? 'Подарок Маше' : 'Ужин после игры'} />
+          <input className="rd-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} placeholder={TITLE_PLACEHOLDER[flow]} />
         </label>
 
         <label className="rd-field">
@@ -268,57 +377,21 @@ export const CreateSkladchinaPage: FC = () => {
           <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
         </label>
 
-        {!perPersonMode && !freeMode && (
-        <label className="rd-field">
-          <span className="rd-label">
-            {kind === 'shared' ? 'Сумма (₽)' : kind === 'per_head' ? 'Цена за человека (₽)' : 'Ориентир (₽)'}
-            {kind !== 'voluntary' && <> <span className="rd-req">*</span></>}
-          </span>
-          <input className="rd-input" type="number" inputMode="decimal" min="1" value={amountRub} onChange={(e) => setAmountRub(e.target.value)} placeholder="Например, 6000" />
-          {perPersonHint && <span className="rd-hint">{perPersonHint}</span>}
-          {kind === 'voluntary' && <span className="rd-hint">Необязательно: участники увидят, сколько получено</span>}
-        </label>
+        {!perPersonMode && (
+          <label className="rd-field">
+            <span className="rd-label">
+              {amountLabel}
+              {kind !== 'voluntary' && <> <span className="rd-req">*</span></>}
+            </span>
+            <input className="rd-input" type="number" inputMode="decimal" min="1" value={amountRub} onChange={(e) => setAmountRub(e.target.value)} placeholder="Например, 6000" />
+            {perPersonHint && <span className="rd-hint">{perPersonHint}</span>}
+            {kind === 'voluntary' && <span className="rd-hint">Необязательно: люди увидят, сколько получено и сколько всего</span>}
+          </label>
         )}
 
-        {kind === 'shared' && !presetEventId && (
-          <div className="rd-field">
-            <span className="rd-label">Кто платит <span className="rd-req">*</span></span>
-            <div className="rd-seg rd-seg-flush" role="tablist">
-              {([['list', 'Список'], ['enroll', 'Кто в деле?'], ['event', 'После встречи']] as [SharedSource, string][]).map(([key, label]) => (
-                <button key={key} type="button" role="tab" aria-selected={source === key} className={source === key ? 'rd-seg-btn rd-active' : 'rd-seg-btn'} onClick={() => { haptic.select(); setSource(key); }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {usesPeople && eventPicker}
 
-        {kind === 'shared' && source === 'event' && (
-          <div className="rd-field">
-            <span className="rd-label">Встреча <span className="rd-req">*</span></span>
-            {presetEventId && selectedEvent && (
-              <div className="rd-hint">{selectedEvent.title} · {DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли {selectedEvent.attendedCount}</div>
-            )}
-            {!presetEventId && splittableQuery.isPending && <Spinner size="s" />}
-            {!presetEventId && !splittableQuery.isPending && events.length === 0 && (
-              <div className="rd-hint">Нет встреч, по которым можно скинуться: нужна прошедшая встреча не старше 30 дней с отмеченной явкой и минимум двумя пришедшими.</div>
-            )}
-            {!presetEventId && events.length > 0 && (
-              <div className="rd-pick-list">
-                {events.map((ev) => (
-                  <button key={ev.eventId} type="button" className={`rd-pick-toggle${eventId === ev.eventId ? ' rd-selected' : ''}`} onClick={() => { haptic.select(); pickEvent(ev); }} style={{ width: '100%' }}>
-                    <span className="rd-check-box">{eventId === ev.eventId ? '✓' : ''}</span>
-                    <span className="rd-pick-name">{ev.title}</span>
-                    <span className="rd-pick-note">{DATE_FMT.format(new Date(ev.eventDatetime))} · пришли {ev.attendedCount}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <span className="rd-hint">Пришедшие уже отмечены ниже — состав и суммы можно поправить. Ваша доля сразу считается полученной.</span>
-          </div>
-        )}
-
-        {kind === 'shared' && source === 'enroll' && (
+        {flow === 'enroll' && (
           <>
             <label className="rd-field">
               <span className="rd-label">Отметиться до <span className="rd-req">*</span></span>
@@ -337,107 +410,9 @@ export const CreateSkladchinaPage: FC = () => {
           </>
         )}
 
-        {kind === 'shared' && (source === 'list' || (source === 'event' && eventId)) && (
-          <div className="rd-field">
-            <span className="rd-label">
-              Люди <span className="rd-req">*</span> <span className="rd-count">· выбрано {selectedIds.size}</span>
-            </span>
-            <label className="rd-check">
-              <input type="checkbox" checked={freeAmount} onChange={(e) => setFreeAmount(e.target.checked)} />
-              <span>Каждый скидывает, сколько считает нужным</span>
-            </label>
-            {freeMode ? (
-              <label className="rd-take-row" style={{ marginBottom: 8 }}>
-                <span className="rd-hint">Всего потратили (₽), необязательно</span>
-                <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Всего потратили (₽)" placeholder="6000" value={billRub} onChange={(e) => setBillRub(e.target.value)} />
-              </label>
-            ) : (
-              <label className="rd-check" style={{ marginBottom: 8 }}>
-                <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} />
-                <span>Суммы по людям (иначе поровну)</span>
-              </label>
-            )}
-            {membersQuery.isPending && <Spinner size="s" />}
-            {!membersQuery.isPending && members.length === 0 && <div className="rd-hint">В клубе пока нет активных участников.</div>}
-            {members.length > 0 && (
-              <div className="rd-pick-list">
-                {orderedMembers.filter((m) => m.userId !== myId).map((m) => {
-                  const isSelected = selectedIds.has(m.userId);
-                  const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
-                  return (
-                    <div key={m.userId} className="rd-debtor-row">
-                      <button type="button" className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`} onClick={() => toggleMember(m)} disabled={isFrozen} aria-disabled={isFrozen}>
-                        <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
-                        <span className="rd-pick-name">
-                          {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
-                        </span>
-                        {isFrozen && <span className="rd-pick-note">{m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}</span>}
-                        {!isFrozen && attendedIds.has(m.userId) && <span className="rd-pick-note">был</span>}
-                      </button>
-                      {!isFrozen && perPersonMode && (
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min="1"
-                          placeholder="₽"
-                          className="rd-input rd-pick-amount"
-                          aria-label={`Сумма для ${m.firstName}`}
-                          value={amounts[m.userId] ?? ''}
-                          onChange={(e) => setPersonAmount(m, e.target.value)}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {/* Создатель — одной фразой во всех видах; рядом только то, что нужно виду. */}
-            {freeMode ? (
-              <>
-                <label className="rd-check" style={{ marginTop: 8 }}>
-                  <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
-                  <span>Я тоже участвую · мой взнос сразу считается полученным</span>
-                </label>
-                {ownContribution && (
-                  <label className="rd-take-row">
-                    <span className="rd-hint">Сколько (₽)</span>
-                    <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
-                  </label>
-                )}
-              </>
-            ) : (
-              <>
-                <label className="rd-check" style={{ marginTop: 8 }}>
-                  <input type="checkbox" checked={includeMe} disabled={!myId} onChange={toggleMe} />
-                  <span>Я тоже участвую · моя доля сразу считается полученной</span>
-                </label>
-                {includeMe && perPersonMode && myId && (
-                  <label className="rd-take-row">
-                    <span className="rd-hint">Моя сумма (₽)</span>
-                    <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Моя сумма (₽)" placeholder="₽" value={amounts[myId] ?? ''} onChange={(e) => setAmounts((prev) => ({ ...prev, [myId]: e.target.value }))} />
-                  </label>
-                )}
-              </>
-            )}
-          </div>
-        )}
+        {usesPeople && peopleList}
 
-        {kind === 'voluntary' && (
-          <div className="rd-field">
-            <label className="rd-check">
-              <input type="checkbox" checked={ownContribution} onChange={(e) => setOwnContribution(e.target.checked)} />
-              <span>Я тоже участвую · мой взнос сразу считается полученным</span>
-            </label>
-            {ownContribution && (
-              <label className="rd-take-row">
-                <span className="rd-hint">Сколько (₽)</span>
-                <input className="rd-input rd-take-qty" type="number" inputMode="decimal" min="1" aria-label="Мой взнос (₽)" placeholder="500" value={ownContributionRub} onChange={(e) => setOwnContributionRub(e.target.value)} />
-              </label>
-            )}
-          </div>
-        )}
-
-        {kind === 'voluntary' && (
+        {flow === 'voluntary' && !eventId && (
           <div className="rd-field">
             <span className="rd-label">Скрыть от</span>
             {membersQuery.isPending && <Spinner size="s" />}
@@ -466,24 +441,24 @@ export const CreateSkladchinaPage: FC = () => {
           <input className="rd-input" value={paymentMethodNote} onChange={(e) => setPaymentMethodNote(e.target.value)} placeholder="Тинькофф, СБП, ВТБ…" />
         </label>
 
-        {(kind === 'voluntary' || freeMode) && (
+        {kind === 'voluntary' && (
           <label className="rd-check">
             <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
             <span>Без срока</span>
           </label>
         )}
-        {((kind !== 'voluntary' && !freeMode) || !noDeadline) && (
+        {(kind !== 'voluntary' || !noDeadline) && (
           <label className="rd-field">
             <span className="rd-label">
-              {kind === 'per_head' ? 'Покупаю' : 'Срок оплаты'} <span className="rd-req">*</span>
+              {flow === 'per_head' ? 'Покупаю' : 'Срок оплаты'} <span className="rd-req">*</span>
             </span>
             <input className="rd-input" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
             {kind === 'shared' && <span className="rd-hint">Срок не стена: заплатить можно и после, но просрочка дольше 3 недель стоит −40 к репутации.</span>}
-            {kind === 'per_head' && <span className="rd-hint">Автозаказа нет: в срок бот напомнит вам нажать «Заказываю».</span>}
+            {flow === 'per_head' && <span className="rd-hint">Автозаказа нет: в срок бот напомнит вам нажать «Заказываю».</span>}
           </label>
         )}
 
-        {kind === 'per_head' && (
+        {flow === 'per_head' && (
           <div className="rd-field">
             <label className="rd-check">
               <input type="checkbox" checked={takeCreator} onChange={(e) => setTakeCreator(e.target.checked)} />
@@ -500,14 +475,14 @@ export const CreateSkladchinaPage: FC = () => {
 
         <div className="rd-field">
           <span className="rd-label">Фото / чек</span>
-          <PhotoAttach value={photoUrl} onChange={setPhotoUrl} addLabel="Прикрепить" />
+          <PhotoAttach value={photoUrl} onChange={setPhotoUrl} addLabel="Прикрепить фото" />
         </div>
 
         {submitError && <div className="rd-error">{submitError}</div>}
 
         <div className="rd-form-actions">
           <button type="button" className="rd-btn-outline" onClick={() => { haptic.impact('light'); navigate(-1); }}>Отмена</button>
-          <button type="button" className="rd-btn-primary" onClick={handleSubmit} disabled={createMut.isPending}>
+          <button type="button" className="rd-btn-primary" disabled={createMut.isPending} onClick={handleSubmit}>
             {createMut.isPending ? 'Создаём…' : 'Создать сбор'}
           </button>
         </div>

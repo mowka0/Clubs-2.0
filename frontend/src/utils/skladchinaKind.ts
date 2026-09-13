@@ -13,6 +13,45 @@ export const KIND_EMOJI: Record<SkladchinaKind, string> = {
   voluntary: '🎁',
 };
 
+/**
+ * Четыре входа в создание сбора (skladchina-v3 § 13 п. 32): плитка = ключевая особенность,
+ * подпись = жизненные ситуации. `split` и `enroll` на бэке один вид `shared`.
+ */
+export type SkladchinaFlow = 'split' | 'enroll' | 'per_head' | 'voluntary';
+
+export const FLOW_KIND: Record<SkladchinaFlow, SkladchinaKind> = {
+  split: 'shared',
+  enroll: 'shared',
+  per_head: 'per_head',
+  voluntary: 'voluntary',
+};
+
+export const FLOW_EMOJI: Record<SkladchinaFlow, string> = {
+  split: '🧾',
+  enroll: '📝',
+  per_head: '🎫',
+  voluntary: '🎁',
+};
+
+export const FLOW_LABEL: Record<SkladchinaFlow, string> = {
+  split: 'Кто сколько должен?',
+  enroll: 'Кто в деле?',
+  per_head: 'Кто берёт?',
+  voluntary: 'Кто сколько хочет?',
+};
+
+/** Подписи PO 2026-09-13: первыми — ключевые слова про сумму, затем ситуации. */
+export const FLOW_SUBTITLE: Record<SkladchinaFlow, string> = {
+  split: 'Сумма и люди известны, каждому своя доля до срока: например, счёт в ресторане',
+  enroll: 'Сумма общая, доля каждого зависит от того, сколько человек наберётся: общая покупка или аренда',
+  per_head: 'Цена за штуку фиксированная, каждый платит только за своё: билеты, мерч, форма',
+  voluntary: 'Сумму выбираешь сам, без долгов и репутации: подарок, благодарность и т. д.',
+};
+
+export function isSkladchinaFlow(v: string | null): v is SkladchinaFlow {
+  return v === 'split' || v === 'enroll' || v === 'per_head' || v === 'voluntary';
+}
+
 export function statusLabel(status: SkladchinaStatus): string {
   switch (status) {
     case 'active': return 'Идёт';

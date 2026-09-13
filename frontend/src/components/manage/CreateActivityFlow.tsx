@@ -15,7 +15,8 @@ import {
 } from '../../queries/eventTemplates';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
-import type { EventFormat, SkladchinaKind } from '../../types/api';
+import type { EventFormat } from '../../types/api';
+import type { SkladchinaFlow } from '../../utils/skladchinaKind';
 
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
@@ -42,7 +43,7 @@ type Step = 'type' | 'kind' | 'event_format' | 'event_templates' | 'club';
 function createRoute(
   clubId: string,
   type: ActivityType,
-  kind: SkladchinaKind | null,
+  kind: SkladchinaFlow | null,
   eventFormat: EventFormat | null,
 ): string {
   // Оба формата (V86) — одна форма создания: она читает ?format и адаптирует поля
@@ -50,8 +51,8 @@ function createRoute(
   if (type === 'event') {
     return `/clubs/${clubId}/events/new${eventFormat ? `?format=${eventFormat}` : ''}`;
   }
-  // Три вида сбора — одна форма: она читает ?kind и показывает поля вида (skladchina-v3 § 9).
-  return `/clubs/${clubId}/skladchina/new${kind ? `?kind=${kind}` : ''}`;
+  // Четыре входа в сбор — одна форма: она читает ?flow и показывает поля входа (skladchina-v3 § 13 п. 32).
+  return `/clubs/${clubId}/skladchina/new${kind ? `?flow=${kind}` : ''}`;
 }
 
 /**
@@ -80,7 +81,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const haptic = useHaptic();
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
-  const [pendingKind, setPendingKind] = useState<SkladchinaKind | null>(null);
+  const [pendingKind, setPendingKind] = useState<SkladchinaFlow | null>(null);
   const [pendingEventFormat, setPendingEventFormat] = useState<EventFormat | null>(null);
   // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
   // запрос уходил бы у каждого участника при каждом монтировании дока.
@@ -108,7 +109,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const goToCreate = (
     clubId: string,
     type: ActivityType,
-    kind: SkladchinaKind | null,
+    kind: SkladchinaFlow | null,
     eventFormat: EventFormat | null,
   ) => {
     resetFlow();
@@ -118,7 +119,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   // Определяем клуб для выбранной тройки (тип, вид, формат): если неоднозначности нет — пикер пропускаем.
   const resolveClub = (
     type: ActivityType,
-    kind: SkladchinaKind | null,
+    kind: SkladchinaFlow | null,
     eventFormat: EventFormat | null,
   ) => {
     if (presetClubId) {
@@ -156,7 +157,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     navigate('/feedback', { state: { from } });
   };
 
-  const handlePickKind = (kind: SkladchinaKind) => {
+  const handlePickKind = (kind: SkladchinaFlow) => {
     haptic.impact('medium');
     resolveClub('skladchina', kind, null);
   };

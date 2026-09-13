@@ -1682,7 +1682,7 @@ export const EventPage: FC = () => {
                 style={{ marginBottom: 14 }}
                 onClick={() => {
                   haptic.impact('medium');
-                  navigate(`/clubs/${event.clubId}/skladchina/new?kind=shared&eventId=${event.id}`);
+                  navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`);
                 }}
               >
                 💰 Скинуться

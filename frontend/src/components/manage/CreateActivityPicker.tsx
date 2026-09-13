@@ -1,7 +1,8 @@
 import { FC, ReactNode, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
-import type { EventFormat, SkladchinaKind } from '../../types/api';
+import type { EventFormat } from '../../types/api';
+import { FLOW_EMOJI, FLOW_LABEL, FLOW_SUBTITLE, type SkladchinaFlow } from '../../utils/skladchinaKind';
 import { formatWords } from '../../utils/eventFormat';
 
 interface ActivityTypeOptionsProps {
@@ -365,30 +366,17 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
 
 // Три вида сбора (skladchina-v3 § 2.1): всё, чем они отличаются, — откуда берётся долг и что с ним в срок.
 interface SkladchinaKindOptionsProps {
-  onPick: (kind: SkladchinaKind) => void;
+  onPick: (flow: SkladchinaFlow) => void;
   onBack: () => void;
 }
 
-const SKLADCHINA_OPTIONS: { key: SkladchinaKind; emoji: string; title: string; subtitle: string }[] = [
-  {
-    key: 'shared',
-    emoji: '💰',
-    title: 'Скинуться',
-    subtitle: 'После встречи, по списку или «кто в деле» — каждому своя доля до срока',
-  },
-  {
-    key: 'per_head',
-    emoji: '🎫',
-    title: 'Кто берёт?',
-    subtitle: 'Билеты, мерч: каждый жмёт «Беру», платят только взявшие',
-  },
-  {
-    key: 'voluntary',
-    emoji: '🎁',
-    title: 'По желанию',
-    subtitle: 'Подарок, благодарность: сколько хотите, можно скрыть от именинника',
-  },
-];
+const SKLADCHINA_OPTIONS: { key: SkladchinaFlow; emoji: string; title: string; subtitle: string }[] =
+  (['split', 'enroll', 'per_head', 'voluntary'] as SkladchinaFlow[]).map((key) => ({
+    key,
+    emoji: FLOW_EMOJI[key],
+    title: FLOW_LABEL[key],
+    subtitle: FLOW_SUBTITLE[key],
+  }));
 
 /** Выбор вида, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
 export const SkladchinaKindOptions: FC<SkladchinaKindOptionsProps> = ({ onPick, onBack }) => (

@@ -73,7 +73,7 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     );
     const { user } = renderPage('?kind=shared');
 
-    expect(await screen.findByText(/Скинуться/)).toBeInTheDocument();
+    expect(await screen.findByText(/Кто сколько должен/)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Название/), 'Ужин');
     await user.type(screen.getByPlaceholderText('Например, 6000'), '6000');
     await user.type(screen.getByPlaceholderText('Ссылка СБП или номер телефона'), 'https://pay.example/x');
@@ -105,7 +105,6 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     const { user } = renderPage('?kind=shared');
     await user.type(await screen.findByLabelText(/Название/), 'Ужин');
     await user.type(screen.getByPlaceholderText('Ссылка СБП или номер телефона'), 'https://pay.example/x');
-    await user.click(screen.getByRole('tab', { name: 'После встречи' }));
     await user.click(await screen.findByText('Ужин в ресторане'));
 
     // Анна была — отмечена сразу; Олег не был, но его можно добавить.
@@ -122,7 +121,7 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(sent!.debtors).toEqual([{ userId: 'u-1', amountKopecks: 70000 }, { userId: 'u-2', amountKopecks: 30000 }]);
   });
 
-  it('«Каждый скидывает, сколько считает нужным»: уходит как voluntary с eventId, приглашёнными и суммой чека', async () => {
+  it('«Кто сколько хочет?» после встречи: voluntary с eventId, приглашёнными и суммой «всего потратили»', async () => {
     let sent: CreateSkladchinaRequest | null = null;
     const OLEG: MemberListItemDto = { ...MEMBER, userId: 'u-2', firstName: 'Олег' };
     server.use(
@@ -135,16 +134,15 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
         return HttpResponse.json({ id: 's-new', clubId: CLUB_ID }, { status: 201 });
       }),
     );
-    const { user } = renderPage('?kind=shared&eventId=ev-1');
+    const { user } = renderPage('?flow=voluntary&eventId=ev-1');
     await user.type(await screen.findByLabelText(/Название/), 'Ужин');
     await user.type(screen.getByPlaceholderText('Ссылка СБП или номер телефона'), 'https://pay.example/x');
-    // Пришедшая Анна отмечена и стоит первой, Олег ниже.
+    // Пришедшая Анна отмечена и стоит первой, Олег ниже; «Суммы по людям» здесь нет.
     const names = (await screen.findAllByText(/Анна|Олег/)).map((el) => el.textContent);
     expect(names.indexOf('Анна')).toBeLessThan(names.indexOf('Олег'));
-    await user.click(screen.getByLabelText('Каждый скидывает, сколько считает нужным'));
     expect(screen.queryByLabelText('Суммы по людям (иначе поровну)')).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText('Всего потратили (₽)'), '6000');
-    await user.click(screen.getByLabelText('Без срока'));
+    await user.type(screen.getByLabelText(/Всего потратили/), '6000');
+    expect(screen.getByLabelText('Без срока')).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Создать сбор' }));
 
     expect(await screen.findByTestId('detail')).toBeInTheDocument();
@@ -156,10 +154,10 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(sent!.deadline).toBeNull();
   });
 
-  it('«Кто берёт?» просит цену за человека; «По желанию» позволяет обойтись без срока', async () => {
+  it('«Кто берёт?» просит цену за штуку; «По желанию» позволяет обойтись без срока', async () => {
     server.use(http.get(`*/api/clubs/${CLUB_ID}/members`, () => HttpResponse.json([MEMBER])));
     renderPage('?kind=per_head');
-    expect(await screen.findByText(/Цена за человека/)).toBeInTheDocument();
+    expect(await screen.findByText('Цена за штуку (₽)')).toBeInTheDocument();
     expect(screen.queryByText('Кто платит')).not.toBeInTheDocument();
   });
 
