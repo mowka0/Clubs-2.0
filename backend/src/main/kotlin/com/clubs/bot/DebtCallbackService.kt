@@ -7,6 +7,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.common.util.Money
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
+import com.clubs.skladchina.SkladchinaLifecycleService
 import com.clubs.skladchina.SkladchinaParticipationService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -15,7 +16,7 @@ import java.util.UUID
 
 /**
  * Inline-кнопки в DM (skladchina-v3 § 5): «Получил / Не получил» по долгу и по сальдо пары,
- * «В деле» на этапе записи, «Беру» в «Кто берёт?». Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
+ * «В деле» на этапе записи, «Беру» в «Кто берёт?», «Простить» при −40, «Закрыть сбор» у «По желанию». Права проверяет НЕ бот, а тот же сервис, что обслуживает REST: `callback_data`
  * подделываема, и угадав `debt:confirm:<id>`, чужой не должен ничего сделать —
  * `query.from.id` резолвится в пользователя и идёт через обычную проверку стороны долга.
  *
@@ -26,7 +27,8 @@ class DebtCallbackService(
     private val userRepository: UserRepository,
     private val debtService: DebtService,
     private val settlementService: DebtSettlementService,
-    private val participationService: SkladchinaParticipationService
+    private val participationService: SkladchinaParticipationService,
+    private val lifecycleService: SkladchinaLifecycleService
 ) {
     private val log = LoggerFactory.getLogger(DebtCallbackService::class.java)
 
@@ -37,6 +39,26 @@ class DebtCallbackService(
         const val SETTLE_REJECT_PREFIX = "settle:reject:"
         const val ENROLL_PREFIX = "skladchina:enroll:"
         const val TAKE_PREFIX = "skladchina:take:"
+        const val FORGIVE_PREFIX = "debt:forgive:"
+        const val CLOSE_PREFIX = "skladchina:close:"
+    }
+
+    /** «Простить» из DM о −40 — то же прощение, что в приложении, права по from.id. */
+    fun handleForgive(fromTelegramId: Long, debtId: UUID): String {
+        val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
+        return guarded(fromTelegramId, debtId) {
+            debtService.forgive(debtId, callerId)
+            "Долг прощён"
+        }
+    }
+
+    /** «Закрыть сбор» из DM «срок прошёл» («По желанию»): неразобранные переводы вернут человеческую ошибку. */
+    fun handleClose(fromTelegramId: Long, skladchinaId: UUID): String {
+        val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
+        return guarded(fromTelegramId, skladchinaId) {
+            lifecycleService.close(skladchinaId, callerId)
+            "Сбор закрыт ✅"
+        }
     }
 
     /** «Беру» из DM о сборе «Кто берёт?»: одна штука, без заметки — как кнопка в приложении по умолчанию. */

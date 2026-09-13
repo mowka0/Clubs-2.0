@@ -201,6 +201,14 @@ class SkladchinaLifecycleService(
         return due
     }
 
+    /** «По желанию» со сроком: в день срока создателю один раз «закрыть сбор?» (штамп тот же, что «пора заказывать»). */
+    @Transactional
+    fun claimCloseReminders(now: OffsetDateTime): List<Skladchina> {
+        val due = skladchinaRepository.findVoluntaryNeedingCloseReminder(now)
+        due.forEach { skladchinaRepository.markOrderReminded(it.id, now) }
+        return due
+    }
+
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
         val s = skladchinaRepository.findByIdForUpdate(skladchinaId) ?: throw NotFoundException("Сбор не найден")
         if (s.isHiddenFrom(callerId)) throw NotFoundException("Сбор не найден")

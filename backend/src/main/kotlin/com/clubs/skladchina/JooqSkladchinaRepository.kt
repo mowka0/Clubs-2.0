@@ -265,6 +265,17 @@ class JooqSkladchinaRepository(
             .fetch()
             .map(mapper::toDomain)
 
+    override fun findVoluntaryNeedingCloseReminder(now: OffsetDateTime): List<Skladchina> =
+        dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
+                    .and(SKLADCHINAS.KIND.eq(SkladchinaKind.voluntary))
+                    .and(SKLADCHINAS.DEADLINE.le(now))
+                    .and(SKLADCHINAS.ORDER_REMINDED_AT.isNull)
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
     override fun markOrderReminded(id: UUID, at: OffsetDateTime) {
         dsl.update(SKLADCHINAS).set(SKLADCHINAS.ORDER_REMINDED_AT, at).where(SKLADCHINAS.ID.eq(id)).execute()
     }

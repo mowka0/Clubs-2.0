@@ -7,6 +7,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
 import com.clubs.generated.jooq.tables.records.UsersRecord
+import com.clubs.skladchina.SkladchinaLifecycleService
 import com.clubs.skladchina.SkladchinaParticipationService
 import com.clubs.user.UserRepository
 import io.mockk.every
@@ -26,7 +27,8 @@ class DebtCallbackServiceTest {
     private val debtService = mockk<DebtService>()
     private val settlementService = mockk<DebtSettlementService>()
     private val participationService = mockk<SkladchinaParticipationService>()
-    private val service = DebtCallbackService(userRepository, debtService, settlementService, participationService)
+    private val lifecycleService = mockk<SkladchinaLifecycleService>()
+    private val service = DebtCallbackService(userRepository, debtService, settlementService, participationService, lifecycleService)
 
     private val debtId = UUID.randomUUID()
     private val settlementId = UUID.randomUUID()
@@ -92,6 +94,21 @@ class DebtCallbackServiceTest {
             every { debtCount } returns 4
         }
         assertEquals("Записали за вами: 1 500 ₽. Берут 4.", service.handleTake(42L, skladchinaId))
+    }
+
+    @Test
+    fun `«Простить» at the minus and «Закрыть сбор» at the deadline go through the same services as the app`() {
+        stubCaller()
+        every { debtService.forgive(debtId, userId) } returns mockk()
+        assertEquals("Долг прощён", service.handleForgive(42L, debtId))
+        every { debtService.forgive(debtId, userId) } throws ForbiddenException("только получателю")
+        assertEquals("Нет прав", service.handleForgive(42L, debtId))
+
+        val skladchinaId = UUID.randomUUID()
+        every { lifecycleService.close(skladchinaId, userId) } returns mockk()
+        assertEquals("Сбор закрыт ✅", service.handleClose(42L, skladchinaId))
+        every { lifecycleService.close(skladchinaId, userId) } throws ValidationException("Разберите переводы: 1")
+        assertEquals("Разберите переводы: 1", service.handleClose(42L, skladchinaId))
     }
 
     @Test

@@ -264,6 +264,14 @@ class ClubsBot(
                 parseCallbackId(data, DebtCallbackService.TAKE_PREFIX)
                     ?.let { debtCallbackService.handleTake(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.FORGIVE_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.FORGIVE_PREFIX)
+                    ?.let { debtCallbackService.handleForgive(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(DebtCallbackService.CLOSE_PREFIX) ->
+                parseCallbackId(data, DebtCallbackService.CLOSE_PREFIX)
+                    ?.let { debtCallbackService.handleClose(query.from.id, it) }
+                    ?: RosterCallbackService.INVALID_REQUEST
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null

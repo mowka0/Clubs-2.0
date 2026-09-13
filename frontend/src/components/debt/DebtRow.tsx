@@ -55,7 +55,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
     if (own) return 'своя доля';
     switch (debt.status) {
       case 'waiting':
-        if (debt.rejectedAt) return `не получил · ответьте через «${debt.skladchinaKind === 'per_head' ? 'Ответить' : 'Не согласен'}»`;
+        if (debt.rejectedAt) return 'не получил · ответьте: заметка или чек';
         if (!debt.dueAt) return 'без срока';
         return debt.isOverdue ? `срок вышел ${DAY_FMT.format(new Date(debt.dueAt))}` : `до ${DATE_FMT.format(new Date(debt.dueAt))}`;
       case 'promised':
@@ -162,7 +162,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
                   кнопка остаётся только как ответ на «Не получил» (заметка и чек). */}
               {(debt.skladchinaKind !== 'per_head' || debt.rejectedAt) && (
                 <button type="button" className="rd-btn-outline" onClick={() => setInline('note')}>
-                  {debt.skladchinaKind === 'per_head' ? 'Ответить' : 'Не согласен'}
+                  {debt.rejectedAt ? 'Ответить' : 'Не согласен'}
                 </button>
               )}
               {extraAction}

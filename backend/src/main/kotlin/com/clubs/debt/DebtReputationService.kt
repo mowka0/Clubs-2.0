@@ -15,7 +15,8 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /** Долг, за который только что списано −40: шедулер шлёт должнику DM. */
-data class DebtPenalty(val debt: DebtWithContext)
+/** Момент −40 по долгу. [reputationApplied] = false у владельца клуба: минуса нет, но получателю всё равно пора решать. */
+data class DebtPenalty(val debt: DebtWithContext, val reputationApplied: Boolean = true)
 
 /**
  * Репутация по долгам shared-сборов (§ 4): +10 за долг, закрытый до срока; −40 один раз за
@@ -58,12 +59,13 @@ class DebtReputationService(
         val owners = ownersOf(overdue)
         val penalized = mutableListOf<DebtPenalty>()
         overdue.forEach { d ->
-            if (owners[d.clubId] != d.debt.debtorId) {
+            val applied = owners[d.clubId] != d.debt.debtorId
+            if (applied) {
                 reputationService.appendAndRecompute(listOf(
                     entry(d, ReputationKind.skladchina_expired, occurredAt = d.debt.dueAt ?: now)
                 ))
-                penalized += DebtPenalty(d)
             }
+            penalized += DebtPenalty(d, reputationApplied = applied)
             debtRepository.markReputationMinus(d.debt.id, now)
         }
         log.info("Debt reputation minus: candidates={} penalized={}", overdue.size, penalized.size)

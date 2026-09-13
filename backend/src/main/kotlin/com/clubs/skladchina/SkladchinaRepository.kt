@@ -64,6 +64,9 @@ interface SkladchinaRepository {
 
     fun markOrderReminded(id: UUID, at: OffsetDateTime)
 
+    /** «По желанию» со сроком, срок прошёл, создателю ещё не напоминали закрыть (штамп — order_reminded_at). */
+    fun findVoluntaryNeedingCloseReminder(now: OffsetDateTime): List<Skladchina>
+
     /**
      * Активные не тихие сборы со сроком в (now, until], по которым чат-напоминание ещё не уходило —
      * фид напоминания «за 24 часа» в чат клуба.

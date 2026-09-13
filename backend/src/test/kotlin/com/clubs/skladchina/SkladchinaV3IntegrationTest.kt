@@ -74,6 +74,7 @@ class SkladchinaV3IntegrationTest {
     @Autowired lateinit var objectMapper: ObjectMapper
     @Autowired lateinit var debtReputationService: DebtReputationService
     @Autowired lateinit var debtReminderService: com.clubs.debt.DebtReminderService
+    @Autowired lateinit var lifecycleService: SkladchinaLifecycleService
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
     private lateinit var ownerId: UUID
@@ -511,6 +512,16 @@ class SkladchinaV3IntegrationTest {
         val day = debtReminderService.collect(now).filter { it.debt.debt.id.toString() == bobDebt }
         assertEquals(listOf(com.clubs.debt.DebtReminderKind.MINUS_TOMORROW), day.map { it.kind })
         assertEquals(0, ledgerRows(bobId))
+    }
+
+    @Test
+    fun `voluntary with a deadline reminds the creator to close once the deadline has passed, once`() {
+        val body = voluntaryBody(hiddenFrom = null).replace("\"paymentLink\"", "\"deadline\": \"${OffsetDateTime.now().plusHours(2)}\", \"paymentLink\"")
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        assertTrue(lifecycleService.claimCloseReminders(OffsetDateTime.now()).isEmpty(), "срок ещё не прошёл")
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", UUID.fromString(id))
+        assertEquals(listOf(id), lifecycleService.claimCloseReminders(OffsetDateTime.now()).map { it.id.toString() })
+        assertTrue(lifecycleService.claimCloseReminders(OffsetDateTime.now()).isEmpty(), "второй раз не напоминаем")
     }
 
     // --- AC-12: чужие долги невидимы ---

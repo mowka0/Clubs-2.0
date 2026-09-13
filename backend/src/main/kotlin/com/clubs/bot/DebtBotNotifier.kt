@@ -185,11 +185,50 @@ class DebtBotNotifier(
         return start.plusWeeks(overdueWeeks).format(dateFmt)
     }
 
+    /** Момент −40: должнику «снижена», получателю «простить или ждать?» с кнопкой «Простить» прямо в DM (PO 2026-09-13). */
     fun sendPenalty(penalty: DebtPenalty) {
         val d = penalty.debt
-        sendToDebtor(
-            d, "⚠️ Долг ${Money.rub(d.debt.amountKopecks)} за «${d.skladchinaTitle}» просрочен больше $overdueWeeks недель — " +
-                "репутация в клубе «${d.clubName}» снижена на 40."
+        val amount = Money.rub(d.debt.amountKopecks)
+        if (penalty.reputationApplied) {
+            sendToDebtor(
+                d, "⚠️ Долг $amount за «${d.skladchinaTitle}» просрочен больше $overdueWeeks недель — " +
+                    "репутация в клубе «${d.clubName}» снижена на 40."
+            )
+        }
+        val creditorTelegramId = telegramIdOf(d.debt.creditorId) ?: return
+        val text = "⚠️ ${d.debtor.firstName} так и не отдал $amount за «${d.skladchinaTitle}»" +
+            (if (penalty.reputationApplied) " — репутация в клубе «${d.clubName}» снижена на 40." else ".") +
+            "\n\nПростить долг или ждать дальше? Сбор останется открытым, пока долг не закрыт."
+        gateway.sendDmWithButtons(
+            creditorTelegramId, text,
+            listOf(
+                listOf(DmButton("🙏 Простить", callbackData = DebtCallbackService.FORGIVE_PREFIX + d.debt.id)),
+                listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${d.debt.skladchinaId}"))
+            )
+        )
+    }
+
+    /** «По желанию» со сроком: приглашённым, кто ещё не перевёл, за сутки до срока — один раз. */
+    fun sendVoluntaryDeadlineReminder(s: Skladchina, userIds: Collection<UUID>) {
+        val deadline = s.deadline ?: return
+        val text = "⏰ Завтра, ${deadline.format(fmt)}, закрывается сбор «${s.title}» по желанию. " +
+            "Если хотите скинуться — переведите и нажмите «Перевёл»."
+        userRepository.findTelegramIds(userIds).forEach {
+            notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON)
+        }
+    }
+
+    /** «По желанию» со сроком: создателю в день срока — «закрыть сбор?» с кнопкой прямо в DM. */
+    fun sendCloseReminder(s: Skladchina, totals: DebtTotals) {
+        val telegramId = telegramIdOf(s.creatorId) ?: return
+        val text = "⏰ Срок сбора «${s.title}» прошёл: получено ${Money.rub(totals.receivedKopecks)}" +
+            (if (totals.claimedCount > 0) ", ждут подтверждения: ${totals.claimedCount}" else "") + ". Закрыть сбор?"
+        gateway.sendDmWithButtons(
+            telegramId, text,
+            listOf(
+                listOf(DmButton("✅ Закрыть сбор", callbackData = DebtCallbackService.CLOSE_PREFIX + s.id)),
+                listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${s.id}"))
+            )
         )
     }
 

@@ -5,6 +5,7 @@ import com.clubs.debt.DebtReminderService
 import com.clubs.debt.DebtRepository
 import com.clubs.debt.DebtReputationService
 import com.clubs.generated.jooq.enums.DebtStatus
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.skladchina.SkladchinaLifecycleService
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
@@ -46,6 +47,7 @@ class DebtScheduler(
         }
         step("order-reminders") {
             lifecycleService.claimOrderReminders(now).forEach { notifier.sendOrderReminder(it, debtRepository.totals(it.id)) }
+            lifecycleService.claimCloseReminders(now).forEach { notifier.sendCloseReminder(it, debtRepository.totals(it.id)) }
         }
         step("reputation") {
             reputationService.applyPlus(now)
@@ -66,6 +68,14 @@ class DebtScheduler(
     private fun chatDeadlineReminders(now: OffsetDateTime) {
         skladchinaRepository.findNeedingDeadlineReminder(now, now.plusMinutes(deadlineReminderMinutesBefore)).forEach { s ->
             skladchinaRepository.markReminderSent(s.id, now)
+            if (s.kind == SkladchinaKind.voluntary) {
+                // «По желанию»: долгов до «Перевёл» нет, напоминаем приглашённым, кто ещё не переводил, — в личку, один раз.
+                val contributed = debtRepository.findBySkladchina(s.id).map { it.debt.debtorId }.toSet()
+                val silent = skladchinaRepository.findEnrolledUserIds(s.id).filter { it !in contributed && it != s.creatorId }
+                if (silent.isNotEmpty()) notifier.sendVoluntaryDeadlineReminder(s, silent)
+                log.info("Voluntary deadline reminder: id={} invited={}", s.id, silent.size)
+                return@forEach
+            }
             val pending = debtRepository.findBySkladchina(s.id)
                 .filter { (it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised) && it.debt.debtorId != it.debt.creditorId }
                 .map { it.debt.debtorId }
