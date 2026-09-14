@@ -16,7 +16,7 @@ data class ServiceSubscription(
     val payerUserId: UUID,
     val payerRole: SubscriptionPayerRole,
     val plan: SubscriptionPlan,
-    /** Клуб, за чат которого идёт подписка. null только у завершённых легаси-строк платформенного плана ёмкости (до V87). */
+    /** Клуб, за чат которого идёт подписка. null только у завершённых легаси-строк платформенного плана ёмкости (до V94). */
     val subjectClubId: UUID?,
     val status: SubscriptionStatus,
     val currentPeriodEnd: OffsetDateTime,

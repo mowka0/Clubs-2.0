@@ -16,7 +16,7 @@
 | SHA | Что |
 |---|---|
 | `cad1593` | docs: исследование финмодели v3 + спека `platform-billing.md`, `payment-v2.md` → superseded |
-| `cce7eea` | feat: миграции V87/V88, `BillingGate`, снос движка ёмкости платных клубов |
+| `cce7eea` | feat: миграции V94/V95, `BillingGate`, снос движка ёмкости платных клубов |
 | `d5250eb` | docs: мокапы экранов (шит, полоска, `/pay/return`, тексты DM) |
 | `3c2202a` | feat: контракт `PaymentProvider`, Robokassa, `BillingService`, ResultURL, календарь, DM |
 | `787d08a` | feat: фронт целиком + правки PO по мокапам + docs alignment |
@@ -36,8 +36,8 @@
 
 | Файл | Роль |
 |---|---|
-| `V87__platform_billing_chat.sql` | план `CHAT`, поля автосписания на подписке, индекс «одна живая подписка на клуб», таблицы `platform_payment`, `chat_free_meeting`, `funnel_event` |
-| `V88__platform_billing_pricing.sql` | цена 19 900 коп. отдельной миграцией (значение enum нельзя использовать в той же транзакции) |
+| `V94__platform_billing_chat.sql` | план `CHAT`, поля автосписания на подписке, индекс «одна живая подписка на клуб», таблицы `platform_payment`, `chat_free_meeting`, `funnel_event` |
+| `V95__platform_billing_pricing.sql` | цена 19 900 коп. отдельной миграцией (значение enum нельзя использовать в той же транзакции) |
 | `subscription/BillingGate.kt` | **единственная точка биллинга** — в `EventService.createEvent` после вставки события; `releaseFreeMeeting` в `cancelEvent` и `cancelBySystem` |
 | `subscription/BillingService.kt` | статус, чекаут, `onResult`, ползунок; подписка рождается здесь с первым успешным платежом |
 | `subscription/BillingLifecycleService.kt` | ежедневный календарь (напоминания, списания, `PAST_DUE`, `ENDED`) + почасовой опрос счетов |
@@ -89,9 +89,9 @@
    без оплаты. Поэтому у `platform_payment` обязателен `club_id`, а `subscription_id` nullable.
 2. `platform_payment.autopay_requested` — положение ползунка на момент чекаута; переносится на
    подписку в `onResult` (в эскизе не было, `autopay-default` из конфига не понадобился).
-3. Легаси-строки платформенного плана ёмкости V87 переводит в `ENDED`;
+3. Легаси-строки платформенного плана ёмкости V94 переводит в `ENDED`;
    `chk_service_subscription_org_club` добавлен как `NOT VALID`.
-4. `V87` содержит `club_id` и индекс `idx_platform_payment_club` вместо эскизного индекса по подписке.
+4. `V94` содержит `club_id` и индекс `idx_platform_payment_club` вместо эскизного индекса по подписке.
 
 ---
 
@@ -124,10 +124,10 @@
 3. **`bot` в адресе `/pay/return` не валидируется** — ссылка вида `?bot=<чужой>` даёт брендированную
    страницу «Оплата принята» с кнопкой в чужого бота. Хост прибит к `t.me`, но проверить по
    `telegram.bot-username` стоит.
-4. **Восемь колонок V87 без `COMMENT ON`** (`platform_payment.id/created_at`,
+4. **Восемь колонок V94 без `COMMENT ON`** (`platform_payment.id/created_at`,
    `chat_free_meeting.chat_id/used_at`, `funnel_event.id/user_id/kind/created_at`) — по
    `.claude/rules/backend.md` это незакрытый DoD миграции. Правится **отдельной новой миграцией**
-   (V87 уже нельзя трогать после push).
+   (V94 уже нельзя трогать после push).
 5. **Напоминание «за день» уходит в день окончания**, если период кончается позже времени крона
    (по умолчанию 09:30 UTC): `daysLeft` считается по мгновениям, а не календарным дням МСК. За день
    до конца DM не приходит вовсе.

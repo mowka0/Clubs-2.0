@@ -1,11 +1,11 @@
--- V87: Биллинг платформы за чат (docs/modules/platform-billing.md § 5.1).
+-- V94: Биллинг платформы за чат (docs/modules/platform-billing.md § 5.1).
 -- Модель «первая встреча бесплатно, дальше 199 ₽/мес за чат» (решения PO 2026-09-07,
 -- docs/design/monetization-v3-research-2026-09.md § 8). Единица счёта — чат (клуб с привязкой),
 -- платит владелец клуба. Планы ёмкости FREE/TRIO/UNLIMITED (V35/V36) мертвы: значения enum
 -- в PostgreSQL не удаляются, в коде они больше не используются.
 --
 -- Про ADD VALUE: новое значение enum нельзя использовать в DML той же транзакции, где оно
--- добавлено (как в V37), поэтому строка прайсинга 'CHAT' живёт в V88.
+-- добавлено (как в V37), поэтому строка прайсинга 'CHAT' живёт в V95.
 ALTER TYPE subscription_plan ADD VALUE IF NOT EXISTS 'CHAT';
 
 ALTER TABLE service_subscription
@@ -25,7 +25,7 @@ COMMENT ON COLUMN service_subscription.last_charge_at IS
 COMMENT ON COLUMN service_subscription.provider_token IS
     'InvId материнского платежа Robokassa — PreviousInvoiceID для дочерних списаний. NULL до первой успешной оплаты и у стаб-провайдера.';
 COMMENT ON COLUMN service_subscription.subject_club_id IS
-    'Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с V87); NULL остался только у завершённых легаси-строк платформенного плана ёмкости.';
+    'Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с V94); NULL остался только у завершённых легаси-строк платформенного плана ёмкости.';
 
 -- Легаси-строки платформенного плана ёмкости (subject_club_id IS NULL) завершаем: в чат-модели
 -- у них нет предмета. Реальных денег за ними нет — провайдер был стабом.

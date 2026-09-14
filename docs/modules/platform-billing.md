@@ -143,7 +143,7 @@ staging-прогона по § 10. Трек **L**: миграции, деньг�
 
 Две миграции (новое значение enum нельзя использовать в той же транзакции — как V37).
 
-### 5.1 `V87__platform_billing_chat.sql`
+### 5.1 `V94__platform_billing_chat.sql`
 ```sql
 ALTER TYPE subscription_plan ADD VALUE IF NOT EXISTS 'CHAT';
 
@@ -209,7 +209,7 @@ CREATE INDEX idx_funnel_event_kind_created ON funnel_event (kind, created_at);
 Все `COMMENT ON` — по-русски (конвенция). Планы `FREE/TRIO/UNLIMITED` в enum остаются (значения
 enum в PostgreSQL не удаляются), в коде не используются.
 
-Как реализовано (отличия от эскиза выше — в самой миграции `V87__platform_billing_chat.sql`):
+Как реализовано (отличия от эскиза выше — в самой миграции `V94__platform_billing_chat.sql`):
 - легаси-строки платформенного плана ёмкости (`payer_role = 'ORGANIZER' AND subject_club_id IS NULL`)
   переводятся в `ENDED` — в чат-модели у них нет предмета, реальных денег за ними нет
   (стаб-провайдер); `chk_service_subscription_org_club` добавлен как `NOT VALID`, чтобы эти строки
@@ -220,7 +220,7 @@ enum в PostgreSQL не удаляются), в коде не использую
 - у `chat_free_meeting.event_id` и `funnel_event.club_id` FK нет — признак и факты воронки
   переживают удаление клуба и его встреч.
 
-### 5.2 `V88__platform_billing_pricing.sql`
+### 5.2 `V95__platform_billing_pricing.sql`
 ```sql
 INSERT INTO subscription_pricing (plan, price_kopecks, effective_from) VALUES ('CHAT', 19900, NOW());
 ```
