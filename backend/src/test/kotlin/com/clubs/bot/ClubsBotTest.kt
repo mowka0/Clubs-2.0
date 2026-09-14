@@ -34,7 +34,7 @@ class ClubsBotTest {
             chatLinkBotService = mockk(relaxed = true),
             chatDoorService = mockk(relaxed = true),
             rosterCallbackService = mockk(relaxed = true),
-            debtCallbackService = mockk(relaxed = true)
+            skladchinaCallbackService = mockk(relaxed = true)
         )
     }
 

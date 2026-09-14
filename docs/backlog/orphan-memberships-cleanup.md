@@ -18,7 +18,7 @@
   Детали — `docs/modules/events.md` § «Каскадная отмена событий при удалении клуба».
 - ✅ **Складчины** — `active` → `cancelled`, их `pending`-участники → `released`
   (репутационно-нейтрально, без ledger-строк; минуя `closeInternal`).
-  Детали — `docs/modules/skladchina.md` § «Удаление клуба».
+  Детали — `docs/backlog/skladchina-pre-v3.md` § «Удаление клуба» (архив; в v3 каскад — `SkladchinaRepository.cancelActiveByClub`).
 - ✅ **Заявки (applications)** — `pending`/`approved` заявки в удалённый клуб
   hard-удаляются (`ApplicationRepository.deleteActiveByClub`), зеркало
   `deleteActiveByUserAndClub` из `leaveClub`. Терминальные `rejected`/`auto_rejected`

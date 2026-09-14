@@ -34,7 +34,7 @@ interface SkladchinaChatPostRepository {
     /**
      * Живые статусы складчин, которые уже НЕ активны — close-проход flush-планировщика.
      * Обязателен для корректности, а не страховка: каскады cancelActiveByClub (удаление клуба)
-     * и cancelActiveByEventId (отмена события split_bill) минуют closeInternal и не публикуют
+     * и cancelActiveByEventId (отмена встречи, к которой привязан сбор) минуют closeInternal и не публикуют
      * SkladchinaClosedEvent — без прохода по БД такие посты остались бы «живыми» навсегда.
      */
     fun findOpenPostsOfInactiveSkladchinas(): List<SkladchinaChatPost>

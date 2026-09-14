@@ -29,7 +29,7 @@ export const ActivitiesPage: FC = () => {
 
   const segment = routeToSegment(location.pathname);
 
-  const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
+  const { data: actionRequiredCount = 0 } = useSkladchinaActionRequiredCountQuery();
 
   const navState = location.state as ActivitiesLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
@@ -75,9 +75,9 @@ export const ActivitiesPage: FC = () => {
           onClick={() => handleSelect('skladchina')}
         >
           Сборы
-          {unpaidCount > 0 && (
-            <span className="rd-seg-badge" aria-label={`Требует оплаты: ${unpaidCount}`}>
-              {unpaidCount}
+          {actionRequiredCount > 0 && (
+            <span className="rd-seg-badge" aria-label={`Ждут вашего действия: ${actionRequiredCount}`}>
+              {actionRequiredCount}
             </span>
           )}
         </button>

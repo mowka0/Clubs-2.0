@@ -59,7 +59,7 @@
 >
 > Связанные специи (не дублируем — ссылаемся):
 > - `docs/modules/events.md` — backend events модуль (источник правды по event-flow)
-> - `docs/modules/skladchina.md` — backend skladchina модуль (источник правды по skladchina-flow)
+> - `docs/modules/skladchina-v3.md` — backend skladchina модуль (источник правды по skladchina-flow; до v3 — `docs/backlog/skladchina-pre-v3.md`)
 > - `docs/modules/club-page-unified.md` — `ClubPage` структура и таб-навигация для members
 > - `docs/modules/events-feed.md` — `/me/events` агрегированная лента (паттерн для club-level аналога)
 
@@ -1612,7 +1612,7 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 ## Связанное
 
 - `docs/modules/events.md` — backend event domain (CRUD, voting, attendance)
-- `docs/modules/skladchina.md` — backend skladchina domain (CRUD, payment, scheduler)
+- `docs/modules/skladchina-v3.md` — backend skladchina domain (сборы и долги; архив до v3 — `docs/backlog/skladchina-pre-v3.md`)
 - `docs/modules/club-page-unified.md` — `ClubPage` структура (этот feature меняет 1 таб)
 - `docs/modules/events-feed.md` — `/me/events` aggregated feed (родственный паттерн, не источник правды для club-level)
 - `docs/modules/haptic.md` — паттерны вибрации

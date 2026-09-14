@@ -54,8 +54,8 @@ class SkladchinaBotNotifier(
             val text = createdText(event, creatorName, share = event.debtorShares[user.id])
             // Записаться / взять прямо из DM, без перехода в приложение (PO 2026-09-13).
             val quickButton = when {
-                event.enrollmentUntil != null -> DmButton("✅ В деле", callbackData = DebtCallbackService.ENROLL_PREFIX + event.skladchinaId)
-                event.kind == SkladchinaKind.per_head -> DmButton("🎫 Беру", callbackData = DebtCallbackService.TAKE_PREFIX + event.skladchinaId)
+                event.enrollmentUntil != null -> DmButton("✅ В деле", callbackData = SkladchinaCallbackService.ENROLL_PREFIX + event.skladchinaId)
+                event.kind == SkladchinaKind.per_head -> DmButton("🎫 Беру", callbackData = SkladchinaCallbackService.TAKE_PREFIX + event.skladchinaId)
                 else -> null
             }
             if (quickButton != null) {
