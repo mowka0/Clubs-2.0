@@ -1,5 +1,6 @@
 package com.clubs.chatlink
 
+import com.clubs.common.util.Excerpt
 import com.clubs.common.util.Money
 import com.clubs.debt.DebtTotals
 import com.clubs.generated.jooq.enums.SkladchinaKind
@@ -104,6 +105,7 @@ class SkladchinaChatStatusRenderer(
         val target = t.targetKopecks ?: s.amountKopecks ?: 0L
         val sb = StringBuilder()
         sb.append("💰 ").append(escapeHtml(s.title)).append("\n")
+        appendDescription(sb, s)
         if (t.debtCount > 0 && target > 0) sb.append("по ").append(Money.rub(target / t.debtCount)).append(" с человека · ")
         sb.append("собирает ").append(escapeHtml(view.creatorName)).append("\n")
         sb.append(progressBar(t, target, s.kind)).append("\n")
@@ -119,6 +121,7 @@ class SkladchinaChatStatusRenderer(
         val s = view.skladchina
         val sb = StringBuilder()
         sb.append("🎾 ").append(escapeHtml(s.title)).append("\n")
+        appendDescription(sb, s)
         sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" на группу, поровну между теми, кто в деле\n")
         sb.append("👥 В деле ").append(view.enrolledCount)
         s.minParticipants?.let { sb.append(" · нужно ").append(it) }
@@ -132,6 +135,7 @@ class SkladchinaChatStatusRenderer(
         val t = view.totals
         val sb = StringBuilder()
         sb.append("🎫 ").append(escapeHtml(s.title)).append("\n")
+        appendDescription(sb, s)
         if (s.orderedAt != null) {
             sb.append("✅ Куплено ").append(t.receivedItems).append(" · ").append(Money.rub(t.receivedKopecks)).append(" · приём закрыт")
             // Создатель купил в долг обещавшим: сбор ещё идёт, в чате видно, кого ждём.
@@ -151,6 +155,7 @@ class SkladchinaChatStatusRenderer(
         val t = view.totals
         val sb = StringBuilder()
         sb.append("🎁 ").append(escapeHtml(s.title)).append("\n")
+        appendDescription(sb, s)
         sb.append(if (s.isFreeAmountRequired) "сумму выбираете сами" else "по желанию")
         // После встречи ориентир — это общий чек: людям важно знать, сколько потратили.
         s.amountKopecks?.let { sb.append(if (s.eventId != null) " · всего потратили " else " · ориентир ").append(Money.rub(it)) }
@@ -167,6 +172,11 @@ class SkladchinaChatStatusRenderer(
         }
         if (t.promisedKopecks > 0) sb.append(" · обещано ").append(Money.rub(t.promisedKopecks))
         return sb.toString()
+    }
+
+    /** Описание сбора под заголовком — в каждом состоянии поста (PO 2026-09-14). */
+    private fun appendDescription(sb: StringBuilder, s: Skladchina) {
+        Excerpt.of(s.description)?.let { sb.append(escapeHtml(it)).append("\n") }
     }
 
     private fun appendDeadline(sb: StringBuilder, s: Skladchina, now: OffsetDateTime, t: DebtTotals) {
