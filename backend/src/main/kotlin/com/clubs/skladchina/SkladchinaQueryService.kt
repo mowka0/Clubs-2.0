@@ -4,6 +4,7 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.debt.DebtMapper
+import com.clubs.debt.DebtPersonDto
 import com.clubs.debt.DebtRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.SkladchinaKind
@@ -44,16 +45,19 @@ class SkladchinaQueryService(
     @Transactional(readOnly = true)
     fun getClubActiveSkladchinas(clubId: UUID, callerId: UUID): List<MySkladchinaListItemDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        return skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = false, viewerId = callerId)
-            .map {
-                mapper.toMyFeedItemDto(
-                    MySkladchinaFeedItem(
-                        skladchina = it.skladchina, clubName = club.name, clubAvatarUrl = club.avatarUrl,
-                        totals = it.totals, myDebtStatus = null, awaitingMyConfirmation = false
-                    ),
-                    callerId
-                )
-            }
+        val items = skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = false, viewerId = callerId)
+        val creatorNames = userRepository.findByIds(items.map { it.skladchina.creatorId }.toSet())
+            .associate { it.id!! to it.firstName }
+        return items.map {
+            mapper.toMyFeedItemDto(
+                MySkladchinaFeedItem(
+                    skladchina = it.skladchina, clubName = club.name, clubAvatarUrl = club.avatarUrl,
+                    creatorName = creatorNames[it.skladchina.creatorId] ?: "",
+                    totals = it.totals, myDebtStatus = null, awaitingMyConfirmation = false
+                ),
+                callerId
+            )
+        }
     }
 
     /**
@@ -75,7 +79,9 @@ class SkladchinaQueryService(
             skladchina = s,
             clubName = club.name,
             clubAvatarUrl = club.avatarUrl,
-            creatorName = userRepository.findById(s.creatorId)?.firstName ?: "",
+            creator = userRepository.findById(s.creatorId)
+                ?.let { DebtPersonDto(it.id!!, it.firstName, it.lastName, it.telegramUsername, it.avatarUrl) }
+                ?: DebtPersonDto(s.creatorId, "", null, null, null),
             callerId = callerId,
             canCancel = isCreator || club.ownerId == callerId,
             totals = debtRepository.totals(skladchinaId),

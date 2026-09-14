@@ -74,7 +74,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     clubName: 'Партия',
     clubAvatarUrl: null,
     creatorId: CREATOR,
-    creatorName: 'Иван',
+    creator,
     title: 'Ужин после игры',
     description: null,
     rules: null,
@@ -202,9 +202,11 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(screen.getByRole('button', { name: 'Получил' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Не получил' })).toBeInTheDocument();
     expect(screen.getByText('получено ✅')).toBeInTheDocument();
+    // Оплатившие — отдельной панелью (PO 2026-09-14).
+    expect(screen.getByText('Оплатили')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Отменить сбор' })).toBeInTheDocument();
     // Создатель себе не платит: реквизитов и своего долга у него нет.
-    expect(screen.queryByText('Реквизиты')).not.toBeInTheDocument();
+    expect(screen.queryByText('Кому переводить')).not.toBeInTheDocument();
   });
 
   it('этап «Кто в деле?»: участник видит «В деле», после отметки — «Передумал»', async () => {
@@ -225,7 +227,7 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByRole('button', { name: 'В деле' })).toBeInTheDocument();
     expect(screen.getByText(/В деле 3 · нужно 6/)).toBeInTheDocument();
     // На этапе записи платить нечего — реквизитов и «Открыть в банке» нет.
-    expect(screen.queryByText('Реквизиты')).not.toBeInTheDocument();
+    expect(screen.queryByText('Кому переводить')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Открыть в банке' })).not.toBeInTheDocument();
     // Кто записался — видно всем вместо «Кто должен».
     expect(screen.getByText('Оля')).toBeInTheDocument();
@@ -326,5 +328,37 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     const close = await screen.findByRole('button', { name: 'Закрыть сбор' });
     expect(close).toBeDisabled();
     expect(screen.getByText('Разберите переводы: 1')).toBeInTheDocument();
+    expect(screen.getByText('Подтвердите')).toBeInTheDocument();
+    expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
+  });
+
+  it('плательщик видит «Кому переводить» с создателем, у «По желанию» заголовок «Ваш перевод», сбор из встречи — строку встречи', async () => {
+    mockDetail(buildDetail({ kind: 'voluntary', myDebt: null, eventId: 'e-1', eventTitle: 'Покатушки', eventDatetime: FUTURE }));
+    renderPage();
+    expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
+    expect(screen.getByText('Иван')).toBeInTheDocument();
+    expect(screen.getByText(/@ivan · собирает/)).toBeInTheDocument();
+    expect(screen.getByText('Ваш перевод')).toBeInTheDocument();
+    expect(screen.getByText('Сбор в клубе · собирает Иван')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Открыть встречу Покатушки/ })).toBeInTheDocument();
+    expect(screen.getByText('Покатушки')).toBeInTheDocument();
+  });
+
+  it('создатель «По желанию»: свой взнос в «Перевели», говорящие «перевёл» — в «Подтвердите», счётчик без знаменателя', async () => {
+    useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
+    mockDetail(buildDetail({
+      kind: 'voluntary', isCreator: true, canCancel: true, myDebt: null, receivedCount: 1, claimedCount: 1, openCount: 1, debtCount: 2,
+      debts: [
+        buildDebt({ id: 'd-own', debtor: creator, creditor: creator, status: 'received', confirmedAt: FUTURE }),
+        buildDebt({ id: 'd-2', debtor: { ...me, id: 'u-2', firstName: 'Оля' }, status: 'claimed', claimedAt: FUTURE }),
+      ],
+    }));
+    renderPage();
+    expect(await screen.findByText('Подтвердите')).toBeInTheDocument();
+    expect(screen.getByText('Перевели')).toBeInTheDocument();
+    expect(screen.getByText('ваш взнос ✅')).toBeInTheDocument();
+    expect(screen.getByText('Сбор в клубе · собираете вы')).toBeInTheDocument();
+    expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
+    expect(screen.getByText(/перевели 1 · 1 ждут подтверждения/)).toBeInTheDocument();
   });
 });

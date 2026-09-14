@@ -167,9 +167,10 @@ class JooqSkladchinaRepository(
         val statusBucket = DSL.case_().`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0).otherwise(1)
         val actionBucket = DSL.case_().`when`(actionRequired, 0).otherwise(1)
 
-        val rows = dsl.select(SKLADCHINAS.asterisk(), CLUBS.NAME, CLUBS.AVATAR_URL)
+        val rows = dsl.select(SKLADCHINAS.asterisk(), CLUBS.NAME, CLUBS.AVATAR_URL, USERS.FIRST_NAME)
             .from(SKLADCHINAS)
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
+            .join(USERS).on(USERS.ID.eq(SKLADCHINAS.CREATOR_ID))
             .where(baseCondition)
             .orderBy(
                 statusBucket.asc(),                          // активные первыми
@@ -203,6 +204,7 @@ class JooqSkladchinaRepository(
                 skladchina = s,
                 clubName = rows[i].get(CLUBS.NAME)!!,
                 clubAvatarUrl = rows[i].get(CLUBS.AVATAR_URL),
+                creatorName = rows[i].get(USERS.FIRST_NAME)!!,
                 totals = totals[s.id] ?: DebtTotals.EMPTY,
                 myDebtStatus = myStatuses[s.id],
                 awaitingMyConfirmation = s.id in awaitingMe

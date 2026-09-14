@@ -50,10 +50,11 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
             {skladchina.clubAvatarUrl ? <img src={skladchina.clubAvatarUrl} alt="" /> : clubInitials}
           </span>
           <span>{skladchina.clubName}</span>
+          {!skladchina.isCreator && <span>· собирает {skladchina.creatorName}</span>}
         </div>
         <div className="rd-act-ttl">{skladchina.title}</div>
         <div className="rd-act-meta" style={{ fontWeight: 600, color: 'var(--text)' }}>
-          Оплатили {skladchina.receivedCount} из {skladchina.debtCount}
+          {skladchina.kind === 'voluntary' ? `Перевели ${skladchina.receivedCount}` : `Оплатили ${skladchina.receivedCount} из ${skladchina.debtCount}`}
         </div>
         <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
           <span className="rd-fill" style={{ width: `${moneyPct}%`, display: 'block', height: '100%' }} />

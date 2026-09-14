@@ -42,6 +42,7 @@ function closedSkladchina(over: Partial<MySkladchinaListItemDto> = {}): MySkladc
     clubId: CLUB_ID,
     clubName: 'Шахматы',
     clubAvatarUrl: null,
+    creatorName: 'Иван',
     kind: 'shared',
     amountKopecks: 500000,
     targetKopecks: 500000,

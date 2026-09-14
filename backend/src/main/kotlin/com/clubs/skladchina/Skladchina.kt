@@ -72,6 +72,7 @@ data class MySkladchinaFeedItem(
     val skladchina: Skladchina,
     val clubName: String,
     val clubAvatarUrl: String?,
+    val creatorName: String,
     val totals: DebtTotals,
     // Статус моего долга как должника (null = я не должник в этом сборе).
     val myDebtStatus: String?,

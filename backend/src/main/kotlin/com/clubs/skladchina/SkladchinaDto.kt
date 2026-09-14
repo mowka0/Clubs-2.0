@@ -117,7 +117,8 @@ data class SkladchinaDetailDto(
     val clubName: String,
     val clubAvatarUrl: String?,
     val creatorId: UUID,
-    val creatorName: String,
+    // Кто собирает: панель «Кому переводить» у плательщика и крошка «собирает …».
+    val creator: DebtPersonDto,
 
     val title: String,
     val description: String?,
@@ -193,6 +194,8 @@ data class MySkladchinaListItemDto(
     val clubId: UUID,
     val clubName: String,
     val clubAvatarUrl: String?,
+    // «собирает …» в карточке ленты у чужого сбора.
+    val creatorName: String,
     val kind: String,
     val amountKopecks: Long?,
     val targetKopecks: Long?,

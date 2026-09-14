@@ -801,7 +801,8 @@ export interface SkladchinaDetailDto {
   clubName: string;
   clubAvatarUrl: string | null;
   creatorId: string;
-  creatorName: string;
+  /** Кто собирает: панель «Кому переводить» и крошка «собирает …». */
+  creator: DebtPersonDto;
   title: string;
   description: string | null;
   rules: string | null;
@@ -858,6 +859,8 @@ export interface MySkladchinaListItemDto {
   clubId: string;
   clubName: string;
   clubAvatarUrl: string | null;
+  /** «собирает …» в карточке ленты у чужого сбора. */
+  creatorName: string;
   kind: SkladchinaKind;
   amountKopecks: number | null;
   targetKopecks: number | null;
