@@ -244,7 +244,7 @@ describe('EventPage — шапка и голосование (PO 2026-09-14)', (
     await user.click(clubBtn);
   });
 
-  it('голос: одна крупная «Пойду» и два вторичных ответа, счётчиков на кнопках нет', async () => {
+  it('голос: три кнопки со счётчиками, «Пойду» залита акцентом, остальные притушены', async () => {
     let sentVote: string | null = null;
     mockEndpoints({ event: stage1Event() });
     server.use(
@@ -256,23 +256,36 @@ describe('EventPage — шапка и голосование (PO 2026-09-14)', (
     const { user } = renderEventPage();
 
     const going = await screen.findByRole('button', { name: /Пойду/ });
-    expect(going).toHaveClass('rd-vote-main');
-    expect(going.textContent).not.toMatch(/\d/); // счётчики переехали в табы
-    expect(screen.getByRole('button', { name: /Возможно/ })).toHaveClass('rd-vote-alt');
-    expect(screen.getByRole('button', { name: /Не пойду/ })).toHaveClass('rd-vote-alt');
+    expect(going).toHaveClass('rd-vb-go');
+    expect(going.textContent).toContain('2'); // счётчик на кнопке остался
+    expect(screen.getByRole('button', { name: /Возможно/ })).toHaveClass('rd-vb-maybe');
+    expect(screen.getByRole('button', { name: /Не пойду/ })).toHaveClass('rd-vb-no');
 
     await user.click(going);
     expect(sentVote).toBe('going');
   });
 
-  it('после голоса «пойду» кнопка подтверждает выбор', async () => {
+  it('свой голос помечен на кнопке и бейджем «Ваш голос»', async () => {
     mockEndpoints({ event: stage1Event() });
     server.use(http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: 'going' })));
     renderEventPage();
 
-    const going = await screen.findByRole('button', { name: /Вы идёте/ });
-    expect(going).toHaveClass('rd-voted');
-    expect(screen.queryByText(/Ваш голос:/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Пойду/ })).toHaveClass('rd-active');
+    expect(screen.getByText(/Ваш голос:/)).toBeInTheDocument();
+  });
+
+  it('место свёрнуто по умолчанию: карта и кнопки появляются по тапу', async () => {
+    mockEndpoints({ event: stage1Event({ locationLat: 55.75, locationLon: 37.61 }) });
+    const { user } = renderEventPage();
+
+    const toggle = await screen.findByRole('button', { name: /Бар/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Открыть в Картах/ })).toBeInTheDocument();
   });
 });
 
