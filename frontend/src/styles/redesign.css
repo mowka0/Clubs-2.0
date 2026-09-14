@@ -3520,6 +3520,8 @@
 /* Полоса прогресса сбора из двух заливок: получено (акцент) и «говорят, что отдали» (мягкий акцент). */
 /* «Говорит, что отдал»: штрихованный оранжевый — деньги заявлены, но не подтверждены. */
 .rd-progress .rd-fill-claimed { background: repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 8px); }
+/* Обещанные суммы («Оплачу N ₽ до …») — своя штриховка, бледнее «говорит, что отдал» (PO 2026-09-14). */
+.rd-progress .rd-fill-promised { background: repeating-linear-gradient(135deg, var(--text-faint) 0 3px, transparent 3px 6px); }
 .rd-debt-row { padding: 10px 4px; }
 .rd-debt-row + .rd-debt-row { border-top: 1px solid var(--hairline); }
 .rd-debt-row.rd-debt-done { opacity: 0.7; }

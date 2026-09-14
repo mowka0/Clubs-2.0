@@ -142,7 +142,9 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(names.indexOf('Анна')).toBeLessThan(names.indexOf('Олег'));
     expect(screen.queryByLabelText('Суммы по людям (иначе поровну)')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/Всего потратили/), '6000');
-    expect(screen.getByLabelText('Без срока')).toBeChecked();
+    // Из встречи с суммой это «Сумму выбираете сами»: срок обязателен, «Без срока» исчезает (§ 3.5).
+    expect(screen.queryByLabelText('Без срока')).not.toBeInTheDocument();
+    expect(screen.getByText(/остаток разделится поровну между теми, кто промолчал/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Создать сбор' }));
 
     expect(await screen.findByTestId('detail')).toBeInTheDocument();
@@ -151,7 +153,7 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(sent!.amountKopecks).toBe(600000);
     expect(sent!.invitedUserIds).toEqual(['u-1']);
     expect(sent!.debtors).toBeUndefined();
-    expect(sent!.deadline).toBeNull();
+    expect(sent!.deadline).not.toBeNull();
   });
 
   it('«Кто берёт?» просит цену за штуку; «По желанию» позволяет обойтись без срока', async () => {

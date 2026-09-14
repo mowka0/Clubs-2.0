@@ -104,6 +104,7 @@ class JooqDebtRepository(
         val claimed = DEBTS.STATUS.eq(DebtStatus.claimed)
         val open = DEBTS.STATUS.`in`(OPEN_DEBT_STATUSES)
         val live = DEBTS.STATUS.`in`(LIVE_DEBT_STATUSES)
+        val promised = DEBTS.STATUS.eq(DebtStatus.promised)
         return dsl.select(
             DEBTS.SKLADCHINA_ID,
             DSL.sum(DEBTS.AMOUNT_KOPECKS).filterWhere(received),
@@ -113,7 +114,9 @@ class JooqDebtRepository(
             DSL.count().filterWhere(received),
             DSL.count().filterWhere(open),
             DSL.count().filterWhere(claimed),
-            DSL.sum(DEBTS.QUANTITY).filterWhere(received)
+            DSL.sum(DEBTS.QUANTITY).filterWhere(received),
+            DSL.sum(DEBTS.AMOUNT_KOPECKS).filterWhere(promised),
+            DSL.count().filterWhere(promised)
         )
             .from(DEBTS)
             .where(DEBTS.SKLADCHINA_ID.`in`(skladchinaIds))
@@ -129,7 +132,9 @@ class JooqDebtRepository(
                     receivedCount = r.value6(),
                     openCount = r.value7(),
                     claimedCount = r.value8(),
-                    receivedItems = r.value9()?.toInt() ?: 0
+                    receivedItems = r.value9()?.toInt() ?: 0,
+                    promisedKopecks = r.value10().toLongOrZero(),
+                    promisedCount = r.value11()
                 )
             }
     }
@@ -385,7 +390,7 @@ class JooqDebtRepository(
     override fun findForReputationPlus(): List<DebtWithContext> =
         contextSelect()
             .where(
-                sharedRealDebt()
+                reputableRealDebt()
                     .and(DEBTS.STATUS.eq(DebtStatus.received))
                     .and(DEBTS.REPUTATION_PLUS_AT.isNull)
                     .and(DEBTS.REPUTATION_MINUS_AT.isNull)
@@ -401,7 +406,7 @@ class JooqDebtRepository(
     override fun findForReputationMinus(overdueBefore: OffsetDateTime): List<DebtWithContext> =
         contextSelect()
             .where(
-                sharedRealDebt()
+                reputableRealDebt()
                     .and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised))
                     .and(DEBTS.REPUTATION_MINUS_AT.isNull)
                     .and(DEBTS.DUE_AT.isNotNull)
@@ -417,7 +422,7 @@ class JooqDebtRepository(
     override fun findMinusWarningDue(now: OffsetDateTime, pointBefore: OffsetDateTime, dayWarning: Boolean): List<DebtWithContext> =
         contextSelect()
             .where(
-                sharedRealDebt()
+                reputableRealDebt()
                     .and(DEBTS.STATUS.`in`(DebtStatus.waiting, DebtStatus.promised))
                     .and(DEBTS.REPUTATION_MINUS_AT.isNull)
                     .and(DEBTS.DUE_AT.isNotNull)
@@ -500,8 +505,12 @@ class JooqDebtRepository(
     private fun realDebt(): Condition =
         DEBTS.DEBTOR_ID.ne(DEBTS.CREDITOR_ID).and(CLUBS.IS_ACTIVE.isTrue)
 
-    private fun sharedRealDebt(): Condition =
-        realDebt().and(SKLADCHINAS.KIND.eq(SkladchinaKind.shared))
+    /** Долги с репутацией (§ 4): `shared` и «Сумму выбираете сами» (§ 3.5: voluntary из встречи с суммой). */
+    private fun reputableRealDebt(): Condition =
+        realDebt().and(
+            SKLADCHINAS.KIND.eq(SkladchinaKind.shared)
+                .or(SKLADCHINAS.KIND.eq(SkladchinaKind.voluntary).and(SKLADCHINAS.EVENT_ID.isNotNull).and(SKLADCHINAS.AMOUNT_KOPECKS.isNotNull))
+        )
 
     private fun betweenCondition(a: UUID, b: UUID): Condition =
         DEBTS.DEBTOR_ID.eq(a).and(DEBTS.CREDITOR_ID.eq(b))

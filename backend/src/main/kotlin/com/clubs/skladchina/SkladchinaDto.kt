@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -97,6 +98,14 @@ data class ContributeRequest(
     val amountKopecks: Long
 )
 
+/** «Оплачу N ₽ до <дата>» в сборе «Сумму выбираете сами» (§ 3.5): обещание всегда с суммой. */
+data class PromiseSkladchinaRequest(
+    @field:NotNull @field:Positive
+    val amountKopecks: Long,
+    @field:NotNull
+    val date: LocalDate
+)
+
 /** Добавить человека в shared-сбор; сумма по умолчанию = доля последнего добавленного. */
 data class AddDebtorRequest(
     @field:NotNull
@@ -119,6 +128,8 @@ data class SkladchinaDetailDto(
     val creatorId: UUID,
     // Кто собирает: панель «Кому переводить» у плательщика и крошка «собирает …».
     val creator: DebtPersonDto,
+    // «Сумму выбираете сами» (§ 3.5): voluntary из встречи с суммой — все должны, сумма своя.
+    val freeAmountRequired: Boolean,
 
     val title: String,
     val description: String?,
@@ -131,6 +142,8 @@ data class SkladchinaDetailDto(
     val targetKopecks: Long?,
     val receivedKopecks: Long,
     val claimedKopecks: Long,
+    // Обещано («Оплачу N ₽ до …») — штриховка в полосе.
+    val promisedKopecks: Long,
     val paymentLink: String,
     val paymentMethodNote: String?,
 
@@ -159,6 +172,7 @@ data class SkladchinaDetailDto(
     val receivedCount: Int,
     val openCount: Int,
     val claimedCount: Int,
+    val promisedCount: Int,
     // per_head: штук оплачено (сумма quantity по received) — «куплено N».
     val receivedItems: Int,
 
@@ -200,6 +214,7 @@ data class MySkladchinaListItemDto(
     // «собирает …» в карточке ленты у чужого сбора.
     val creatorName: String,
     val kind: String,
+    val freeAmountRequired: Boolean,
     val amountKopecks: Long?,
     val targetKopecks: Long?,
     val receivedKopecks: Long,

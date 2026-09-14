@@ -13,6 +13,7 @@ function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchi
     clubAvatarUrl: null,
     creatorName: 'Иван',
     kind: 'shared',
+    freeAmountRequired: false,
     amountKopecks: 600000,
     targetKopecks: 600000,
     receivedKopecks: 100000,
@@ -45,6 +46,10 @@ describe('SkladchinaCard — сборы v3', () => {
     render(<SkladchinaCard skladchina={buildItem({ id: 's-2', kind: 'voluntary', deadline: null, targetKopecks: null, amountKopecks: null, actionRequired: false, myDebtStatus: null })} onClick={vi.fn()} />);
     expect(screen.getByText(/без срока/)).toBeInTheDocument();
     expect(screen.getByText('Перевели 1')).toBeInTheDocument();
+
+    // Из встречи с суммой подпись режима другая (skladchina-v3 § 3.5).
+    render(<SkladchinaCard skladchina={buildItem({ id: 's-3', kind: 'voluntary', freeAmountRequired: true })} onClick={vi.fn()} />);
+    expect(screen.getByText('СУММУ ВЫБИРАЕТЕ САМИ')).toBeInTheDocument();
     expect(screen.getByText(/1\s?000 ₽ получено/)).toBeInTheDocument();
   });
 });

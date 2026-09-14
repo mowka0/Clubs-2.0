@@ -235,6 +235,10 @@ class SkladchinaCreationService(
         }
         // «Каждый сколько считает нужным» после встречи: встреча даёт привязку, список — кого позвали.
         val eventId = request.eventId?.also { resolveAttended(clubId, it, OffsetDateTime.now()) }
+        // «Сумму выбираете сами» (§ 3.5): из встречи с суммой счёта срок обязателен — по нему остаток делится между молчунами.
+        if (eventId != null && request.amountKopecks != null && request.deadline == null) {
+            throw ValidationException("Укажите срок: в сборе из встречи с суммой он обязателен")
+        }
         val invited = request.invitedUserIds.distinct().filter { it != creatorId && it != hidden }
         if (invited.isNotEmpty() && skladchinaRepository.findNonActiveMembers(clubId, invited).isNotEmpty()) {
             throw ForbiddenException("В списке есть не участники клуба")

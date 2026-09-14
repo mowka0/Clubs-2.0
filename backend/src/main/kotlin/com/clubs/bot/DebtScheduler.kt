@@ -7,6 +7,7 @@ import com.clubs.debt.DebtReputationService
 import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.skladchina.SkladchinaLifecycleService
+import com.clubs.skladchina.SkladchinaRemainderService
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -23,6 +24,7 @@ import java.time.OffsetDateTime
 @Component
 class DebtScheduler(
     private val lifecycleService: SkladchinaLifecycleService,
+    private val remainderService: SkladchinaRemainderService,
     private val reputationService: DebtReputationService,
     private val reminderService: DebtReminderService,
     private val skladchinaRepository: SkladchinaRepository,
@@ -47,7 +49,18 @@ class DebtScheduler(
         }
         step("order-reminders") {
             lifecycleService.claimOrderReminders(now).forEach { notifier.sendOrderReminder(it, debtRepository.totals(it.id)) }
-            lifecycleService.claimCloseReminders(now).forEach { notifier.sendCloseReminder(it, debtRepository.totals(it.id)) }
+            lifecycleService.claimCloseReminders(now).forEach { s ->
+                if (!s.isFreeAmountRequired) {
+                    notifier.sendCloseReminder(s, debtRepository.totals(s.id))
+                    return@forEach
+                }
+                // «Сумму выбираете сами» (§ 3.5): по сроку остаток счёта делится между молчунами.
+                when (val outcome = remainderService.splitAmongSilent(s, now)) {
+                    is SkladchinaRemainderService.Outcome.Split -> notifier.sendSilentSplit(s, outcome)
+                    is SkladchinaRemainderService.Outcome.Shortfall -> notifier.sendShortfall(s, outcome.remainderKopecks)
+                    SkladchinaRemainderService.Outcome.Nothing -> notifier.sendCloseReminder(s, debtRepository.totals(s.id))
+                }
+            }
         }
         step("reputation") {
             reputationService.applyPlus(now)

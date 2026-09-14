@@ -5,7 +5,7 @@ import { PhotoAttach } from '../PhotoAttach';
 import type { DebtAction } from '../../queries/debts';
 import type { DebtDto } from '../../types/api';
 import { formatRub } from '../../utils/money';
-import { DAY_FMT, DATE_FMT, initials, personName } from '../../utils/skladchinaKind';
+import { DATE_FMT, DAY_FMT, defaultPromiseDate, initials, personName } from '../../utils/skladchinaKind';
 
 interface DebtRowProps {
   debt: DebtDto;
@@ -22,12 +22,6 @@ interface DebtRowProps {
 }
 
 type Inline = 'none' | 'promise' | 'reject' | 'note';
-
-function defaultPromiseDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 3);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * Строка долга — одна на экран сбора, пару и список создателя (skladchina-v3 § 9). Кнопки по

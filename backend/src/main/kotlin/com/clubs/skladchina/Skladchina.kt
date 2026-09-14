@@ -54,6 +54,13 @@ data class Skladchina(
     val isActive: Boolean
         get() = status == SkladchinaStatus.active
 
+    /**
+     * «Сумму выбираете сами» (§ 3.5): «по желанию» из встречи с суммой счёта. Все из списка должны,
+     * сумму каждый выбирает сам; по сроку остаток счёта поровну уходит в долг тем, кто промолчал.
+     */
+    val isFreeAmountRequired: Boolean
+        get() = kind == SkladchinaKind.voluntary && eventId != null && amountKopecks != null
+
     fun isHiddenFrom(userId: UUID): Boolean = hiddenFromUserId == userId
 }
 

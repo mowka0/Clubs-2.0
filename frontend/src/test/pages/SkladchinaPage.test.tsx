@@ -75,6 +75,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     clubAvatarUrl: null,
     creatorId: CREATOR,
     creator,
+    freeAmountRequired: false,
     title: 'Ужин после игры',
     description: null,
     rules: null,
@@ -84,6 +85,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     targetKopecks: 600000,
     receivedKopecks: 100000,
     claimedKopecks: 0,
+    promisedKopecks: 0,
     paymentLink: 'https://pay.example/x',
     paymentMethodNote: null,
     deadline: FUTURE,
@@ -107,6 +109,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     receivedCount: 1,
     openCount: 5,
     claimedCount: 0,
+    promisedCount: 0,
     receivedItems: 1,
     myDebt: buildDebt(),
     debts: null,
@@ -373,5 +376,32 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(screen.getByText('Сбор в клубе · собираете вы')).toBeInTheDocument();
     expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
     expect(screen.getByText(/перевели 1 · 1 ждут подтверждения/)).toBeInTheDocument();
+  });
+
+  it('«Сумму выбираете сами»: подпись режима, «перевели N из M · обещали K», подсказка о молчунах, «Оплачу позже» шлёт сумму и дату', async () => {
+    let sent: { amountKopecks: number; date: string } | null = null;
+    const olya = { ...me, id: 'u-2', firstName: 'Оля' };
+    const petya = { ...me, id: 'u-3', firstName: 'Петя' };
+    mockDetail(buildDetail({
+      kind: 'voluntary', freeAmountRequired: true, eventId: 'e-1', eventTitle: 'Покатушки', eventDatetime: FUTURE,
+      amountKopecks: 900000, targetKopecks: 900000, receivedKopecks: 500000, promisedKopecks: 150000, promisedCount: 1,
+      receivedCount: 2, debtCount: 3, openCount: 1, myDebt: null, enrolled: [me, olya, petya], paid: [creator, petya],
+    }));
+    server.use(
+      http.post('*/api/skladchinas/s-1/promise', async ({ request }) => {
+        sent = (await request.json()) as { amountKopecks: number; date: string };
+        return HttpResponse.json(buildDetail({ kind: 'voluntary', freeAmountRequired: true }));
+      }),
+    );
+    const { user } = renderPage();
+    expect(await screen.findByText(/Сумму выбираете сами/)).toBeInTheDocument();
+    // Круг = позвали трое + создатель, который скинулся.
+    expect(screen.getByText(/перевели 2 из 4 · обещали 1/)).toBeInTheDocument();
+    expect(screen.getByText('после срока остаток разделится между теми, кто промолчал')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Оплачу позже' }));
+    await user.type(screen.getByLabelText('Сумма обещания'), '1500');
+    await user.click(screen.getByRole('button', { name: 'Обещаю' }));
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    expect(sent).toEqual({ amountKopecks: 150000, date: expect.any(String) });
   });
 });

@@ -197,6 +197,6 @@ class RateLimitFilter : OncePerRequestFilter() {
         // действие превращается в DM с кнопками получателю; под общим лимитом 120/мин один человек
         // мог бы заспамить чужую личку серией «Перевёл» / «Отдал Σ» (security-ревью v3).
         private const val MONEY_CLAIM_LIMIT_PER_MIN = 10L
-        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute)$")
+        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute|skladchinas/[^/]+/promise)$")
     }
 }

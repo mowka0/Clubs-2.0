@@ -4,6 +4,7 @@ import {
   cancelSkladchina,
   closeSkladchina,
   contributeSkladchina,
+  promiseSkladchina,
   createSkladchina,
   getEventSplitState,
   getMySkladchinas,
@@ -92,6 +93,7 @@ export type SkladchinaAction =
   | { type: 'join'; note?: string | null; quantity?: number }
   | { type: 'leave' }
   | { type: 'contribute'; amountKopecks: number }
+  | { type: 'promise'; amountKopecks: number; date: string }
   | { type: 'lock' }
   | { type: 'order'; includePromised: boolean }
   | { type: 'close' }
@@ -104,6 +106,7 @@ function runSkladchinaAction(id: string, action: SkladchinaAction): Promise<Skla
     case 'join': return joinSkladchina(id, action.note, action.quantity ?? 1);
     case 'leave': return leaveSkladchina(id);
     case 'contribute': return contributeSkladchina(id, action.amountKopecks);
+    case 'promise': return promiseSkladchina(id, action.amountKopecks, action.date);
     case 'lock': return lockSkladchina(id);
     case 'order': return orderSkladchina(id, action.includePromised);
     case 'close': return closeSkladchina(id);

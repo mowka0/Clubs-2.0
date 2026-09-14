@@ -151,7 +151,7 @@ class SkladchinaChatStatusRenderer(
         val t = view.totals
         val sb = StringBuilder()
         sb.append("🎁 ").append(escapeHtml(s.title)).append("\n")
-        sb.append("по желанию")
+        sb.append(if (s.isFreeAmountRequired) "сумму выбираете сами" else "по желанию")
         // После встречи ориентир — это общий чек: людям важно знать, сколько потратили.
         s.amountKopecks?.let { sb.append(if (s.eventId != null) " · всего потратили " else " · ориентир ").append(Money.rub(it)) }
         s.deadline?.let { sb.append(" · до ").append(it.format(fmt)) }
@@ -165,6 +165,7 @@ class SkladchinaChatStatusRenderer(
         } else {
             sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks))
         }
+        if (t.promisedKopecks > 0) sb.append(" · обещано ").append(Money.rub(t.promisedKopecks))
         return sb.toString()
     }
 

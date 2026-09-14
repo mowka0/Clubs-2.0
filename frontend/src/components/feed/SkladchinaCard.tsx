@@ -1,7 +1,7 @@
 import { FC } from 'react';
 import type { MySkladchinaListItemDto } from '../../types/api';
 import { formatRub } from '../../utils/money';
-import { DATE_FMT, KIND_LABEL, initials, statusLabel } from '../../utils/skladchinaKind';
+import { DATE_FMT, FREE_AMOUNT_LABEL, KIND_LABEL, initials, statusLabel } from '../../utils/skladchinaKind';
 
 interface SkladchinaCardProps {
   skladchina: MySkladchinaListItemDto;
@@ -42,7 +42,7 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
   return (
     <button type="button" className="rd-activity-card" onClick={onClick}>
       <div className="rd-act-cover rd-c-coin">
-        <span className="rd-type-badge">{KIND_LABEL[skladchina.kind].toUpperCase()}</span>
+        <span className="rd-type-badge">{(skladchina.freeAmountRequired ? FREE_AMOUNT_LABEL : KIND_LABEL[skladchina.kind]).toUpperCase()}</span>
       </div>
       <div className="rd-act-body">
         <div className="rd-act-club-row">

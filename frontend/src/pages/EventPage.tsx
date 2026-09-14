@@ -2166,7 +2166,7 @@ export const EventPage: FC = () => {
           options={[
             // Со страницы встречи важно одно различие: кто решает, сколько с каждого (PO 2026-09-13).
             { label: 'Я распределю, кто сколько должен', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=split&eventId=${event.id}`); } },
-            { label: 'Каждый сам решит, сколько скинуть', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
+            { label: 'Кто сколько даст? Все платят, сумму выбирает каждый', onPick: () => { setSplitAsk(false); navigate(`/clubs/${event.clubId}/skladchina/new?flow=voluntary&eventId=${event.id}`); } },
           ]}
           onCancel={() => setSplitAsk(false)}
         />
