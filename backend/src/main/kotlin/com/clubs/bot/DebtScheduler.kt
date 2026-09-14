@@ -55,7 +55,9 @@ class DebtScheduler(
                     return@forEach
                 }
                 // «Сумму выбираете сами» (§ 3.5): по сроку остаток счёта делится между молчунами.
-                when (val outcome = remainderService.splitAmongSilent(s, now)) {
+                val outcome = remainderService.splitAmongSilent(s, now)
+                log.info("Free-amount deadline: id={} outcome={}", s.id, outcome)
+                when (outcome) {
                     is SkladchinaRemainderService.Outcome.Split -> notifier.sendSilentSplit(s, outcome)
                     is SkladchinaRemainderService.Outcome.Shortfall -> notifier.sendShortfall(s, outcome.remainderKopecks)
                     SkladchinaRemainderService.Outcome.Nothing -> notifier.sendCloseReminder(s, debtRepository.totals(s.id))
