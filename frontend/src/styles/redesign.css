@@ -1873,6 +1873,8 @@
 .rd-amounts .rd-vol-note { font-size: 12px; color: var(--text-dim); }
 .rd-sklad-stats { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
 .rd-payment-link-text {
+/* Реквизиты без ссылки (номер, текст): крупно, выделяются целиком по тапу — чтобы скопировать в банк. */
+.rd-requisites-text { font-size: 17px; font-weight: 600; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); user-select: all; -webkit-user-select: all; word-break: break-word; }
   font-size: 11px; color: var(--text-faint); margin-top: 8px;
   word-break: break-all; line-height: 1.4;
 }

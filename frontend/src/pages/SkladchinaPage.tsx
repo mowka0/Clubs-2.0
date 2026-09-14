@@ -14,7 +14,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, defaultPromiseDate, initials, personName, statusLabel } from '../utils/skladchinaKind';
+import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, defaultPromiseDate, initials, isHttpLink, personName, statusLabel } from '../utils/skladchinaKind';
 
 // Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
 // потом ждём; прощённые и выбывшие в хвосте. `received` в эту панель не попадает.
@@ -114,6 +114,13 @@ export const SkladchinaPage: FC = () => {
   const openDebts = (s.debts ?? []).filter((d) => d.status !== 'received').sort((a, b) => OPEN_ORDER[a.status] - OPEN_ORDER[b.status]);
   const paidDebts = (s.debts ?? []).filter((d) => d.status === 'received');
   const openTitle = s.kind === 'per_head' ? 'Берут' : s.kind === 'voluntary' ? 'Подтвердите' : 'Кто должен';
+  // «По желанию» (PO 2026-09-14): в «Подтвердите» только «говорит, что перевёл»; обещавшие и спорящие — в «Скидываются»
+  // вместе с молчунами; кто перевёл — в «Перевели». Остальным участникам — те же панели людьми, без сумм.
+  const openRows = s.kind === 'voluntary' ? openDebts.filter((d) => d.status === 'claimed') : openDebts;
+  const pendingDebts = s.kind === 'voluntary' ? openDebts.filter((d) => d.status === 'promised' || d.status === 'waiting') : [];
+  const paidIds = new Set(s.paid.map((p) => p.id));
+  const debtorIds = new Set((s.debts ?? []).map((d) => d.debtor.id));
+  const pendingPeople = s.enrolled.filter((p) => !paidIds.has(p.id) && !debtorIds.has(p.id));
   const paidTitle = s.kind === 'voluntary' ? 'Перевели' : 'Оплатили';
   const orderText = `Заказываю: оплатили ${s.receivedCount}, говорят, что отдали ${s.claimedCount}` +
     (waitingRows.length > 0 ? `, не оплатили ${waitingRows.length} — они выбывают.` : '.');
@@ -277,10 +284,17 @@ export const SkladchinaPage: FC = () => {
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
             <div style={{ marginBottom: 10 }}><PersonRow person={s.creator} subtitle="собирает" /></div>
             {s.paymentMethodNote && <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>}
-            <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('light'); window.open(s.paymentLink, '_blank', 'noopener,noreferrer'); }}>
-              Открыть в банке
-            </button>
-            <div className="rd-payment-link-text">{s.paymentLink}</div>
+            {isHttpLink(s.paymentLink) ? (
+              <>
+                <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('light'); window.open(s.paymentLink, '_blank', 'noopener,noreferrer'); }}>
+                  Открыть в банке
+                </button>
+                <div className="rd-payment-link-text">{s.paymentLink}</div>
+              </>
+            ) : (
+              // Номер телефона или свободный текст: кнопке присвоить нечего — показываем как есть (PO 2026-09-14).
+              <div className="rd-requisites-text">{s.paymentLink}</div>
+            )}
           </div>
         </>
       )}
@@ -414,29 +428,37 @@ export const SkladchinaPage: FC = () => {
         </div>
       )}
 
-      {/* Этап записи: кто в деле — всем, вместо списка долгов (их ещё нет). */}
-      {/* Этап записи — кто в деле; «По желанию» — кого позвали скинуться (создателю видно, кто уже перевёл). */}
-      {(s.isEnrolling || (s.kind === 'voluntary' && s.enrolled.length > 0)) && (
+      {/* Этап записи — кто в деле (долгов ещё нет). */}
+      {s.isEnrolling && (
         <>
           <div className="rd-section-sub-h">
-            {s.isEnrolling ? 'В деле' : 'Скидываются'} <span className="rd-count">· {s.enrolled.length}</span>
+            В деле <span className="rd-count">· {s.enrolled.length}</span>
           </div>
           <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
             {s.enrolled.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
-            {s.enrolled.map((p) => {
-              // Создателю — сумма и состояние из долга; остальным — только галочка оплатившим.
-              const debt = (s.debts ?? []).find((d) => d.debtor.id === p.id);
-              const mark = debt
-                ? (debt.status === 'received' ? `${formatRub(debt.amountKopecks)} ✅` : debt.status === 'claimed' ? `${formatRub(debt.amountKopecks)} · ждёт` : '')
-                : (s.paid.some((x) => x.id === p.id) ? '✅' : '');
-              return <PersonRow key={p.id} person={p} viewerId={viewerId} meta={mark || undefined} />;
-            })}
+            {s.enrolled.map((p) => <PersonRow key={p.id} person={p} viewerId={viewerId} />)}
+          </div>
+        </>
+      )}
+
+      {/* «По желанию»: «Скидываются» — только кто ещё не скинул (PO 2026-09-14). Создателю обещания и споры —
+          строками долга с кнопками, молчуны — людьми; остальным — людьми без пометок. Пусто — панели нет. */}
+      {s.kind === 'voluntary' && pendingDebts.length + pendingPeople.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">
+            Скидываются <span className="rd-count">· {pendingDebts.length + pendingPeople.length}</span>
+          </div>
+          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+            {pendingDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
+            ))}
+            {pendingPeople.map((p) => <PersonRow key={p.id} person={p} viewerId={viewerId} />)}
           </div>
         </>
       )}
 
       {/* Оплатившие — всем участникам, людьми без сумм (PO 2026-09-14); у создателя вместо этого панели долгов ниже. */}
-      {!s.isCreator && !s.isEnrolling && s.paid.length > 0 && !(s.kind === 'voluntary' && s.enrolled.length > 0) && (
+      {!s.isCreator && !s.isEnrolling && s.paid.length > 0 && (
         <>
           <div className="rd-section-sub-h">
             {paidTitle} <span className="rd-count">· {s.paid.length}</span>
@@ -450,19 +472,21 @@ export const SkladchinaPage: FC = () => {
       {/* Создатель: не оплатившие и оплатившие двумя панелями, потом кнопки стадии. */}
       {s.isCreator && s.debts && !s.isEnrolling && (
         <>
-          <div className="rd-section-sub-h">
-            {openTitle} <span className="rd-count">· {openDebts.length}</span>
-          </div>
-          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
-            {openDebts.length === 0 && (
-              <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>
-                {paidDebts.length === 0 ? 'Пока никого.' : s.kind === 'voluntary' ? 'Все переводы подтверждены.' : 'Все оплатили.'}
+          {(s.kind !== 'voluntary' || openRows.length > 0) && (
+            <>
+              <div className="rd-section-sub-h">
+                {openTitle} <span className="rd-count">· {openRows.length}</span>
               </div>
-            )}
-            {openDebts.map((d) => (
-              <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
-            ))}
-          </div>
+              <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+                {openRows.length === 0 && (
+                  <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>{paidDebts.length === 0 ? 'Пока никого.' : 'Все оплатили.'}</div>
+                )}
+                {openRows.map((d) => (
+                  <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
+                ))}
+              </div>
+            </>
+          )}
           {paidDebts.length > 0 && (
             <>
               <div className="rd-section-sub-h">
