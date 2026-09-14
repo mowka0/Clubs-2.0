@@ -52,7 +52,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const canAct = !readOnly && !busy && open && !inSettlement && !own && (isDebtor || isCreditor);
 
   const statusLine = (() => {
-    if (own) return 'своя доля';
+    if (own) return 'ваш взнос ✅';
     switch (debt.status) {
       case 'waiting':
         if (debt.rejectedAt) return 'не получил · ответьте: заметка или чек';

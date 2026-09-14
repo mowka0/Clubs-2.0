@@ -117,7 +117,8 @@ data class SkladchinaDetailDto(
     val clubName: String,
     val clubAvatarUrl: String?,
     val creatorId: UUID,
-    val creatorName: String,
+    // Кто собирает: панель «Кому переводить» у плательщика и крошка «собирает …».
+    val creator: DebtPersonDto,
 
     val title: String,
     val description: String?,
@@ -164,6 +165,9 @@ data class SkladchinaDetailDto(
     // Люди на экране сбора: на этапе «Кто в деле?» — отметившиеся «В деле» (видно всем участникам);
     // в «По желанию» — кого позвали скинуться (`people` формы, блок «Скидываются»); иначе пустой список.
     val enrolled: List<DebtPersonDto>,
+    // Кто уже оплатил (долги `received`) — всем участникам, только люди: суммы и заметки чужих
+    // долгов остаются между сторонами (PO 2026-09-14: «оплативших видят все»).
+    val paid: List<DebtPersonDto>,
 
     // Мой долг как должника (null = у меня долга в этом сборе нет).
     val myDebt: DebtDto?,
@@ -193,6 +197,8 @@ data class MySkladchinaListItemDto(
     val clubId: UUID,
     val clubName: String,
     val clubAvatarUrl: String?,
+    // «собирает …» в карточке ленты у чужого сбора.
+    val creatorName: String,
     val kind: String,
     val amountKopecks: Long?,
     val targetKopecks: Long?,

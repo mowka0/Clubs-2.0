@@ -12,9 +12,27 @@ import { Toast } from '../components/Toast';
 import { ConfirmSheet, useConfirm } from '../components/ConfirmSheet';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
-import type { SkladchinaDetailDto } from '../types/api';
+import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
 import { DATE_FMT, DAY_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
+
+// Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
+// потом ждём; прощённые и выбывшие в хвосте. `received` в эту панель не попадает.
+const OPEN_ORDER: Record<DebtStatus, number> = { claimed: 0, promised: 1, waiting: 2, forgiven: 3, dropped: 4, received: 5 };
+
+/** Строка человека в панелях сбора: аватар, имя (+ «(вы)»), @username и подпись, справа короткая пометка. */
+const PersonRow: FC<{ person: DebtPersonDto; viewerId?: string; subtitle?: string; meta?: string }> = ({ person, viewerId, subtitle, meta }) => (
+  <div className="rd-debt-head rd-enrolled-row">
+    <span className="rd-av rd-debt-av">{person.avatarUrl ? <img src={person.avatarUrl} alt="" /> : initials(personName(person))}</span>
+    <span className="rd-debt-who">
+      <b>{personName(person)}{viewerId && person.id === viewerId ? ' (вы)' : ''}</b>
+      {(person.username || subtitle) && (
+        <span className="rd-debt-handle">{person.username ? `@${person.username}` : ''}{person.username && subtitle ? ' · ' : ''}{subtitle ?? ''}</span>
+      )}
+    </span>
+    {meta && <span className="rd-debt-meta">{meta}</span>}
+  </div>
+);
 
 function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof ApiError && (e.status === 400 || e.status === 403 || e.status === 409) && e.message) return e.message;
@@ -28,6 +46,8 @@ function stageLine(s: SkladchinaDetailDto): string {
   }
   const parts: string[] = [];
   if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт${s.openCount > 0 ? ` · ждём оплату ${s.openCount}` : ''}` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
+  // «По желанию» без знаменателя: круг платящих не задан, считаем только переводы (PO 2026-09-14).
+  else if (s.kind === 'voluntary') parts.push(`перевели ${s.receivedCount}${s.claimedCount > 0 ? ` · ${s.claimedCount} ждут подтверждения` : ''}`);
   else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
   if (s.deadline && s.status === 'active' && !s.orderedAt) {
     const past = new Date(s.deadline).getTime() < Date.now();
@@ -80,6 +100,11 @@ export const SkladchinaPage: FC = () => {
   const busy = actionMut.isPending || debtMut.isPending;
   const promisedRows = (s.debts ?? []).filter((d) => d.status === 'promised');
   const waitingRows = (s.debts ?? []).filter((d) => d.status === 'waiting' && d.debtor.id !== d.creditor.id);
+  // Создателю долги двумя панелями: не оплатившие и оплатившие, включая его собственный взнос (PO 2026-09-14).
+  const openDebts = (s.debts ?? []).filter((d) => d.status !== 'received').sort((a, b) => OPEN_ORDER[a.status] - OPEN_ORDER[b.status]);
+  const paidDebts = (s.debts ?? []).filter((d) => d.status === 'received');
+  const openTitle = s.kind === 'per_head' ? 'Берут' : s.kind === 'voluntary' ? 'Подтвердите' : 'Кто должен';
+  const paidTitle = s.kind === 'voluntary' ? 'Перевели' : 'Оплатили';
   const orderText = `Заказываю: оплатили ${s.receivedCount}, говорят, что отдали ${s.claimedCount}` +
     (waitingRows.length > 0 ? `, не оплатили ${waitingRows.length} — они выбывают.` : '.');
   const takeQuantity = /^\d+$/.test(quantityInput.trim()) && Number(quantityInput) >= 1 && Number(quantityInput) <= 50 ? Number(quantityInput) : null;
@@ -128,7 +153,7 @@ export const SkladchinaPage: FC = () => {
       setError('Введите сумму');
       return;
     }
-    void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.', `Перевели ${formatRub(kopecks)}? ${s.creatorName} получит уведомление и подтвердит.`).then(() => setAmountInput(''));
+    void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.', `Перевели ${formatRub(kopecks)}? ${s.creator.firstName} получит уведомление и подтвердит.`).then(() => setAmountInput(''));
   };
 
   const clubInitials = initials(s.clubName);
@@ -145,7 +170,7 @@ export const SkladchinaPage: FC = () => {
       >
         <span className="rd-ico">{s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}</span>
         <div className="rd-info">
-          <div className="rd-met">Сбор в клубе · собирает {s.creatorName}</div>
+          <div className="rd-met">Сбор в клубе · {s.isCreator ? 'собираете вы' : `собирает ${s.creator.firstName}`}</div>
           <div className="rd-ttl">{s.clubName}</div>
         </div>
         <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
@@ -155,12 +180,25 @@ export const SkladchinaPage: FC = () => {
       <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
       <div className="rd-badges-row" style={{ marginBottom: 16 }}>
         <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
-        {s.eventId && (
-          <button type="button" className="rd-badge rd-neutral2" style={{ cursor: 'pointer', font: 'inherit' }} onClick={() => navigate(`/events/${s.eventId}`)}>
-            за встречу «{s.eventTitle}» ›
-          </button>
-        )}
       </div>
+
+      {/* Сбор из встречи: встреча отдельной строкой, как крошка клуба, с переходом (PO 2026-09-14). */}
+      {s.eventId && (
+        <button
+          type="button"
+          className="rd-glass rd-host-row"
+          onClick={() => { haptic.impact('light'); navigate(`/events/${s.eventId}`); }}
+          aria-label={`Открыть встречу ${s.eventTitle ?? ''}`}
+          style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+        >
+          <span className="rd-ico" aria-hidden="true">📅</span>
+          <div className="rd-info">
+            <div className="rd-met">За встречу{s.eventDatetime ? ` · ${DATE_FMT.format(new Date(s.eventDatetime))}` : ''}</div>
+            <div className="rd-ttl">{s.eventTitle}</div>
+          </div>
+          <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
+        </button>
+      )}
 
       {s.photoUrl && (
         <button
@@ -205,8 +243,9 @@ export const SkladchinaPage: FC = () => {
       {/* На этапе записи платить ещё нечего: реквизиты появляются со второго этапа (PO 2026-09-13). */}
       {!s.isCreator && !s.isEnrolling && (
         <>
-          <div className="rd-section-sub-h">Реквизиты</div>
+          <div className="rd-section-sub-h">Кому переводить</div>
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div style={{ marginBottom: 10 }}><PersonRow person={s.creator} subtitle="собирает" /></div>
             {s.paymentMethodNote && <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>}
             <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('light'); window.open(s.paymentLink, '_blank', 'noopener,noreferrer'); }}>
               Открыть в банке
@@ -273,6 +312,7 @@ export const SkladchinaPage: FC = () => {
 
           {s.kind === 'voluntary' && !s.myDebt && (
             <>
+              <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Ваш перевод</div>
               <div style={{ position: 'relative', marginBottom: 10 }}>
                 <input
                   type="number"
@@ -328,34 +368,57 @@ export const SkladchinaPage: FC = () => {
           <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
             {s.enrolled.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
             {s.enrolled.map((p) => {
-              const paid = (s.debts ?? []).find((d) => d.debtor.id === p.id);
-              return (
-                <div className="rd-debt-head rd-enrolled-row" key={p.id}>
-                  <span className="rd-av rd-debt-av">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(personName(p))}</span>
-                  <span className="rd-debt-who">
-                    <b>{personName(p)}{p.id === viewerId ? ' (вы)' : ''}</b>
-                    {p.username && <span className="rd-debt-handle">@{p.username}</span>}
-                  </span>
-                  {paid && <span className="rd-debt-meta">{paid.status === 'received' ? `${formatRub(paid.amountKopecks)} ✅` : paid.status === 'claimed' ? `${formatRub(paid.amountKopecks)} · ждёт` : ''}</span>}
-                </div>
-              );
+              // Создателю — сумма и состояние из долга; остальным — только галочка оплатившим.
+              const debt = (s.debts ?? []).find((d) => d.debtor.id === p.id);
+              const mark = debt
+                ? (debt.status === 'received' ? `${formatRub(debt.amountKopecks)} ✅` : debt.status === 'claimed' ? `${formatRub(debt.amountKopecks)} · ждёт` : '')
+                : (s.paid.some((x) => x.id === p.id) ? '✅' : '');
+              return <PersonRow key={p.id} person={p} viewerId={viewerId} meta={mark || undefined} />;
             })}
           </div>
         </>
       )}
 
-      {/* Создатель: список долгов и кнопки стадии. */}
+      {/* Оплатившие — всем участникам, людьми без сумм (PO 2026-09-14); у создателя вместо этого панели долгов ниже. */}
+      {!s.isCreator && !s.isEnrolling && s.paid.length > 0 && !(s.kind === 'voluntary' && s.enrolled.length > 0) && (
+        <>
+          <div className="rd-section-sub-h">
+            {paidTitle} <span className="rd-count">· {s.paid.length}</span>
+          </div>
+          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+            {s.paid.map((p) => <PersonRow key={p.id} person={p} viewerId={viewerId} meta="✅" />)}
+          </div>
+        </>
+      )}
+
+      {/* Создатель: не оплатившие и оплатившие двумя панелями, потом кнопки стадии. */}
       {s.isCreator && s.debts && !s.isEnrolling && (
         <>
           <div className="rd-section-sub-h">
-            {s.kind === 'per_head' ? 'Берут' : 'Кто должен'} <span className="rd-count">· {s.debts.length}</span>
+            {openTitle} <span className="rd-count">· {openDebts.length}</span>
           </div>
           <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
-            {s.debts.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
-            {s.debts.map((d) => (
+            {openDebts.length === 0 && (
+              <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>
+                {paidDebts.length === 0 ? 'Пока никого.' : s.kind === 'voluntary' ? 'Все переводы подтверждены.' : 'Все оплатили.'}
+              </div>
+            )}
+            {openDebts.map((d) => (
               <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
             ))}
           </div>
+          {paidDebts.length > 0 && (
+            <>
+              <div className="rd-section-sub-h">
+                {paidTitle} <span className="rd-count">· {paidDebts.length}</span>
+              </div>
+              <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+                {paidDebts.map((d) => (
+                  <DebtRow key={d.id} debt={d} viewerId={viewerId} readOnly={!isActive} busy={busy} onAction={(a) => runDebt(d.id, a)} />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 

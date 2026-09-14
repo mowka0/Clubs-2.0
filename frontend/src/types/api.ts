@@ -801,7 +801,8 @@ export interface SkladchinaDetailDto {
   clubName: string;
   clubAvatarUrl: string | null;
   creatorId: string;
-  creatorName: string;
+  /** Кто собирает: панель «Кому переводить» и крошка «собирает …». */
+  creator: DebtPersonDto;
   title: string;
   description: string | null;
   rules: string | null;
@@ -833,6 +834,8 @@ export interface SkladchinaDetailDto {
   myEnrolled: boolean;
   /** Люди на экране сбора: на этапе «Кто в деле?» — отметившиеся «В деле»; в «По желанию» — кого позвали (блок «Скидываются»); иначе пусто. */
   enrolled: DebtPersonDto[];
+  /** Кто уже оплатил — всем участникам, только люди (без сумм и заметок). */
+  paid: DebtPersonDto[];
   debtCount: number;
   receivedCount: number;
   openCount: number;
@@ -858,6 +861,8 @@ export interface MySkladchinaListItemDto {
   clubId: string;
   clubName: string;
   clubAvatarUrl: string | null;
+  /** «собирает …» в карточке ленты у чужого сбора. */
+  creatorName: string;
   kind: SkladchinaKind;
   amountKopecks: number | null;
   targetKopecks: number | null;

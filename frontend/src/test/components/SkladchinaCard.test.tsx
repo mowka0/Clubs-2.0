@@ -11,6 +11,7 @@ function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchi
     clubId: 'club-1',
     clubName: 'Партия',
     clubAvatarUrl: null,
+    creatorName: 'Иван',
     kind: 'shared',
     amountKopecks: 600000,
     targetKopecks: 600000,
@@ -31,6 +32,7 @@ describe('SkladchinaCard — сборы v3', () => {
   it('показывает «Оплатили N из M», деньги «X из Y» и бейдж «Ждёт вас»', () => {
     render(<SkladchinaCard skladchina={buildItem()} onClick={vi.fn()} />);
     expect(screen.getByText('Оплатили 1 из 6')).toBeInTheDocument();
+    expect(screen.getByText('· собирает Иван')).toBeInTheDocument();
     expect(screen.getByText(/1\s?000 ₽ из 6\s?000 ₽/)).toBeInTheDocument();
     expect(screen.getByText('Ждёт вас')).toBeInTheDocument();
     expect(screen.getByText('СКИНУТЬСЯ')).toBeInTheDocument();
@@ -42,6 +44,7 @@ describe('SkladchinaCard — сборы v3', () => {
 
     render(<SkladchinaCard skladchina={buildItem({ id: 's-2', kind: 'voluntary', deadline: null, targetKopecks: null, amountKopecks: null, actionRequired: false, myDebtStatus: null })} onClick={vi.fn()} />);
     expect(screen.getByText(/без срока/)).toBeInTheDocument();
+    expect(screen.getByText('Перевели 1')).toBeInTheDocument();
     expect(screen.getByText(/1\s?000 ₽ получено/)).toBeInTheDocument();
   });
 });

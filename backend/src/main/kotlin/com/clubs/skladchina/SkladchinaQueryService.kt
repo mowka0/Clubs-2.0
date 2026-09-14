@@ -4,8 +4,10 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.debt.DebtMapper
+import com.clubs.debt.DebtPersonDto
 import com.clubs.debt.DebtRepository
 import com.clubs.event.EventRepository
+import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.membership.MembershipRepository
 import com.clubs.user.UserRepository
@@ -44,16 +46,19 @@ class SkladchinaQueryService(
     @Transactional(readOnly = true)
     fun getClubActiveSkladchinas(clubId: UUID, callerId: UUID): List<MySkladchinaListItemDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        return skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = false, viewerId = callerId)
-            .map {
-                mapper.toMyFeedItemDto(
-                    MySkladchinaFeedItem(
-                        skladchina = it.skladchina, clubName = club.name, clubAvatarUrl = club.avatarUrl,
-                        totals = it.totals, myDebtStatus = null, awaitingMyConfirmation = false
-                    ),
-                    callerId
-                )
-            }
+        val items = skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = false, viewerId = callerId)
+        val creatorNames = userRepository.findByIds(items.map { it.skladchina.creatorId }.toSet())
+            .associate { it.id!! to it.firstName }
+        return items.map {
+            mapper.toMyFeedItemDto(
+                MySkladchinaFeedItem(
+                    skladchina = it.skladchina, clubName = club.name, clubAvatarUrl = club.avatarUrl,
+                    creatorName = creatorNames[it.skladchina.creatorId] ?: "",
+                    totals = it.totals, myDebtStatus = null, awaitingMyConfirmation = false
+                ),
+                callerId
+            )
+        }
     }
 
     /**
@@ -69,13 +74,18 @@ class SkladchinaQueryService(
         if (!isCreator) requireMember(s.clubId, callerId)
 
         val now = OffsetDateTime.now()
-        val debts = debtRepository.findBySkladchina(skladchinaId).map { debtMapper.toDto(it, now) }
+        val debtItems = debtRepository.findBySkladchina(skladchinaId)
+        val debts = debtItems.map { debtMapper.toDto(it, now) }
+        // Оплативших видят все участники — людьми, без сумм (PO 2026-09-14).
+        val paid = debtItems.filter { it.debt.status == DebtStatus.received }.map { it.debtor }.distinctBy { it.id }.map(debtMapper::toPersonDto)
         val event = s.eventId?.let { eventRepository.findById(it) }
         return mapper.toDetailDto(
             skladchina = s,
             clubName = club.name,
             clubAvatarUrl = club.avatarUrl,
-            creatorName = userRepository.findById(s.creatorId)?.firstName ?: "",
+            creator = userRepository.findById(s.creatorId)
+                ?.let { DebtPersonDto(it.id!!, it.firstName, it.lastName, it.telegramUsername, it.avatarUrl) }
+                ?: DebtPersonDto(s.creatorId, "", null, null, null),
             callerId = callerId,
             canCancel = isCreator || club.ownerId == callerId,
             totals = debtRepository.totals(skladchinaId),
@@ -83,6 +93,7 @@ class SkladchinaQueryService(
             myEnrolled = s.isEnrolling && skladchinaRepository.isEnrolled(skladchinaId, callerId),
             // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
             enrolled = if (s.isEnrolling || s.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledPersons(skladchinaId).map(debtMapper::toPersonDto) else emptyList(),
+            paid = paid,
             debts = debts,
             event = event
         )
