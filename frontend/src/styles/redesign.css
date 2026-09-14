@@ -1226,13 +1226,27 @@
 }
 .rd-hero-meta { position: absolute; left: 16px; right: 16px; bottom: 18px; color: #fff; z-index: 2; }
 .rd-hero-eyebrow { font-size: 11px; opacity: 0.85; margin-bottom: 4px; }
-/* Дата и время встречи в хиро (PO 2026-09-14): число крупно, месяц с днём недели и время рядом. */
-.rd-hero.rd-hero-event { height: calc(224px + var(--app-inset-top, 0px)); }
-.rd-hero-when { display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px); }
-.rd-hero-when-day { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
-.rd-hero-when-col { display: flex; flex-direction: column; line-height: 1.15; }
-.rd-hero-when-month { font-size: 12px; opacity: 0.85; }
-.rd-hero-when-time { font-size: 18px; font-weight: 700; }
+/* Фото встречи ниже на 30 % (PO 2026-09-14): четверть экрана под картинку, которой у большинства
+   встреч нет, — слишком дорого. Без фото фон рисует градиент категории клуба (data-cat). */
+.rd-hero.rd-hero-event { height: calc(140px + var(--app-inset-top, 0px)); }
+
+/* Панель «когда» наезжает на фото: дата и время были строкой 11-м кеглем поверх картинки и
+   терялись, хотя это главный факт встречи. Полосы обратного отсчёта нет намеренно — на встрече
+   через месяц она почти пуста и врёт, фраза «через 5 недель» честна на любом сроке. */
+.rd-when-panel { position: relative; margin: -34px 0 14px; padding: 15px 16px; overflow: hidden; }
+.rd-when-day { font-size: 13px; font-weight: 600; color: var(--text-dim); padding-right: 58px; }
+.rd-when-time { font-size: 33px; font-weight: 850; letter-spacing: -0.03em; line-height: 1; margin: 5px 0 6px; }
+.rd-when-until { font-size: 12.5px; color: var(--accent); font-weight: 700; }
+/* Аватар клуба садится в скруглённый угол панели и заменяет прежнюю строку «клуб · организатор». */
+.rd-when-club {
+  position: absolute; top: 0; right: 0; width: 46px; height: 46px; z-index: 2;
+  border: 0; padding: 0; overflow: hidden; cursor: pointer;
+  border-radius: 0 18px 0 16px;
+  background: var(--accent-grad); color: #fff;
+  font-family: inherit; font-size: 13px; font-weight: 800;
+  box-shadow: -6px 6px 14px rgba(0, 0, 0, 0.3);
+}
+.rd-when-club img { width: 100%; height: 100%; object-fit: cover; }
 .rd-hero-ttl { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .rd-hero-bg[data-cat] { background-size: cover; background-position: center; }
 .rd-hero-bg[data-cat="sport"]       { background-image: radial-gradient(circle at 70% 30%, rgba(255,205,168,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5c2c12 55%, #0a0a0e 100%); }
@@ -1467,45 +1481,52 @@
 .rd-addr-body .rd-a-met { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
 /* ---------- Голосование / статистика (страница события) ---------- */
-.rd-vote-row { display: flex; gap: 8px; }
-.rd-vote-btn {
-  flex: 1; padding: 12px; border-radius: 12px;
-  background: var(--surface); border: 1px solid var(--hairline);
-  color: var(--text); font-size: 13px; font-weight: 600;
-  cursor: pointer; font-family: inherit;
-}
-.rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
-/* Кнопка голоса несёт свой цвет через color (--vote-*): от него живут метка-кружок и счётчик
-   (currentColor), подпись остаётся цветом текста. Те же цвета у точки статуса в ростере. */
-.rd-vote-btn.rd-vb-go { color: var(--vote-go); }
-.rd-vote-btn.rd-vb-maybe { color: var(--vote-maybe); }
-.rd-vote-btn.rd-vb-no { color: var(--vote-no); }
-/* Выбранный голос — обводка своим цветом и плотнее поверхность, БЕЗ сплошной заливки:
-   залитая кнопка на тёмной теме читалась как «недоступна». */
-.rd-vote-btn.rd-active {
-  border-color: currentColor; background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px currentColor;
-}
-/* Голосование: колонка кнопок слева + кольцо занятости справа. Высота кнопки фиксирована
-   (42px): три кнопки с зазорами по 7px дают ровно 140px — диаметр кольца. Вывести диаметр из
-   содержимого нельзя, ширина кольца зависела бы от его высоты, а высота — от высоты строки. */
+/* Колонка счётчиков слева + кольцо занятости справа. На этапе 2 и в состояниях без действий
+   здесь стоят плитки `.rd-stat-tile`; кнопки голоса живут своим блоком (`.rd-vote-main`). */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
 .rd-vote-stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
-/* Высота задаётся через flex-basis, а не height: у базового `.rd-vote-btn` стоит `flex: 1`
-   (для горизонтального ряда), а это `flex-basis: 0%` — в КОЛОНОЧНОМ флексе basis управляет
-   высотой и обнуляет любой height, схлопывая кнопку до содержимого. */
-.rd-vote-stack .rd-vote-btn {
-  width: 100%; flex: 0 0 42px; text-align: left; padding: 0 13px; font-size: 13px;
-  display: flex; align-items: center; gap: 9px;
+
+/* Карточка мест: кольцо и полоса статуса рядом. Полоса теряет свою подложку — фон даёт карточка. */
+.rd-seats-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; margin-bottom: 12px; }
+.rd-seats-tx { flex: 1; min-width: 0; }
+.rd-seats-card .rd-roster-note { background: transparent; border: 0; padding: 0; margin: 0; }
+.rd-seats-plain b { display: block; font-size: 15.5px; font-weight: 750; margin-bottom: 3px; }
+.rd-seats-plain span { font-size: 12.5px; color: var(--text-dim); }
+
+/* Голос: одна крупная кнопка и два вторичных ответа (PO 2026-09-14). Три равные кнопки не
+   говорили, чего от человека ждут; счётчики сняты — те же числа стоят в табах «Кто откликнулся». */
+.rd-vote-main {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 16px; border: 0; border-radius: 16px; cursor: pointer;
+  font-family: inherit; font-size: 16.5px; font-weight: 800; color: var(--on-accent);
+  background: var(--accent-grad); box-shadow: 0 8px 22px var(--accent-glow);
 }
-/* Метка-кружок: залита цветом голоса, сама иконка — цветом фона страницы. */
-.rd-vote-btn .rd-vm {
+.rd-vote-main .rd-vm { background: rgba(255, 255, 255, 0.9); }
+.rd-vote-main .rd-vm svg { color: var(--accent); }
+.rd-vote-main.rd-voted {
+  background: var(--live-soft); color: var(--live); box-shadow: none;
+  border: 1px solid var(--live-soft);
+}
+.rd-vote-main.rd-voted .rd-vm { background: var(--live); }
+.rd-vote-main.rd-voted .rd-vm svg { color: var(--bg); }
+.rd-vote-main:disabled, .rd-vote-alt:disabled { opacity: 0.6; cursor: default; }
+.rd-vote-pair { display: flex; gap: 8px; margin: 8px 0 14px; }
+.rd-vote-alt {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 12px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--surface);
+  font-family: inherit; font-size: 13.5px; font-weight: 650; color: var(--text);
+}
+.rd-vote-alt .rd-vm { background: var(--text-faint); }
+.rd-vote-alt .rd-vm svg { color: var(--bg); }
+.rd-vote-alt.rd-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.rd-vote-alt.rd-active .rd-vm { background: var(--accent); }
+.rd-vote-main .rd-vm, .rd-vote-alt .rd-vm {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; background: currentColor;
+  display: flex; align-items: center; justify-content: center;
 }
-.rd-vote-btn .rd-vm svg { width: 11px; height: 11px; color: var(--bg); }
-.rd-vote-btn .rd-vl { flex: 1; min-width: 0; color: var(--text); }
-.rd-vote-btn .rd-vc { font-size: 13px; font-weight: 800; letter-spacing: -0.02em; }
+.rd-vote-main .rd-vm svg, .rd-vote-alt .rd-vm svg { width: 11px; height: 11px; }
+
 .rd-donut { flex: 0 0 140px; width: 140px; height: 140px; position: relative; }
 /* Объём кольца (PO 2026-08-01: «всё объёмное, а она плоская»). Язык — стекло, как у карточек:
    утопленный жёлоб = тёмная внутренняя тень сверху + тонкий блик по нижней кромке (тот же
@@ -1532,7 +1553,7 @@
 .rd-donut-cap { font-size: 8.5px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.12em; }
 
 /* Сводка состава (Этап 2+) — плитки в геометрии кнопки голоса, но НЕ кнопки: на Этапе 2
-   нажимать нечего, а силуэт `.rd-vote-btn` обещал бы интерактив. Отсюда div, `cursor: default`
+   нажимать нечего, а силуэт кнопки обещал бы интерактив. Отсюда div, `cursor: default`
    и отсутствие :active. Прежде эта зона была плоским списком `.rd-kv`, из-за чего Этап 2
    говорил другим визуальным языком, чем Этап 1 (event-stage2-composition.md § 1). */
 .rd-stat-tile {

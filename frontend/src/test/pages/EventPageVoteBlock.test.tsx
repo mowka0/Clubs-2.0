@@ -208,6 +208,74 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
   });
 });
 
+describe('EventPage — шапка и голосование (PO 2026-09-14)', () => {
+  it('панель «когда»: день словами, крупное время и «через …» вместо строки поверх фото', async () => {
+    const inThreeDays = new Date(Date.now() + 3 * 86_400_000 + 3_600_000).toISOString();
+    mockEndpoints({ event: stage1Event({ eventDatetime: inThreeDays }) });
+    renderEventPage();
+
+    await screen.findByText('Событие');
+    const panel = document.querySelector('.rd-when-panel');
+    expect(panel).toBeTruthy();
+    expect(panel!.querySelector('.rd-when-day')!.textContent).toMatch(/,/); // «суббота, 10 сентября»
+    expect(panel!.querySelector('.rd-when-time')!.textContent).toMatch(/^\d{2}:\d{2}$/);
+    expect(await screen.findByText('через 3 дня')).toBeInTheDocument();
+    // Прежней строки-даты поверх фото больше нет.
+    expect(document.querySelector('.rd-hero-eyebrow')).toBeNull();
+  });
+
+  it('без фото встречи фон хиро — градиент категории, аватарку клуба не растягиваем', async () => {
+    mockEndpoints({ event: stage1Event({ photoUrl: null }) });
+    renderEventPage();
+
+    await screen.findByText('Событие');
+    const bg = document.querySelector('.rd-hero-bg') as HTMLElement;
+    expect(bg.getAttribute('data-cat')).toBe('sport');
+    expect(bg.style.backgroundImage).toBe('');
+  });
+
+  it('клуб живёт в углу панели и открывает клуб; отдельной строки «организатор» нет', async () => {
+    mockEndpoints({ event: stage1Event() });
+    const { user } = renderEventPage();
+
+    const clubBtn = await screen.findByRole('button', { name: 'Открыть клуб Клуб' });
+    expect(clubBtn).toHaveClass('rd-when-club');
+    expect(screen.queryByText('организатор')).not.toBeInTheDocument();
+    await user.click(clubBtn);
+  });
+
+  it('голос: одна крупная «Пойду» и два вторичных ответа, счётчиков на кнопках нет', async () => {
+    let sentVote: string | null = null;
+    mockEndpoints({ event: stage1Event() });
+    server.use(
+      http.post(`*/api/events/${EVENT_ID}/vote`, async ({ request }) => {
+        sentVote = ((await request.json()) as { vote: string }).vote;
+        return HttpResponse.json({ vote: sentVote });
+      }),
+    );
+    const { user } = renderEventPage();
+
+    const going = await screen.findByRole('button', { name: /Пойду/ });
+    expect(going).toHaveClass('rd-vote-main');
+    expect(going.textContent).not.toMatch(/\d/); // счётчики переехали в табы
+    expect(screen.getByRole('button', { name: /Возможно/ })).toHaveClass('rd-vote-alt');
+    expect(screen.getByRole('button', { name: /Не пойду/ })).toHaveClass('rd-vote-alt');
+
+    await user.click(going);
+    expect(sentVote).toBe('going');
+  });
+
+  it('после голоса «пойду» кнопка подтверждает выбор', async () => {
+    mockEndpoints({ event: stage1Event() });
+    server.use(http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: 'going' })));
+    renderEventPage();
+
+    const going = await screen.findByRole('button', { name: /Вы идёте/ });
+    expect(going).toHaveClass('rd-voted');
+    expect(screen.queryByText(/Ваш голос:/)).not.toBeInTheDocument();
+  });
+});
+
 describe('EventPage — бейдж формата встречи (event-formats.md § 9.1)', () => {
   it('обычная без минимума → «👥 ДО N»', async () => {
     mockEndpoints({ event: stage1Event() });

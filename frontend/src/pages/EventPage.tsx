@@ -202,25 +202,26 @@ function formatDeadlineShort(iso: string): string {
   return `${formatNearDay(iso)} в ${formatTimeHM(iso)}`;
 }
 
-/** Плашка даты в хиро (PO 2026-09-14): число крупно, рядом месяц с днём недели и время. */
-function eventWhenParts(iso: string): { day: string; month: string; weekday: string; time: string } {
-  const d = new Date(iso);
-  return {
-    day: String(d.getDate()),
-    month: d.toLocaleString('ru-RU', { day: 'numeric', month: 'long' }).replace(/^\d+\s*/, ''),
-    weekday: d.toLocaleString('ru-RU', { weekday: 'short' }),
-    time: formatTimeHM(iso),
-  };
+/** День встречи словами для панели «когда»: «суббота, 10 сентября». */
+function eventDayLine(iso: string): string {
+  return new Date(iso).toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function formatEventDate(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/**
+ * Сколько осталось до встречи одной фразой (PO 2026-09-14): полосу отсчёта не рисуем — на встрече
+ * через месяц она почти пуста и врёт, а текст честен на любом сроке.
+ */
+function untilEventText(iso: string): string {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs <= 0) return 'встреча уже прошла';
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 60) return `через ${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `через ${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+  const weeks = Math.round(days / 7);
+  return `через ${weeks} ${pluralRu(weeks, ['неделю', 'недели', 'недель'])}`;
 }
 
 export const EventPage: FC = () => {
@@ -1139,10 +1140,64 @@ export const EventPage: FC = () => {
   // формат, тем же словарём, что на карточках лент.
   const heroFormatBadge = formatBadge(event.format, event.participantLimit, event.minParticipants).toUpperCase();
 
-  // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
-  // фолбэк — аватар клуба, как раньше.
-  const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
-  const when = eventWhenParts(event.eventDatetime);
+  /* Кольцо занятости мест. SVG, а не conic-gradient: нужен скруглённый конец дуги. */
+  const donutBlock = (
+    <div className="rd-donut" aria-hidden="true">
+      <svg viewBox="0 0 128 128">
+        <defs>
+          {/* Объём дуги: блик сверху-слева → тёмный тон снизу-справа, как у акцентных кнопок. */}
+          <linearGradient id="rd-donut-arc-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="var(--donut-arc-hi)" />
+            <stop offset="100%" stopColor="var(--donut-arc-lo)" />
+          </linearGradient>
+          {/* Собранный состав зеленеет: «набрали» — это успех, и цвет говорит об этом
+              раньше, чем подпись под числом (V83). */}
+          <linearGradient id="rd-donut-arc-grad-full" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="var(--live)" />
+            <stop offset="100%" stopColor="var(--live)" />
+          </linearGradient>
+        </defs>
+        <circle cx="64" cy="64" r={DONUT_RADIUS} fill="none" stroke="var(--ring-track)" strokeWidth="11" />
+        {donutRatio > 0 && (
+          <circle
+            className="rd-donut-arc"
+            cx="64" cy="64" r={DONUT_RADIUS} fill="none"
+            stroke={rosterFull ? 'url(#rd-donut-arc-grad-full)' : 'url(#rd-donut-arc-grad)'}
+            strokeWidth="11" strokeLinecap="round"
+            strokeDasharray={`${DONUT_CIRCUMFERENCE * donutRatio} ${DONUT_CIRCUMFERENCE}`}
+          />
+        )}
+        {/* Засечка минимума: риска поперёк дуги там, где проходит порог «соберёмся». */}
+        {minNotchAngle !== null && (
+          <line
+            className="rd-roster-notch"
+            x1={64 + (DONUT_RADIUS - 9) * Math.cos(minNotchAngle)}
+            y1={64 + (DONUT_RADIUS - 9) * Math.sin(minNotchAngle)}
+            x2={64 + (DONUT_RADIUS + 9) * Math.cos(minNotchAngle)}
+            y2={64 + (DONUT_RADIUS + 9) * Math.sin(minNotchAngle)}
+          />
+        )}
+      </svg>
+      <div className="rd-donut-center">
+        <span className="rd-donut-num">
+          {donutCount}
+          {/* Открытая встреча: знаменателя нет — только счёт. */}
+          {!isOpenEvent && <small> / {event.participantLimit}</small>}
+        </span>
+        <span className="rd-donut-cap">
+          {isOpenEvent
+            ? 'идут'
+            : isRosterEvent
+              ? (rosterFull ? 'состав собран' : 'в составе')
+              : 'мест занято'}
+        </span>
+      </div>
+    </div>
+  );
+
+  // Фон хиро — только фото события. Без фото рисуем градиент категории клуба (data-cat):
+  // аватарка клуба растягивалась на всю ширину в кашу (PO 2026-09-14).
+  const heroImage = event.photoUrl ?? null;
 
   return (
     <div className="rd-page">
@@ -1157,37 +1212,28 @@ export const EventPage: FC = () => {
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">{heroFormatBadge}</div>
           <div className="rd-hero-ttl">{event.title}</div>
-          <div className="rd-hero-when" aria-label={formatEventDate(event.eventDatetime)}>
-            <span className="rd-hero-when-day" aria-hidden="true">{when.day}</span>
-            <span className="rd-hero-when-col" aria-hidden="true">
-              <span className="rd-hero-when-month">{when.month} · {when.weekday}</span>
-              <span className="rd-hero-when-time">{when.time}</span>
-            </span>
-          </div>
         </div>
       </div>
 
-      {/* Клуб-организатор */}
-      {hostClubQuery.data && (
-        <button
-          type="button"
-          className="rd-glass"
-          style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0, marginBottom: 14, cursor: 'pointer' }}
-          onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
-        >
-          <div className="rd-host-row">
-            <span className="rd-ico">
-              {hostClubQuery.data.avatarUrl
-                ? <img src={hostClubQuery.data.avatarUrl} alt="" />
-                : getInitials(hostClubQuery.data.name)}
-            </span>
-            <div className="rd-info">
-              <div className="rd-ttl">{hostClubQuery.data.name}</div>
-              <div className="rd-met">организатор</div>
-            </div>
-          </div>
-        </button>
-      )}
+      {/* Когда: главный факт встречи вместо строки 11-м кеглем поверх фото. Аватар клуба сидит
+          в скруглённом углу панели и заменяет собой прежнюю строку «клуб · организатор». */}
+      <div className="rd-glass rd-when-panel">
+        {hostClubQuery.data && (
+          <button
+            type="button"
+            className="rd-when-club"
+            aria-label={`Открыть клуб ${hostClubQuery.data.name}`}
+            onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
+          >
+            {hostClubQuery.data.avatarUrl
+              ? <img src={hostClubQuery.data.avatarUrl} alt="" />
+              : getInitials(hostClubQuery.data.name)}
+          </button>
+        )}
+        <div className="rd-when-day">{eventDayLine(event.eventDatetime)}</div>
+        <div className="rd-when-time">{formatTimeHM(event.eventDatetime)}</div>
+        <div className="rd-when-until">{untilEventText(event.eventDatetime)}</div>
+      </div>
 
       {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
           без координат — текстом: адрес (легаси) и/или уточнение организатора (V58). */}
@@ -1241,31 +1287,56 @@ export const EventPage: FC = () => {
             ? `Состав · ${event.confirmedCount}${limitSuffix}`
             : `Идут · ${event.goingCount}${limitSuffix}`}
       </div>
+      {showVoting ? (
+        /* Крупная «Пойду» — главное действие экрана (PO 2026-09-14): три равные кнопки не
+           говорили, чего от человека ждут. Счётчики сняты — те же числа стоят в табах ниже. */
+        <>
+          <div className="rd-glass rd-seats-card">
+            {donutBlock}
+            <div className="rd-seats-tx">
+              {rosterStatusNote ?? (
+                <div className="rd-seats-plain">
+                  <b>{isOpenEvent ? `Идут ${event.goingCount}` : `Занято ${donutCount} из ${event.participantLimit}`}</b>
+                  <span>{isOpenEvent ? 'Без ограничения по местам' : 'Набор открыт'}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {actionError && <div className="rd-error">{actionError}</div>}
+          <button
+            type="button"
+            className={`rd-vote-main${myVote === 'going' ? ' rd-voted' : ''}`}
+            onClick={() => handleVote('going')}
+            disabled={voting}
+          >
+            <span className="rd-vm">{VOTE_ICONS.going}</span>
+            {myVote === 'going' ? 'Вы идёте' : 'Пойду'}
+          </button>
+          <div className="rd-vote-pair">
+            <button
+              type="button"
+              className={`rd-vote-alt${myVote === 'maybe' ? ' rd-active' : ''}`}
+              onClick={() => handleVote('maybe')}
+              disabled={voting}
+            >
+              <span className="rd-vm">{VOTE_ICONS.maybe}</span>Возможно
+            </button>
+            <button
+              type="button"
+              className={`rd-vote-alt${myVote === 'not_going' ? ' rd-active' : ''}`}
+              onClick={() => handleVote('not_going')}
+              disabled={voting}
+            >
+              <span className="rd-vm">{VOTE_ICONS.not_going}</span>Не пойду
+            </button>
+          </div>
+        </>
+      ) : (
+      <>
       {rosterStatusNote}
-      {/* Только ошибки голосования Этапа 1; ошибки confirm/decline Этапа 2 рендерятся в своём
-          блоке ниже, так что actionError никогда не показывается дважды на этапе 2 (F5-23). */}
-      {showVoting && actionError && <div className="rd-error">{actionError}</div>}
       <div className="rd-vote-layout">
         <div className="rd-vote-stack">
-          {showVoting ? (
-            <>
-              <button type="button" className={`rd-vote-btn rd-vb-go${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
-                <span className="rd-vm">{VOTE_ICONS.going}</span>
-                <span className="rd-vl">Пойду</span>
-                <span className="rd-vc">{event.goingCount}</span>
-              </button>
-              <button type="button" className={`rd-vote-btn rd-vb-maybe${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
-                <span className="rd-vm">{VOTE_ICONS.maybe}</span>
-                <span className="rd-vl">Возможно</span>
-                <span className="rd-vc">{event.maybeCount}</span>
-              </button>
-              <button type="button" className={`rd-vote-btn rd-vb-no${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
-                <span className="rd-vm">{VOTE_ICONS.not_going}</span>
-                <span className="rd-vl">Не пойду</span>
-                <span className="rd-vc">{event.notGoingCount}</span>
-              </button>
-            </>
-          ) : finalComposition ? (
+          {finalComposition ? (
             /* Те же плитки, что кнопки голоса Этапа 1, но БЕЗ интерактива: на Этапе 2 счётчики
                никуда не ведут, поэтому это div, а не button (event-stage2-composition.md § 1). */
             <>
@@ -1314,64 +1385,9 @@ export const EventPage: FC = () => {
             </div>
           )}
         </div>
-        {/* Кольцо занятости мест. SVG, а не conic-gradient: нужен скруглённый конец дуги.
-            Диаметр 140px задан в CSS и равен высоте стопки кнопок (3 × 42 + 2 × 7). */}
-        <div className="rd-donut" aria-hidden="true">
-          <svg viewBox="0 0 128 128">
-            <defs>
-              {/* Объём дуги: блик сверху-слева → тёмный тон снизу-справа, как у акцентных кнопок. */}
-              <linearGradient id="rd-donut-arc-grad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="var(--donut-arc-hi)" />
-                <stop offset="100%" stopColor="var(--donut-arc-lo)" />
-              </linearGradient>
-              {/* Собранный состав зеленеет: «набрали» — это успех, и цвет говорит об этом
-                  раньше, чем подпись под числом (V83). */}
-              <linearGradient id="rd-donut-arc-grad-full" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="var(--live)" />
-                <stop offset="100%" stopColor="var(--live)" />
-              </linearGradient>
-            </defs>
-            <circle cx="64" cy="64" r={DONUT_RADIUS} fill="none" stroke="var(--ring-track)" strokeWidth="11" />
-            {donutRatio > 0 && (
-              <circle
-                className="rd-donut-arc"
-                cx="64" cy="64" r={DONUT_RADIUS} fill="none"
-                stroke={rosterFull ? 'url(#rd-donut-arc-grad-full)' : 'url(#rd-donut-arc-grad)'}
-                strokeWidth="11" strokeLinecap="round"
-                strokeDasharray={`${DONUT_CIRCUMFERENCE * donutRatio} ${DONUT_CIRCUMFERENCE}`}
-              />
-            )}
-            {/* Засечка минимума: риска поперёк дуги там, где проходит порог «соберёмся». */}
-            {minNotchAngle !== null && (
-              <line
-                className="rd-roster-notch"
-                x1={64 + (DONUT_RADIUS - 9) * Math.cos(minNotchAngle)}
-                y1={64 + (DONUT_RADIUS - 9) * Math.sin(minNotchAngle)}
-                x2={64 + (DONUT_RADIUS + 9) * Math.cos(minNotchAngle)}
-                y2={64 + (DONUT_RADIUS + 9) * Math.sin(minNotchAngle)}
-              />
-            )}
-          </svg>
-          <div className="rd-donut-center">
-            <span className="rd-donut-num">
-              {donutCount}
-              {/* Открытая встреча: знаменателя нет — только счёт. */}
-              {!isOpenEvent && <small> / {event.participantLimit}</small>}
-            </span>
-            <span className="rd-donut-cap">
-              {isOpenEvent
-                ? 'идут'
-                : isRosterEvent
-                  ? (rosterFull ? 'состав собран' : 'в составе')
-                  : 'мест занято'}
-            </span>
-          </div>
-        </div>
+        {donutBlock}
       </div>
-      {showVoting && myVote && (
-        <div style={{ marginBottom: 14 }}>
-          <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
-        </div>
+      </>
       )}
       {showVoting && pathBackNudge}
       </>
