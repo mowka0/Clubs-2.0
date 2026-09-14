@@ -22,10 +22,11 @@ internal fun rendererSkladchina(
     lockedAt: OffsetDateTime? = null,
     orderedAt: OffsetDateTime? = null,
     hiddenFromUserId: UUID? = null,
-    title: String = "Ужин после игры"
+    title: String = "Ужин после игры",
+    description: String? = null
 ): Skladchina = Skladchina(
     id = UUID.randomUUID(), clubId = UUID.randomUUID(), creatorId = UUID.randomUUID(),
-    title = title, description = null, rules = null, photoUrl = null,
+    title = title, description = description, rules = null, photoUrl = null,
     kind = kind, amountKopecks = amountKopecks, paymentLink = "https://bank.example/pay", paymentMethodNote = null,
     eventId = null, deadline = deadline, enrollmentUntil = enrollmentUntil, minParticipants = minParticipants,
     lockedAt = lockedAt, orderedAt = orderedAt, hiddenFromUserId = hiddenFromUserId,
@@ -103,6 +104,17 @@ class SkladchinaChatStatusRendererTest {
         val text = renderer.closedText(view(shortfall, totals = DebtTotals.EMPTY, enrolledCount = 4))
         assertTrue(text.contains("Не набрали: в деле 4 из 6"), text)
         assertTrue(text.contains("денег никто не переводил"), text)
+    }
+
+    @Test
+    fun `description is shown under the title in every kind, escaped and cut at 500 chars`() {
+        val text = renderer.statusText(view(rendererSkladchina(description = "Стол на 8, <b>бар</b> внизу")))
+        assertTrue(text.startsWith("💰 Ужин после игры\nСтол на 8, &lt;b&gt;бар&lt;/b&gt; внизу\n"), text)
+        val perHead = renderer.statusText(view(rendererSkladchina(kind = SkladchinaKind.per_head, description = "Размер укажите в заметке"), totals = DebtTotals(0, 0, null, 0, 0, 0, 0)))
+        assertTrue(perHead.contains("\nРазмер укажите в заметке\n"), perHead)
+        val long = renderer.statusText(view(rendererSkladchina(description = "я".repeat(600))))
+        assertTrue(long.contains("я".repeat(499) + "…\n") && !long.contains("я".repeat(500)), "обрезано до 500 с многоточием")
+        assertFalse(renderer.statusText(view(rendererSkladchina(description = "   "))).contains("\n\n"), "пустое описание строки не добавляет")
     }
 
     @Test

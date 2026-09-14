@@ -1,6 +1,7 @@
 package com.clubs.bot
 
 import com.clubs.chatlink.SkladchinaChatStatusService
+import com.clubs.common.util.Excerpt
 import com.clubs.common.util.Money
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
@@ -73,7 +74,7 @@ class SkladchinaBotNotifier(
         when (e.kind) {
             SkladchinaKind.shared -> {
                 append("💰 Сбор «${e.title}» в клубе «${e.clubName}»")
-                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                Excerpt.of(e.description)?.let { append("\n\n").append(it) }
                 if (share != null) {
                     append("\n\n💵 Ваша доля: ").append(Money.rub(share))
                     e.deadline?.let { append("\n⏳ До: ").append(it.format(fmt)) }
@@ -87,7 +88,7 @@ class SkladchinaBotNotifier(
             }
             SkladchinaKind.per_head -> {
                 append("🎫 «${e.title}» в клубе «${e.clubName}»: ").append(Money.rub(e.amountKopecks ?: 0L)).append(" за штуку.")
-                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                Excerpt.of(e.description)?.let { append("\n\n").append(it) }
                 e.deadline?.let { append("\n\n$creatorName покупает ").append(it.format(fmt)).append(" на тех, кто оплатил.") }
                 append("\nНажмите «Беру», если вам нужно.")
             }
@@ -101,7 +102,7 @@ class SkladchinaBotNotifier(
                     append("\n\nВсе из списка должны, сумму выбираете сами. После срока остаток разделится поровну между теми, кто промолчал.")
                     append("\n").append(ReputationPolicy.skladchinaRulesLine())
                 }
-                e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
+                Excerpt.of(e.description)?.let { append("\n\n").append(it) }
                 append(requisites(e.paymentLink, e.paymentMethodNote))
                 append("\n\nПеревели — нажмите «Перевёл» в приложении.")
             }

@@ -1030,7 +1030,7 @@ CREATE TABLE skladchina_chat_posts (
 | Close-проход (тот же flush) | открытые посты складчин со `status != active` → финальный edit + unpin + `closed_at`. **Обязателен для корректности**, не страховка: каскады `cancelActiveByClub` (удаление клуба) и `cancelActiveByEventId` (отмена встречи, к которой привязан сбор) минуют `closeInternal` и НЕ публикуют событий |
 | `SkladchinaClosedEvent` (AFTER_COMMIT, существующее) | немедленный финальный edit + unpin + `closed_at` (не ждём flush) |
 
-Текст живого статуса (HTML parse_mode — нужен для `text_mention`; заголовок и имена экранируются):
+Текст живого статуса (HTML parse_mode — нужен для `text_mention`; заголовок, описание и имена экранируются; описание сбора идёт второй строкой, до 500 символов — PO 2026-09-14):
 
 ```
 💰 {title}
