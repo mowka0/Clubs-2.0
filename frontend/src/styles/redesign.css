@@ -1853,6 +1853,10 @@
 .rd-pick-toggle.rd-selected .rd-check-box { background: var(--accent-grad); border-color: transparent; }
 .rd-pick-toggle .rd-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-pick-toggle .rd-pick-note { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+/* Вариант в шторке выбора (ChoiceSheet): заголовок сверху, подпись под ним — иначе длинная подпись справа сжимает заголовок. */
+.rd-pick-toggle.rd-pick-stack { flex-direction: column; align-items: flex-start; gap: 2px; }
+.rd-pick-toggle.rd-pick-stack .rd-pick-name { white-space: normal; }
+.rd-pick-toggle.rd-pick-stack .rd-pick-note { font-size: 12px; }
 .rd-pick-amount { width: 96px; flex-shrink: 0; }
 
 /* ============================================================

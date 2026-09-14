@@ -78,7 +78,7 @@ export const ChoiceSheet: FC<ChoiceSheetProps> = ({ title, options, onCancel }) 
         <p className="rd-confirm-text">{title}</p>
         <div className="rd-pick-list">
           {options.map((o) => (
-            <button key={o.label} type="button" className="rd-pick-toggle" style={{ width: '100%' }} onClick={o.onPick}>
+            <button key={o.label} type="button" className="rd-pick-toggle rd-pick-stack" style={{ width: '100%' }} onClick={o.onPick}>
               <span className="rd-pick-name">{o.label}</span>
               {o.hint && <span className="rd-pick-note">{o.hint}</span>}
             </button>
