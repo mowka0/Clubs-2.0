@@ -102,6 +102,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     enrolledCount: 0,
     myEnrolled: false,
     enrolled: [],
+    paid: [],
     debtCount: 6,
     receivedCount: 1,
     openCount: 5,
@@ -333,7 +334,7 @@ describe('SkladchinaPage — сборы и долги v3', () => {
   });
 
   it('плательщик видит «Кому переводить» с создателем, у «По желанию» заголовок «Ваш перевод», сбор из встречи — строку встречи', async () => {
-    mockDetail(buildDetail({ kind: 'voluntary', myDebt: null, eventId: 'e-1', eventTitle: 'Покатушки', eventDatetime: FUTURE }));
+    mockDetail(buildDetail({ kind: 'voluntary', myDebt: null, eventId: 'e-1', eventTitle: 'Покатушки', eventDatetime: FUTURE, paid: [{ ...me, id: 'u-2', firstName: 'Оля' }] }));
     renderPage();
     expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
     expect(screen.getByText('Иван')).toBeInTheDocument();
@@ -342,6 +343,18 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(screen.getByText('Сбор в клубе · собирает Иван')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Открыть встречу Покатушки/ })).toBeInTheDocument();
     expect(screen.getByText('Покатушки')).toBeInTheDocument();
+    // Оплативших видят все участники — людьми, без сумм (PO 2026-09-14).
+    expect(screen.getByText('Перевели')).toBeInTheDocument();
+    expect(screen.getByText('Оля')).toBeInTheDocument();
+  });
+
+  it('участник «Скинуться» видит панель «Оплатили» с людьми, без сумм и без «Кто должен»', async () => {
+    mockDetail(buildDetail({ paid: [creator, { ...me, id: 'u-2', firstName: 'Оля' }] }));
+    renderPage();
+    expect(await screen.findByText('Оплатили')).toBeInTheDocument();
+    expect(screen.getByText('Оля')).toBeInTheDocument();
+    expect(screen.getAllByText('Иван').length).toBe(3); // «Мой долг» (кредитор), «Кому переводить», «Оплатили»
+    expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
   });
 
   it('создатель «По желанию»: свой взнос в «Перевели», говорящие «перевёл» — в «Подтвердите», счётчик без знаменателя', async () => {

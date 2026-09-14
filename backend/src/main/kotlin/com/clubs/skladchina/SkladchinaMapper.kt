@@ -51,6 +51,7 @@ class SkladchinaMapper {
         enrolledCount: Int,
         myEnrolled: Boolean,
         enrolled: List<DebtPersonDto>,
+        paid: List<DebtPersonDto>,
         debts: List<DebtDto>,
         event: Event?
     ): SkladchinaDetailDto {
@@ -89,6 +90,7 @@ class SkladchinaMapper {
             enrolledCount = enrolledCount,
             myEnrolled = myEnrolled,
             enrolled = enrolled,
+            paid = paid,
             debtCount = totals.debtCount,
             receivedCount = totals.receivedCount,
             openCount = totals.openCount,

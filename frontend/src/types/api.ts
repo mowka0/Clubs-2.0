@@ -834,6 +834,8 @@ export interface SkladchinaDetailDto {
   myEnrolled: boolean;
   /** Люди на экране сбора: на этапе «Кто в деле?» — отметившиеся «В деле»; в «По желанию» — кого позвали (блок «Скидываются»); иначе пусто. */
   enrolled: DebtPersonDto[];
+  /** Кто уже оплатил — всем участникам, только люди (без сумм и заметок). */
+  paid: DebtPersonDto[];
   debtCount: number;
   receivedCount: number;
   openCount: number;

@@ -12,13 +12,27 @@ import { Toast } from '../components/Toast';
 import { ConfirmSheet, useConfirm } from '../components/ConfirmSheet';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
-import type { DebtStatus, SkladchinaDetailDto } from '../types/api';
+import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
 import { DATE_FMT, DAY_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
 
 // Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
 // потом ждём; прощённые и выбывшие в хвосте. `received` в эту панель не попадает.
 const OPEN_ORDER: Record<DebtStatus, number> = { claimed: 0, promised: 1, waiting: 2, forgiven: 3, dropped: 4, received: 5 };
+
+/** Строка человека в панелях сбора: аватар, имя (+ «(вы)»), @username и подпись, справа короткая пометка. */
+const PersonRow: FC<{ person: DebtPersonDto; viewerId?: string; subtitle?: string; meta?: string }> = ({ person, viewerId, subtitle, meta }) => (
+  <div className="rd-debt-head rd-enrolled-row">
+    <span className="rd-av rd-debt-av">{person.avatarUrl ? <img src={person.avatarUrl} alt="" /> : initials(personName(person))}</span>
+    <span className="rd-debt-who">
+      <b>{personName(person)}{viewerId && person.id === viewerId ? ' (вы)' : ''}</b>
+      {(person.username || subtitle) && (
+        <span className="rd-debt-handle">{person.username ? `@${person.username}` : ''}{person.username && subtitle ? ' · ' : ''}{subtitle ?? ''}</span>
+      )}
+    </span>
+    {meta && <span className="rd-debt-meta">{meta}</span>}
+  </div>
+);
 
 function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof ApiError && (e.status === 400 || e.status === 403 || e.status === 409) && e.message) return e.message;
@@ -231,13 +245,7 @@ export const SkladchinaPage: FC = () => {
         <>
           <div className="rd-section-sub-h">Кому переводить</div>
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-            <div className="rd-debt-head rd-enrolled-row" style={{ marginBottom: 10 }}>
-              <span className="rd-av rd-debt-av">{s.creator.avatarUrl ? <img src={s.creator.avatarUrl} alt="" /> : initials(personName(s.creator))}</span>
-              <span className="rd-debt-who">
-                <b>{personName(s.creator)}</b>
-                <span className="rd-debt-handle">{s.creator.username ? `@${s.creator.username} · ` : ''}собирает</span>
-              </span>
-            </div>
+            <div style={{ marginBottom: 10 }}><PersonRow person={s.creator} subtitle="собирает" /></div>
             {s.paymentMethodNote && <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>}
             <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('light'); window.open(s.paymentLink, '_blank', 'noopener,noreferrer'); }}>
               Открыть в банке
@@ -360,18 +368,25 @@ export const SkladchinaPage: FC = () => {
           <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
             {s.enrolled.length === 0 && <div className="rd-debt-meta" style={{ padding: '10px 4px' }}>Пока никого.</div>}
             {s.enrolled.map((p) => {
-              const paid = (s.debts ?? []).find((d) => d.debtor.id === p.id);
-              return (
-                <div className="rd-debt-head rd-enrolled-row" key={p.id}>
-                  <span className="rd-av rd-debt-av">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(personName(p))}</span>
-                  <span className="rd-debt-who">
-                    <b>{personName(p)}{p.id === viewerId ? ' (вы)' : ''}</b>
-                    {p.username && <span className="rd-debt-handle">@{p.username}</span>}
-                  </span>
-                  {paid && <span className="rd-debt-meta">{paid.status === 'received' ? `${formatRub(paid.amountKopecks)} ✅` : paid.status === 'claimed' ? `${formatRub(paid.amountKopecks)} · ждёт` : ''}</span>}
-                </div>
-              );
+              // Создателю — сумма и состояние из долга; остальным — только галочка оплатившим.
+              const debt = (s.debts ?? []).find((d) => d.debtor.id === p.id);
+              const mark = debt
+                ? (debt.status === 'received' ? `${formatRub(debt.amountKopecks)} ✅` : debt.status === 'claimed' ? `${formatRub(debt.amountKopecks)} · ждёт` : '')
+                : (s.paid.some((x) => x.id === p.id) ? '✅' : '');
+              return <PersonRow key={p.id} person={p} viewerId={viewerId} meta={mark || undefined} />;
             })}
+          </div>
+        </>
+      )}
+
+      {/* Оплатившие — всем участникам, людьми без сумм (PO 2026-09-14); у создателя вместо этого панели долгов ниже. */}
+      {!s.isCreator && !s.isEnrolling && s.paid.length > 0 && !(s.kind === 'voluntary' && s.enrolled.length > 0) && (
+        <>
+          <div className="rd-section-sub-h">
+            {paidTitle} <span className="rd-count">· {s.paid.length}</span>
+          </div>
+          <div className="rd-glass" style={{ padding: '6px 12px', marginBottom: 14 }}>
+            {s.paid.map((p) => <PersonRow key={p.id} person={p} viewerId={viewerId} meta="✅" />)}
           </div>
         </>
       )}
