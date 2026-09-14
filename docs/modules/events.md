@@ -63,6 +63,7 @@ photo_url`). Зеркалит `skladchinas.photo_url`: у существующи
 Фронт: `CreateEventPage` получил поле загрузки фото через компонент
 `AvatarUpload` → `CreateEventBody.photoUrl`. **Отображение (PO 2026-07-11):**
 - фон хиро на странице события (`EventPage`, `rd-hero-bg`); фолбэк — аватар клуба;
+- дата и время в хиро — плашка `rd-hero-when` (PO 2026-09-14): число крупно, рядом «месяц · день недели» и время; полная строка в `aria-label`;
 - обложка карточки в табе «Активности» (`EventCard`, `rd-act-cover`) с тёмным скримом
   сверху вниз (`rd-act-photo`, зеркалит клубный `.rd-cover::after`); фолбэк — аватар клуба
   (`MyEventListItemDto.photoUrl` добавлен для этого);

@@ -202,6 +202,17 @@ function formatDeadlineShort(iso: string): string {
   return `${formatNearDay(iso)} в ${formatTimeHM(iso)}`;
 }
 
+/** Плашка даты в хиро (PO 2026-09-14): число крупно, рядом месяц с днём недели и время. */
+function eventWhenParts(iso: string): { day: string; month: string; weekday: string; time: string } {
+  const d = new Date(iso);
+  return {
+    day: String(d.getDate()),
+    month: d.toLocaleString('ru-RU', { day: 'numeric', month: 'long' }).replace(/^\d+\s*/, ''),
+    weekday: d.toLocaleString('ru-RU', { weekday: 'short' }),
+    time: formatTimeHM(iso),
+  };
+}
+
 function formatEventDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {
     weekday: 'long',
@@ -1131,12 +1142,13 @@ export const EventPage: FC = () => {
   // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
   // фолбэк — аватар клуба, как раньше.
   const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
+  const when = eventWhenParts(event.eventDatetime);
 
   return (
     <div className="rd-page">
       {/* Хиро — фото события как фон (решение PO 2026-07-11: фото прежде нигде не
           показывалось); фолбэк — аватар клуба, как раньше. */}
-      <div className="rd-hero rd-compact">
+      <div className="rd-hero rd-compact rd-hero-event">
         <div
           className="rd-hero-bg"
           data-cat={hostClubQuery.data?.category ?? 'sport'}
@@ -1145,8 +1157,12 @@ export const EventPage: FC = () => {
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">{heroFormatBadge}</div>
           <div className="rd-hero-ttl">{event.title}</div>
-          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
-            {formatEventDate(event.eventDatetime)}
+          <div className="rd-hero-when" aria-label={formatEventDate(event.eventDatetime)}>
+            <span className="rd-hero-when-day" aria-hidden="true">{when.day}</span>
+            <span className="rd-hero-when-col" aria-hidden="true">
+              <span className="rd-hero-when-month">{when.month} · {when.weekday}</span>
+              <span className="rd-hero-when-time">{when.time}</span>
+            </span>
           </div>
         </div>
       </div>
