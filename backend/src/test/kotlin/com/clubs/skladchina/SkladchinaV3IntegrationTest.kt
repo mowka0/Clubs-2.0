@@ -75,6 +75,8 @@ class SkladchinaV3IntegrationTest {
     @Autowired lateinit var debtReputationService: DebtReputationService
     @Autowired lateinit var debtReminderService: com.clubs.debt.DebtReminderService
     @Autowired lateinit var lifecycleService: SkladchinaLifecycleService
+    @Autowired lateinit var remainderService: SkladchinaRemainderService
+    @Autowired lateinit var skladchinaRepository: SkladchinaRepository
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
     private lateinit var ownerId: UUID
@@ -195,6 +197,7 @@ class SkladchinaV3IntegrationTest {
         val body = """
             {
               "title": "Бар", "kind": "voluntary", "amountKopecks": 600000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}",
               "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId", "$ownerId"]
             }
         """.trimIndent()
@@ -524,6 +527,71 @@ class SkladchinaV3IntegrationTest {
         assertTrue(lifecycleService.claimCloseReminders(OffsetDateTime.now()).isEmpty(), "второй раз не напоминаем")
     }
 
+    // --- § 3.5: «Сумму выбираете сами» ---
+
+    @Test
+    fun `free amount from an event needs a deadline, is flagged, and a promise becomes a promised debt with its amount`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId, bobId))
+        val noDeadline = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId"]}"""
+        postJson("/api/clubs/$clubId/skladchinas", owner, noDeadline).andExpect(status().isBadRequest)
+        val withDeadline = noDeadline.replace("\"paymentLink\"", "\"deadline\": \"${OffsetDateTime.now().plusDays(3)}\", \"paymentLink\"")
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, withDeadline).andExpect(status().isCreated))
+        val id = created["id"].asText()
+        assertTrue(created["freeAmountRequired"].asBoolean(), "из встречи с суммой — режим включён")
+        val date = LocalDate.now().plusDays(5)
+        val afterPromise = json(postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":150000,"date":"$date"}""").andExpect(status().isOk))
+        assertEquals("promised", afterPromise["myDebt"]["status"].asText())
+        assertEquals(150_000L, afterPromise["myDebt"]["amountKopecks"].asLong())
+        assertEquals(150_000L, afterPromise["promisedKopecks"].asLong())
+        assertEquals(1, afterPromise["promisedCount"].asInt())
+        postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+        // Подарок без встречи обещаний не знает; создатель себе не обещает.
+        val plain = json(postJson("/api/clubs/$clubId/skladchinas", owner, voluntaryBody(hiddenFrom = null)).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$plain/promise", alice, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+        postJson("/api/skladchinas/$id/promise", owner, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `at the deadline the remainder is split equally among the silent, promised and own amounts are excluded, once, and paying closes the skladchina`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId, bobId, carolId))
+        val body = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId", "$carolId"], "deadline": "${OffsetDateTime.now().plusHours(2)}", "creatorContributionKopecks": 200000}"""
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        val uuid = UUID.fromString(id)
+        postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":150000,"date":"${LocalDate.now().plusDays(5)}"}""").andExpect(status().isOk)
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", uuid)
+        assertEquals(listOf(id), lifecycleService.claimCloseReminders(OffsetDateTime.now()).map { it.id.toString() }, "тик «срок вышел» видит сбор")
+        val outcome = remainderService.splitAmongSilent(skladchinaRepository.findById(uuid)!!, OffsetDateTime.now())
+        val split = outcome as? SkladchinaRemainderService.Outcome.Split ?: error("ожидали раздел, получили $outcome")
+        assertEquals(550_000L, split.remainderKopecks, "9 000 − 2 000 своих − 1 500 обещанных")
+        assertEquals(setOf(bobId, carolId), split.debts.map { it.debtorId }.toSet(), "долги только молчунам")
+        assertEquals(listOf(275_000L, 275_000L), split.debts.map { it.amountKopecks })
+        assertTrue(split.debts.all { it.status == com.clubs.generated.jooq.enums.DebtStatus.waiting && it.dueAt != null })
+        assertTrue(remainderService.splitAmongSilent(skladchinaRepository.findById(uuid)!!, OffsetDateTime.now()) is SkladchinaRemainderService.Outcome.Nothing, "повторный проход ничего не создаёт")
+        // Долги обычные: Отдал → Получил; когда счёт закрыт и открытых нет — сбор закрывается сам.
+        listOf(alice, bob, carol).forEach { token ->
+            val debtId = myDebtId(id, token)
+            post("/api/debts/$debtId/claim", token).andExpect(status().isOk)
+            post("/api/debts/$debtId/confirm", owner).andExpect(status().isOk)
+        }
+        val after = json(get("/api/skladchinas/$id", owner))
+        assertEquals(900_000L, after["receivedKopecks"].asLong())
+        assertEquals("collected", after["status"].asText())
+        // Репутация как у shared: долг молчуна закрыт до срока — +10.
+        debtReputationService.applyPlus(OffsetDateTime.now())
+        assertEquals(ReputationKind.skladchina_paid, soleKind(bobId))
+    }
+
+    @Test
+    fun `when nobody is silent but the bill is not covered the creator is told about the shortfall`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId))
+        val body = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId"], "deadline": "${OffsetDateTime.now().plusHours(2)}"}"""
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$id/contribute", alice, """{"amountKopecks":100000}""").andExpect(status().isOk)
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", UUID.fromString(id))
+        val outcome = remainderService.splitAmongSilent(skladchinaRepository.findById(UUID.fromString(id))!!, OffsetDateTime.now())
+        assertEquals(SkladchinaRemainderService.Outcome.Shortfall(800_000L), outcome)
+    }
+
     // --- AC-12: чужие долги невидимы ---
 
     @Test
@@ -701,6 +769,21 @@ class SkladchinaV3IntegrationTest {
     }
 
     // ---- helpers ----
+
+    /** Завершённая встреча с отмеченной явкой — вход для сборов «из встречи». */
+    private fun attendedEvent(attended: List<UUID>): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Покатушки', 'Парк', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        attended.forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        return eventId
+    }
 
     private fun newUser(telegramId: Long, name: String): UUID {
         val id = UUID.randomUUID()

@@ -94,6 +94,16 @@ class SkladchinaController(
         return ResponseEntity.ok(participationService.contribute(id, user.userId, request.amountKopecks))
     }
 
+    @PostMapping("/api/skladchinas/{id}/promise")
+    fun promise(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: PromiseSkladchinaRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina promise: id={} userId={} amount={} date={}", id, user.userId, request.amountKopecks, request.date)
+        return ResponseEntity.ok(participationService.promise(id, user.userId, request.amountKopecks, request.date))
+    }
+
     @PostMapping("/api/skladchinas/{id}/lock")
     fun lock(
         @PathVariable id: UUID,

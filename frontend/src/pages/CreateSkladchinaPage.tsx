@@ -171,7 +171,9 @@ export const CreateSkladchinaPage: FC = () => {
     const amountKopecks = perPersonMode ? (perPersonTotal > 0 ? perPersonTotal : null) : amountRub.trim() ? rubToKopecks(amountRub) : null;
     if (!perPersonMode && amountRub.trim() && amountKopecks === null) return fail('Сумма должна быть числом больше нуля');
     if (!perPersonMode && kind !== 'voluntary' && amountKopecks === null) return fail(flow === 'per_head' ? 'Укажите цену за штуку' : 'Укажите сумму');
-    const withDeadline = kind !== 'voluntary' || !noDeadline;
+    // «Сумму выбираете сами» (§ 3.5): из встречи с суммой счёта срок обязателен — по нему остаток делится между молчунами.
+    const freeAmountRequired = flow === 'voluntary' && Boolean(eventId) && amountKopecks !== null;
+    const withDeadline = kind !== 'voluntary' || !noDeadline || freeAmountRequired;
     if (withDeadline && !deadline) return fail('Укажите срок');
 
     const body: CreateSkladchinaRequest = {
@@ -358,7 +360,14 @@ export const CreateSkladchinaPage: FC = () => {
             </span>
             <input className="rd-input" type="number" inputMode="decimal" min="1" value={amountRub} onChange={(e) => setAmountRub(e.target.value)} placeholder="Например, 6000" />
             {perPersonHint && <span className="rd-hint">{perPersonHint}</span>}
-            {kind === 'voluntary' && <span className="rd-hint">Необязательно: люди увидят, сколько получено и сколько всего</span>}
+            {kind === 'voluntary' && !eventId && <span className="rd-hint">Необязательно: люди увидят, сколько получено и сколько всего</span>}
+            {kind === 'voluntary' && eventId && (
+              <span className="rd-hint">
+                {amountRub.trim()
+                  ? 'Все из списка должны, сумму каждый выбирает сам. После срока остаток разделится поровну между теми, кто промолчал.'
+                  : 'Без суммы это подарок «По желанию»; с суммой — все из списка должны, срок обязателен.'}
+              </span>
+            )}
           </label>
         )}
 
@@ -414,13 +423,13 @@ export const CreateSkladchinaPage: FC = () => {
           <input className="rd-input" value={paymentMethodNote} onChange={(e) => setPaymentMethodNote(e.target.value)} placeholder="Тинькофф, СБП, ВТБ…" />
         </label>
 
-        {kind === 'voluntary' && (
+        {kind === 'voluntary' && !(eventId && amountRub.trim()) && (
           <label className="rd-check">
             <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
             <span>Без срока</span>
           </label>
         )}
-        {(kind !== 'voluntary' || !noDeadline) && (
+        {(kind !== 'voluntary' || !noDeadline || Boolean(eventId && amountRub.trim())) && (
           <label className="rd-field">
             <span className="rd-label">
               {flow === 'per_head' ? 'Покупаю' : 'Срок оплаты'} <span className="rd-req">*</span>

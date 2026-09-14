@@ -96,6 +96,11 @@ class SkladchinaBotNotifier(
                 e.amountKopecks?.let { append(if (e.eventId != null) ", всего потратили " else ", ориентир ").append(Money.rub(it)) }
                 e.deadline?.let { append(", до ").append(it.format(fmt)) }
                 append(". Собирает $creatorName.")
+                // «Сумму выбираете сами» (§ 3.5): из встречи с суммой — обязанность и репутация.
+                if (e.eventId != null && e.amountKopecks != null) {
+                    append("\n\nВсе из списка должны, сумму выбираете сами. После срока остаток разделится поровну между теми, кто промолчал.")
+                    append("\n").append(ReputationPolicy.skladchinaRulesLine())
+                }
                 e.description?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it.take(200)) }
                 append(requisites(e.paymentLink, e.paymentMethodNote))
                 append("\n\nПеревели — нажмите «Перевёл» в приложении.")

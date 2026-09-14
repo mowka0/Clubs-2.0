@@ -803,6 +803,8 @@ export interface SkladchinaDetailDto {
   creatorId: string;
   /** Кто собирает: панель «Кому переводить» и крошка «собирает …». */
   creator: DebtPersonDto;
+  /** «Сумму выбираете сами» (§ 3.5): voluntary из встречи с суммой — все из списка должны, сумма своя. */
+  freeAmountRequired: boolean;
   title: string;
   description: string | null;
   rules: string | null;
@@ -814,6 +816,8 @@ export interface SkladchinaDetailDto {
   targetKopecks: number | null;
   receivedKopecks: number;
   claimedKopecks: number;
+  /** Обещано («Оплачу N ₽ до …») — штриховка в полосе. */
+  promisedKopecks: number;
   paymentLink: string;
   paymentMethodNote: string | null;
   deadline: string | null;
@@ -840,6 +844,7 @@ export interface SkladchinaDetailDto {
   receivedCount: number;
   openCount: number;
   claimedCount: number;
+  promisedCount: number;
   /** per_head: штук оплачено — «куплено N». */
   receivedItems: number;
   /** Мой долг как должника (null = долга нет). */
@@ -864,6 +869,7 @@ export interface MySkladchinaListItemDto {
   /** «собирает …» в карточке ленты у чужого сбора. */
   creatorName: string;
   kind: SkladchinaKind;
+  freeAmountRequired: boolean;
   amountKopecks: number | null;
   targetKopecks: number | null;
   receivedKopecks: number;

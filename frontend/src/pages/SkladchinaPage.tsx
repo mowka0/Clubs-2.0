@@ -14,7 +14,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { DATE_FMT, DAY_FMT, KIND_EMOJI, KIND_LABEL, initials, personName, statusLabel } from '../utils/skladchinaKind';
+import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, defaultPromiseDate, initials, personName, statusLabel } from '../utils/skladchinaKind';
 
 // Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
 // потом ждём; прощённые и выбывшие в хвосте. `received` в эту панель не попадает.
@@ -46,8 +46,14 @@ function stageLine(s: SkladchinaDetailDto): string {
   }
   const parts: string[] = [];
   if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт${s.openCount > 0 ? ` · ждём оплату ${s.openCount}` : ''}` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
-  // «По желанию» без знаменателя: круг платящих не задан, считаем только переводы (PO 2026-09-14).
-  else if (s.kind === 'voluntary') parts.push(`перевели ${s.receivedCount}${s.claimedCount > 0 ? ` · ${s.claimedCount} ждут подтверждения` : ''}`);
+  else if (s.kind === 'voluntary') {
+    // «Сумму выбираете сами»: круг известен (позвали + создатель, если скинулся) — «перевели N из M»;
+    // подарок «По желанию» — без знаменателя, круг платящих не задан (PO 2026-09-14).
+    const circle = s.freeAmountRequired ? s.enrolled.length + (s.paid.some((p) => p.id === s.creatorId) ? 1 : 0) : 0;
+    parts.push(circle > 0 ? `перевели ${s.receivedCount} из ${circle}` : `перевели ${s.receivedCount}`);
+    if (s.promisedCount > 0) parts.push(`обещали ${s.promisedCount}`);
+    if (s.claimedCount > 0) parts.push(`${s.claimedCount} ждут подтверждения`);
+  }
   else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
   if (s.deadline && s.status === 'active' && !s.orderedAt) {
     const past = new Date(s.deadline).getTime() < Date.now();
@@ -71,6 +77,10 @@ export const SkladchinaPage: FC = () => {
   const { confirm, confirmSheet } = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState('');
+  // «Оплачу позже» в «Сумму выбираете сами»: обещание всегда с суммой и датой (§ 3.5).
+  const [promiseOpen, setPromiseOpen] = useState(false);
+  const [promiseAmountInput, setPromiseAmountInput] = useState('');
+  const [promiseDate, setPromiseDate] = useState(defaultPromiseDate);
   const [noteInput, setNoteInput] = useState('');
   const [quantityInput, setQuantityInput] = useState('1');
   // «Заказываю»: шторка со списком обещавших и выбором, брать ли их в долг.
@@ -113,10 +123,12 @@ export const SkladchinaPage: FC = () => {
   // видов появляются с первым долгом, до него нет ни знаменателя, ни ожидания.
   const showTarget = Boolean(target && target > 0 && (s.kind === 'voluntary' || s.debtCount > 0));
   const receivedPct = target && target > 0 ? Math.min(100, Math.round((s.receivedKopecks / target) * 100)) : 0;
+  // Обещанное — своей штриховкой (PO 2026-09-14); у «Кто берёт?» всё взятое и так в штриховке ожидания.
+  const promisedPct = target && target > 0 && s.kind !== 'per_head' ? Math.min(100 - receivedPct, Math.round((s.promisedKopecks / target) * 100)) : 0;
   // Штриховка = деньги ждём: у «Кто берёт?» это всё взятое и не оплаченное («Беру» — заявка),
   // у остальных видов только «говорит, что отдал» (PO 2026-09-13).
   const pendingKopecks = s.kind === 'per_head' && target ? Math.max(0, target - s.receivedKopecks) : s.claimedKopecks;
-  const claimedPct = target && target > 0 ? Math.min(100 - receivedPct, Math.round((pendingKopecks / target) * 100)) : 0;
+  const claimedPct = target && target > 0 ? Math.min(100 - receivedPct - promisedPct, Math.round((pendingKopecks / target) * 100)) : 0;
 
   const run = async (action: SkladchinaAction, done: string | ((result: SkladchinaDetailDto) => string), confirmText?: string) => {
     if (confirmText && !(await confirm(confirmText))) return;
@@ -156,6 +168,20 @@ export const SkladchinaPage: FC = () => {
     void run({ type: 'contribute', amountKopecks: kopecks }, 'Перевод отмечен — создатель подтвердит.', `Перевели ${formatRub(kopecks)}? ${s.creator.firstName} получит уведомление и подтвердит.`).then(() => setAmountInput(''));
   };
 
+  const handlePromise = () => {
+    const kopecks = rubToKopecks(promiseAmountInput);
+    if (kopecks === null) {
+      haptic.notify('error');
+      setError('Укажите, сколько отдадите');
+      return;
+    }
+    void run(
+      { type: 'promise', amountKopecks: kopecks, date: promiseDate },
+      'Обещание записано — создатель увидит.',
+      `Обещаете ${formatRub(kopecks)} до ${DAY_FMT.format(new Date(promiseDate))}? Сумма вычтется из остатка счёта.`,
+    );
+  };
+
   const clubInitials = initials(s.clubName);
   const statusCls = s.status === 'cancelled' ? 'rd-neutral2' : s.status === 'collected' ? 'rd-going' : 'rd-warn';
 
@@ -176,7 +202,7 @@ export const SkladchinaPage: FC = () => {
         <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
       </button>
 
-      <div className="rd-ft-eyebrow">{KIND_EMOJI[s.kind]} {KIND_LABEL[s.kind]}</div>
+      <div className="rd-ft-eyebrow">{s.freeAmountRequired ? `💸 ${FREE_AMOUNT_LABEL}` : `${KIND_EMOJI[s.kind]} ${KIND_LABEL[s.kind]}`}</div>
       <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
       <div className="rd-badges-row" style={{ marginBottom: 16 }}>
         <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
@@ -224,10 +250,14 @@ export const SkladchinaPage: FC = () => {
         {!s.isEnrolling && showTarget && (
           <div className="rd-progress" aria-hidden="true">
             <div className="rd-fill" style={{ width: `${receivedPct}%` }} />
+            <div className="rd-fill rd-fill-promised" style={{ width: `${promisedPct}%` }} />
             <div className="rd-fill rd-fill-claimed" style={{ width: `${claimedPct}%` }} />
           </div>
         )}
         <div className="rd-sklad-stats">{stageLine(s)}</div>
+        {s.freeAmountRequired && isActive && s.deadline && new Date(s.deadline).getTime() > Date.now() && (
+          <div className="rd-debt-meta" style={{ marginTop: 6 }}>после срока остаток разделится между теми, кто промолчал</div>
+        )}
         {s.description && <div className="rd-sklad-inline-sep">{s.description}</div>}
       </div>
 
@@ -329,6 +359,32 @@ export const SkladchinaPage: FC = () => {
                 <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
               </div>
               <button type="button" className="rd-btn-primary" disabled={busy} onClick={handleContribute}>Перевёл</button>
+              {s.freeAmountRequired && !promiseOpen && (
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => { haptic.select(); setPromiseOpen(true); }}>Оплачу позже</button>
+              )}
+              {s.freeAmountRequired && promiseOpen && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Оплачу позже</div>
+                  <div style={{ position: 'relative', marginBottom: 8 }}>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      step="1"
+                      placeholder="Сколько отдадите, ₽"
+                      value={promiseAmountInput}
+                      onChange={(e) => setPromiseAmountInput(e.target.value)}
+                      className="rd-input"
+                      style={{ paddingRight: 32 }}
+                      aria-label="Сумма обещания"
+                    />
+                    <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
+                  </div>
+                  <input className="rd-input" type="date" value={promiseDate} onChange={(e) => setPromiseDate(e.target.value)} aria-label="Дата обещания" style={{ marginBottom: 8 }} />
+                  <button type="button" className="rd-btn-primary" disabled={busy} onClick={handlePromise}>Обещаю</button>
+                  <button type="button" className="rd-btn-outline" style={{ marginTop: 6 }} onClick={() => setPromiseOpen(false)}>Отмена</button>
+                </div>
+              )}
             </>
           )}
 

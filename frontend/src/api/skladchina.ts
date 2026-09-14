@@ -57,6 +57,11 @@ export function contributeSkladchina(id: string, amountKopecks: number): Promise
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/contribute`, { amountKopecks });
 }
 
+/** «Оплачу N ₽ до <дата>» в сборе «Сумму выбираете сами» (§ 3.5): обещание всегда с суммой. */
+export function promiseSkladchina(id: string, amountKopecks: number, date: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/promise`, { amountKopecks, date });
+}
+
 /** «Закрыть запись» раньше срока. */
 export function lockSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/lock`);

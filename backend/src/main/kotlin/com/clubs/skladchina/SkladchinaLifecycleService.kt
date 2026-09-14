@@ -168,7 +168,8 @@ class SkladchinaLifecycleService(
         val ready = when (s.kind) {
             SkladchinaKind.shared -> !s.isEnrolling
             SkladchinaKind.per_head -> s.orderedAt != null
-            SkladchinaKind.voluntary -> false
+            // «Сумму выбираете сами» закрывается как shared, когда счёт закрыт; подарок — только рукой.
+            SkladchinaKind.voluntary -> s.isFreeAmountRequired && totals.receivedKopecks >= (s.amountKopecks ?: Long.MAX_VALUE)
         }
         if (!ready || totals.openCount > 0) return
         complete(s, SkladchinaStatus.collected, OffsetDateTime.now(), refunds = emptyMap())

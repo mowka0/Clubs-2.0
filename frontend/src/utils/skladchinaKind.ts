@@ -7,6 +7,9 @@ export const KIND_LABEL: Record<SkladchinaKind, string> = {
   voluntary: 'По желанию',
 };
 
+/** «Сумму выбираете сами» (§ 3.5): подпись режима вместо «По желанию» у сбора из встречи с суммой. */
+export const FREE_AMOUNT_LABEL = 'Сумму выбираете сами';
+
 export const KIND_EMOJI: Record<SkladchinaKind, string> = {
   shared: '💰',
   per_head: '🎫',
@@ -91,4 +94,11 @@ export function initials(name: string): string {
     .slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase())
     .join('');
+}
+
+/** Дата обещания по умолчанию — через три дня; поле `type="date"` ждёт `YYYY-MM-DD`. */
+export function defaultPromiseDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return d.toISOString().slice(0, 10);
 }

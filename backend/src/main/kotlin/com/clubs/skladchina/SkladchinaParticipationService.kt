@@ -9,6 +9,7 @@ import com.clubs.debt.DebtClaimedEvent
 import com.clubs.debt.DebtCreatedEvent
 import com.clubs.debt.DebtReplacedEvent
 import com.clubs.debt.DebtRepository
+import com.clubs.debt.DebtService
 import com.clubs.debt.NewDebt
 import com.clubs.generated.jooq.enums.DebtStatus
 import com.clubs.generated.jooq.enums.SkladchinaKind
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -32,6 +34,7 @@ class SkladchinaParticipationService(
     private val debtRepository: DebtRepository,
     private val membershipRepository: MembershipRepository,
     private val lifecycleService: SkladchinaLifecycleService,
+    private val debtService: DebtService,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService
 ) {
@@ -124,6 +127,29 @@ class SkladchinaParticipationService(
         ) ?: throw ConflictException("Перевод уже отмечен — обновите экран")
         log.info("Skladchina contribute: id={} userId={} amount={}", skladchinaId, callerId, amountKopecks)
         eventPublisher.publishEvent(DebtClaimedEvent(debtRepository.findWithContext(created.id)!!))
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * «Оплачу N ₽ до <дата>» в сборе «Сумму выбираете сами» (§ 3.5): долг рождается `waiting` на N и тут же
+     * обещается — дальше это обычный долг. Обещанная сумма вычитается из остатка счёта до раздела между
+     * молчунами, поэтому обещание без суммы невозможно (PO 2026-09-14).
+     */
+    @Transactional
+    fun promise(skladchinaId: UUID, callerId: UUID, amountKopecks: Long, date: LocalDate): SkladchinaDetailDto {
+        val s = requireActiveForMember(skladchinaId, callerId)
+        if (!s.isFreeAmountRequired) throw ValidationException("«Оплачу позже» есть только в сборе из встречи с суммой")
+        if (callerId == s.creatorId) throw ValidationException("Создатель не обещает сам себе")
+        if (amountKopecks > Money.MAX_AMOUNT_KOPECKS) throw ValidationException("Сумма не может превышать ${Money.MAX_AMOUNT_KOPECKS / 100} ₽")
+        if (debtRepository.findBySkladchinaAndDebtor(skladchinaId, callerId) != null) {
+            throw ValidationException("У вас уже есть перевод или долг в этом сборе")
+        }
+        val created = debtRepository.insertIfAbsent(
+            NewDebt(skladchinaId = skladchinaId, debtorId = callerId, creditorId = s.creatorId, amountKopecks = amountKopecks, dueAt = s.deadline)
+        ) ?: throw ConflictException("Долг уже есть — обновите экран")
+        debtService.promise(created.id, callerId, date)
+        log.info("Skladchina promise: id={} userId={} amount={} date={}", skladchinaId, callerId, amountKopecks, date)
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         return queryService.getDetail(skladchinaId, callerId)
     }

@@ -108,7 +108,10 @@ data class DebtTotals(
     val openCount: Int,
     val claimedCount: Int,
     // Штук оплачено (сумма quantity по received) — «куплено N» у per_head.
-    val receivedItems: Int = 0
+    val receivedItems: Int = 0,
+    // Обещанные суммы («Оплачу N ₽ до …»): штриховка в полосе, вычитаются из остатка счёта (§ 3.5).
+    val promisedKopecks: Long = 0,
+    val promisedCount: Int = 0
 ) {
     companion object {
         val EMPTY = DebtTotals(0, 0, null, 0, 0, 0, 0, 0)

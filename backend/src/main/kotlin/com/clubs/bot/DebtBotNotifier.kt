@@ -18,6 +18,7 @@ import com.clubs.debt.SettlementClaimedEvent
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.skladchina.Skladchina
+import com.clubs.skladchina.SkladchinaRemainderService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -211,11 +212,49 @@ class DebtBotNotifier(
     /** «По желанию» со сроком: приглашённым, кто ещё не перевёл, за сутки до срока — один раз. */
     fun sendVoluntaryDeadlineReminder(s: Skladchina, userIds: Collection<UUID>) {
         val deadline = s.deadline ?: return
-        val text = "⏰ Завтра, ${deadline.format(fmt)}, закрывается сбор «${s.title}» по желанию. " +
-            "Если хотите скинуться — переведите и нажмите «Перевёл»."
+        val text = if (s.isFreeAmountRequired) {
+            "⏰ Завтра, ${deadline.format(fmt)}, срок сбора «${s.title}». Все из списка должны, сумму выбираете сами: " +
+                "переведите и нажмите «Перевёл» или обещайте сумму и дату. После срока остаток разделится поровну между теми, кто промолчал."
+        } else {
+            "⏰ Завтра, ${deadline.format(fmt)}, закрывается сбор «${s.title}» по желанию. " +
+                "Если хотите скинуться — переведите и нажмите «Перевёл»."
+        }
         userRepository.findTelegramIds(userIds).forEach {
             notificationService.sendDirectMessageWithDeepLink(it, text, "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON)
         }
+    }
+
+    /** § 3.5, по сроку: молчунам — их долг из остатка, создателю — кому что назначено. */
+    fun sendSilentSplit(s: Skladchina, split: SkladchinaRemainderService.Outcome.Split) {
+        val names = userRepository.findByIds(split.debts.map { it.debtorId }).associate { it.id!! to it.firstName }
+        val k = split.debts.size
+        split.debts.forEach { d ->
+            val telegramId = telegramIdOf(d.debtorId) ?: return@forEach
+            val text = "💸 «${s.title}»: срок вышел, вы не ответили. С вас ${Money.rub(d.amountKopecks)}" +
+                (d.dueAt?.let { " до ${it.format(fmt)}" } ?: "") +
+                " — остаток ${Money.rub(split.remainderKopecks)} поровну на $k. После перевода нажмите «Отдал»."
+            notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON)
+        }
+        val creatorTelegramId = telegramIdOf(s.creatorId) ?: return
+        val list = split.debts.joinToString(", ") { "${names[it.debtorId] ?: "участник"} ${Money.rub(it.amountKopecks)}" }
+        notificationService.sendDirectMessageWithDeepLink(
+            creatorTelegramId, "💸 «${s.title}»: срок вышел. Остаток ${Money.rub(split.remainderKopecks)} ушёл в долг: $list.",
+            "/skladchina/${s.id}", OPEN_SKLADCHINA_BUTTON
+        )
+    }
+
+    /** § 3.5, по сроку: все ответили, но счёт не закрыт — решает создатель. */
+    fun sendShortfall(s: Skladchina, remainderKopecks: Long) {
+        val telegramId = telegramIdOf(s.creatorId) ?: return
+        val text = "💸 «${s.title}»: срок вышел, все ответили, не хватило ${Money.rub(remainderKopecks)}. " +
+            "Закрыть сбор или добавить долг — решать вам."
+        gateway.sendDmWithButtons(
+            telegramId, text,
+            listOf(
+                listOf(DmButton("✅ Закрыть сбор", callbackData = SkladchinaCallbackService.CLOSE_PREFIX + s.id)),
+                listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${s.id}"))
+            )
+        )
     }
 
     /** «По желанию» со сроком: создателю в день срока — «закрыть сбор?» с кнопкой прямо в DM. */
