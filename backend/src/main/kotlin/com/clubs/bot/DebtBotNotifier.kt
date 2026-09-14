@@ -143,8 +143,8 @@ class DebtBotNotifier(
             telegramId, text,
             listOf(
                 listOf(
-                    DmButton("✅ Получил", callbackData = DebtCallbackService.SETTLE_CONFIRM_PREFIX + s.id),
-                    DmButton("❌ Не получил", callbackData = DebtCallbackService.SETTLE_REJECT_PREFIX + s.id)
+                    DmButton("✅ Получил", callbackData = SkladchinaCallbackService.SETTLE_CONFIRM_PREFIX + s.id),
+                    DmButton("❌ Не получил", callbackData = SkladchinaCallbackService.SETTLE_REJECT_PREFIX + s.id)
                 ),
                 listOf(DmButton(OPEN_DEBTS_BUTTON, webAppPath = "/debts/with/${s.payerId}"))
             )
@@ -202,7 +202,7 @@ class DebtBotNotifier(
         gateway.sendDmWithButtons(
             creditorTelegramId, text,
             listOf(
-                listOf(DmButton("🙏 Простить", callbackData = DebtCallbackService.FORGIVE_PREFIX + d.debt.id)),
+                listOf(DmButton("🙏 Простить", callbackData = SkladchinaCallbackService.FORGIVE_PREFIX + d.debt.id)),
                 listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${d.debt.skladchinaId}"))
             )
         )
@@ -226,7 +226,7 @@ class DebtBotNotifier(
         gateway.sendDmWithButtons(
             telegramId, text,
             listOf(
-                listOf(DmButton("✅ Закрыть сбор", callbackData = DebtCallbackService.CLOSE_PREFIX + s.id)),
+                listOf(DmButton("✅ Закрыть сбор", callbackData = SkladchinaCallbackService.CLOSE_PREFIX + s.id)),
                 listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${s.id}"))
             )
         )
@@ -261,8 +261,8 @@ class DebtBotNotifier(
             telegramId, text,
             listOf(
                 listOf(
-                    DmButton("✅ Получил", callbackData = DebtCallbackService.CONFIRM_PREFIX + d.debt.id),
-                    DmButton("❌ Не получил", callbackData = DebtCallbackService.REJECT_PREFIX + d.debt.id)
+                    DmButton("✅ Получил", callbackData = SkladchinaCallbackService.CONFIRM_PREFIX + d.debt.id),
+                    DmButton("❌ Не получил", callbackData = SkladchinaCallbackService.REJECT_PREFIX + d.debt.id)
                 ),
                 listOf(DmButton(OPEN_SKLADCHINA_BUTTON, webAppPath = "/skladchina/${d.debt.skladchinaId}"))
             )

@@ -21,14 +21,14 @@ import kotlin.test.assertEquals
  * Кнопки «Получил / Не получил» в DM (skladchina-v3 § 5). `callback_data` подделываема: права
  * даёт не адресат DM, а тот же сервисный метод, что у REST — чужой `from.id` получает «Нет прав».
  */
-class DebtCallbackServiceTest {
+class SkladchinaCallbackServiceTest {
 
     private val userRepository = mockk<UserRepository>()
     private val debtService = mockk<DebtService>()
     private val settlementService = mockk<DebtSettlementService>()
     private val participationService = mockk<SkladchinaParticipationService>()
     private val lifecycleService = mockk<SkladchinaLifecycleService>()
-    private val service = DebtCallbackService(userRepository, debtService, settlementService, participationService, lifecycleService)
+    private val service = SkladchinaCallbackService(userRepository, debtService, settlementService, participationService, lifecycleService)
 
     private val debtId = UUID.randomUUID()
     private val settlementId = UUID.randomUUID()

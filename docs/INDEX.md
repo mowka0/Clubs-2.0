@@ -45,7 +45,7 @@
 | `membership` | `membership.md`, `membership-lifecycle.md` |
 | `payment` | `payment.md`, `payment-v2.md` |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
-| `skladchina`, `debt` | `skladchina-v3.md` (действующая с 2026-09-13; `skladchina.md` — архив до чистки) |
+| `skladchina`, `debt` | `skladchina-v3.md` |
 | `storage` | `infrastructure.md` |
 | `subscription` | `payment-v2.md`, `membership-lifecycle.md` |
 | `user` | `profile.md`, `profile-quest.md` |
@@ -94,7 +94,7 @@
 
 ## 2. Живые спеки (`docs/modules/`)
 
-48 файлов. Дата — последняя правка спеки, метка свежести, не гарантия актуальности.
+49 файлов. Дата — последняя правка спеки, метка свежести, не гарантия актуальности.
 
 ### Клубы и участники
 | Файл | О чём | Правлен |
@@ -127,7 +127,6 @@
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
 | `unified-activity-creation.md` | единое создание активностей через «+» | 2026-08-12 |
-| `skladchina.md` | ⛔ архив: сборы до v3 (MVP, Фаза A, сплит) | 2026-09-13 |
 | `skladchina-v3.md` | сборы и долги: три вида, долг как сущность, экран «Долги», V90–V93 — в проде | 2026-09-13 |
 
 ### Чат, бот, репутация
@@ -208,7 +207,7 @@
 
 | Что | Объём | Статус |
 |---|---|---|
-| `docs/backlog/` | 92 файла, 10 149 строк | архив: хэндоффы, разборы багов, чек-листы прошлых сессий. Открывается **только по прямой ссылке**; греп по нему при alignment не делается |
+| `docs/backlog/` | 96 файлов, 12123 строк | архив: хэндоффы, разборы багов, чек-листы прошлых сессий. Открывается **только по прямой ссылке**; греп по нему при alignment не делается |
 | `docs/completion/` | 4 файла | отчёты TASK-001/002/007/023, историческое |
 | `docs/qa/` | 1 файл | `docs/qa/reputation-test-plan.md` — ручной тест-план |
 | `docs/design/**/mockups/` | ~250 файлов | HTML/PNG дизайн-сессий |

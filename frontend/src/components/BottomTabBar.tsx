@@ -96,7 +96,7 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
+  const { data: actionRequiredCount = 0 } = useSkladchinaActionRequiredCountQuery();
   // Организатору требуется действие на «Мои клубы»: заявки в ожидании (inbox) + платные участники,
   // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы».
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
@@ -125,7 +125,7 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
         {TABS.map((tab) => {
           const isActive = activePath === tab.path;
           const showDot =
-            (tab.path === '/activities' && unpaidCount > 0) ||
+            (tab.path === '/activities' && actionRequiredCount > 0) ||
             (tab.path === '/my-clubs' && myClubsActionTotal > 0);
           return (
             <button

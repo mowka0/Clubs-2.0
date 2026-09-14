@@ -233,9 +233,9 @@ disputed/null attendance.
   (три отказа = выход из «Новичка» без обязательств). Kind `skladchina_declined`
   остаётся в enum ради исторических −5-строк (не реконсилируются — staging-объёмы).
 - Обоснования величин (+10 = 1/10 ironclad; −40 = 1/5 no_show) и гейты тумблера —
-  `docs/modules/skladchina.md` § Reputation deltas и `skladchina-reputation-redesign.md`.
+  `docs/backlog/skladchina-pre-v3.md` § Reputation deltas (архив) и `skladchina-reputation-redesign.md`.
 
-Только если `skladchina.affects_reputation = true`. Финансовые строки дают вклад в `reliability_index`
+До V90 — только при `skladchina.affects_reputation = true`; в v3 тумблера нет, считается любой `shared`-сбор. Финансовые строки дают вклад в `reliability_index`
 (SUM points), но **не** в счётчики явки (`COUNT FILTER axis='attendance'`). На момент P1a был паритет
 с прежним `addReliabilityDelta` (трогал только `reliability_index`); значения P1a (+10/−5/−25)
 действовали до решения 2026-06-12.
@@ -314,7 +314,7 @@ disputed/null attendance.
    Все каст-литералы явно типизированы (`'ironclad'::reputation_kind`, `'event'::reputation_source`,
    `'attendance'::reputation_axis`).
 3. **Finance ledger** из истории (одноразовая миграция — выполнена с весами P1a +10/−5/−25,
-   ре-эмиссии под веса 2026-06-12 нет): `skladchina_participants p JOIN skladchinas s JOIN clubs c`,
+   ре-эмиссии под веса 2026-06-12 нет): `skladchina_participants p JOIN skladchinas s JOIN clubs c` (таблица удалена в V90),
    `WHERE s.affects_reputation AND s.status <> 'active' AND p.status IN
    ('paid','declined','expired_no_response') AND p.user_id <> c.owner_id`; `occurred_at = s.closed_at`;
    `source_type='skladchina'`, `source_id=s.id`. **Фильтр `p.reputation_applied` НЕ используется** —

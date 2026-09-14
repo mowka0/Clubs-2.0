@@ -42,7 +42,7 @@ class ClubsBot(
     private val chatLinkBotService: ChatLinkBotService,
     private val chatDoorService: ChatDoorService,
     private val rosterCallbackService: RosterCallbackService,
-    private val debtCallbackService: DebtCallbackService,
+    private val skladchinaCallbackService: SkladchinaCallbackService,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -240,37 +240,37 @@ class ClubsBot(
                 if (id == null) RosterCallbackService.INVALID_REQUEST else rosterCallbackService.handleRemind(query.from.id, id)
             }
             // Долги: «Получил / Не получил» по долгу и по сальдо пары (skladchina-v3 § 5).
-            data.startsWith(DebtCallbackService.CONFIRM_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.CONFIRM_PREFIX)
-                    ?.let { debtCallbackService.handleDebt(query.from.id, it, confirm = true) }
+            data.startsWith(SkladchinaCallbackService.CONFIRM_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.CONFIRM_PREFIX)
+                    ?.let { skladchinaCallbackService.handleDebt(query.from.id, it, confirm = true) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.REJECT_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.REJECT_PREFIX)
-                    ?.let { debtCallbackService.handleDebt(query.from.id, it, confirm = false) }
+            data.startsWith(SkladchinaCallbackService.REJECT_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.REJECT_PREFIX)
+                    ?.let { skladchinaCallbackService.handleDebt(query.from.id, it, confirm = false) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.SETTLE_CONFIRM_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.SETTLE_CONFIRM_PREFIX)
-                    ?.let { debtCallbackService.handleSettlement(query.from.id, it, confirm = true) }
+            data.startsWith(SkladchinaCallbackService.SETTLE_CONFIRM_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.SETTLE_CONFIRM_PREFIX)
+                    ?.let { skladchinaCallbackService.handleSettlement(query.from.id, it, confirm = true) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.SETTLE_REJECT_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.SETTLE_REJECT_PREFIX)
-                    ?.let { debtCallbackService.handleSettlement(query.from.id, it, confirm = false) }
+            data.startsWith(SkladchinaCallbackService.SETTLE_REJECT_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.SETTLE_REJECT_PREFIX)
+                    ?.let { skladchinaCallbackService.handleSettlement(query.from.id, it, confirm = false) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.ENROLL_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.ENROLL_PREFIX)
-                    ?.let { debtCallbackService.handleEnroll(query.from.id, it) }
+            data.startsWith(SkladchinaCallbackService.ENROLL_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.ENROLL_PREFIX)
+                    ?.let { skladchinaCallbackService.handleEnroll(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.TAKE_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.TAKE_PREFIX)
-                    ?.let { debtCallbackService.handleTake(query.from.id, it) }
+            data.startsWith(SkladchinaCallbackService.TAKE_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.TAKE_PREFIX)
+                    ?.let { skladchinaCallbackService.handleTake(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.FORGIVE_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.FORGIVE_PREFIX)
-                    ?.let { debtCallbackService.handleForgive(query.from.id, it) }
+            data.startsWith(SkladchinaCallbackService.FORGIVE_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.FORGIVE_PREFIX)
+                    ?.let { skladchinaCallbackService.handleForgive(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
-            data.startsWith(DebtCallbackService.CLOSE_PREFIX) ->
-                parseCallbackId(data, DebtCallbackService.CLOSE_PREFIX)
-                    ?.let { debtCallbackService.handleClose(query.from.id, it) }
+            data.startsWith(SkladchinaCallbackService.CLOSE_PREFIX) ->
+                parseCallbackId(data, SkladchinaCallbackService.CLOSE_PREFIX)
+                    ?.let { skladchinaCallbackService.handleClose(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))

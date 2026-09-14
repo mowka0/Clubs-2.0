@@ -1,7 +1,7 @@
 # Складчина — модуль совместных сборов внутри клуба
 
 **Статус:** ✅ RESOLVED — реализовано в `feature/skladchina-mvp` (2026-05-23).
-Актуальная спека модуля: [`docs/modules/skladchina.md`](../modules/skladchina.md).
+Актуальная спека модуля: [`docs/backlog/skladchina-pre-v3.md`](./skladchina-pre-v3.md) (архив; действующая — [`docs/modules/skladchina-v3.md`](../modules/skladchina-v3.md)).
 Этот backlog оставлен как исторический документ — отражает brainstorm 2026-05-17
 до уточнения дизайн-решений. Не использовать для понимания текущей реализации.
 

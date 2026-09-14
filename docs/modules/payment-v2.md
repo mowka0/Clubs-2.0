@@ -203,5 +203,5 @@ PO зафиксировал: **оба плательщика обязатель�
 - `docs/design/payment-monetization-v2.md` — decision record (§6.3/§7/§11 — форки, закрытые этой спекой; §10 — стратегическая рамка).
 - `docs/backlog/monetization-v2-model-handoff.md` — операционный план + decoupling-слайс (Трек B, B1–B11).
 - `docs/modules/payment.md` — v1 as-built (Stars; нейтрализуется).
-- `docs/modules/skladchina.md` — механика P2P-out (org-toggle, honor-system — паттерн для гейта).
+- `docs/backlog/skladchina-pre-v3.md` (архив; действующее — `skladchina-v3.md`) — механика P2P-out (org-toggle, honor-system — паттерн для гейта).
 - `docs/modules/reputation-v2.md` — retention-движок, на котором держится §10.

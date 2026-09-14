@@ -230,7 +230,7 @@ export const EventPage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
-  // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
+  // Существующий сбор по этой встрече — кнопка «Скинуться» открывает его / блокирует пересоздание.
   const eventSplitQuery = useEventSplitStateQuery(isAuthenticated ? id : undefined);
   // «Скинуться» со страницы встречи: встреча — точка входа, а не поле формы (§ 13 п. 33).
   const [splitAsk, setSplitAsk] = useState(false);

@@ -472,9 +472,10 @@ penalty-флоу), а их страницы упираются в скрытый
 
 ### Связь с автозавершением и attendance-flow
 В отличие от `EventCompletionService` (status-независимого, гейтит на флагах), здесь статус
-`cancelled` **load-bearing для финализации** — именно поэтому добавлены гарды выше. Складчины
-этого же клуба отменяются параллельно (`SkladchinaRepository.cancelActiveByClub`) — см.
-`docs/modules/skladchina.md` § «Удаление клуба» и `docs/modules/clubs.md` § DELETE.
+`cancelled` **load-bearing для финализации** — именно поэтому добавлены гарды выше. Сборы
+этого же клуба отменяются параллельно (`SkladchinaRepository.cancelActiveByClub`: неразобранные сальдо
+отклоняются, открытые долги прощаются без репутации) — см. `docs/modules/skladchina-v3.md` § 13 п. 11
+и `docs/modules/clubs.md` § DELETE.
 
 ---
 

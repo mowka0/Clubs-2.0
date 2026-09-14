@@ -575,7 +575,7 @@
 > **Переписано 2026-09-13** (v3, ветка `feature/skladchina-rethink`, миграции V90–V93).
 > Источник истины — `docs/modules/skladchina-v3.md`; обоснования — `docs/design/skladchina-rethink/`.
 > Предыдущие редакции (MVP, Фаза A, сплит, сверка оплат V89) отменены: слишком много правил
-> на один случай каждое. Старое описание — `docs/modules/skladchina.md` (архив до чистки).
+> на один случай каждое. Старое описание — `docs/backlog/skladchina-pre-v3.md` (архив).
 
 #### 4.8.1 Идея
 

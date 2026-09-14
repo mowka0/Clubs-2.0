@@ -23,14 +23,14 @@ import java.util.UUID
  * Возвращает текст для `AnswerCallbackQuery` — бот показывает его алертом.
  */
 @Service
-class DebtCallbackService(
+class SkladchinaCallbackService(
     private val userRepository: UserRepository,
     private val debtService: DebtService,
     private val settlementService: DebtSettlementService,
     private val participationService: SkladchinaParticipationService,
     private val lifecycleService: SkladchinaLifecycleService
 ) {
-    private val log = LoggerFactory.getLogger(DebtCallbackService::class.java)
+    private val log = LoggerFactory.getLogger(SkladchinaCallbackService::class.java)
 
     companion object {
         const val CONFIRM_PREFIX = "debt:confirm:"

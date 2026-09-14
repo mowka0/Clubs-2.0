@@ -1,5 +1,28 @@
 # Хэндофф: чистка после «Сборы и долги v3»
 
+> **Статус 2026-09-14** (ветка `chore/skladchina-v3-cleanup` → staging). Сделано всё, что не требует
+> решения PO; остальное ждёт команды.
+>
+> | Пункт | Статус |
+> |---|---|
+> | 1.1 нумерация Flyway | ✅ вариант (а): V87/V88 → **V94/V95** коммитом `8e861a1` на локальной `feature/sprint-1.0-day4-payment-model` (тесты биллинга не перегонялись — переименованы только файлы и упоминания) |
+> | 1.2 ветка `feature/skladchina-payment-confirmation` | ⏳ **ждёт PO**: не удалялась (ни локально, ни на origin) |
+> | 1.3 `MANAGE_SKLADCHINA` | ⏳ **ждёт PO**: код и карта ролей не трогались |
+> | 2 старые ветки | ⏳ **ждёт PO**: команды удаления подготовлены, не выполнялись |
+> | 3 документы | ✅ `skladchina.md` → `docs/backlog/skladchina-pre-v3.md`; 5 файлов backlog удалены; `skladchina-reputation-redesign.md` — шапка «история»; ссылки в 12 спеках/доках переведены; `type-scenarios-handoff` уже отсутствовал; `docs/design/skladchina-split-header/` в git пуст (мокапы только на диске, gitignored — не удалялись) |
+> | 3 сверка старой модели | ✅ `club-chat-link.md` (пинг №2, таблица триггеров, каскады), `clubs.md`/`events.md` (каскад удаления клуба → долги `forgiven`), `reputation-v2.md` (гейт `affects_reputation` — до V90), `event-templates.md`, `redesign-banco-style.md`; `club-leave.md`/`club-quality.md` уже были с баннером v3 — не трогались; PRD § 4.4.4 старой модели не содержит |
+> | 3 spec updated | ✅ `skladchina-v3.md` § 7 и § 9: эндпоинт `GET /api/users/me/skladchinas/action-required-count` и бейдж сегмента «Сборы» не были описаны |
+> | 4 `LeavePreviewDto.skladchinaObligations` | ✅ оставлено «ради контракта» с комментарием (бэк + `api.ts`); удаление = триггер L «удалённое поле DTO» — отдельным решением |
+> | 4 `DebtCallbackService` | ✅ переименован в `SkladchinaCallbackService` (+ тест, `ClubsBot`, нотифаеры, `telegram-bot.md`) |
+> | 4 `SkladchinaDetailDto.enrolled` | ✅ задокументировано (бэк + `api.ts`), не переименовывалось (триггер L) |
+> | 4 девять штампов напоминаний | ⏸ отложено по условию «после жизни v3 в проде» |
+> | 4 фронт | ✅ `?kind=` только в комментарии о чтении старых ссылок; `unpaidCount` → `actionRequiredCount`, aria-label «Требует оплаты» → «Ждут вашего действия»; комментарий «Разделить счёт» в `EventPage` → «Скинуться»; `ClubStats`/`SkladchinaChatPost` — стейл-упоминания `skladchina_participants`/`split_bill` |
+> | 5 Coolify | ⏳ **руками PO** (у сессии нет токена API): на **prod** переменных `SKLADCHINA_*`/`DEBT_*` нет вовсе (дефолты) — ничего не делать; на **staging** живут обе мёртвые (`SKLADCHINA_REMINDER_POLL_MS=30000`, `SKLADCHINA_CONFIRMATION_POLL_MS=30000`) и ужатые тестовые `DEBT_POLL_MS=30000`, `DEBT_OVERDUE_WEEKS=0`, `DEBT_CLAIM_STALE_HOURS=0`, `SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE=5` — удалить все шесть, дефолты возьмутся из `application.yml` |
+> | 6 память | ✅ четыре файла помечены отменёнными/историей, `project_skladchina_rethink` обновлён |
+> | дамп `/root/staging-pre-v90-20260912-1448.sql` | ⏳ **ждёт PO**: на VPS лежит (665 КБ), не удалялся |
+> | 7 открытые вопросы | без изменений |
+
+
 > Написан 2026-09-13, в день мержа `feature/skladchina-rethink` в `master`. Задача следующей
 > сессии — убрать всё, что осталось от прежних редакций модуля, не трогая v3. Каждый пункт
 > самостоятелен; порядок — сверху вниз по риску.
