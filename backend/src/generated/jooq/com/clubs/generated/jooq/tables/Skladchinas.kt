@@ -254,12 +254,12 @@ open class Skladchinas(
     val HIDDEN_FROM_USER_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("hidden_from_user_id"), SQLDataType.UUID, this, "voluntary: от кого скрыть сбор (именинник, FK users.id). Скрытый сбор тихий: чат-поста нет, DM всем участникам клуба кроме скрытого; скрытый не видит сбор нигде (лента, прямая ссылка → 404).")
 
     /**
-     * The column <code>public.skladchinas.order_reminded_at</code>. per_head:
-     * когда создателю в последний раз ушло напоминание «пора заказывать» (в
-     * срок и раз в день после, пока нет ordered_at). Штамп дедупликации
-     * шедулера.
+     * The column <code>public.skladchinas.order_reminded_at</code>. Когда
+     * создателю в последний раз напомнили завершить сбор: per_head — «пора
+     * заказывать» (в срок и раз в день, пока нет ordered_at), voluntary со
+     * сроком — «закрыть сбор?» (один раз в день срока). NULL = не напоминали.
      */
-    val ORDER_REMINDED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("order_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "per_head: когда создателю в последний раз ушло напоминание «пора заказывать» (в срок и раз в день после, пока нет ordered_at). Штамп дедупликации шедулера.")
+    val ORDER_REMINDED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("order_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда создателю в последний раз напомнили завершить сбор: per_head — «пора заказывать» (в срок и раз в день, пока нет ordered_at), voluntary со сроком — «закрыть сбор?» (один раз в день срока). NULL = не напоминали.")
 
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

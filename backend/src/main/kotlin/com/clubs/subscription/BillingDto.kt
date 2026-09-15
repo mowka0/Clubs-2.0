@@ -6,10 +6,12 @@ import java.time.OffsetDateTime
 enum class BillingState {
     /** Клуб без чата — бесплатен, полоски нет. */
     NO_CHAT,
-    /** Чат подключён, бесплатная встреча ещё не взята. */
-    FREE_MEETING_AVAILABLE,
-    /** Бесплатная встреча использована, подписки ещё не было. */
-    FREE_MEETING_USED,
+    /** Чат подключён, встреч ещё не создавали — бесплатный период не начат (V99). */
+    TRIAL_NOT_STARTED,
+    /** Бесплатный период идёт: `trialUntil` заполнен. */
+    TRIAL,
+    /** Бесплатный период кончился, подписки ещё не было. */
+    TRIAL_ENDED,
     /** Оплаченный период идёт. */
     ACTIVE,
     /** Период кончился, грейс идёт — всё работает, ждём оплату. */
@@ -21,6 +23,10 @@ enum class BillingState {
 data class BillingStatusDto(
     val state: BillingState,
     val priceKopecks: Int,
+    /** До какого момента чат живёт бесплатно; null — период ещё не начат или уже неважен. */
+    val trialUntil: OffsetDateTime?,
+    /** Длина бесплатного периода в днях (billing.trial-days) — чтобы тексты не зашивали число. */
+    val trialDays: Int,
     val currentPeriodEnd: OffsetDateTime?,
     val graceUntil: OffsetDateTime?,
     val autopay: Boolean,

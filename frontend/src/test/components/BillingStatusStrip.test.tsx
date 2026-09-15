@@ -28,8 +28,10 @@ const CLUB_ID = 'club-1';
 
 function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
   return {
-    state: 'FREE_MEETING_AVAILABLE',
+    state: 'TRIAL',
     priceKopecks: 19900,
+    trialUntil: '2026-09-30T10:00:00Z',
+    trialDays: 15,
     currentPeriodEnd: null,
     graceUntil: null,
     autopay: true,
@@ -54,15 +56,25 @@ describe('BillingStatusStrip', () => {
     expect(container.querySelector('.rd-billing-strip')).toBeNull();
   });
 
-  it('первая встреча бесплатна — обещание из рекламы без кнопки', async () => {
-    mockStatus(status());
+  it('чат подключён, встреч ещё не было — обещание без даты и без кнопки', async () => {
+    mockStatus(status({ state: 'TRIAL_NOT_STARTED', trialUntil: null }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
-    expect(await screen.findByText('Первая встреча — бесплатно')).toBeInTheDocument();
+    expect(await screen.findByText('15 дней бесплатно')).toBeInTheDocument();
+    expect(screen.getByText(/Отсчёт пойдёт с первой встречи/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('бесплатная использована — кнопка «Оплатить» открывает шит', async () => {
-    mockStatus(status({ state: 'FREE_MEETING_USED' }));
+  it('бесплатный период идёт — видна дата конца и кнопка оплаты заранее', async () => {
+    mockStatus(status());
+    const onPay = vi.fn();
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={onPay} />);
+    expect(await screen.findByText('Бесплатно до 30 сентября')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить' }));
+    expect(onPay).toHaveBeenCalled();
+  });
+
+  it('бесплатный период кончился — кнопка «Оплатить» открывает шит', async () => {
+    mockStatus(status({ state: 'TRIAL_ENDED', trialUntil: null }));
     const onPay = vi.fn();
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={onPay} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Оплатить' }));

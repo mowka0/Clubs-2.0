@@ -4,7 +4,8 @@ import java.util.UUID
 
 /** Шаги воронки, которые пишет биллинг (platform-billing.md § 10.10). Литерал — значение funnel_event.kind. */
 enum class FunnelStep(val kind: String) {
-    FREE_MEETING_USED("free_meeting_used"),
+    /** Первая встреча чата — с неё пошёл бесплатный период (V99). */
+    TRIAL_STARTED("trial_started"),
     PAYWALL_SEEN("paywall_seen"),
     CHECKOUT_STARTED("checkout_started"),
     PAYMENT_SUCCEEDED("payment_succeeded"),

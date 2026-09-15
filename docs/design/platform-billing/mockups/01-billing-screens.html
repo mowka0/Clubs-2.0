@@ -217,7 +217,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
   <div class="topbar">
     <div>
       <h1>Биллинг за чат — экраны</h1>
-      <p class="lead">Спека <b>docs/modules/platform-billing.md</b> § 7–8. Модель: первая встреча бесплатно, дальше <b>199 ₽ в месяц за клуб</b> (по логике единица счёта — чат, по тексту — клуб), оплата через Robokassa самозанятому, ползунок автопродления. Ниже — всё, что человек увидит глазами; бэкенд-часть на экранах не показана. <b>Версия после правок PO 2026-09-07</b>: «за клуб», списание в день окончания периода, ФИО целиком, оферта текстом, без кнопки «Закрыть» в состоянии ②, без DM «завтра спишем».</p>
+      <p class="lead">Спека <b>docs/modules/platform-billing.md</b> § 7–8. Модель: <b>первые 15 дней бесплатно</b> (отсчёт с первой созданной встречи, решение PO 2026-09-15), дальше <b>199 ₽ в месяц за клуб</b> (по логике единица счёта — чат, по тексту — клуб), оплата через Robokassa самозанятому, ползунок автопродления. Ниже — всё, что человек увидит глазами; бэкенд-часть на экранах не показана. <b>Версия после правок PO 2026-09-07</b>: «за клуб», списание в день окончания периода, ФИО целиком, оферта текстом, без кнопки «Закрыть» в состоянии ②, без DM «завтра спишем». <b>⟳ 2026-09-15</b>: бесплатная встреча заменена бесплатным периодом 15 дней (<code>BILLING_TRIAL_DAYS</code>), напоминания за неделю и за день, отмена встречи срок не возвращает.</p>
     </div>
     <button class="theme-btn" onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">Тема: тёмная / светлая</button>
   </div>
@@ -229,7 +229,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
   <div class="row">
     <!-- ① к оплате -->
     <div class="col">
-      <div class="vh">① К оплате <span class="chip warn">402 · FREE_MEETING_USED</span></div>
+      <div class="vh">① К оплате <span class="chip warn">402 · TRIAL_ENDED</span></div>
       <div class="vd">Бесплатная встреча чата уже была. Ползунок включён по умолчанию; под ним честно — когда и сколько спишем. Карточка «через кого платите» вместо trust-карточки организатора.</div>
       <div class="phone">
         <div class="screen">
@@ -245,7 +245,7 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
             <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
             <div class="body">
               <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес · 30 дней с момента оплаты</span></div>
-              <div class="forchat">за клуб <b>«Бег по средам»</b> · первая встреча была бесплатной</div>
+              <div class="forchat">за клуб <b>«Бег по средам»</b> · первые 15 дней были бесплатными</div>
 
               <div class="feat" style="padding-top:2px">
                 <div class="fi">
@@ -368,12 +368,12 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
 
   <div class="row">
     <div class="col">
-      <div class="vh">FREE_MEETING_AVAILABLE <span class="chip ok">бесплатно</span></div>
+      <div class="vh">TRIAL <span class="chip ok">бесплатно</span></div>
       <div class="vd">Чат подключён, встреч ещё не было. Полоска — это и есть обещание из рекламы.</div>
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip free"><span class="ic">🎁</span><div class="tx"><div class="t">Первая встреча — бесплатно</div><div class="d">Дальше 199 ₽ в месяц за клуб. Счёт появится при создании второй встречи.</div></div></div>
+          <div class="strip free"><span class="ic">🎁</span><div class="tx"><div class="t">Бесплатно до 30 сентября</div><div class="d">Дальше 199 ₽ в месяц за клуб. Напомним в личке за неделю и за день — можно оплатить заранее.</div></div><span class="act">Оплатить</span></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
           <div class="subh">Аватар</div>
           <div class="field">…</div>
@@ -382,12 +382,12 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
     </div>
 
     <div class="col">
-      <div class="vh">FREE_MEETING_USED <span class="chip warn">до стены</span></div>
+      <div class="vh">TRIAL_ENDED <span class="chip warn">стена</span></div>
       <div class="vd">Бесплатная встреча создана (или прошла). Ещё ничего не должен; кнопка позволяет оплатить заранее, не дожидаясь 402 на форме.</div>
       <div class="phone short">
         <div class="screen">
           <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
-          <div class="strip pay"><span class="ic">💬</span><div class="tx"><div class="t">Бесплатная встреча использована</div><div class="d">Следующая — по подписке 199 ₽ в месяц за клуб. Отмените первую до старта — бесплатная вернётся.</div></div><span class="act">Оплатить</span></div>
+          <div class="strip pay"><span class="ic">💬</span><div class="tx"><div class="t">Бесплатный период закончился</div><div class="d">Новые встречи — по подписке 199 ₽ в месяц за клуб. Начатое доживёт, бот из чата не уходит.</div></div><span class="act">Оплатить</span></div>
           <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
           <div class="subh">Аватар</div>
           <div class="field">…</div>
@@ -492,17 +492,17 @@ h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; b
     <div class="entry">
       <h4>Экран «Выбрать чат» (<code>ConnectChatScreen</code>)</h4>
       <p>Заголовок «Бот ведёт встречи в вашем чате», под описанием — строка цены. Человек ещё ничего не подключил: цена не должна пугать, но и не должна быть сюрпризом.</p>
-      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
+      <div class="line">Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
     </div>
     <div class="entry">
       <h4>Мастер наполнения клуба (<code>ClubSetupWizard</code>)</h4>
       <p>Последний шаг, перед «Пригласить»: та же строка мелким текстом под кнопкой. Ничего не собираем и не спрашиваем — просто напоминаем правило.</p>
-      <div class="line">Первая встреча бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
+      <div class="line">Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
     </div>
     <div class="entry">
       <h4>Страница управления клубом</h4>
-      <p>Полоска из раздела 2 в состоянии FREE_MEETING_AVAILABLE — то же обещание, но уже как статус.</p>
-      <div class="line">🎁 Первая встреча — бесплатно</div>
+      <p>Полоска из раздела 2 в состоянии TRIAL — то же обещание, но уже как статус с датой конца.</p>
+      <div class="line">🎁 Бесплатно до 30 сентября</div>
     </div>
   </div>
 

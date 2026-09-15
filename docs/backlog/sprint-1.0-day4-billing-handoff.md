@@ -70,11 +70,29 @@
 
 ---
 
+## 2a. ⟳ 2026-09-15: бесплатный период вместо бесплатной встречи
+
+Модель сменилась до staging-прогона (решение PO, обоснование —
+`monetization-v3-research-2026-09.md` § 8.2): первая созданная встреча запускает бесплатный период
+чата **15 дней** (`BILLING_TRIAL_DAYS`), дальше подписка. DM о конце — за **7 дней** и за **1 день**.
+
+| Что | Где |
+|---|---|
+| `V99__chat_trial.sql` | `chat_free_meeting` → `chat_trial`: `used_at → started_at`, `event_id → first_event_id`, `released_at` удалена, добавлена `reminder_days_left` (дедуп DM, как V77) |
+| `ChatTrialRepository` / `JooqChatTrialRepository` | `startOrGet` (идемпотентная вставка + `justStarted` для воронки), `findStartedAt`, `findTrialsEndingBefore`, `markReminded`, `migrateChatId` |
+| `BillingGate` | стена только после `started_at + trial-days`; первая встреча проходит всегда; `releaseFreeMeeting` удалён вместе с вызовами в `cancelEvent`/`cancelBySystem` |
+| `BillingLifecycleService.remindEndingTrials` | новый проход тика: DM за 7 и 1 день по чатам без подписки |
+| `BillingNotifier.trialEndingSoon` | два текста; говорят, что бот продолжит делать за эти деньги |
+| Статус и фронт | состояния `TRIAL_NOT_STARTED` / `TRIAL` / `TRIAL_ENDED`, поля `trialUntil` и `trialDays`, полоска «Бесплатно до …», `PaywallReason.TRIAL_ENDED`, `CHAT_PRICE_LINE` |
+
+Воронка: шаг `free_meeting_used` заменён на `trial_started`.
+
 ## 3. Решения PO, которые нельзя переоткрывать
 
 Из `monetization-v3-research-2026-09.md` § 8 (деньги) и правок по мокапам 2026-09-07 (тексты и UI):
 
-1. Первая встреча чата бесплатна, счёт — при создании второй. Отменённая до старта возвращается.
+1. ⟳ **Заменено 2026-09-15** (см. § 2a): бесплатный период чата 15 дней от первой встречи; отмена
+   встречи срок не возвращает.
 2. **199 ₽/мес для всех**, круга ранних нет. Цена живёт в `subscription_pricing`.
 3. **По тексту везде «за клуб»**, хотя единица счёта в коде — чат. Не «за чат».
 4. Списание — **в день окончания** оплаченного периода. Отдельного DM «завтра спишем» нет.

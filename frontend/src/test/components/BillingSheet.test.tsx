@@ -36,8 +36,10 @@ const CLUB_ID = '7c2e1d2a-0000-4000-8000-000000000001';
 
 function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
   return {
-    state: 'FREE_MEETING_USED',
+    state: 'TRIAL_ENDED',
     priceKopecks: 19900,
+    trialUntil: null,
+    trialDays: 15,
     currentPeriodEnd: null,
     graceUntil: null,
     autopay: true,
@@ -68,10 +70,10 @@ describe('BillingSheet', () => {
         return HttpResponse.json({ paymentUrl: 'https://rk.example/pay?inv=100001', invId: 100001 });
       }),
     );
-    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="FREE_MEETING_USED" onClose={() => {}} />);
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
 
     expect(await screen.findByText('199 ₽')).toBeInTheDocument();
-    expect(screen.getByText(/первая встреча была бесплатной/)).toBeInTheDocument();
+    expect(screen.getByText(/первые 15 дней были бесплатными/)).toBeInTheDocument();
     // По тексту платят «за клуб», получатель — ФИО целиком (PO 2026-09-07).
     expect(screen.getByRole('heading', { name: 'Оплата за клуб' })).toBeInTheDocument();
     expect(screen.getByText('самозанятый Варламов Иван Иванович')).toBeInTheDocument();
@@ -133,7 +135,7 @@ describe('BillingSheet', () => {
   it('со-организатору вместо кнопки оплаты объясняет, что платит владелец', async () => {
     // Со-организатор доходит до стены при создании встречи, но чекаут ему ответил бы 403.
     mockBilling(status({ canPay: false }));
-    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="FREE_MEETING_USED" onClose={() => {}} />);
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
 
     expect(await screen.findByText('Оплачивает владелец клуба')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Оплатить/ })).toBeNull();

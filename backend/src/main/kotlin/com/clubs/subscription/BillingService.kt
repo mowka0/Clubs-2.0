@@ -49,12 +49,14 @@ class BillingService(
     private val chatLinkRepository: ChatLinkRepository,
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
-    private val freeMeetingRepository: FreeMeetingRepository,
+    private val chatTrialRepository: ChatTrialRepository,
     private val funnelEventRepository: FunnelEventRepository,
     private val paymentProvider: PaymentProvider,
     private val notifier: BillingNotifier,
     // Грейс после конца оплаченного периода (R10).
     @Value("\${billing.grace-days:7}") private val graceDays: Long,
+    // Бесплатный период чата от первой созданной встречи (решение PO 2026-09-15).
+    @Value("\${billing.trial-days:15}") private val trialDays: Long,
     // Оплаченный период за один платёж — часы идут с оплаты (R8).
     @Value("\${subscription.period-days:30}") private val periodDays: Long,
     // Повторный чекаут при живом неоплаченном счёте моложе этого окна отдаёт ту же ссылку.
@@ -234,18 +236,30 @@ class BillingService(
         val canPay = club.ownerId == userId
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         val link = chatLinkRepository.findByClubId(club.id)
-            ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false, recipientName = recipientName, canPay = canPay)
+            ?: return mapper().toStatusDto(
+                BillingState.NO_CHAT, price, trialUntil = null, trialDays = trialDays.toInt(),
+                subscription = null, graceUntil = null, pendingCheckout = false,
+                recipientName = recipientName, canPay = canPay,
+            )
         val pending = paymentRepository.hasPendingMother(club.id)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
+        // Бесплатный период идёт по чату и от первой встречи: до неё строки нет вовсе.
+        val trialUntil = chatTrialRepository.findStartedAt(link.chatId)?.plusDays(trialDays)
         val state = when {
-            subscription == null ->
-                if (freeMeetingRepository.isUsed(link.chatId)) BillingState.FREE_MEETING_USED else BillingState.FREE_MEETING_AVAILABLE
+            subscription == null -> when {
+                trialUntil == null -> BillingState.TRIAL_NOT_STARTED
+                now.isBefore(trialUntil) -> BillingState.TRIAL
+                else -> BillingState.TRIAL_ENDED
+            }
             !subscription.allowsNewMeetings(now, graceDays) -> BillingState.ENDED
             now.isBefore(subscription.currentPeriodEnd) -> BillingState.ACTIVE
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
-        return mapper().toStatusDto(state, price, subscription, graceUntil, pending, recipientName, canPay)
+        return mapper().toStatusDto(
+            state, price, trialUntil?.takeIf { state == BillingState.TRIAL }, trialDays.toInt(),
+            subscription, graceUntil, pending, recipientName, canPay,
+        )
     }
 
     private fun requireOwner(clubId: UUID, userId: UUID): Club {

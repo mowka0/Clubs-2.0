@@ -3,18 +3,23 @@ import { apiClient, ApiError } from './apiClient';
 /** Зеркалит backend BillingState (platform-billing.md § 6.6). */
 export type BillingState =
   | 'NO_CHAT'
-  | 'FREE_MEETING_AVAILABLE'
-  | 'FREE_MEETING_USED'
+  | 'TRIAL_NOT_STARTED'
+  | 'TRIAL'
+  | 'TRIAL_ENDED'
   | 'ACTIVE'
   | 'GRACE'
   | 'ENDED';
 
 /** Причина стены из 402 (backend PaywallReason). */
-export type PaywallReason = 'FREE_MEETING_USED' | 'SUBSCRIPTION_EXPIRED';
+export type PaywallReason = 'TRIAL_ENDED' | 'SUBSCRIPTION_EXPIRED';
 
 export interface BillingStatusDto {
   state: BillingState;
   priceKopecks: number;
+  /** До какого момента чат живёт бесплатно; null — период не начат или уже неважен. */
+  trialUntil: string | null;
+  /** Длина бесплатного периода в днях — приходит с сервера, в текстах не зашита. */
+  trialDays: number;
   currentPeriodEnd: string | null;
   graceUntil: string | null;
   autopay: boolean;
@@ -45,7 +50,7 @@ export interface PaywallInfo {
  * у которого можно спросить цену. Меняется вместе с subscription_pricing на бэкенде.
  * По тексту платят «за клуб» (PO 2026-09-07), хотя единица счёта — чат.
  */
-export const CHAT_PRICE_LINE = 'Первая встреча бесплатно. Дальше 199 ₽ в месяц за клуб.';
+export const CHAT_PRICE_LINE = 'Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.';
 
 export function getBilling(clubId: string): Promise<BillingStatusDto> {
   return apiClient.get<BillingStatusDto>(`/api/clubs/${clubId}/billing`);
@@ -65,7 +70,7 @@ export function paywallFromError(error: unknown): PaywallInfo | null {
   const body = error.body;
   if (body && typeof body === 'object' && 'reason' in body && 'clubId' in body) {
     const b = body as Record<string, unknown>;
-    const reason = b.reason === 'SUBSCRIPTION_EXPIRED' ? 'SUBSCRIPTION_EXPIRED' : 'FREE_MEETING_USED';
+    const reason = b.reason === 'SUBSCRIPTION_EXPIRED' ? 'SUBSCRIPTION_EXPIRED' : 'TRIAL_ENDED';
     return {
       reason,
       clubId: String(b.clubId),

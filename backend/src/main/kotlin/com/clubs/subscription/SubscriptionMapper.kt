@@ -44,6 +44,8 @@ class SubscriptionMapper {
     fun toStatusDto(
         state: BillingState,
         priceKopecks: Int,
+        trialUntil: OffsetDateTime?,
+        trialDays: Int,
         subscription: ServiceSubscription?,
         graceUntil: OffsetDateTime?,
         pendingCheckout: Boolean,
@@ -52,6 +54,8 @@ class SubscriptionMapper {
     ): BillingStatusDto = BillingStatusDto(
         state = state,
         priceKopecks = priceKopecks,
+        trialUntil = trialUntil,
+        trialDays = trialDays,
         currentPeriodEnd = subscription?.currentPeriodEnd,
         graceUntil = graceUntil,
         autopay = subscription?.autopay ?: true,

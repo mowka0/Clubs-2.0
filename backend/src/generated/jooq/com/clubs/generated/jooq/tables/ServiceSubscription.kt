@@ -127,10 +127,10 @@ open class ServiceSubscription(
     /**
      * The column <code>public.service_subscription.subject_club_id</code>.
      * Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с
-     * V87); NULL остался только у завершённых легаси-строк платформенного плана
+     * V97); NULL остался только у завершённых легаси-строк платформенного плана
      * ёмкости.
      */
-    val SUBJECT_CLUB_ID: TableField<ServiceSubscriptionRecord, UUID?> = createField(DSL.name("subject_club_id"), SQLDataType.UUID, this, "Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с V87); NULL остался только у завершённых легаси-строк платформенного плана ёмкости.")
+    val SUBJECT_CLUB_ID: TableField<ServiceSubscriptionRecord, UUID?> = createField(DSL.name("subject_club_id"), SQLDataType.UUID, this, "Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с V97); NULL остался только у завершённых легаси-строк платформенного плана ёмкости.")
 
     /**
      * The column <code>public.service_subscription.status</code>. Статус

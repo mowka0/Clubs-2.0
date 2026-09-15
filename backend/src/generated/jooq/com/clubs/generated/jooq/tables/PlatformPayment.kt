@@ -88,9 +88,10 @@ open class PlatformPayment(
     override fun getRecordType(): Class<PlatformPaymentRecord> = PlatformPaymentRecord::class.java
 
     /**
-     * The column <code>public.platform_payment.id</code>.
+     * The column <code>public.platform_payment.id</code>. Суррогатный первичный
+     * ключ (UUID).
      */
-    val ID: TableField<PlatformPaymentRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "")
+    val ID: TableField<PlatformPaymentRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "Суррогатный первичный ключ (UUID).")
 
     /**
      * The column <code>public.platform_payment.club_id</code>. Клуб (чат), за
@@ -166,9 +167,11 @@ open class PlatformPayment(
     val PROVIDER_FEE: TableField<PlatformPaymentRecord, BigDecimal?> = createField(DSL.name("provider_fee"), SQLDataType.NUMERIC(10, 2), this, "Комиссия провайдера из ResultURL (Fee), рубли с копейками. Для сверки с выпиской, в логику не входит.")
 
     /**
-     * The column <code>public.platform_payment.created_at</code>.
+     * The column <code>public.platform_payment.created_at</code>. Когда счёт
+     * выставлен. По нему считаются окно идемпотентности чекаута и протухание
+     * неоплаченного счёта.
      */
-    val CREATED_AT: TableField<PlatformPaymentRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
+    val CREATED_AT: TableField<PlatformPaymentRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда счёт выставлен. По нему считаются окно идемпотентности чекаута и протухание неоплаченного счёта.")
 
     /**
      * The column <code>public.platform_payment.paid_at</code>. Когда провайдер

@@ -139,11 +139,13 @@ open class Events(
     /**
      * The column <code>public.events.participant_limit</code>. Максимум
      * участников — ПОТОЛОК мест (V86): сверх него голос «Иду» встаёт в очередь
-     * на замену. NULL = открытая встреча: без мест, очереди и репутации. У
-     * обычной встречи обязателен — NULL читают пять мест кода как маркер
-     * открытой встречи.
+     * на замену. NULL = открытая встреча (V96, модель v3): без мест, очереди,
+     * дедлайна набора и второго этапа — голос «Пойду» сразу кладёт в состав, а
+     * репутация за посещение не меняется. У обычной встречи обязателен — NULL
+     * читают как маркер открытой встречи репутация (ReputationService),
+     * обязательства при выходе из клуба и статистика открытых встреч.
      */
-    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Максимум участников — ПОТОЛОК мест (V86): сверх него голос «Иду» встаёт в очередь на замену. NULL = открытая встреча: без мест, очереди и репутации. У обычной встречи обязателен — NULL читают пять мест кода как маркер открытой встречи.")
+    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Максимум участников — ПОТОЛОК мест (V86): сверх него голос «Иду» встаёт в очередь на замену. NULL = открытая встреча (V96, модель v3): без мест, очереди, дедлайна набора и второго этапа — голос «Пойду» сразу кладёт в состав, а репутация за посещение не меняется. У обычной встречи обязателен — NULL читают как маркер открытой встречи репутация (ReputationService), обязательства при выходе из клуба и статистика открытых встреч.")
 
     /**
      * The column <code>public.events.voting_opens_days_before</code>. За
@@ -163,11 +165,12 @@ open class Events(
     val STATUS: TableField<EventsRecord, EventStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'upcoming'::event_status"), SQLDataType.VARCHAR)).asEnumDataType(EventStatus::class.java), this, "Статус события (enum event_status): upcoming = создано, Этап-1 голосование идёт в своём окне; stage_1 = зарезервировано и фактически не проставляется (Этап 1 живёт в upcoming); stage_2 = открыт Этап 2 — подтверждение брони; completed = событие прошло (проставляется после event_datetime); cancelled = отменено организатором.")
 
     /**
-     * The column <code>public.events.stage_2_triggered</code>. TRUE = Этап 2
-     * уже запускался (дедуп триггера, срабатывающего ~за 24 часа до начала,
-     * events.stage2-trigger-minutes-before).
+     * The column <code>public.events.stage_2_triggered</code>. TRUE = набор
+     * состава уже закрывался (дедуп тика, срабатывающего за stage2_lead_minutes
+     * до старта). У открытой встречи (participant_limit IS NULL) навсегда FALSE
+     * (V96): дедлайна набора у неё нет, голосование идёт до самого старта.
      */
-    val STAGE_2_TRIGGERED: TableField<EventsRecord, Boolean?> = createField(DSL.name("stage_2_triggered"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = Этап 2 уже запускался (дедуп триггера, срабатывающего ~за 24 часа до начала, events.stage2-trigger-minutes-before).")
+    val STAGE_2_TRIGGERED: TableField<EventsRecord, Boolean?> = createField(DSL.name("stage_2_triggered"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = набор состава уже закрывался (дедуп тика, срабатывающего за stage2_lead_minutes до старта). У открытой встречи (participant_limit IS NULL) навсегда FALSE (V96): дедлайна набора у неё нет, голосование идёт до самого старта.")
 
     /**
      * The column <code>public.events.attendance_marked</code>. TRUE =

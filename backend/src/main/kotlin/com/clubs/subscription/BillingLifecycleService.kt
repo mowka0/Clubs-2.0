@@ -27,10 +27,13 @@ class BillingLifecycleService(
     private val chatLinkRepository: ChatLinkRepository,
     private val clubRepository: ClubRepository,
     private val funnelEventRepository: FunnelEventRepository,
+    private val chatTrialRepository: ChatTrialRepository,
     private val paymentProvider: PaymentProvider,
     private val billingService: BillingService,
     private val notifier: BillingNotifier,
     @Value("\${billing.grace-days:7}") private val graceDays: Long,
+    // Бесплатный период чата от первой созданной встречи (решение PO 2026-09-15).
+    @Value("\${billing.trial-days:15}") private val trialDays: Long,
     @Value("\${subscription.period-days:30}") private val periodDays: Long,
     // Слоты дочерних списаний в днях от конца периода; четвёртой попытки нет — грейс кончился.
     @Value("\${billing.retry-days:0,1,3}") private val retryDays: List<Long>,
@@ -58,6 +61,38 @@ class BillingLifecycleService(
                 log.error("Billing daily tick failed for subscription {}: {}", subscription.id, e.message, e)
             }
         }
+        remindEndingTrials(now, price)
+    }
+
+    /**
+     * Конец бесплатного периода наступает по календарю и сам по себе ничего не присылает, поэтому
+     * стена встретила бы владельца молча. Два DM: за неделю и за день (решение PO 2026-09-15).
+     */
+    private fun remindEndingTrials(now: OffsetDateTime, price: Int) {
+        for (trial in chatTrialRepository.findTrialsEndingBefore(now.plusDays(TRIAL_REMINDER_DAYS.first()), trialDays)) {
+            try {
+                remindTrial(trial, now, price)
+            } catch (e: RuntimeException) {
+                log.error("Trial reminder failed for chat {}: {}", trial.chatId, e.message, e)
+            }
+        }
+    }
+
+    private fun remindTrial(trial: ChatTrial, now: OffsetDateTime, price: Int) {
+        val trialEnd = trial.startedAt.plusDays(trialDays)
+        // Период уже кончился — напоминать поздно: стену человек увидит на создании встречи.
+        if (!now.isBefore(trialEnd)) return
+        val daysLeft = if (now.isBefore(trialEnd.minusDays(TRIAL_REMINDER_DAYS.last()))) {
+            TRIAL_REMINDER_DAYS.first().toInt()
+        } else {
+            TRIAL_REMINDER_DAYS.last().toInt()
+        }
+        // Порог уже отправляли (или отправляли более поздний) — тик повторяется, DM нет.
+        if (trial.reminderDaysLeft != null && trial.reminderDaysLeft <= daysLeft) return
+        val club = clubRepository.findById(trial.clubId) ?: return
+        chatTrialRepository.markReminded(trial.chatId, daysLeft)
+        notifier.trialEndingSoon(club, trialEnd, price, daysLeft)
+        log.info("Trial reminder sent: chatId={} clubId={} daysLeft={}", trial.chatId, trial.clubId, daysLeft)
     }
 
     private fun processSubscription(subscription: ServiceSubscription, now: OffsetDateTime, price: Int) {
@@ -179,5 +214,11 @@ class BillingLifecycleService(
             val club = subscription.subjectClubId?.let(clubRepository::findById) ?: return
             notifier.chargeFailed(club, price, subscription.currentPeriodEnd.plusDays(graceDays))
         }
+    }
+
+    companion object {
+        // Пороги напоминаний о конце бесплатного периода, в днях до конца (решение PO 2026-09-15).
+        // Первый порог задаёт и окно выборки кандидатов, последний — «завтра».
+        private val TRIAL_REMINDER_DAYS = listOf(7L, 1L)
     }
 }

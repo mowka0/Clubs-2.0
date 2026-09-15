@@ -20,10 +20,12 @@ import java.util.UUID
 class BillingGate(
     private val chatLinkRepository: ChatLinkRepository,
     private val subscriptionRepository: SubscriptionRepository,
-    private val freeMeetingRepository: FreeMeetingRepository,
+    private val chatTrialRepository: ChatTrialRepository,
     private val funnelEventRepository: FunnelEventRepository,
     // Грейс после конца оплаченного периода: всё разрешено, ждём оплату; потом — стена (R10).
     @Value("\${billing.grace-days:7}") private val graceDays: Long,
+    // Бесплатный период чата от первой созданной встречи (решение PO 2026-09-15).
+    @Value("\${billing.trial-days:15}") private val trialDays: Long,
 ) {
 
     private val log = LoggerFactory.getLogger(BillingGate::class.java)
@@ -31,31 +33,26 @@ class BillingGate(
     /**
      * Вызывается из EventService.createEvent ПОСЛЕ вставки события (нужен его id), в той же
      * транзакции — 402 откатывает вставку. Клуб без чата бесплатен (R2); оплаченный период
-     * или грейс пропускают; иначе атомарно берётся бесплатная встреча чата, и лишь когда она
-     * уже использована — стена.
+     * или грейс пропускают; иначе идёт бесплатный период чата, и стена встаёт лишь когда он
+     * закончился. Первая встреча чата запускает отсчёт и всегда проходит.
      */
     fun requireBillable(club: Club, eventId: UUID, actorUserId: UUID) {
         val link = chatLinkRepository.findByClubId(club.id) ?: return
+        val now = OffsetDateTime.now()
         val subscription = subscriptionRepository.findLatestByClub(club.id)
-        if (subscription != null && subscription.allowsNewMeetings(OffsetDateTime.now(), graceDays)) return
+        if (subscription != null && subscription.allowsNewMeetings(now, graceDays)) return
 
-        if (freeMeetingRepository.claim(link.chatId, club.id, eventId)) {
-            log.info("Free meeting used: clubId={} chatId={} eventId={}", club.id, link.chatId, eventId)
-            funnelEventRepository.record(FunnelStep.FREE_MEETING_USED, actorUserId, club.id)
-            return
+        val trial = chatTrialRepository.startOrGet(link.chatId, club.id, eventId)
+        if (trial.justStarted) {
+            log.info("Trial started: clubId={} chatId={} eventId={}", club.id, link.chatId, eventId)
+            funnelEventRepository.record(FunnelStep.TRIAL_STARTED, actorUserId, club.id)
         }
+        if (now.isBefore(trial.startedAt.plusDays(trialDays))) return
 
-        val reason = if (subscription == null) PaywallReason.FREE_MEETING_USED else PaywallReason.SUBSCRIPTION_EXPIRED
+        val reason = if (subscription == null) PaywallReason.TRIAL_ENDED else PaywallReason.SUBSCRIPTION_EXPIRED
         log.info("Paywall shown: clubId={} reason={} userId={}", club.id, reason, actorUserId)
         // В отдельной транзакции: 402 ниже откатит текущую вместе со вставкой события.
         funnelEventRepository.recordDetached(FunnelStep.PAYWALL_SEEN, actorUserId, club.id)
         throw PaymentRequiredException(reason, club.id, subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT))
-    }
-
-    /** Отмена встречи до старта возвращает бесплатную чату (R5); для остальных встреч — no-op. */
-    fun releaseFreeMeeting(eventId: UUID) {
-        if (freeMeetingRepository.release(eventId) > 0) {
-            log.info("Free meeting released by cancellation: eventId={}", eventId)
-        }
     }
 }

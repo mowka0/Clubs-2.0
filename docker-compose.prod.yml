@@ -107,6 +107,8 @@ services:
       # Без дефолта намеренно: незаданная переменная роняет деплой, а не запускает прод со стабом,
       # у которого страница оплаты открыта без авторизации (ревью 2026-09-07).
       BILLING_PROVIDER: ${BILLING_PROVIDER:?set BILLING_PROVIDER=stub for staging or robokassa for prod}
+      # Бесплатный период чата в днях от первой встречи (PO 2026-09-15); дефолт как в application.yml.
+      BILLING_TRIAL_DAYS: ${BILLING_TRIAL_DAYS:-15}
       BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
       BILLING_PENDING_TIMEOUT_HOURS: ${BILLING_PENDING_TIMEOUT_HOURS:-6}
       BILLING_STUB_SETTLE_SECONDS: ${BILLING_STUB_SETTLE_SECONDS:-5}

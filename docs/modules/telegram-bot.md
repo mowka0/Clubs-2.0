@@ -335,9 +335,9 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Inline-кнопка:** «Оспорить явку», deep-link на `/events/{eventId}`.
 **Подключение:** `AttendanceService.markAttendance` публикует `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)`; `bot/AttendanceMarkedListener` (`@TransactionalEventListener`, AFTER_COMMIT) зовёт `@Async sendAttendanceMarked`. Детали потока спора — `docs/modules/events.md` § «Репутация — Блок 1» → ATT-3 и § «Целостность отметки/спора (пакет 1 F5)».
 
-### DM биллинга за клуб (`subscription/BillingNotifier`, 2026-09-07)
+### DM биллинга за клуб (`subscription/BillingNotifier`, 2026-09-07, триал — 2026-09-15)
 
-Платформенная подписка «первая встреча бесплатно, дальше 199 ₽/мес за клуб» пишет владельцу клуба
+Платформенная подписка «15 дней бесплатно, дальше 199 ₽/мес за клуб» пишет владельцу клуба
 только в личку — в чат ничего (`docs/modules/platform-billing.md` § 8). Все DM идут через
 `sendDirectMessageWithDeepLink`; кнопка ведёт на `/clubs/{id}/manage`, а с `?billing=1` — сразу в
 шит оплаты. По тексту «за клуб», хотя единица счёта — чат (решение PO). Владелец без `telegram_id`
@@ -345,6 +345,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 | Когда | Метод | Кнопка |
 |---|---|---|
+| −7 и −1 день до конца бесплатного периода | `trialEndingSoon` (дедуп по `chat_trial.reminder_days_left`) — называет, что бот продолжит делать за эти деньги | «💳 Оплатить» (`?billing=1`) |
 | Материнский платёж прошёл | `paid` — «Оплачено до дд.мм.гггг: клуб «…» ведём дальше» + дата списания при автопродлении | «Открыть клуб» |
 | Дочернее списание прошло | `renewed` — «Продлено до дд.мм.гггг» + мотивирующий текст PO про офлайн-встречи | «Открыть клуб» |
 | −3 и −1 день без автосписания | `expiringSoon` (дедуп по `subscription_event`, ключ `reminder:<period_end>:<3\|1>`) | «💳 Оплатить» (`?billing=1`) |

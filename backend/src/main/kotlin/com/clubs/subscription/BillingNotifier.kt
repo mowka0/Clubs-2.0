@@ -53,6 +53,21 @@ class BillingNotifier(
         send(club, text, payLink(club), "💳 Оплатить")
     }
 
+    /**
+     * −7 и −1 день до конца бесплатного периода. Текст не пугает стеной, а называет, что именно
+     * бот продолжит делать за эти деньги: платит человек за снятую рутину, а не за доступ.
+     */
+    fun trialEndingSoon(club: Club, trialEnd: OffsetDateTime, priceKopecks: Int, daysLeft: Int) {
+        val text = if (daysLeft <= 1) {
+            "⏳ Завтра заканчивается бесплатный период клуба «${club.name}». Дальше — ${rubles(priceKopecks)} в месяц, " +
+                "и бот продолжит вести встречи: афиша в чате, «кто идёт», напоминания участникам и сборы."
+        } else {
+            "⏳ Бесплатный период клуба «${club.name}» заканчивается ${dateFmt.format(trialEnd)}. Дальше — " +
+                "${rubles(priceKopecks)} в месяц. Оплатить можно заранее — встречи и афиши в чате не прервутся."
+        }
+        send(club, text, payLink(club), "💳 Оплатить")
+    }
+
     fun chargeFailed(club: Club, priceKopecks: Int, graceUntil: OffsetDateTime) {
         send(
             club,

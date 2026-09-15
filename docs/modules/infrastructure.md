@@ -387,7 +387,8 @@ volumes:
 
 Переменные `BILLING_*` и `ROBOKASSA_*` прокинуты через `docker-compose.prod.yml` (дефолты
 дублируют `application.yml`, секреты — только из env Coolify): `BILLING_PROVIDER` (`stub` |
-`robokassa`), `BILLING_GRACE_DAYS`, `BILLING_PENDING_TIMEOUT_HOURS`, `BILLING_STUB_SETTLE_SECONDS`,
+`robokassa`), `BILLING_TRIAL_DAYS` (бесплатный период чата в днях, по умолчанию 15 — ручка
+воронки, меняется без релиза), `BILLING_GRACE_DAYS`, `BILLING_PENDING_TIMEOUT_HOURS`, `BILLING_STUB_SETTLE_SECONDS`,
 `BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.

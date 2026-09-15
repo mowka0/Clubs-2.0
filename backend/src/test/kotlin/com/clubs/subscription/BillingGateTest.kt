@@ -22,16 +22,17 @@ import java.util.UUID
 
 /**
  * Гейт биллинга за чат (platform-billing.md § 6.4): клуб без чата бесплатен, оплаченный период
- * и грейс пропускают, бесплатная встреча берётся атомарно, стена — с причиной для шита.
+ * и грейс пропускают, бесплатный период чата идёт от первой встречи, стена — с причиной для шита.
  */
 class BillingGateTest {
 
     private val chatLinkRepository = mockk<ChatLinkRepository>()
     private val subscriptionRepository = mockk<SubscriptionRepository>()
-    private val freeMeetingRepository = mockk<FreeMeetingRepository>()
+    private val chatTrialRepository = mockk<ChatTrialRepository>()
     private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
     private val gate = BillingGate(
-        chatLinkRepository, subscriptionRepository, freeMeetingRepository, funnelEventRepository, graceDays = 7,
+        chatLinkRepository, subscriptionRepository, chatTrialRepository, funnelEventRepository,
+        graceDays = 7, trialDays = 15,
     )
 
     private val clubId: UUID = UUID.randomUUID()
@@ -65,6 +66,12 @@ class BillingGateTest {
         providerToken = "100001", createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now(),
     )
 
+    /** Бесплатный период чата, начатый [daysAgo] дней назад; justStarted — первая ли это встреча. */
+    private fun trial(daysAgo: Long, justStarted: Boolean = false) {
+        every { chatTrialRepository.startOrGet(chatId, clubId, eventId) } returns
+            TrialStart(OffsetDateTime.now().minusDays(daysAgo), justStarted)
+    }
+
     private fun linked() {
         every { chatLinkRepository.findByClubId(clubId) } returns link()
         every { subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT) } returns 19900
@@ -77,29 +84,40 @@ class BillingGateTest {
         gate.requireBillable(club, eventId, ownerId)
 
         verify(exactly = 0) { subscriptionRepository.findLatestByClub(any()) }
-        verify(exactly = 0) { freeMeetingRepository.claim(any(), any(), any()) }
+        verify(exactly = 0) { chatTrialRepository.startOrGet(any(), any(), any()) }
     }
 
     @Test
-    fun `first meeting of a chat is free and recorded by event id`() {
+    fun `first meeting of a chat starts the trial and passes`() {
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns null
-        every { freeMeetingRepository.claim(chatId, clubId, eventId) } returns true
+        trial(daysAgo = 0, justStarted = true)
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 1) { funnelEventRepository.record(FunnelStep.FREE_MEETING_USED, ownerId, clubId) }
+        verify(exactly = 1) { funnelEventRepository.record(FunnelStep.TRIAL_STARTED, ownerId, clubId) }
     }
 
     @Test
-    fun `second meeting without a subscription hits the paywall with FREE_MEETING_USED`() {
+    fun `meeting inside the trial window passes without a second funnel step`() {
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns null
-        every { freeMeetingRepository.claim(chatId, clubId, eventId) } returns false
+        trial(daysAgo = 14)
+
+        gate.requireBillable(club, eventId, ownerId)
+
+        verify(exactly = 0) { funnelEventRepository.record(FunnelStep.TRIAL_STARTED, any(), any()) }
+    }
+
+    @Test
+    fun `meeting after the trial without a subscription hits the paywall with TRIAL_ENDED`() {
+        linked()
+        every { subscriptionRepository.findLatestByClub(clubId) } returns null
+        trial(daysAgo = 16)
 
         val ex = assertThrows<PaymentRequiredException> { gate.requireBillable(club, eventId, ownerId) }
 
-        assertEquals(PaywallReason.FREE_MEETING_USED, ex.reason)
+        assertEquals(PaywallReason.TRIAL_ENDED, ex.reason)
         assertEquals(clubId, ex.clubId)
         assertEquals(19900, ex.priceKopecks)
         // Пейволл откатывает транзакцию создания — шаг воронки пишется отдельной.
@@ -107,14 +125,14 @@ class BillingGateTest {
     }
 
     @Test
-    fun `active subscription passes without touching the free meeting`() {
+    fun `active subscription passes without touching the trial`() {
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns
             subscription(SubscriptionStatus.ACTIVE, OffsetDateTime.now().plusDays(20))
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 0) { freeMeetingRepository.claim(any(), any(), any()) }
+        verify(exactly = 0) { chatTrialRepository.startOrGet(any(), any(), any()) }
     }
 
     @Test
@@ -125,7 +143,7 @@ class BillingGateTest {
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 0) { freeMeetingRepository.claim(any(), any(), any()) }
+        verify(exactly = 0) { chatTrialRepository.startOrGet(any(), any(), any()) }
     }
 
     @Test
@@ -133,7 +151,7 @@ class BillingGateTest {
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns
             subscription(SubscriptionStatus.PAST_DUE, OffsetDateTime.now().minusDays(8))
-        every { freeMeetingRepository.claim(chatId, clubId, eventId) } returns false
+        trial(daysAgo = 40)
 
         val ex = assertThrows<PaymentRequiredException> { gate.requireBillable(club, eventId, ownerId) }
 
@@ -141,24 +159,16 @@ class BillingGateTest {
     }
 
     @Test
-    fun `ENDED subscription with a released free meeting lets the meeting through`() {
-        // Бесплатная вернулась отменой (R5) — она снова доступна, даже если подписка кончилась.
+    fun `ENDED subscription with a trial still running lets the meeting through`() {
+        // Крайний случай: подписку успели закончить, а бесплатный период чата ещё идёт —
+        // человеку это видно как «бесплатно до …», и стены быть не должно.
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns
             subscription(SubscriptionStatus.ENDED, OffsetDateTime.now().minusDays(30))
-        every { freeMeetingRepository.claim(chatId, clubId, eventId) } returns true
+        trial(daysAgo = 3)
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 1) { funnelEventRepository.record(FunnelStep.FREE_MEETING_USED, ownerId, clubId) }
-    }
-
-    @Test
-    fun `releaseFreeMeeting delegates to the repository`() {
-        every { freeMeetingRepository.release(eventId) } returns 1
-
-        gate.releaseFreeMeeting(eventId)
-
-        verify(exactly = 1) { freeMeetingRepository.release(eventId) }
+        verify(exactly = 0) { funnelEventRepository.recordDetached(FunnelStep.PAYWALL_SEEN, any(), any()) }
     }
 }

@@ -6,8 +6,8 @@ package com.clubs.generated.jooq.keys
 
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ChatAwardTags
-import com.clubs.generated.jooq.tables.ChatFreeMeeting
 import com.clubs.generated.jooq.tables.ChatStrictBans
+import com.clubs.generated.jooq.tables.ChatTrial
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -39,8 +39,8 @@ import com.clubs.generated.jooq.tables.UserOnboardingTours
 import com.clubs.generated.jooq.tables.Users
 import com.clubs.generated.jooq.tables.records.ApplicationsRecord
 import com.clubs.generated.jooq.tables.records.ChatAwardTagsRecord
-import com.clubs.generated.jooq.tables.records.ChatFreeMeetingRecord
 import com.clubs.generated.jooq.tables.records.ChatStrictBansRecord
+import com.clubs.generated.jooq.tables.records.ChatTrialRecord
 import com.clubs.generated.jooq.tables.records.CitiesRecord
 import com.clubs.generated.jooq.tables.records.ClubAwardsRecord
 import com.clubs.generated.jooq.tables.records.ClubChatLinksRecord
@@ -84,8 +84,8 @@ import org.jooq.impl.Internal
 
 val APPLICATIONS_PKEY: UniqueKey<ApplicationsRecord> = Internal.createUniqueKey(Applications.APPLICATIONS, DSL.name("applications_pkey"), arrayOf(Applications.APPLICATIONS.ID), true)
 val CHAT_AWARD_TITLES_PKEY: UniqueKey<ChatAwardTagsRecord> = Internal.createUniqueKey(ChatAwardTags.CHAT_AWARD_TAGS, DSL.name("chat_award_titles_pkey"), arrayOf(ChatAwardTags.CHAT_AWARD_TAGS.CLUB_ID, ChatAwardTags.CHAT_AWARD_TAGS.TELEGRAM_ID), true)
-val CHAT_FREE_MEETING_PKEY: UniqueKey<ChatFreeMeetingRecord> = Internal.createUniqueKey(ChatFreeMeeting.CHAT_FREE_MEETING, DSL.name("chat_free_meeting_pkey"), arrayOf(ChatFreeMeeting.CHAT_FREE_MEETING.CHAT_ID), true)
 val CHAT_STRICT_BANS_PKEY: UniqueKey<ChatStrictBansRecord> = Internal.createUniqueKey(ChatStrictBans.CHAT_STRICT_BANS, DSL.name("chat_strict_bans_pkey"), arrayOf(ChatStrictBans.CHAT_STRICT_BANS.CLUB_ID, ChatStrictBans.CHAT_STRICT_BANS.TELEGRAM_ID), true)
+val CHAT_FREE_MEETING_PKEY: UniqueKey<ChatTrialRecord> = Internal.createUniqueKey(ChatTrial.CHAT_TRIAL, DSL.name("chat_free_meeting_pkey"), arrayOf(ChatTrial.CHAT_TRIAL.CHAT_ID), true)
 val CITIES_PKEY: UniqueKey<CitiesRecord> = Internal.createUniqueKey(Cities.CITIES, DSL.name("cities_pkey"), arrayOf(Cities.CITIES.ID), true)
 val CLUB_AWARDS_CLUB_ID_USER_ID_LABEL_KEY: UniqueKey<ClubAwardsRecord> = Internal.createUniqueKey(ClubAwards.CLUB_AWARDS, DSL.name("club_awards_club_id_user_id_label_key"), arrayOf(ClubAwards.CLUB_AWARDS.CLUB_ID, ClubAwards.CLUB_AWARDS.USER_ID, ClubAwards.CLUB_AWARDS.LABEL), true)
 val CLUB_AWARDS_PKEY: UniqueKey<ClubAwardsRecord> = Internal.createUniqueKey(ClubAwards.CLUB_AWARDS, DSL.name("club_awards_pkey"), arrayOf(ClubAwards.CLUB_AWARDS.ID), true)

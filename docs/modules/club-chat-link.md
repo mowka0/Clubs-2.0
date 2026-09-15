@@ -222,7 +222,7 @@ chat was upgraded to a supergroup chat` + `parameters.migrate_to_chat_id`
 
 1. новый `chat_id` свободен → `updateChatId` + событие `ChatIdMigratedEvent(clubId, old, new)`
    (синхронный `@EventListener`, та же транзакция): данные, привязанные к `chat_id` вне этой
-   таблицы, едут следом — сейчас это признак бесплатной встречи (`platform-billing.md` § 5.3);
+   таблицы, едут следом — сейчас это бесплатный период чата `chat_trial` (`platform-billing.md` § 5.3);
 2. занят ТЕМ ЖЕ клубом → no-op, `true` (второе событие пришло следом за первым);
 3. занят **клубом-двойником** → двойник освобождается через `releaseKeepingBotInChat`
    (**бот из чата НЕ выходит** — это тот же чат, который сейчас вернётся законному клубу),

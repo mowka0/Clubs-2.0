@@ -200,8 +200,6 @@ class EventService(
             return
         }
         skladchinaRepository.cancelActiveByEventId(event.id)
-        // Отменённая до старта бесплатная встреча возвращается чату (platform-billing.md R5).
-        billingGate.releaseFreeMeeting(event.id)
         log.info("Event cancelled by system: id={} reason='{}'", event.id, reason)
         eventPublisher.publishEvent(EventCancelledEvent(event, reason))
     }
@@ -226,8 +224,6 @@ class EventService(
             throw ConflictException("Событие нельзя отменить: оно уже началось, завершено или отменено")
         }
         skladchinaRepository.cancelActiveByEventId(eventId)
-        // Отменённая до старта бесплатная встреча возвращается чату (platform-billing.md R5).
-        billingGate.releaseFreeMeeting(eventId)
 
         log.info("Event cancelled: id={} userId={} reasonGiven={}", eventId, userId, normalizedReason != null)
         eventPublisher.publishEvent(EventCancelledEvent(event, normalizedReason))

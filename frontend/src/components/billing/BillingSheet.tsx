@@ -5,6 +5,7 @@ import { useClubQuery } from '../../queries/clubs';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { openExternalLink } from '../../utils/telegramLinks';
+import { pluralRu } from '../../utils/formatters';
 import { formatBillingDate, formatRubles, type PaywallReason } from '../../api/billing';
 import { OFFER_TITLE, offerParagraphs } from './offerText';
 
@@ -111,6 +112,8 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   };
 
   const expired = reason === 'SUBSCRIPTION_EXPIRED' || data?.state === 'GRACE' || data?.state === 'ENDED';
+  // Оплата внутри бесплатного периода: человек платит заранее, ничего не «продлевая».
+  const payingEarly = data?.state === 'TRIAL';
   const title = mode === 'paid' ? 'Оплата за клуб' : expired ? 'Продлить подписку' : 'Оплата за клуб';
   const price = data ? formatRubles(data.priceKopecks) : null;
   // Списание — в день окончания оплаченного периода (PO 2026-09-07).
@@ -127,6 +130,12 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
             : ' Начатые встречи доживут, новые — после оплаты.'}
         </div>
       )}
+      {payingEarly && data?.trialUntil && (
+        <div className="rd-billing-note">
+          Бесплатный период клуба <b>«{clubName}»</b> идёт до {formatBillingDate(data.trialUntil)} — оплата
+          сейчас его не прерывает: месяц подписки начнётся с момента платежа.
+        </div>
+      )}
       <div className="rd-dues-amount">
         <span className="rd-dues-emoji" aria-hidden="true">💬</span>
         <span className="rd-dues-sum">{price ?? '…'}</span>
@@ -134,7 +143,8 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       </div>
       <div className="rd-billing-for">
         за клуб <b>«{clubName}»</b>
-        {reason === 'FREE_MEETING_USED' && ' · первая встреча была бесплатной'}
+        {reason === 'TRIAL_ENDED' && data
+          && ` · первые ${data.trialDays} ${pluralRu(data.trialDays, ['день', 'дня', 'дней'])} были бесплатными`}
       </div>
 
       <div className="rd-cl-feat" style={{ paddingTop: 2 }}>

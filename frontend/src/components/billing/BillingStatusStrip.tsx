@@ -2,6 +2,7 @@ import { FC, useState } from 'react';
 import { useBillingQuery, useSetAutopayMutation } from '../../queries/billing';
 import { useHaptic } from '../../hooks/useHaptic';
 import { formatBillingDate, formatRubles } from '../../api/billing';
+import { pluralRu } from '../../utils/formatters';
 
 interface BillingStatusStripProps {
   clubId: string;
@@ -11,7 +12,7 @@ interface BillingStatusStripProps {
 
 /**
  * Полоска статуса биллинга на странице управления клубом (platform-billing.md § 7): одна
- * полоска, шесть состояний из BillingStatusDto; ползунок автопродления живёт прямо в ней —
+ * полоска, семь состояний из BillingStatusDto; ползунок автопродления живёт прямо в ней —
  * отдельного экрана «подписка» нет. У клуба без чата полоски нет: ему не за что платить.
  * По тексту платят «за клуб», хотя единица счёта — чат (PO 2026-09-07).
  */
@@ -25,6 +26,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay 
 
   const price = formatRubles(data.priceKopecks);
   const periodEnd = data.currentPeriodEnd ? formatBillingDate(data.currentPeriodEnd) : null;
+  const trialUntil = data.trialUntil ? formatBillingDate(data.trialUntil) : null;
   const graceUntil = data.graceUntil ? formatBillingDate(data.graceUntil) : null;
 
   const toggleAutopay = () => {
@@ -38,23 +40,34 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay 
   };
 
   switch (data.state) {
-    case 'FREE_MEETING_AVAILABLE':
+    case 'TRIAL_NOT_STARTED':
       return (
         <div className="rd-billing-strip free" data-state={data.state}>
           <span className="ic" aria-hidden="true">🎁</span>
           <div className="tx">
-            <div className="t">Первая встреча — бесплатно</div>
-            <div className="d">Дальше {price} в месяц за клуб. Счёт появится при создании второй встречи.</div>
+            <div className="t">{data.trialDays} {pluralRu(data.trialDays, ['день', 'дня', 'дней'])} бесплатно</div>
+            <div className="d">Отсчёт пойдёт с первой встречи. Дальше {price} в месяц за клуб.</div>
           </div>
         </div>
       );
-    case 'FREE_MEETING_USED':
+    case 'TRIAL':
+      return (
+        <div className="rd-billing-strip free" data-state={data.state}>
+          <span className="ic" aria-hidden="true">🎁</span>
+          <div className="tx">
+            <div className="t">Бесплатно до {trialUntil}</div>
+            <div className="d">Дальше {price} в месяц за клуб. Напомним в личке за неделю и за день — можно оплатить заранее.</div>
+          </div>
+          <button type="button" className="act" onClick={onPay}>Оплатить</button>
+        </div>
+      );
+    case 'TRIAL_ENDED':
       return (
         <div className="rd-billing-strip pay" data-state={data.state}>
           <span className="ic" aria-hidden="true">💬</span>
           <div className="tx">
-            <div className="t">Бесплатная встреча использована</div>
-            <div className="d">Следующая — по подписке {price} в месяц за клуб. Отмените первую до старта — бесплатная вернётся.</div>
+            <div className="t">Бесплатный период закончился</div>
+            <div className="d">Новые встречи — по подписке {price} в месяц за клуб. Начатое доживёт, бот из чата не уходит.</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>

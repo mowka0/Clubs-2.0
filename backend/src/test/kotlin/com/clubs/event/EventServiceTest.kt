@@ -98,7 +98,7 @@ class EventServiceTest {
         every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
         every { eventRepository.create(any(), clubId, ownerId, any()) } returns event
         every { billingGate.requireBillable(any(), any(), any()) } throws
-            PaymentRequiredException(PaywallReason.FREE_MEETING_USED, clubId, 19900)
+            PaymentRequiredException(PaywallReason.TRIAL_ENDED, clubId, 19900)
 
         assertThrows<PaymentRequiredException> { eventService.createEvent(clubId, request(), ownerId) }
 
@@ -107,7 +107,7 @@ class EventServiceTest {
     }
 
     @Test
-    fun `cancelEvent returns the free meeting to the chat`() {
+    fun `cancelEvent does not touch billing — the trial runs by the calendar (V99)`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
@@ -117,21 +117,8 @@ class EventServiceTest {
 
         eventService.cancelEvent(event.id, ownerId, null)
 
-        verify(exactly = 1) { billingGate.releaseFreeMeeting(event.id) }
-    }
-
-    @Test
-    fun `cancelEvent that hits the guard does not touch the free meeting`() {
-        val clubId = UUID.randomUUID()
-        val ownerId = UUID.randomUUID()
-        val event = sampleEvent(clubId, ownerId)
-        every { eventRepository.findById(event.id) } returns event
-        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
-        every { eventRepository.cancelEvent(event.id, null) } returns 0
-
-        assertThrows<ConflictException> { eventService.cancelEvent(event.id, ownerId, null) }
-
-        verify(exactly = 0) { billingGate.releaseFreeMeeting(any()) }
+        // Отмена ничего не возвращает: бесплатный период считается от первой встречи по календарю.
+        verify(exactly = 0) { billingGate.requireBillable(any(), any(), any()) }
     }
 
     @Test

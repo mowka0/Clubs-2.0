@@ -32,11 +32,13 @@ class BillingLifecycleServiceTest {
     private val paymentProvider = mockk<PaymentProvider>(relaxed = true)
     private val billingService = mockk<BillingService>(relaxed = true)
     private val notifier = mockk<BillingNotifier>(relaxed = true)
+    private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
 
     private val service = BillingLifecycleService(
         subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, funnelEventRepository,
-        paymentProvider, billingService, notifier,
-        graceDays = 7, periodDays = 30, retryDays = listOf(0, 1, 3), pendingTimeoutHours = 6, motherExpireHours = 24,
+        chatTrialRepository, paymentProvider, billingService, notifier,
+        graceDays = 7, trialDays = 15, periodDays = 30, retryDays = listOf(0, 1, 3),
+        pendingTimeoutHours = 6, motherExpireHours = 24,
     )
 
     private val club = BillingTestFixtures.club()
@@ -53,6 +55,13 @@ class BillingLifecycleServiceTest {
 
     private fun live(vararg subscriptions: ServiceSubscription) {
         every { subscriptionRepository.findLive() } returns subscriptions.toList()
+    }
+
+    /** Бесплатный период чата, начатый [daysAgo] дней назад, с уже отправленным порогом [reminded]. */
+    private fun trial(daysAgo: Long, reminded: Int? = null) {
+        every { chatTrialRepository.findTrialsEndingBefore(any(), any()) } returns listOf(
+            ChatTrial(chatId = -1001L, clubId = club.id, startedAt = now.minusDays(daysAgo), reminderDaysLeft = reminded),
+        )
     }
 
     // ---------- напоминания ----------
@@ -227,5 +236,41 @@ class BillingLifecycleServiceTest {
         service.runDaily(now)
 
         verify(exactly = 0) { notifier.graceExhausted(any()) }
+    }
+
+    // ---------- конец бесплатного периода ----------
+
+    @Test
+    fun `trial end is announced a week before and a day before, once each`() {
+        live()
+        // 15-дневный период, начатый 9 дней назад: до конца 6 дней — порог «неделя».
+        trial(daysAgo = 9)
+
+        service.runDaily(now)
+
+        verify(exactly = 1) { notifier.trialEndingSoon(club, now.minusDays(9).plusDays(15), PRICE, 7) }
+        verify(exactly = 1) { chatTrialRepository.markReminded(-1001L, 7) }
+
+        // Порог уже отмечен — повторный тик молчит.
+        trial(daysAgo = 9, reminded = 7)
+        service.runDaily(now)
+        verify(exactly = 1) { notifier.trialEndingSoon(any(), any(), any(), 7) }
+
+        // За день до конца уходит второе, последнее напоминание.
+        trial(daysAgo = 14, reminded = 7)
+        service.runDaily(now)
+        verify(exactly = 1) { notifier.trialEndingSoon(club, now.minusDays(14).plusDays(15), PRICE, 1) }
+        verify(exactly = 1) { chatTrialRepository.markReminded(-1001L, 1) }
+    }
+
+    @Test
+    fun `a trial that already ended is not announced — the wall speaks for itself`() {
+        live()
+        trial(daysAgo = 16)
+
+        service.runDaily(now)
+
+        verify(exactly = 0) { notifier.trialEndingSoon(any(), any(), any(), any()) }
+        verify(exactly = 0) { chatTrialRepository.markReminded(any(), any()) }
     }
 }

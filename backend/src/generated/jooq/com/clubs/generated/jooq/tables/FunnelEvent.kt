@@ -81,14 +81,16 @@ open class FunnelEvent(
     override fun getRecordType(): Class<FunnelEventRecord> = FunnelEventRecord::class.java
 
     /**
-     * The column <code>public.funnel_event.id</code>.
+     * The column <code>public.funnel_event.id</code>. Суррогатный первичный
+     * ключ (UUID).
      */
-    val ID: TableField<FunnelEventRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "")
+    val ID: TableField<FunnelEventRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "Суррогатный первичный ключ (UUID).")
 
     /**
-     * The column <code>public.funnel_event.user_id</code>.
+     * The column <code>public.funnel_event.user_id</code>. Кто совершил шаг (FK
+     * users.id). NULL для шагов без опознанного пользователя.
      */
-    val USER_ID: TableField<FunnelEventRecord, UUID?> = createField(DSL.name("user_id"), SQLDataType.UUID, this, "")
+    val USER_ID: TableField<FunnelEventRecord, UUID?> = createField(DSL.name("user_id"), SQLDataType.UUID, this, "Кто совершил шаг (FK users.id). NULL для шагов без опознанного пользователя.")
 
     /**
      * The column <code>public.funnel_event.club_id</code>. Клуб, к которому
@@ -98,9 +100,12 @@ open class FunnelEvent(
     val CLUB_ID: TableField<FunnelEventRecord, UUID?> = createField(DSL.name("club_id"), SQLDataType.UUID, this, "Клуб, к которому относится шаг (NULL для шагов до создания клуба). Без FK: клуб может быть удалён.")
 
     /**
-     * The column <code>public.funnel_event.kind</code>.
+     * The column <code>public.funnel_event.kind</code>. Шаг воронки строкой:
+     * free_meeting_used, paywall_seen, checkout_started, payment_succeeded,
+     * subscription_ended и шаги привлечения дня 5. Без enum — набор шагов
+     * меняется чаще, чем схема.
      */
-    val KIND: TableField<FunnelEventRecord, String?> = createField(DSL.name("kind"), SQLDataType.VARCHAR(48).nullable(false), this, "")
+    val KIND: TableField<FunnelEventRecord, String?> = createField(DSL.name("kind"), SQLDataType.VARCHAR(48).nullable(false), this, "Шаг воронки строкой: free_meeting_used, paywall_seen, checkout_started, payment_succeeded, subscription_ended и шаги привлечения дня 5. Без enum — набор шагов меняется чаще, чем схема.")
 
     /**
      * The column <code>public.funnel_event.campaign</code>. Метка рекламной
@@ -110,9 +115,10 @@ open class FunnelEvent(
     val CAMPAIGN: TableField<FunnelEventRecord, String?> = createField(DSL.name("campaign"), SQLDataType.VARCHAR(64), this, "Метка рекламной кампании из /start ad_<campaign> (NULL = органика или шаг без атрибуции).")
 
     /**
-     * The column <code>public.funnel_event.created_at</code>.
+     * The column <code>public.funnel_event.created_at</code>. Когда шаг
+     * случился.
      */
-    val CREATED_AT: TableField<FunnelEventRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
+    val CREATED_AT: TableField<FunnelEventRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда шаг случился.")
 
     private constructor(alias: Name, aliased: Table<FunnelEventRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<FunnelEventRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

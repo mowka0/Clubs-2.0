@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
@@ -34,15 +36,15 @@ class BillingServiceTest {
     private val chatLinkRepository = mockk<ChatLinkRepository>()
     private val clubRepository = mockk<ClubRepository>()
     private val clubRoleGuard = mockk<ClubRoleGuard>()
-    private val freeMeetingRepository = mockk<FreeMeetingRepository>(relaxed = true)
+    private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
     private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
     private val paymentProvider = mockk<PaymentProvider>()
     private val notifier = mockk<BillingNotifier>(relaxed = true)
 
     private val service = BillingService(
         subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, clubRoleGuard,
-        freeMeetingRepository, funnelEventRepository, paymentProvider, notifier,
-        graceDays = 7, periodDays = 30, checkoutReuseMinutes = 30,
+        chatTrialRepository, funnelEventRepository, paymentProvider, notifier,
+        graceDays = 7, trialDays = 15, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
         recipientName = "Варламов Иван Иванович",
     )
@@ -287,10 +289,19 @@ class BillingServiceTest {
         assertEquals("Варламов Иван Иванович", noChat.recipientName)
 
         every { chatLinkRepository.findByClubId(club.id) } returns link
-        every { freeMeetingRepository.isUsed(link.chatId) } returns false
-        assertEquals(BillingState.FREE_MEETING_AVAILABLE, service.status(club.id, club.ownerId).state)
-        every { freeMeetingRepository.isUsed(link.chatId) } returns true
-        assertEquals(BillingState.FREE_MEETING_USED, service.status(club.id, club.ownerId).state)
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns null
+        assertEquals(BillingState.TRIAL_NOT_STARTED, service.status(club.id, club.ownerId).state)
+
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(2)
+        val trial = service.status(club.id, club.ownerId)
+        assertEquals(BillingState.TRIAL, trial.state)
+        assertEquals(15, trial.trialDays)
+        assertNotNull(trial.trialUntil, "полоска показывает, до какого числа бесплатно")
+
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
+        val ended = service.status(club.id, club.ownerId)
+        assertEquals(BillingState.TRIAL_ENDED, ended.state)
+        assertNull(ended.trialUntil, "период кончился — дату больше не показываем")
 
         every { subscriptionRepository.findLatestByClub(club.id) } returns BillingTestFixtures.subscription(club, autopay = false)
         val active = service.status(club.id, club.ownerId)
@@ -316,7 +327,7 @@ class BillingServiceTest {
     fun `status tells a co-organizer that only the owner can pay`() {
         val coOrganizer = UUID.randomUUID()
         every { clubRoleGuard.requireCapability(club.id, any(), any()) } returns club
-        every { freeMeetingRepository.isUsed(link.chatId) } returns true
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
 
         assertTrue(service.status(club.id, club.ownerId).canPay)
         assertFalse(service.status(club.id, coOrganizer).canPay, "чекаут ответил бы со-организатору 403")

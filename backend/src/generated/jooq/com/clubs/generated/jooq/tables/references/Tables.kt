@@ -6,8 +6,8 @@ package com.clubs.generated.jooq.tables.references
 
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ChatAwardTags
-import com.clubs.generated.jooq.tables.ChatFreeMeeting
 import com.clubs.generated.jooq.tables.ChatStrictBans
+import com.clubs.generated.jooq.tables.ChatTrial
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -57,20 +57,21 @@ val APPLICATIONS: Applications = Applications.APPLICATIONS
 val CHAT_AWARD_TAGS: ChatAwardTags = ChatAwardTags.CHAT_AWARD_TAGS
 
 /**
- * Одна бесплатная встреча на чат Telegram. Строка есть = бесплатная встреча
- * взята; released_at заполнен = встреча отменена до старта и бесплатная
- * возвращена (R5). Переживает отвязку чата, удаление клуба и повторное
- * подключение того же чата новым клубом.
- */
-val CHAT_FREE_MEETING: ChatFreeMeeting = ChatFreeMeeting.CHAT_FREE_MEETING
-
-/**
  * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот
  * забанил за уход из клуба. Нужна для снятия ВСЕХ наших банов при отвязке чата
  * (бот уходит — иначе баны навсегда). Ручные баны организатора здесь не
  * учитываются и не снимаются.
  */
 val CHAT_STRICT_BANS: ChatStrictBans = ChatStrictBans.CHAT_STRICT_BANS
+
+/**
+ * Бесплатный период чата Telegram: строка появляется с первой созданной
+ * встречей и задаёт, до какого момента клуб этого чата живёт без подписки
+ * (billing.trial-days). Переживает отвязку чата, удаление клуба и повторное
+ * подключение того же чата новым клубом — второй бесплатный период по тому же
+ * chat_id не выдаётся.
+ */
+val CHAT_TRIAL: ChatTrial = ChatTrial.CHAT_TRIAL
 
 /**
  * Справочник городов (GeoNames, население от 50 000). Пополняется только новой

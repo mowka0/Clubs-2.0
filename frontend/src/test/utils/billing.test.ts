@@ -12,7 +12,7 @@ describe('billing helpers', () => {
     );
     expect(paywall).toEqual({ reason: 'SUBSCRIPTION_EXPIRED', clubId: 'club-1', priceKopecks: 19900, message: 'Subscription required' });
 
-    expect(paywallFromError(new ApiError(403, 'Forbidden', { reason: 'FREE_MEETING_USED', clubId: 'x' }))).toBeNull();
+    expect(paywallFromError(new ApiError(403, 'Forbidden', { reason: 'TRIAL_ENDED', clubId: 'x' }))).toBeNull();
     expect(paywallFromError(new ApiError(402, 'no body'))).toBeNull();
     expect(paywallFromError(new Error('network'))).toBeNull();
   });
