@@ -131,7 +131,7 @@ class ClubsBot(
                 // /start в личке — прежний welcome.
                 text.startsWith("/start") ->
                     if (isGroupChat(update.message)) handleGroupStart(update.message) else handleStart(chatId)
-                text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(chatId)
+                text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(update.message)
             }
         } catch (e: Exception) {
             log.error("Error handling command '{}' from chat {}: {}", text, chatId, e.message, e)
@@ -336,17 +336,29 @@ class ClubsBot(
         telegramClient.execute(msg)
     }
 
-    private fun handleWhoIsGoing(chatId: String) {
-        val now = OffsetDateTime.now()
-        val event = eventRepository.findNextUpcomingEvent(now)
+    /**
+     * «/кто_идет» — ближайшая встреча КЛУБА, к чьему чату привязан бот. Ответ несёт место и
+     * время встречи, то есть данные для участников клуба, поэтому единственная аудитория команды —
+     * привязанная группа. В личке команда отвечает подсказкой: до 2026-09-15 она отдавала там
+     * ближайшую встречу ВСЕЙ платформы — адрес чужого клуба любому, кто нашёл бота (OWASP A01).
+     */
+    private fun handleWhoIsGoing(message: Message) {
+        val chatId = message.chatId.toString()
+        if (!isGroupChat(message)) {
+            sendText(chatId, "Команда работает в чате клуба, к которому подключён бот. Свои встречи смотри в приложении.")
+            return
+        }
 
+        val clubId = chatLinkBotService.findLinkedClubId(message.chatId)
+        if (clubId == null) {
+            sendText(chatId, "Этот чат не привязан к клубу.")
+            return
+        }
+
+        // Тот же набор статусов, что у «Живого закрепа», ближайшая встреча — первая в списке.
+        val event = eventRepository.findFutureEventsByClub(clubId, OffsetDateTime.now()).firstOrNull()
         if (event == null) {
-            val msg = SendMessage
-                .builder()
-                .chatId(chatId)
-                .text("Нет ближайших событий")
-                .build()
-            telegramClient.execute(msg)
+            sendText(chatId, "Ближайших встреч нет")
             return
         }
 
@@ -357,8 +369,8 @@ class ClubsBot(
         val formattedDate = event.eventDatetime.format(dateFormatter)
 
         val text = buildString {
-            appendLine("\uD83D\uDCC5 Ближайшее событие: ${event.title}")
-            // \u041C\u0435\u0441\u0442\u043E \u043E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E (V58): \u0441\u0442\u0440\u043E\u043A\u0430 \uD83D\uDCCD \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u0430\u043D\u043E (\u0430\u0434\u0440\u0435\u0441 \u0438/\u0438\u043B\u0438 \u0443\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435).
+            appendLine("\uD83D\uDCC5 Ближайшая встреча: ${event.title}")
+            // Место опционально (V58): строку с адресом печатаем, только когда оно указано.
             event.locationDisplay?.let { appendLine("\uD83D\uDCCD $it") }
             appendLine("\uD83D\uDDD3 $formattedDate")
             appendLine("\u2705 Пойдут: $goingCount")
@@ -367,12 +379,17 @@ class ClubsBot(
             append(EventMessageTemplate.seatsLine(event))
         }
 
-        val msg = SendMessage
-            .builder()
-            .chatId(chatId)
-            .text(text)
-            .build()
+        sendText(chatId, text)
+    }
 
-        telegramClient.execute(msg)
+    /** Короткий текстовый ответ в чат — общий для всех реплик команды. */
+    private fun sendText(chatId: String, text: String) {
+        telegramClient.execute(
+            SendMessage
+                .builder()
+                .chatId(chatId)
+                .text(text)
+                .build()
+        )
     }
 }

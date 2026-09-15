@@ -54,13 +54,22 @@ class EventController(
     ): ResponseEntity<PageResponse<EventListItemDto>> =
         ResponseEntity.ok(eventService.getClubEvents(id, status, page, size))
 
+    /**
+     * Карточка встречи. Аннотации членства здесь нет намеренно (в пути id ВСТРЕЧИ, не клуба, —
+     * как у /cancel), гейт живёт в сервисе и работает урезанием, а не отказом: место, фото,
+     * описание и организатора видит только имеющий отношение к встрече, остальным уходит карточка
+     * без них — по ней страница уводит гостя на клуб. См. EventService.getEvent.
+     */
     @GetMapping("/api/events/{id}")
-    fun getEvent(@PathVariable id: UUID): ResponseEntity<EventDetailDto> =
-        ResponseEntity.ok(eventService.getEvent(id))
+    fun getEvent(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventDetailDto> =
+        ResponseEntity.ok(eventService.getEvent(id, user.userId))
 
     /**
-     * Тизер-афиша клуба — НАМЕРЕННО без @RequiresMembership (единственный событийный эндпоинт
-     * клуба, открытый не-участнику): урезанная проекция без места/фото/состава, чтобы гость
+     * Тизер-афиша клуба — НАМЕРЕННО без @RequiresMembership (единственный СПИСОЧНЫЙ эндпоинт
+     * событий клуба, открытый не-участнику): урезанная проекция без места/фото/состава, чтобы гость
      * или участник без взноса видел, что клуб живой. См. EventService.getClubEventsTeaser.
      */
     @GetMapping("/api/clubs/{id}/events/teaser")
@@ -148,7 +157,7 @@ class EventController(
     ): ResponseEntity<EventDetailDto> {
         log.info("Proceed roster: eventId={} userId={}", id, user.userId)
         rosterService.proceed(id, user.userId)
-        return ResponseEntity.ok(eventService.getEvent(id))
+        return ResponseEntity.ok(eventService.getEvent(id, user.userId))
     }
 
     @PostMapping("/api/events/{id}/confirm")

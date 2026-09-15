@@ -47,7 +47,7 @@ status: enum (upcoming, stage_1, stage_2, completed, cancelled)
 **Реальность:**
 - Enum `EventStatus` (в БД и jOOQ) содержит значение `stage_1`.
 - Код **никогда** не переводит событие в `stage_1` — переход идёт `upcoming → stage_2` напрямую в `Stage2Service.transitionToStage2`.
-- `EventRepository.findNextUpcomingEvent` фильтрует по `IN (upcoming, stage_1, stage_2)` для устойчивости к данным, которые могли бы появиться, но фактически `stage_1` в проде не существует.
+- `EventRepository.findFutureEventsByClub` (и удалённый 2026-09-15 `findNextUpcomingEvent`) фильтрует по `IN (upcoming, stage_1, stage_2)` для устойчивости к данным, которые могли бы появиться, но фактически `stage_1` в проде не существует.
 
 **Impact:** ноль на поведение, но dead-state в enum.
 

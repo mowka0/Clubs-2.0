@@ -22,6 +22,11 @@ data class EventPersonDto(
     val avatarUrl: String?
 )
 
+/**
+ * Карточка встречи. Смотрящему без доступа она уходит урезанной ([EventMapper.redactForOutsider]),
+ * поэтому НОВОЕ приватное поле здесь нужно добавлять и туда: по умолчанию поле уедет наружнику.
+ * Набор полей урезанной карточки стережёт тест `EventControllerSecurityTest`.
+ */
 data class EventDetailDto(
     val id: UUID,
     val clubId: UUID,

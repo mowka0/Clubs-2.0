@@ -185,6 +185,23 @@ class EventMapper(
         }
     }
 
+    /**
+     * Карточка для смотрящего без доступа к встрече: убираем ровно то, что не отдаёт и тизер-афиша,
+     * — место (адрес, точку, уточнение), фото и описание, плюс карточку организатора и причину
+     * отмены: в свободный текст организатора попадает что угодно, вплоть до того же адреса.
+     * Остаются название, дата, статус и счётчики — по ним страница уводит гостя на клуб.
+     */
+    fun redactForOutsider(detail: EventDetailDto): EventDetailDto = detail.copy(
+        description = null,
+        locationText = null,
+        locationLat = null,
+        locationLon = null,
+        locationHint = null,
+        photoUrl = null,
+        creator = null,
+        cancellationReason = null
+    )
+
     // Тизер-афиша: проекция БЕЗ места/фото — приватное не попадает в DTO по построению.
     fun toTeaserDto(item: EventWithGoingCount) = TeaserEventDto(
         id = item.event.id,

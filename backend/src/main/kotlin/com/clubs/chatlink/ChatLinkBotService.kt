@@ -33,6 +33,12 @@ class ChatLinkBotService(
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
 
     /**
+     * Клуб, к чьему чату привязан бот; null — чат не привязан. Скоуп команд бота в группе: всё,
+     * что бот отвечает в чате, относится к ЭТОМУ клубу и ни к какому другому.
+     */
+    fun findLinkedClubId(chatId: Long): UUID? = chatLinkRepository.findByChatId(chatId)?.clubId
+
+    /**
      * Стереть из группы служебную команду `/start@bot`, которую кладёт туда клиент Telegram.
      *
      * Своей команды человек не писал — её отправляет приложение Telegram при добавлении бота,

@@ -15,7 +15,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 - **Команды**:
   - `/start` — приветствие + inline-кнопка «Открыть Clubs»
-  - `/кто_идет` (alias `/kto_idet`) — карточка ближайшего события (по всем клубам)
+  - `/кто_идет` (alias `/kto_idet`) — карточка ближайшей встречи КЛУБА, к чьему чату привязан бот (только в привязанной группе)
   - ~~`/мой_рейтинг`~~ — **удалена 2026-06-12** (продуктовое решение: команда не нужна). Репутация видна в Mini App (профиль, карточка участника). Вместе с ней удалён `ReputationRepository.findLatestByUserId` → закрыты баги REP-3/F5-24.
 - **Telegram Stars handlers**:
   - `pre_checkout_query` — подтверждение формата payload в течение 10 с
@@ -96,7 +96,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 8. `update.message.hasText()` == false → return
 9. Диспатч по `text.startsWith(...)`:
    - `/start` в личке → `handleStart(chatId)`; `/start <club_id>` в группе/супергруппе → привязка чата (`ChatLinkBotService.handleGroupStart`, гейт «отправитель = владелец клуба»); `/start` в группе без валидного UUID-payload — молчаливый no-op
-   - `/кто_идет` или `/kto_idet` → `handleWhoIsGoing(chatId)`
+   - `/кто_идет` или `/kto_idet` → `handleWhoIsGoing(update.message)` (нужен тип чата: команда живёт только в группе)
 
 Любое исключение во время диспатча команды ловится `catch (e: Exception)` на уровне `consume` и логируется `ERROR`. Long-polling loop при этом не падает.
 
@@ -114,16 +114,27 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ### `/кто_идет` (alias `/kto_idet`)
 
 **Триггер:** message text начинается с `/кто_идет` или `/kto_idet`.
-**Логика:**
-1. `now = OffsetDateTime.now()`
-2. `event = eventRepository.findNextUpcomingEvent(now)` — ближайшее событие со статусом `upcoming|stage_1|stage_2` и `event_datetime > now` **по всем клубам платформы** (без фильтрации по членству вызывающего пользователя).
-3. Если `event == null` → ответить «Нет ближайших событий», return.
-4. `counts = eventResponseRepository.countByVote(event.id)` — карта `{"going": N, "maybe": N, "notGoing": N}`.
-5. Формирование текста (точная цитата из `ClubsBot.handleWhoIsGoing`, строки 157-163):
+
+**Область действия (bugfix 2026-09-15):** команда работает ТОЛЬКО в группе/супергруппе,
+привязанной к клубу, и показывает встречу ЭТОГО клуба. В ответе — место и время встречи,
+то есть данные для участников клуба, а аудитория привязанного чата ≈ клуб (туда же «Живой
+закреп» публикует ту же встречу с адресом).
+
+**Логика (`ClubsBot.handleWhoIsGoing`):**
+1. Чат не группа (личка) → ответить «Команда работает в чате клуба, к которому подключён бот.
+   Свои встречи смотри в приложении.», return. Встречи при этом НЕ читаются.
+2. `clubId = chatLinkBotService.findLinkedClubId(message.chatId)`; `null` (чат не привязан) →
+   ответить «Этот чат не привязан к клубу.», return.
+3. `event = eventRepository.findFutureEventsByClub(clubId, now).firstOrNull()` — ближайшая
+   встреча этого клуба со статусом `upcoming|stage_1|stage_2` и `event_datetime > now`
+   (тот же набор статусов, что у «Живого закрепа»).
+4. Если `event == null` → ответить «Ближайших встреч нет», return.
+5. `counts = eventResponseRepository.countByVote(event.id)` — карта `{"going": N, "maybe": N, "notGoing": N}`.
+6. Формирование текста:
    ```
-   📅 Ближайшее событие: {title}
-   📍 {locationText}
-   🗓 {eventDatetime, dd.MM.yyyy HH:mm | "не указана"}
+   📅 Ближайшая встреча: {title}
+   📍 {locationDisplay}                ← строка только когда место указано (V58)
+   🗓 {eventDatetime, dd.MM.yyyy HH:mm}
    ✅ Пойдут: {goingCount}
    🤔 Возможно: {maybeCount}
    👥 Мест — {participantLimit}   ← строка по формату (V85): «Нужно минимум N — иначе встреча отменится» / «Мест — N» / «Без ограничений — приходят все желающие, репутация не считается»
@@ -131,7 +142,11 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 **Inline-кнопка:** отсутствует `[GAP-008]`. PRD §4.6 AC требует «Все уведомления содержат inline-кнопку перехода в Mini App».
 
-**Privacy примечание:** команда показывает ближайшее событие любого клуба, в т.ч. closed/private. Поля `title`, `locationText`, счётчики — текущее поведение (pre-existing, не связано с рефакторингом). Эскалировано отдельно в backlog (`docs/backlog/telegram-bot-prd-gaps.md` § Privacy notes).
+**История дефекта:** до 2026-09-15 команда отвечала в ЛЮБОМ чате и брала ближайшую встречу
+ВСЕЙ платформы (`EventRepository.findNextUpcomingEvent`, без фильтра по клубу и членству) —
+любой человек, нашедший бота, получал в личке адрес и время встречи чужого закрытого клуба
+(OWASP A01 + утечка геоданных). Метод `findNextUpcomingEvent` удалён вместе с фиксом: его
+единственным потребителем была эта команда, а club-scoped выборка уже существовала.
 
 ### ~~`/мой_рейтинг`~~ — удалена (2026-06-12)
 
@@ -321,16 +336,24 @@ AND видит inline-кнопку «📱 Открыть Clubs»
 AND нажатие открывает Mini App https://t.me/clubs_v2_bot/app
 ```
 
-### AC-2: `/кто_идет` показывает ближайшее событие или сообщение о его отсутствии
+### AC-2: `/кто_идет` отвечает только в привязанном чате и только про его клуб
 
 ```
-GIVEN на платформе есть хотя бы одно событие со статусом upcoming|stage_1|stage_2 и event_datetime > now
-WHEN пользователь отправляет /кто_идет
-THEN получает карточку ближайшего события с title, locationText, датой, счётчиками going/maybe и participant_limit
+GIVEN чат привязан к клубу, у клуба есть встреча со статусом upcoming|stage_1|stage_2 и event_datetime > now
+WHEN участник отправляет /кто_идет в этот чат
+THEN получает карточку ближайшей встречи ЭТОГО клуба: title, место, дата, счётчики going/maybe и строка мест
 
-GIVEN на платформе нет упомянутых событий
-WHEN пользователь отправляет /кто_идет
-THEN получает «Нет ближайших событий»
+GIVEN чат привязан к клубу, будущих встреч у клуба нет
+WHEN участник отправляет /кто_идет в этот чат
+THEN получает «Ближайших встреч нет»
+
+GIVEN команда отправлена в ЛИЧКУ боту
+WHEN бот обрабатывает /кто_идет
+THEN отвечает подсказкой «Команда работает в чате клуба…» И не читает ни одной встречи
+
+GIVEN команда отправлена в группу, не привязанную ни к какому клубу
+WHEN бот обрабатывает /кто_идет
+THEN отвечает «Этот чат не привязан к клубу.» И не читает ни одной встречи
 ```
 
 ### ~~AC-3: `/мой_рейтинг`~~ — снят (команда удалена 2026-06-12)
@@ -417,7 +440,7 @@ AND отказ Telegram API не откатывает переход в stage_2 
 ## Интеграции
 
 - **`payment` модуль** (`PaymentService`): `handlePreCheckoutQuery` и `successful_payment` диспатчатся в `ClubsBot.consume`; `PaymentNotificationHandler` зовёт `NotificationService.sendDirectMessage` после `PaymentConfirmedEvent`. См. `docs/modules/payment.md` § Интеграции.
-- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findStage2InviteTelegramIds` (участники с доступом кроме `not_going`, для `sendStage2Started`; членство-driven), `findTelegramIdsByEventAndUserIds` (newly-absent набор, для `sendAttendanceMarked` — F5-15.2), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)` (+ disputed) — слушатели в bot-пакете.
+- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findFutureEventsByClub`, `countByVote` для `/кто_идет` (клуб — из привязки чата); `findStage2InviteTelegramIds` (участники с доступом кроме `not_going`, для `sendStage2Started`; членство-driven), `findTelegramIdsByEventAndUserIds` (newly-absent набор, для `sendAttendanceMarked` — F5-15.2), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)` (+ disputed) — слушатели в bot-пакете.
 - **`membership` модуль** (`MembershipRepository`): `findMemberTelegramIds(clubId)` для `sendEventCreated`. См. `docs/modules/membership.md`.
 - **Telegram Bot API** (через `TelegramClient` из `BotConfig`):
   - `SendMessage` (команды, DM).
