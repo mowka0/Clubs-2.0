@@ -123,6 +123,7 @@ class SkladchinaMapper {
             debtCount = item.totals.debtCount,
             receivedCount = item.totals.receivedCount,
             deadline = s.deadline,
+            closedAt = s.closedAt,
             status = s.status.literal,
             isCreator = s.creatorId == callerId,
             myDebtStatus = item.myDebtStatus,

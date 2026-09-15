@@ -51,6 +51,7 @@ function closedSkladchina(over: Partial<MySkladchinaListItemDto> = {}): MySkladc
     debtCount: 5,
     receivedCount: 5,
     deadline: '2026-06-15T18:00:00Z',
+    closedAt: null,
     status: 'collected',
     isCreator: true,
     myDebtStatus: null,
@@ -176,6 +177,26 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(container.querySelector('.rd-progress')).toBeNull();
     // Карточка-тизер «скоро здесь» при непустой истории не рендерится
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
+  });
+
+  it('в истории дата-плитка показывает закрытие сбора, а не срок оплаты', async () => {
+    mockEndpoints({
+      clubs: [membership({ role: 'organizer' })],
+      skladchinasResponder: () => HttpResponse.json({
+        ...EMPTY_FEED,
+        // Срок был 15 июня, закрыли 12-го — плитка должна показать 12-е.
+        content: [closedSkladchina({ closedAt: '2026-06-12T09:00:00Z' })],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    });
+    const { container } = renderTab();
+
+    expect(await screen.findByText('История')).toBeInTheDocument();
+    // Справа маркер вида: во вкладке история смешанная, по названию сбор от встречи не отличить.
+    expect(container.querySelector('.rd-hist-kind')?.textContent).toContain('Сбор');
+    expect(container.querySelector('.rd-hist-day')?.textContent).toBe('12');
+    expect(container.querySelector('.rd-hist-month')?.textContent).toBe('июня');
   });
 
   it('отменённый сбор в истории → подстрока содержит «Отменён»', async () => {

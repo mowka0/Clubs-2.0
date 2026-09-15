@@ -57,22 +57,36 @@ class RosterService(
     }
 
     /**
-     * Голос Этапа 1 на встрече с местами: «Иду» занимает место, любой другой голос из состава
-     * выводит. Вызывается из [VoteService.castVote] в той же транзакции, сразу после записи голоса.
+     * Голос Этапа 1 у ОБОИХ форматов (модель v3): «Иду» кладёт в состав, любой другой голос из
+     * состава выводит. Вызывается из [VoteService.castVote] в той же транзакции, сразу после
+     * записи голоса.
+     *
+     * Разница форматов — только в потолке: у встречи с местами голос сверх лимита встаёт в
+     * очередь, у открытой очереди нет и «Иду» ВСЕГДА означает место.
      *
      * Слот-лок — тот же, что у подтверждения/отказа: два «Иду» на последнее место не должны оба
-     * пройти проверку `confirmedCount < limit`.
+     * пройти проверку `confirmedCount < limit`. Берётся у ОБОИХ форматов, хотя дефицита мест у
+     * открытой нет: тем же локом держат свои транзакции выход из клуба и кик, которые удаляют
+     * строки откликов. Без лока голос, поданный ровно в момент удаления, пережил бы каскад, и
+     * не-участник остался бы в составе — а состав открытой теперь ведёт в отметку явки, сбор и
+     * долг (ось finance). Экономия одной advisory-блокировки такой дыры не стоит.
      */
     @Transactional
     fun applyVote(event: Event, userId: UUID, vote: Stage_1Vote) {
-        val limit = event.participantLimit ?: return
-
         eventResponseRepository.lockEventSlots(event.id)
         val response = eventResponseRepository.findByEventAndUser(event.id, userId) ?: return
 
         if (vote == Stage_1Vote.going) {
             // Уже в составе или в очереди — повторный «Иду» ничего не меняет (идемпотентность).
             if (response.stage2Vote == Stage_2Vote.confirmed || response.stage2Vote == Stage_2Vote.waitlisted) return
+            val limit = event.participantLimit
+            if (limit == null) {
+                // Открытая встреча (v3): голос «Иду» И ЕСТЬ место — считать занятые незачем,
+                // waitlisted у неё недостижим.
+                eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+                log.info("Open event vote: eventId={} userId={} placed in roster", event.id, userId)
+                return
+            }
             val taken = eventResponseRepository.countConfirmed(event.id)
             val fits = taken < limit
             val place = if (fits) Stage_2Vote.confirmed else Stage_2Vote.waitlisted
@@ -82,12 +96,17 @@ class RosterService(
             return
         }
 
-        // «Возможно» / «Не иду» — выход из набора. Это НЕ отказ (declined): состав ещё не объявлен,
-        // никто на человека не рассчитывал, и дорога назад должна остаться открытой.
+        // «Возможно» / «Не иду» — выход из состава. Это НЕ отказ (declined): состав ещё не
+        // объявлен, никто на человека не рассчитывал, и дорога назад должна остаться открытой.
+        // У открытой встречи это и есть отказ — бесплатный и обратимый до самого старта;
+        // очередь у неё пуста по построению, поэтому повышать после выхода некого.
         if (response.stage2Vote == null) return
         val heldSlot = response.stage2Vote == Stage_2Vote.confirmed
         eventResponseRepository.clearStage2Vote(response.id)
-        if (heldSlot) promoteFromWaitlist(event.id)
+        // Очередь есть только там, где есть потолок: инвариант «у открытой повышать некого» должен
+        // утверждаться кодом, а не комментарием, — иначе одна строка `waitlisted`, попавшая на
+        // открытую встречу мимо кода, включила бы незащищённое повышение.
+        if (event.hasSeatLimit && heldSlot) promoteFromWaitlist(event.id)
         log.info("Roster leave: eventId={} userId={} vote={} heldSlot={}", event.id, userId, vote, heldSlot)
     }
 
@@ -101,7 +120,7 @@ class RosterService(
      */
     @Transactional
     fun handleRosterDeadline(event: Event): Boolean {
-        if (!event.isRosterEvent) return false
+        if (!event.hasSeatLimit) return false
         val limit = event.participantLimit ?: return false
         val min = event.minParticipants
 
@@ -206,7 +225,7 @@ class RosterService(
         // Напоминание — одно на человека НА ЭТАП (V86): после закрытия у молчуна снова есть о
         // чём напоминать, и отметки набора сбрасываются.
         eventResponseRepository.clearStage2Reminders(event.id)
-        // DM «состав собран» и перерисовка закрепа — на AFTER_COMMIT, как Stage2StartedEvent:
+        // DM «состав собран» и перерисовка закрепа — на AFTER_COMMIT:
         // @Async-рассылка обязана читать уже закоммиченный состав.
         eventPublisher.publishEvent(RosterClosedEvent(event, confirmed))
         eventPublisher.publishEvent(EventRosterChangedEvent(event.id))

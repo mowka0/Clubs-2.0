@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { formatNearDay, formatTimeHM, pluralRu, toDatetimeLocalValue } from '../utils/formatters';
+import { formatNearDay, formatTimeHM, pluralRu, shortName, toDatetimeLocalValue, untilText } from '../utils/formatters';
 import { eventToTemplateBody } from '../utils/eventTemplate';
 import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
@@ -207,21 +207,9 @@ function eventDayLine(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-/**
- * Сколько осталось до встречи одной фразой (PO 2026-09-14): полосу отсчёта не рисуем — на встрече
- * через месяц она почти пуста и врёт, а текст честен на любом сроке.
- */
+/** Сколько осталось до встречи одной фразой; прошедшую называем словами, а не «через −5 дней». */
 function untilEventText(iso: string): string {
-  const diffMs = new Date(iso).getTime() - Date.now();
-  if (diffMs <= 0) return 'встреча уже прошла';
-  const minutes = Math.round(diffMs / 60000);
-  if (minutes < 60) return `через ${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `через ${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
-  const days = Math.round(hours / 24);
-  if (days < 14) return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
-  const weeks = Math.round(days / 7);
-  return `через ${weeks} ${pluralRu(weeks, ['неделю', 'недели', 'недель'])}`;
+  return untilText(iso) ?? 'встреча уже прошла';
 }
 
 export const EventPage: FC = () => {
@@ -290,11 +278,11 @@ export const EventPage: FC = () => {
   const pendingQuery = useEventPendingQuery(
     isAuthenticated ? id : undefined,
     // То же окно, в котором работает напоминание: до старта встречи. На завершённой встрече
-    // бэкенд откажет, а «Без ответа» там уже не имеет смысла. У обычной встречи (V86 § 5)
-    // список нужен и на наборе; у открытой на Этапе 1 напоминать не о чем.
+    // бэкенд откажет, а «Без ответа» там уже не имеет смысла. Формат здесь больше не читается
+    // (модель v3, event-formats.md § 16.8): у открытой встречи голосование идёт до самого старта,
+    // и догонять молчунов нужно ровно так же, как на наборе встречи с местами.
     isManager
-      && (eventQuery.data?.status === 'stage_2'
-        || (eventQuery.data?.status === 'upcoming' && eventQuery.data.participantLimit != null))
+      && (eventQuery.data?.status === 'upcoming' || eventQuery.data?.status === 'stage_2')
       && new Date(eventQuery.data.eventDatetime).getTime() > Date.now(),
   );
   const cancelMutation = useCancelEventMutation();
@@ -698,29 +686,30 @@ export const EventPage: FC = () => {
   // F5-14: у отменённого события показывается только баннер — набор/состав/явка скрываются.
   const isCancelled = event.status === 'cancelled';
   // Открытая встреча (V62): лимита нет — счётчики без знаменателя, отказ свободен (без штрафа
-  // и порога), лист ожидания недостижим. См. events.md § «Открытая встреча».
+  // и порога), лист ожидания недостижим. С модели v3 (§ 16) она ещё и одноэтапна: голос «Пойду»
+  // сразу кладёт в состав, статуса stage_2 у неё не бывает. См. events.md § «Открытая встреча».
   const isOpenEvent = event.participantLimit == null;
 
-  // Кольцо считает ТОЛЬКО занятость мест — на обеих фазах: Этап 1 = going/лимит, Этап 2+ =
-  // confirmed/лимит. Прежде на Этапе 1 дуга показывала доли голосов, а число внутри неё —
-  // заполненность мест: два разных смысла в одном элементе читались как один (event-vote-block.md).
-  // Открытая встреча: «занято/свободно» не существует — кольцо целиком закрашено при первом
-  // отклике и пустое, пока откликов нет.
-  // Обычная встреча (V86): голос «Иду» сразу кладёт в состав, поэтому кольцо считает СОСТАВ
-  // уже на наборе, а не голоса — «4 из 10» на обеих фазах значит одно и то же. Знаменатель —
-  // всегда максимум; включённый минимум показывает засечка на кольце. Ветвление «есть ли
-  // порог» — по minParticipants, формат тут не читается: недостача считается от минимума,
-  // свободные места — от максимума.
-  const isRosterEvent = !isOpenEvent;
+  // Разница форматов сводится к одному факту: у встречи с местами есть ПОТОЛОК, и вместе с ним
+  // очередь, дедлайн набора, минимум и цена отказа; у открытой нет ничего из этого — только живой
+  // список идущих. Прежнее имя `isRosterEvent` врало: состав набирается голосами у обоих форматов
+  // (event-formats.md § 16.3).
+  const hasSeats = !isOpenEvent;
   const participantLimit = event.participantLimit ?? 0;
-  const hasMinimum = isRosterEvent && event.minParticipants != null;
+  const hasMinimum = hasSeats && event.minParticipants != null;
   const minParticipants = event.minParticipants ?? 0;
   const rosterClosed = event.rosterClosed;
-  const rosterFull = isRosterEvent && event.confirmedCount >= participantLimit;
-  const freeSeats = isRosterEvent ? Math.max(participantLimit - event.confirmedCount, 0) : 0;
+  const rosterFull = hasSeats && event.confirmedCount >= participantLimit;
+  const freeSeats = hasSeats ? Math.max(participantLimit - event.confirmedCount, 0) : 0;
   const rosterShortage = hasMinimum ? Math.max(minParticipants - event.confirmedCount, 0) : 0;
   const belowMinimum = hasMinimum && event.confirmedCount < minParticipants;
-  const donutCount = finalComposition || isRosterEvent ? event.confirmedCount : event.goingCount;
+  // Кольцо считает СОСТАВ на всём жизненном цикле обоих форматов: голос «Пойду» кладёт в состав
+  // сразу (V83 у встречи с местами, v3 у открытой), поэтому источник числа один — confirmedCount.
+  // Прежде на Этапе 1 дуга показывала доли голосов, а число внутри неё — заполненность мест: два
+  // разных смысла в одном элементе читались как один (event-vote-block.md). У открытой
+  // «занято/свободно» не существует — кольцо закрашено целиком, пока в составе хоть кто-то.
+  // Знаменатель у встречи с местами — всегда максимум; минимум показывает засечка на кольце.
+  const donutCount = event.confirmedCount;
   const donutRatio = isOpenEvent
     ? (donutCount > 0 ? 1 : 0)
     : Math.min(donutCount / (participantLimit || 1), 1);
@@ -738,8 +727,11 @@ export const EventPage: FC = () => {
   // отказ прямо сейчас, считает бэкенд и отдаёт в declineCostPoints.
   const confirmedCanDecline = myVote === 'confirmed' && !eventHappened;
 
-  // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
-  const showVoting = event.status === 'upcoming';
+  // Backend (`VoteService.castVote`) принимает голос при status='upcoming' И до старта встречи.
+  // Второй гард обязателен: у открытой встречи статус остаётся 'upcoming' ещё до шести часов
+  // после старта (часовой проход EventCompletionService), и без него можно было бы записаться
+  // в состав уже идущей встречи — прямо перед отметкой явки (event-formats.md § 16.6 п. 3).
+  const showVoting = event.status === 'upcoming' && !eventHappened;
   // Баг B: confirm/decline закрываются в момент старта события. Статус остаётся 'stage_2'
   // до часового completion-прохода, поэтому гейтим ещё и по !eventHappened — зеркалит
   // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
@@ -765,11 +757,10 @@ export const EventPage: FC = () => {
 
   // Отметка явки — только организатор и только после того, как событие состоялось. Бэкенд
   // (AttendanceService) гейтит по event_datetime <= now + флагу attendance_marked,
-  // никогда по status (см. events.md § attendance flow). Кандидаты = ФИНАЛЬНЫЙ состав:
-  // только подтвердившие на Этапе 2 (PRD §4.4.3 «список финальных участников,
-  // кто подтвердил на Этапе 2»). Голосовавшие going/maybe, но не подтвердившие («забыли
-  // подтвердить» → expired_no_confirm) в составе НЕ значатся — здесь они исключены,
-  // и репутация их игнорирует (она читает только final_status=confirmed).
+  // никогда по status (см. events.md § attendance flow). Кандидаты = СОСТАВ
+  // (final_status = confirmed): у обоих форматов это те, кто сказал «Пойду» — место даёт голос
+  // (V83 с местами, § 16 у открытой). Легаси-строки `expired_no_confirm` (бронь сгорела до
+  // реформы) в составе не значатся и здесь исключены, репутация их тоже игнорирует.
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
@@ -836,7 +827,23 @@ export const EventPage: FC = () => {
    * после закрытия — состав относительно минимума и цену отказа, которую посчитал СЕРВЕР.
    */
   const rosterStatusNote = (() => {
-    if (!isRosterEvent || isCancelled || eventHappened) return null;
+    if (isCancelled || eventHappened) return null;
+    // Открытая встреча (§ 16.8): одно состояние на всю жизнь — голосовать можно до старта,
+    // подтверждать нечего, передумать бесплатно. Полосы набора у неё нет по построению, поэтому
+    // раньше здесь не рисовалось ничего и момент закрытия голосования наружу не отдавался.
+    if (isOpenEvent) {
+      if (!showVoting) return null;
+      const iAmGoing = myVote === 'going';
+      return (
+        <div className={`rd-roster-note${iAmGoing ? ' rd-ok' : ''}`}>
+          <span className="rd-roster-ico" aria-hidden="true">{iAmGoing ? '✅' : '⏳'}</span>
+          <span className="rd-roster-txt">
+            <b>{iAmGoing ? 'Вы идёте' : 'Голосование открыто до начала встречи'}</b>
+            <span>Передумать можно в любой момент — на репутацию это не влияет</span>
+          </span>
+        </div>
+      );
+    }
     const seatsWord = `${freeSeats} ${pluralRu(freeSeats, ['место', 'места', 'мест'])}`;
     if (!rosterClosed) {
       // Дедлайн не «закрывает» ничего — свободное место можно занять и после него. Меняется
@@ -1006,14 +1013,15 @@ export const EventPage: FC = () => {
   // Переключатель у менеджера есть всегда: иначе о самой возможности догнать молчунов он
   // узнавал бы только при удачном стечении обстоятельств.
   const showStage2Tabs = showStage2 && isManager;
-  // На наборе таб «Без ответа» и «Напомнить» тоже менеджерские (V86 § 5): «Возможно» и молчуны
-  // без места — те, кого стоит догнать до закрытия, а не после.
-  const showRosterPendingTab = isManager && isRosterEvent && showVoting && !eventHappened;
+  // Таб «Без ответа» и «Напомнить» — менеджерские и на голосовании (V86 § 5): «Возможно» и
+  // молчуны — те, кого стоит догнать, пока решение ещё можно изменить. Формат здесь не читается
+  // (§ 16.8): у открытой голосование идёт до старта, и молчуны у неё такие же.
+  const showRosterPendingTab = isManager && showVoting;
   const pendingResponders = pendingQuery.data ?? [];
   const visiblePending = rosterExpanded ? pendingResponders : pendingResponders.slice(0, ROSTER_PREVIEW_SIZE);
   // Очередь у обычной встречи — полноценный таб рядом с составом: смешивать её
   // со списком идущих нельзя, а нумерация («вы вторые») должна оставаться видимой.
-  const showWaitlistTab = isRosterEvent && finalComposition && waitlist.length > 0;
+  const showWaitlistTab = hasSeats && finalComposition && waitlist.length > 0;
   const showRosterTabs = showStage2Tabs || showWaitlistTab;
   // Активный список секции состава. Табы существуют не всегда, поэтому потеря менеджерства
   // (или опустевшая очередь) сама возвращает экран к «Кто идёт».
@@ -1192,10 +1200,7 @@ export const EventPage: FC = () => {
                     ? <img src={event.creator.avatarUrl} alt="" />
                     : getInitials(`${event.creator.firstName} ${event.creator.lastName ?? ''}`)}
                 </span>
-                <span className="rd-host-nm">
-                  {event.creator.firstName}
-                  {event.creator.lastName ? ` ${event.creator.lastName[0]}.` : ''}
-                </span>
+                <span className="rd-host-nm">{shortName(event.creator)}</span>
               </span>
             )}
           </button>
@@ -1243,16 +1248,16 @@ export const EventPage: FC = () => {
 
       {!isCancelled && (
       <>
-      {/* Места (встреча с местами, обе стадии) / идут → состав (открытая) — пончик + голосование
+      {/* Состав встречи: «Места» с потолком, «Идут» у открытой — пончик + голосование
           либо счётчики без действий */}
       <div className="rd-section-sub-h">
-        {isRosterEvent
+        {hasSeats
           // Одно слово на обе стадии (PO 2026-09-05): места те же, дедлайн меняет лишь цену
           // передумать, и об этом говорит полоса ниже, а не заголовок.
           ? `Места · ${event.confirmedCount}${limitSuffix}`
-          : finalComposition
-            ? `Состав · ${event.confirmedCount}${limitSuffix}`
-            : `Идут · ${event.goingCount}${limitSuffix}`}
+          // У открытой тоже одно слово на весь жизненный цикл (§ 16.8): «Пойду» и есть состав,
+          // и ступенька «Идут» → «Состав» после завершения только выглядела сменой правил.
+          : `Идут · ${event.confirmedCount}`}
       </div>
       {rosterStatusNote}
       {/* Только ошибки голосования Этапа 1; ошибки confirm/decline Этапа 2 рендерятся в своём
@@ -1284,11 +1289,12 @@ export const EventPage: FC = () => {
             <>
               <div className="rd-stat-tile rd-st-confirmed">
                 <span className="rd-vm">{VOTE_ICONS.going}</span>
-                {/* У встречи с порогом набора подтверждений нет — место даёт голос (V83). */}
-                <span className="rd-vl">{isRosterEvent ? 'В составе' : 'Подтвердили'}</span>
+                {/* Подтверждений нет ни у одного формата: место даёт голос (V83 с местами,
+                    § 16.8 у открытой) — «Подтвердили» здесь было бы неправдой. */}
+                <span className="rd-vl">{hasSeats ? 'В составе' : 'Идут'}</span>
                 <span className="rd-vc">{event.confirmedCount}</span>
               </div>
-              {isRosterEvent ? (
+              {hasSeats ? (
                 <>
                   <div className="rd-stat-tile rd-st-waitlist">
                     <span className="rd-vm">{QUEUE_ICON}</span>
@@ -1303,20 +1309,12 @@ export const EventPage: FC = () => {
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="rd-stat-tile rd-st-pending">
-                    <span className="rd-vm">{VOTE_ICONS.maybe}</span>
-                    <span className="rd-vl">Без ответа</span>
-                    <span className="rd-vc">{pendingCount}</span>
-                  </div>
-                  {waitlistedCount > 0 && (
-                    <div className="rd-stat-tile rd-st-waitlist">
-                      <span className="rd-vm">{QUEUE_ICON}</span>
-                      <span className="rd-vl">В очереди</span>
-                      <span className="rd-vc">{waitlistedCount}</span>
-                    </div>
-                  )}
-                </>
+                /* У открытой очереди нет по построению — только молчуны. */
+                <div className="rd-stat-tile rd-st-pending">
+                  <span className="rd-vm">{VOTE_ICONS.maybe}</span>
+                  <span className="rd-vl">Без ответа</span>
+                  <span className="rd-vc">{pendingCount}</span>
+                </div>
               )}
             </>
           ) : (
@@ -1372,11 +1370,8 @@ export const EventPage: FC = () => {
               {!isOpenEvent && <small> / {event.participantLimit}</small>}
             </span>
             <span className="rd-donut-cap">
-              {isOpenEvent
-                ? 'идут'
-                : isRosterEvent
-                  ? (rosterFull ? 'состав собран' : 'в составе')
-                  : 'мест занято'}
+              {/* Ветка «мест занято» была недостижима: !isOpenEvent и есть «встреча с местами». */}
+              {isOpenEvent ? 'идут' : rosterFull ? 'состав собран' : 'в составе'}
             </span>
           </div>
         </div>
@@ -1435,7 +1430,7 @@ export const EventPage: FC = () => {
                   // наборе нет (лишний экран), поэтому черта проходит внутри списка: выше — те,
                   // кто проходит, ниже — очередь на замену.
                   const queueStartsHere =
-                    isRosterEvent && r.seat === 'waitlisted' && visibleResponders[i - 1]?.seat !== 'waitlisted';
+                    hasSeats && r.seat === 'waitlisted' && visibleResponders[i - 1]?.seat !== 'waitlisted';
                   return (
                     <Fragment key={r.userId}>
                       {queueStartsHere && (
@@ -1515,10 +1510,9 @@ export const EventPage: FC = () => {
           )}
           {showStage2Tabs && stage2Tab === 'pending' ? pendingPanel : (
             <div className="rd-glass rd-resp-panel">
+              {/* Подтверждений нет ни у одного формата — состав набирается голосами. */}
               {visibleStage2.length === 0 ? (
-                <div className="rd-resp-empty">
-                  {isRosterEvent ? 'В составе пока никого.' : 'Пока никто не подтвердил участие.'}
-                </div>
+                <div className="rd-resp-empty">В составе пока никого.</div>
               ) : (
                 <>
                   {visibleStage2.map((r, i) => {
@@ -1562,32 +1556,6 @@ export const EventPage: FC = () => {
         </div>
       )}
 
-      {/* Лист ожидания (Этап 2+) отдельным блоком — только у открытой встречи, где он
-          недостижим, и у легаси-встреч, доживающих в гонке за места. У форматов с лимитом (V85)
-          очередь живёт табом рядом с составом и второй копией списка внизу быть не должна. */}
-      {!isCancelled && finalComposition && !isRosterEvent && waitlist.length > 0 && (
-        <>
-          <div className="rd-section-sub-h">В очереди <span className="rd-count">· {waitlist.length}</span></div>
-          <div className="rd-attn-hint">Если участник откажется, место получит первый в очереди.</div>
-          <div className="rd-glass rd-wl-panel">
-            {waitlist.map((r, i) => {
-              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
-              return (
-                <div className="rd-wl-row" key={r.userId}>
-                  <span className="rd-wl-pos">{i + 1}</span>
-                  <div className="rd-voter">
-                    <span className="rd-av">
-                      {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
-                    </span>
-                    <span className="rd-vn">{name}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
       {/* Явка — организатор отмечает пришедших после события */}
       {showAttendanceMarking && (
         <>
@@ -1615,7 +1583,7 @@ export const EventPage: FC = () => {
           ) : attendanceCandidates.length === 0 ? (
             <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
               <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-                Отмечать некого — никто не подтвердил участие в этом событии.
+                Отмечать некого — в составе этой встречи никого нет.
               </div>
             </div>
           ) : (
@@ -1793,7 +1761,7 @@ export const EventPage: FC = () => {
           {/* У встречи с порогом набора своего заголовка и бейджа статуса нет (решение PO
               2026-08-31): подтверждать нечего, а «где я» уже сказано полосой над составом и
               точкой на своём табе — третья копия той же мысли только занимала экран. */}
-          {!isRosterEvent && (
+          {!hasSeats && (
             <>
               <div className="rd-section-sub-h">Подтверждение участия</div>
               <div style={{ marginBottom: 10 }}>
@@ -1816,12 +1784,12 @@ export const EventPage: FC = () => {
               <button type="button" className="rd-btn-primary" onClick={handleConfirm} disabled={voting}>
                 {voting
                   ? <Spinner size="s" />
-                  : isRosterEvent
+                  : hasSeats
                     // Свободное место после чьего-то отказа занимается сразу, иначе — очередь.
                     ? (rosterFull ? 'Встать в очередь' : 'Занять свободное место')
                     : 'Подтвердить участие'}
               </button>
-              {isRosterEvent && !rosterFull && (
+              {hasSeats && !rosterFull && (
                 <span className="rd-hint">Место сразу станет обещанием — отказ повлияет на репутацию</span>
               )}
               {(myVote === 'going' || myVote === 'maybe') && (
@@ -1841,7 +1809,7 @@ export const EventPage: FC = () => {
               <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Отказ от участия">
                 <div className="rd-sheet-grabber" aria-hidden="true" />
                 <div className="rd-sheet-head">
-                  <h2>{isRosterEvent ? 'Не смогу прийти' : 'Отказаться от участия'}</h2>
+                  <h2>{hasSeats ? 'Не смогу прийти' : 'Отказаться от участия'}</h2>
                   <button type="button" className="rd-sheet-close" onClick={() => setConfirmingDecline(false)}>Закрыть</button>
                 </div>
                 <div className="rd-sheet-body">
@@ -1859,7 +1827,7 @@ export const EventPage: FC = () => {
                   {/* Безопасный выход первым, необратимое действие ниже (PO 2026-09-06). */}
                   <div className="rd-org-gate-acts">
                     <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
-                      {isRosterEvent ? 'Оставить место' : 'Остаться'}
+                      {hasSeats ? 'Оставить место' : 'Остаться'}
                     </button>
                     <button
                       type="button"
@@ -1919,10 +1887,10 @@ export const EventPage: FC = () => {
             (
               <div className="rd-cta-wrap">
                 <button type="button" className="rd-btn-outline" onClick={() => { setActionError(null); setConfirmingDecline(true); }}>
-                  {isRosterEvent ? 'Не смогу прийти' : 'Отказаться'}
+                  {hasSeats ? 'Не смогу прийти' : 'Отказаться'}
                 </button>
                 {/* Цена названа до открытия диалога: решение принимают ЗДЕСЬ, а не в модалке. */}
-                {isRosterEvent && !isOpenEvent && (
+                {hasSeats && (
                   <div className="rd-hint" style={{ marginTop: 6 }}>
                     {event.declineCostPoints === 0
                       ? (event.declineConsequence === 'replaced'
@@ -1939,9 +1907,9 @@ export const EventPage: FC = () => {
           {myVote === 'waitlisted' && (
             <div className="rd-cta-wrap">
               <button type="button" className="rd-btn-outline" onClick={handleDecline} disabled={voting}>
-                {isRosterEvent ? 'Выйти из очереди' : 'Отказаться'}
+                {hasSeats ? 'Выйти из очереди' : 'Отказаться'}
               </button>
-              {isRosterEvent && (
+              {hasSeats && (
                 <div className="rd-hint" style={{ marginTop: 6 }}>
                   Выход из очереди бесплатен всегда — вы никого не держите
                 </div>
@@ -2000,7 +1968,7 @@ export const EventPage: FC = () => {
             <div className="rd-sheet-body">
               <div className="rd-body-text" style={{ marginTop: 0 }}>
                 Участники получат уведомление, только если поменяется место или время. Правки
-                возможны до начала подтверждения мест.
+                возможны {hasSeats ? 'до начала подтверждения мест' : 'до начала встречи'}.
               </div>
 
               <label className="rd-field">

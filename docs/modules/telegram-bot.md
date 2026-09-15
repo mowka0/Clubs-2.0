@@ -1,6 +1,6 @@
 # Module: Telegram Bot
 
-**Источник:** `backend/src/main/kotlin/com/clubs/bot/` (`ClubsBot.kt`, `NotificationService.kt`, `BotConfig.kt`; event-листенеры `EventBotNotifier`, `Stage2StartedListener`, `AttendanceMarkedListener`, `AttendanceDisputedListener`, `SkladchinaBotNotifier`, `DebtBotNotifier`; callback-кнопки `RosterCallbackService`, `SkladchinaCallbackService` («Получил / Не получил» по долгу и сальдо — `skladchina-v3.md` § 5); шедулеры `EventReminderScheduler`, `DebtScheduler`).
+**Источник:** `backend/src/main/kotlin/com/clubs/bot/` (`ClubsBot.kt`, `NotificationService.kt`, `BotConfig.kt`; event-листенеры `EventBotNotifier`, `Stage2ReminderListener`, `AttendanceMarkedListener`, `AttendanceDisputedListener`, `SkladchinaBotNotifier`, `DebtBotNotifier`; callback-кнопки `RosterCallbackService`, `SkladchinaCallbackService` («Получил / Не получил» по долгу и сальдо — `skladchina-v3.md` § 5); шедулеры `EventReminderScheduler`, `DebtScheduler`).
 **PRD:** §4.6 (Telegram-бот), §4.7.3 (платежи — pre_checkout / successful_payment).
 
 Этот модуль описывает **реальное** поведение бота после рефакторинга `feature/refactor-bot` (2026-05-12). Расхождения с PRD §4.6 зафиксированы как gap'ы в `docs/backlog/telegram-bot-prd-gaps.md` — на них здесь стоят ссылки `[GAP-N]`.
@@ -29,7 +29,10 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendAccessFrozenDM(memberTelegramId, clubName, clubId)` — member-DM, когда организатор закрыл доступ («Закрыть доступ» → frozen): deep-link `/clubs/{id}?pay=1` (шит взноса открывается сам), кнопка «Оплатить взнос» `[подключено: AccessGateService.freezeAccess, сессия 4]` `[2026-07-06: UI-кнопка «Закрыть доступ» удалена; эндпоинт/DM живы без UI-вызова — см. docs/backlog/freeze-flow-rethink.md]`
   - `sendAccessExtendedDM(memberTelegramId, clubName, clubId, until)` — member-DM «организатор продлил вашу подписку — доступ открыт до DD.MM.YYYY» (дата по МСК), кнопка на клуб `[подключено: AccessGateService.markDuesPaid («Взнос получен») и setAccessUntil («своя дата»), фидбек PO 2026-07-08 — раньше в клубе без чата продление проходило без уведомления]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
-  - `sendStage2Started(event)` — DM «Этап 2 начался — подтвердите участие» going/maybe-воутерам `[подключено: Stage2StartedListener @TransactionalEventListener ← Stage2Service.triggerStage2, GAP-004 ✅ / GAP-009 ✅ / S2T-2 ✅, 2026-06-13]`
+  - ~~`sendStage2Started(event)`~~ — **удалён 2026-09-15** (модель v3, `event-formats.md` § 16.5):
+    единственным форматом, доходившим до этого DM, была открытая встреча, а она больше не переходит
+    в `stage_2`. Вместе с методом удалены `Stage2StartedEvent`, `Stage2StartedListener.onStage2Started` (класс переименован в `Stage2ReminderListener` — слушать «начало Этапа 2» ему больше нечего),
+    `LivePinListener.onStage2Started`, `findStage2InviteTelegramIds`
   - `sendWaitlistPromoted(event, promotedUserId)` — DM «🎉 Освободилось место» повышённому из листа ожидания, кнопка на `/events/{id}` `[подключено: WaitlistPromotedListener @TransactionalEventListener ← Stage2Service.declineParticipation И MembershipService (выход из клуба), 2026-07-05]`
   - `sendAttendanceMarked(eventId, newlyAbsentUserIds)` — DM участникам, **впервые** отмеченным `absent` в этой отметке (F5-15.2; раньше — всем `attendance=absent`) `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
   - `sendAttendanceReminder(event, organizerTelegramId)` — poll-напоминание «отметь явку» (через 24ч), зовётся из `EventReminderScheduler` (Блок 1; детали и дедуп-флаг — `docs/modules/events.md` § «Напоминания событий»). Напоминание «подтверди участие» за 2ч (`sendConfirmReminder`) удалено PO 2026-07-08 (V51 — лишний пинг, nudge остаётся один: DM при старте Этапа 2)
@@ -80,7 +83,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Я хочу** получать DM при наступлении важных событий в клубе (новое событие, начало Stage 2, отметка отсутствия)
 **Чтобы** не пропускать дедлайны
 
-> US-5 реализована полностью: payment-related DM (`PaymentNotificationHandler`, `SubscriptionScheduler`) + все три event-related DM подключены через transactional event listeners — новое событие (`EventBotNotifier`, GAP-003 ✅), старт Этапа 2 (`Stage2StartedListener`, GAP-004 ✅, 2026-06-13), отметка отсутствия (`AttendanceMarkedListener`, GAP-005 ✅).
+> US-5 реализована полностью: payment-related DM (`PaymentNotificationHandler`, `SubscriptionScheduler`) + все три event-related DM подключены через transactional event listeners — новое событие (`EventBotNotifier`, GAP-003 ✅), старт Этапа 2 (`Stage2StartedListener`, GAP-004 ✅, 2026-06-13 — **удалён 2026-09-15**, § «Модель v3»), отметка отсутствия (`AttendanceMarkedListener`, GAP-005 ✅).
 
 ## API контракт (Telegram updates handler)
 
@@ -252,7 +255,11 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Inline-кнопка:** «📅 Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
 **Подключение:** `EventService.createEvent` (`@Transactional`) публикует `EventCreatedEvent` после `eventRepository.create()`; `EventBotNotifier.onEventCreated` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendEventCreated` (`@Async` — не блокирует HTTP-ответ при массовой рассылке). Те же транзакционные гарантии, что у Payment/Skladchina DM: при rollback `createEvent` DM не уходят. Per-DM ошибки Telegram ловятся и логируются внутри `sendDm` (fire-and-forget — сбой бота не валит создание события). Пустой список получателей → `WARN` + return.
 
-### `sendStage2Started(event: Event)` — **подключено** `[GAP-004 ✅, GAP-009 ✅, S2T-2 ✅]`
+### `sendStage2Started(event: Event)` — **удалён 2026-09-15** `[был: GAP-004 ✅, GAP-009 ✅, S2T-2 ✅]`
+
+> **⚠️ Метода в коде нет.** Модель v3 (`event-formats.md` § 16.5): открытая встреча — единственный
+> формат, который доходил до `Stage2StartedEvent`, — стала одноэтапной, и точек публикации не
+> осталось. Описание ниже сохранено как история решения (2026-06-13 … 2026-09-15).
 
 **Назначение (по PRD §4.6.3 / §4.4.2 шаг 1):** при переходе события в `stage_2` — попросить голосовавших подтвердить участие. Реализовано в `bugfix/stage2-dm-and-slot-races` (2026-06-13).
 **Получатели (UPDATED 2026-07-05):** `eventResponseRepository.findStage2InviteTelegramIds(event.id)` — участники клуба с доступом, у кого `stage_1_vote IS DISTINCT FROM 'not_going'`, т.е. `going` / `maybe` / **не ответившие** (Этап 2 открыт всем — зовём подтвердить и тех, кто молчал). `not_going` DM не получают (`[GAP-009 ✅]`), но подтвердить участие могут. Раньше слался только going/maybe (`findStage2TargetTelegramIds`).
@@ -309,6 +316,10 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 - **`sendStage2Reminder(event, telegramIds, rosterDeadline?)`** — ручное напоминание менеджера,
   текст по этапу (V86): до дедлайна «🔔 Организатор ждёт ответа … Ответьте до {дедлайн} — до этого момента
   передумать можно без влияния на репутацию» с кнопкой «Открыть встречу», после дедлайна — прежний текст с «✅ Подтвердить участие».
+  **Третья ветка — открытая встреча (v3, 2026-09-15):** дедлайна у неё нет, поэтому ветвление идёт
+  по `event.isOpenEvent`, а не по «`rosterDeadline == null`»; текст — «🔔 Организатор ждёт ответа …
+  Идёте или нет? Ответить можно до самого начала — на репутацию это не влияет», кнопка
+  «Открыть встречу». Окно напоминания у открытой — до старта встречи.
 
 ### `sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
 
@@ -411,7 +422,7 @@ AND при rollback createEvent DM не отправляются
 ```
 GIVEN событие переходит в stage_2 (Stage2Service.triggerStage2ForReadyEvents)
 WHEN транзакция триггера коммитится
-THEN Stage2StartedListener (AFTER_COMMIT) вызывает sendStage2Started
+THEN Stage2StartedListener (AFTER_COMMIT) вызывает sendStage2Started  ⛔ сценарий удалён 2026-09-15
 AND воутеры с stage_1_vote IN (going, maybe) получают DM
     с inline-кнопкой «✅ Подтвердить участие» (deep-link /events/{id})
 AND воутеры с stage_1_vote = not_going DM НЕ получают
@@ -454,7 +465,7 @@ AND отказ Telegram API не откатывает переход в stage_2 
 - ~~`[GAP-001]`~~ **снят 2026-06-12**: команда `/мой_рейтинг` удалена (продуктовое решение), вопрос «один клуб vs агрегат» неактуален.
 - `[GAP-002]` Команда `/события` (PRD §4.6.2) не реализована.
 - ~~`[GAP-003]`~~ ✅ **закрыт 2026-06-06** (`bugfix/event-dm-notification`): `sendEventCreated` подключён через `EventBotNotifier`.
-- ~~`[GAP-004]`~~ ✅ **закрыт 2026-06-13** (`bugfix/stage2-dm-and-slot-races`): `sendStage2Started` подключён через `Stage2StartedEvent` → `Stage2StartedListener` (= S2T-2).
+- ~~`[GAP-004]`~~ ✅ **закрыт 2026-06-13** (`bugfix/stage2-dm-and-slot-races`): `sendStage2Started` подключён через `Stage2StartedEvent` → `Stage2StartedListener` (= S2T-2). **Вся цепочка удалена 2026-09-15** (`event-formats.md` § 16.5).
 - ~~`[GAP-005]`~~ ✅ **закрыт 2026-06-07** (Блок 1, = ATT-3): `sendAttendanceMarked` подключён через `AttendanceMarkedEvent` → `AttendanceMarkedListener`.
 - `[GAP-006]` Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) не реализованы.
 - `[GAP-007]` Уведомления **заявителю** об approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) не реализованы. **Частично закрыт** в `feature/applications-inbox` (2026-05-30): DM **организатору** на submit теперь реализован через `sendApplicationCreatedDM`. Уведомления заявителю об approve/reject — по-прежнему gap.

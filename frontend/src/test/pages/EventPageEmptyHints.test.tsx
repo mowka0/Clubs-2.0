@@ -181,8 +181,8 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
   });
 });
 
-describe('EventPage — W3-10 «Отмечать некого» при 0 подтверждённых', () => {
-  it('организатор, прошедшее событие, 0 подтверждённых → новый текст, без кнопки сохранения', async () => {
+describe('EventPage — W3-10 «Отмечать некого» при пустом составе', () => {
+  it('организатор, прошедшее событие, пустой состав → новый текст, без кнопки сохранения', async () => {
     mockEndpoints({
       event: buildEvent({ status: 'completed', eventDatetime: PAST }),
       myVote: 'confirmed',
@@ -193,7 +193,7 @@ describe('EventPage — W3-10 «Отмечать некого» при 0 под�
 
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
     expect(
-      screen.getByText('Отмечать некого — никто не подтвердил участие в этом событии.'),
+      screen.getByText('Отмечать некого — в составе этой встречи никого нет.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Сохранить посещаемость/ })).not.toBeInTheDocument();
   });

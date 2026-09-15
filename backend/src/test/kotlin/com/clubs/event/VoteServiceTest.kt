@@ -15,6 +15,7 @@ import com.clubs.membership.Membership
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
@@ -140,6 +141,20 @@ class VoteServiceTest {
             service.castVote(eventId, userId, CastVoteRequest("going"))
         }
         assertEquals("Voting is not available for this event", ex.message)
+    }
+
+    /** AC-OPEN7: статус `upcoming` держится ещё 6 ч после старта — окно закрывает сама дата. */
+    @Test
+    fun `castVote rejects a vote after the event has started`() {
+        every { eventRepository.findById(eventId) } returns
+            upcomingEvent(OffsetDateTime.now().minusMinutes(10))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+
+        val ex = assertFailsWith<ValidationException> {
+            service.castVote(eventId, userId, CastVoteRequest("going"))
+        }
+        assertEquals("Встреча уже началась", ex.message)
+        verify(exactly = 0) { eventResponseRepository.upsertStage1Vote(any(), any(), any()) }
     }
 
     // --- getEventResponders: dispute_note privacy (F5-06) ---
@@ -294,21 +309,45 @@ class VoteServiceTest {
     }
 
     @Test
-    fun `remind is rejected without an open answer window and after the event starts`() {
-        // У формата «сколько придёт» до Этапа 2 отвечать нечего — напоминать не о чем.
-        stubStage2Event(ownerId = userId)
-        every { eventRepository.findById(eventId) } returns
-            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(participantLimit = null)
-        assertEquals(
-            "Confirmation is not open for this event",
-            assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
-        )
-
+    fun `remind is rejected once the event has started`() {
         stubStage2Event(ownerId = userId, eventDatetime = OffsetDateTime.now().minusMinutes(1))
         assertEquals(
             "Event has already started",
             assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
         )
+    }
+
+    @Test
+    fun `remind is rejected when the answer window is closed (completed event)`() {
+        // Ни голосование (`upcoming`), ни подтверждение (`stage_2`) — отвечать уже нечего.
+        stubStage2Event(ownerId = userId)
+        every { eventRepository.findById(eventId) } returns
+            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(status = EventStatus.completed)
+        assertEquals(
+            "Confirmation is not open for this event",
+            assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
+        )
+    }
+
+    /** AC-OPEN11: у открытой встречи голосование открыто до старта — молчунам можно напомнить. */
+    @Test
+    fun `remind works on an open event and carries no roster deadline`() {
+        stubStage2Event(ownerId = userId)
+        val target = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns
+            upcomingEvent(OffsetDateTime.now().plusHours(3)).copy(participantLimit = null)
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
+            listOf(pendingMember(null, id = target))
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns
+            listOf(RemindedRecipient(target, 42L))
+
+        assertEquals(1, service.remind(eventId, userId, target).remindedCount)
+
+        // Дедлайна набора у открытой нет — DM не должен называть несуществующий срок.
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(match<Stage2ReminderSentEvent> { it.rosterDeadline == null })
+        }
+        verify(exactly = 0) { rosterService.rosterDeadline(any()) }
     }
 
     @Test
@@ -372,6 +411,33 @@ class VoteServiceTest {
         assertEquals("going", service.getMyVote(eventId, userId).vote)
     }
 
+    /**
+     * AC-OPEN1: голос «Пойду» на открытой встрече сразу пишет final_status = confirmed. Если
+     * отдать его наружу, человек выпадет из вкладки «Идут», а кнопка «Пойду» перестанет
+     * подсвечиваться — та же ловушка, что у встречи с местами, только теперь на всю жизнь встречи.
+     */
+    @Test
+    fun `open event reports the stage-1 vote, not the seat status`() {
+        every { eventRepository.findById(eventId) } returns
+            rosterEvent(EventStatus.upcoming).copy(participantLimit = null)
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+
+        assertEquals("going", service.getMyVote(eventId, userId).vote)
+    }
+
+    @Test
+    fun `getEventResponders on an open event reports votes, not seats`() {
+        val open = rosterEvent(EventStatus.upcoming).copy(participantLimit = null)
+        every { eventRepository.findById(eventId) } returns open
+        every { membershipRepository.isMember(userId, open.clubId) } returns true
+        every { clubRepository.findById(open.clubId) } returns null
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
+            listOf(responderWithNote(null).copy(stage1Vote = Stage_1Vote.going, finalStatus = FinalStatus.confirmed))
+
+        assertEquals("going", service.getEventResponders(eventId, userId).single().status)
+    }
+
     @Test
     fun `roster event with a closed roster reports the seat status`() {
         every { eventRepository.findById(eventId) } returns rosterEvent(EventStatus.stage_2)
@@ -379,6 +445,29 @@ class VoteServiceTest {
             responseWith(Stage_1Vote.going, FinalStatus.confirmed)
 
         assertEquals("confirmed", service.getMyVote(eventId, userId).vote)
+    }
+
+    /**
+     * Начавшаяся открытая встреча ещё несколько часов висит в `upcoming` (grace-период
+     * EventCompletionService плюс его часовой тик), и это ровно те часы, когда организатор
+     * отмечает явку. Окно голосования закрывает СТАРТ, а не статус: иначе наружу продолжал бы
+     * уходить голос вместо места, список кандидатов на отметку (он читает `confirmed`) оставался
+     * бы пустым, и отмечать было бы некого. AC-OPEN3.
+     */
+    @Test
+    fun `open event that already started reports the seat status, not the vote`() {
+        val started = rosterEvent(EventStatus.upcoming)
+            .copy(participantLimit = null, eventDatetime = OffsetDateTime.now().minusHours(2))
+        every { eventRepository.findById(eventId) } returns started
+        every { membershipRepository.isMember(userId, started.clubId) } returns true
+        every { clubRepository.findById(started.clubId) } returns null
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            responseWith(Stage_1Vote.going, FinalStatus.confirmed)
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
+            listOf(responderWithNote(null).copy(stage1Vote = Stage_1Vote.going, finalStatus = FinalStatus.confirmed))
+
+        assertEquals("confirmed", service.getMyVote(eventId, userId).vote)
+        assertEquals("confirmed", service.getEventResponders(eventId, userId).single().status)
     }
 
     private fun rosterEvent(status: EventStatus) = Event(

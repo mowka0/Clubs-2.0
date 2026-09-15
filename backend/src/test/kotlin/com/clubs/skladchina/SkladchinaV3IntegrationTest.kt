@@ -183,6 +183,76 @@ class SkladchinaV3IntegrationTest {
     }
 
     @Test
+    fun `a single attendee is enough to split an event bill, and an event with nobody marked is refused`() {
+        // PO 2026-09-15: пришедшим отмечают только того, кто был в составе встречи, поэтому один
+        // человек в списке — обычное дело; порога «нужно двое» больше нет.
+        val soloEvent = attendedEvent(listOf(aliceId))
+        val splittable = json(get("/api/clubs/$clubId/skladchinas/splittable-events", owner).andExpect(status().isOk))
+        assertTrue(
+            splittable.any { it["eventId"].asText() == soloEvent.toString() },
+            "встреча с одним пришедшим попадает в список «Скинуться после встречи»"
+        )
+        val soloBody = """
+            {
+              "title": "Кофе", "kind": "shared", "amountKopecks": 50000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}", "eventId": "$soloEvent"
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, soloBody).andExpect(status().isCreated))
+        assertEquals(
+            mapOf(aliceId.toString() to 50_000L),
+            created["debts"].associate { it["debtor"]["id"].asText() to it["amountKopecks"].asLong() },
+            "весь счёт на единственного пришедшего"
+        )
+
+        // Явка отмечена, но не пришёл никто: делить не с кем — просим указать состав руками.
+        val emptyEvent = attendedEvent(emptyList())
+        val emptyBody = soloBody.replace(soloEvent.toString(), emptyEvent.toString())
+        postJson("/api/clubs/$clubId/skladchinas", owner, emptyBody).andExpect(status().isBadRequest)
+        // Свой список должников такую встречу принимает: он и отвечает, с кем делить.
+        val withList = emptyBody.replace(
+            """"eventId": "$emptyEvent"""",
+            """"eventId": "$emptyEvent", "debtors": [{"userId":"$aliceId"}]"""
+        )
+        postJson("/api/clubs/$clubId/skladchinas", owner, withList).andExpect(status().isCreated)
+
+        // Пришёл только сам создатель: долг самому себе рождается `received`, сбор выглядел бы
+        // собранным на 100 %, сам никогда не закрылся бы и держал встречу занятой.
+        val selfEvent = attendedEvent(listOf(ownerId))
+        postJson("/api/clubs/$clubId/skladchinas", owner, soloBody.replace(soloEvent.toString(), selfEvent.toString()))
+            .andExpect(status().isBadRequest)
+        // ...но со списком должников та же встреча принимается: делить есть с кем.
+        val selfWithList = soloBody
+            .replace(soloEvent.toString(), selfEvent.toString())
+            .replace(""""eventId": "$selfEvent"""", """"eventId": "$selfEvent", "debtors": [{"userId":"$bobId"}]""")
+        postJson("/api/clubs/$clubId/skladchinas", owner, selfWithList).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `my feed keeps active skladchinas by nearest deadline and closed ones by the freshest closing`() {
+        // Порядок истории решает дата закрытия (PO 2026-09-15): раньше первым ключом был срок
+        // оплаты, и закрытый вчера сбор со старым сроком проваливался вниз списка.
+        val soonActive = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val lateActive = createShared(owner, listOf(bobId), amount = 1_000)["id"].asText()
+        val freshClosed = createShared(owner, listOf(carolId), amount = 1_000)["id"].asText()
+        val oldClosed = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        dsl.execute("UPDATE skladchinas SET deadline = now() + interval '1 day' WHERE id = ?", UUID.fromString(soonActive))
+        dsl.execute("UPDATE skladchinas SET deadline = now() + interval '9 days' WHERE id = ?", UUID.fromString(lateActive))
+        // У закрытых срок нарочно «ближе» — если бы сортировка шла по нему, они бы перемешались.
+        dsl.execute(
+            "UPDATE skladchinas SET status = 'collected'::skladchina_status, closed_at = now() - interval '1 hour', deadline = now() + interval '2 hours' WHERE id = ?",
+            UUID.fromString(freshClosed)
+        )
+        dsl.execute(
+            "UPDATE skladchinas SET status = 'collected'::skladchina_status, closed_at = now() - interval '10 days', deadline = now() + interval '3 hours' WHERE id = ?",
+            UUID.fromString(oldClosed)
+        )
+
+        val feed = json(get("/api/users/me/skladchinas", owner).andExpect(status().isOk))["content"].map { it["id"].asText() }
+        assertEquals(listOf(soonActive, lateActive, freshClosed, oldClosed), feed)
+    }
+
+    @Test
     fun `free contributions after an event go as voluntary with invited people, event link and total bill`() {
         val eventId = UUID.randomUUID()
         dsl.execute(

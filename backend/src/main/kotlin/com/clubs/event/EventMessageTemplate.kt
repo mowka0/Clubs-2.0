@@ -109,10 +109,10 @@ object EventMessageTemplate {
      * Очередь упоминаем, только если она есть.
      */
     fun rosterClosedStats(event: Event, confirmed: Int, waitlisted: Int): String {
+        // Закрывается набор только у встречи с местами — открытая сюда не доходит (v3).
         val limit = event.participantLimit
         val min = event.minParticipants
         val head = when {
-            limit == null -> "✅ Состав собран: $confirmed."
             min != null && confirmed < min && !event.isRosterDecided ->
                 "⚠️ Состав $confirmed из $min — встреча состоится, если организатор не решит иначе."
             min != null && confirmed < min -> "👥 Состав $confirmed из $limit."
@@ -128,22 +128,6 @@ object EventMessageTemplate {
     }
 
     /**
-     * Счётчики Этапа 2 (подтверждение мест). Дедлайн подтверждения = старт встречи.
-     * У открытой встречи гонки за места нет — счёт без знаменателя и без строки очереди.
-     */
-    fun stage2Stats(event: Event, confirmed: Int, waitlisted: Int, fmt: DateTimeFormatter): String {
-        val sb = StringBuilder()
-        if (event.participantLimit != null) {
-            sb.append("✅ Подтвердили — $confirmed из ${event.participantLimit}\n")
-            if (waitlisted > 0) sb.append("📋 В очереди — $waitlisted\n")
-        } else {
-            sb.append("✅ Подтвердили — $confirmed\n")
-        }
-        sb.append("⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}")
-        return sb.toString()
-    }
-
-    /**
      * Что означает число участников — одна строка на все бот-поверхности (DM, /status, закреп).
      * Формат без лимита сообщает свою суть, а не «Мест — null».
      */
@@ -151,7 +135,9 @@ object EventMessageTemplate {
         EventFormat.NORMAL -> event.minParticipants
             ?.let { "👥 Мест — ${event.participantLimit}, нужно минимум $it — иначе встреча отменится" }
             ?: "👥 Мест — ${event.participantLimit}"
-        EventFormat.OPEN -> "👥 Без ограничений — приходят все желающие, репутация не считается"
+        // Про репутацию здесь больше не говорим (v3): открытая встреча не меняет репутацию за
+        // посещение, но долг из сбора по ней работает как у всех — прежняя формулировка врала.
+        EventFormat.OPEN -> "🌊 Без мест и очереди — «Пойду» сразу записывает; передумать можно до начала"
     }
 
     /** HTML parse_mode: `&`, `<`, `>` в пользовательском вводе ломали бы разметку/давали инъекцию тегов. */

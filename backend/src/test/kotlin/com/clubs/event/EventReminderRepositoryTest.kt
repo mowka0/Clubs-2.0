@@ -131,25 +131,7 @@ class EventReminderRepositoryTest {
         assertEquals(ownerTelegramId, eventRepository.findOrganizerTelegramId(event))
     }
 
-    // --- Этап 2 открыт всем: приглашение (все кроме not_going) + поздняя строка ---
-
-    @Test
-    fun `stage2 invite = active members minus not_going, including non-voters`() {
-        val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
-        val (goingU, goingTg) = insertMember()
-        insertResponse(event, goingU, "going")
-        val (maybeU, maybeTg) = insertMember()
-        insertResponse(event, maybeU, "maybe")
-        val (notGoingU, _) = insertMember()
-        insertResponse(event, notGoingU, "not_going")        // не иду → DM не шлём
-        val (_, silentTg) = insertMember()                   // не ответил → включён
-        val (frozenU, _) = insertMember("frozen")            // нет доступа → исключён, даже если голосовал
-        insertResponse(event, frozenU, "going")
-
-        val ids = eventResponseRepository.findStage2InviteTelegramIds(event).toSet()
-
-        assertEquals(setOf(goingTg, maybeTg, silentTg), ids)
-    }
+    // --- поздняя строка и порядок состава ---
 
     @Test
     fun `responders include late joiners (null stage1) and fall back to stage_1 order when no stage_2 action`() {

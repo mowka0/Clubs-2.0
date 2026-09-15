@@ -103,13 +103,15 @@ class ActivityService(
 
     companion object {
         /**
-         * Ключ сортировки для элемента: собственный datetime события или срок сбора («По желанию»
-         * без срока — дата создания). Исчерпывающий `when` по sealed-подтипу — компилятор требует
-         * ветку для каждого будущего типа активности.
+         * Ключ сортировки для элемента: собственный datetime события или дата сбора. У сбора это
+         * фактическое закрытие, если оно уже случилось, иначе срок оплаты («По желанию» без срока —
+         * дата создания): закрытый 15-го сбор со сроком 18-го стоял в «Прошедших» на месте 18-го.
+         * Исчерпывающий `when` по sealed-подтипу — компилятор требует ветку для каждого будущего
+         * типа активности.
          */
         private fun relevantDate(item: ActivityItemDto): OffsetDateTime = when (item) {
             is ActivityItemDto.EventActivity -> item.eventDatetime
-            is ActivityItemDto.SkladchinaActivity -> item.deadline ?: item.createdAt
+            is ActivityItemDto.SkladchinaActivity -> item.closedAt ?: item.deadline ?: item.createdAt
         }
 
         /** Ближайшие первыми; ничья разрешается через `id ASC` для детерминированного порядка. */

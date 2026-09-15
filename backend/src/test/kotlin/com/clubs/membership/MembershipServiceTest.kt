@@ -413,7 +413,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `leaveClub free - open-event booking is not penalized but still frees the slot (AC-OPEN4)`() {
+    fun `leaveClub free - open-event booking is not penalized but still frees the slot (AC-OPEN12 v3)`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()

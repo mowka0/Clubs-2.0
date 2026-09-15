@@ -332,7 +332,9 @@ members **и** organizer (organizer всегда active member клуба по �
 - `upcoming` = всё остальное (`isCompleted == false`)
 
 **Сортировка по `relevantDate`** (own-date активности, не `createdAt`):
-- `relevantDate` = `eventDatetime` для событий, `deadline` для складчин
+- `relevantDate` = `eventDatetime` для событий, `closedAt ?: deadline ?: createdAt` для складчин
+  (с 2026-09-15: у прошедшего сбора важно, когда его закрыли, а не до когда просили заплатить —
+  сбор со сроком 18-го могли закрыть 15-го)
 - `upcoming` — `relevantDate ASC` (ближайшее сверху)
 - `past` — `relevantDate DESC` (недавнее сверху)
 - ties по `relevantDate` в обеих группах разрешаются `id ASC` (детерминизм)
@@ -481,6 +483,7 @@ interface SkladchinaActivityDto extends ActivityBase {   // сборы v3 (sklad
   kind: 'shared' | 'per_head' | 'voluntary';
   amountKopecks: number | null;
   targetKopecks: number | null;       // знаменатель «получено X из Y»: живые долги, иначе amountKopecks
+  closedAt: string | null;            // когда сбор закрыли: дата и порядок «Прошедших» — по ней
   receivedKopecks: number;
   deadline: string | null;            // null у «По желанию» без срока
   debtCount: number;
@@ -860,8 +863,8 @@ Lock-placeholder для не-членов остаётся (`<strong>Событ�
 5. Отсортировать:
    - `upcoming` → `relevantDate ASC, id ASC` (`UPCOMING_ORDER`)
    - `past` → `relevantDate DESC, id ASC` (`PAST_ORDER`)
-   - `relevantDate(item)` = `eventDatetime` для event, `deadline` для skladchina
-     (exhaustive `when` над sealed-подтипом)
+   - `relevantDate(item)` = `eventDatetime` для event, `closedAt ?: deadline ?: createdAt`
+     для skladchina (exhaustive `when` над sealed-подтипом)
 6. Вернуть `ClubActivityFeedDto(upcoming = sortedUpcoming, past = sortedPast)`
 
 **Без пагинации** (D-1): объём активностей одного клуба ограничен, in-memory

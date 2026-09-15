@@ -15,10 +15,15 @@ function formatShortDate(iso: string): string {
   return DATE_FMT.format(new Date(iso));
 }
 
-// У сбора «По желанию» срока может не быть — тогда строка показывает дату создания.
+/**
+ * Дата прошедшей активности: у встречи — когда она была, у сбора — когда его закрыли. Срок оплаты
+ * тут врал: сбор со сроком 18-го могли закрыть 15-го. Откат на срок и дату создания — страховка
+ * (у закрытого сбора дата закрытия есть всегда) и случай «По желанию» без срока.
+ */
 function activityDate(activity: ActivityItemDto): string {
-  const iso =
-    activity.type === 'event' ? activity.eventDatetime : activity.deadline ?? activity.createdAt;
+  const iso = activity.type === 'event'
+    ? activity.eventDatetime
+    : activity.closedAt ?? activity.deadline ?? activity.createdAt;
   return formatShortDate(iso);
 }
 

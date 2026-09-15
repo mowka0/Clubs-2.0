@@ -63,6 +63,7 @@ function buildSkladchina(
     targetKopecks: 500000,
     receivedKopecks: 100000,
     deadline: '2026-05-28T12:00:00Z',
+    closedAt: null,
     debtCount: 5,
     receivedCount: 1,
     enrolledCount: 0,
@@ -106,6 +107,22 @@ describe('ActivityCard (full)', () => {
     );
     expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('2/20');
     expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('подтв.');
+  });
+
+  // Модель v3 (event-formats.md § 16.8): у открытой встречи подтверждений не существует,
+  // поэтому подпись счётчика одна на весь жизненный цикл.
+  it('открытая завершённая встреча: счёт по составу, подпись «идёт», а не «подтв.»', () => {
+    const { container } = render(
+      <ActivityCard
+        activity={buildEvent({
+          format: 'open', participantLimit: null, status: 'completed', isCompleted: true,
+          goingCount: 7, confirmedCount: 7,
+        })}
+        onClick={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('7');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идёт');
   });
 
   it('uses confirmedCount for a completed event', () => {

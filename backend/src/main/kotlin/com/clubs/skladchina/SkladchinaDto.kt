@@ -221,6 +221,8 @@ data class MySkladchinaListItemDto(
     val debtCount: Int,
     val receivedCount: Int,
     val deadline: OffsetDateTime?,
+    // Дата фактического закрытия — по ней группа «История» показывает дату и порядок.
+    val closedAt: OffsetDateTime?,
     val status: String,
     val isCreator: Boolean,
     val myDebtStatus: String?,

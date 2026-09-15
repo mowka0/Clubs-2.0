@@ -81,6 +81,9 @@ export const DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
 
 export const DAY_FMT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
 
+/** Дата крупно в плашке срока: «20 сент.» — «20 сентября» в половину ширины экрана не влезает. */
+export const SHORT_DAY_FMT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
+
 /** «Иван Петров» / «Иван». */
 export function personName(p: { firstName: string; lastName: string | null }): string {
   return p.lastName ? `${p.firstName} ${p.lastName}` : p.firstName;

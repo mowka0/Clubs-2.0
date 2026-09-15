@@ -18,6 +18,15 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
+/**
+ * Закрытие набора по дедлайну и легаси-подтверждение участия.
+ *
+ * Модель v3 (решение PO 2026-09-15): второй этап больше не начинается ни у одной новой встречи —
+ * планировщик закрывает только наборы составов, а открытая встреча в его выборку не попадает
+ * вовсе. [confirmParticipation] / [declineParticipation] остаются ради строк, флипнутых в
+ * `stage_2` до реформы: новая встреча в этот статус уже не приходит, и оба метода отвечают ей
+ * «Event is not in confirmation stage». Спека: docs/modules/event-formats.md § 16.
+ */
 @Service
 class Stage2Service(
     private val eventRepository: EventRepository,
@@ -39,10 +48,9 @@ class Stage2Service(
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
-    // Окно подтверждения — [flip .. старт события], а сам flip случается где угодно внутри одного
-    // периода опроса после границы триггера — поэтому тик должен быть сильно мельче упреждения
-    // триггера. Старый захардкоженный тик 5 мин съедал короткое staging-упреждение (3 мин) целиком:
-    // flip часто приходился уже после старта события, оставляя окно нулевой длины.
+    // Тик должен быть сильно мельче упреждения триггера: дедлайн набора наступает где угодно
+    // внутри одного периода опроса после границы. Старый захардкоженный тик 5 мин съедал короткое
+    // staging-упреждение (3 мин) целиком — набор закрывался уже после старта встречи.
     @Scheduled(fixedDelayString = "\${events.stage2-poll-ms:60000}")
     @Transactional
     fun triggerStage2ForReadyEvents() {
@@ -52,43 +60,18 @@ class Stage2Service(
         val events = eventRepository.findEventsToTriggerStage2(now, stage2TriggerMinutesBefore)
         events.forEach { event ->
             try {
-                triggerStage2(event)
-                log.info("Stage 2 triggered for event ${event.id}")
+                // Единственное, что делает тик: закрывает набор по правилу ① (минимума нет или он
+                // взят — состав закрыт, иначе встреча отменяется). Открытая встреча в выборку не
+                // попадает вовсе (v3), поэтому второй ветки — перехода в Этап 2 с приглашением
+                // «подтвердите участие» — у планировщика больше нет.
+                rosterService.handleRosterDeadline(event)
+                log.info("Roster deadline handled for event ${event.id}")
             } catch (e: Exception) {
-                log.error("Failed to trigger Stage 2 for event ${event.id}", e)
+                log.error("Failed to handle roster deadline for event ${event.id}", e)
             }
         }
         // Правило ② — после дедлайнов в том же проходе: предупреждение не догоняет отмену.
         rosterService.sendDueRosterWarnings(now)
-    }
-
-    private fun triggerStage2(event: Event) {
-        // Встречи с местами закрывают набор своим путём (правило ①): минимума нет или он взят —
-        // состав закрыт, иначе встреча отменяется. Приглашения «подтвердите участие» у них нет —
-        // место даёт голос, а не подтверждение.
-        if (rosterService.handleRosterDeadline(event)) return
-
-        eventRepository.transitionToStage2(event.id)
-
-        // Этап 1 — только предварительный визуал: он НЕ резервирует места и НЕ задаёт очередь.
-        // При старте Этапа 2 никто не помечается waitlisted заранее — все места разыгрываются
-        // заново «гонкой за места»: кто первым нажмёт «Подтвердить», тот в зале (confirmParticipation:
-        // confirmedCount < limit → confirmed, иначе waitlisted). Очередь листа ожидания и её
-        // продвижение упорядочены по stage_2_timestamp (времени подтверждения на Этапе 2), а не по
-        // голосу Этапа 1. См. events.md § «Гонка за места».
-
-        // S2T-2: просим проголосовавших going/maybe подтвердить участие. Без этого DM никто не
-        // узнает, что начался Stage 2, никто не подтвердит, и все автоматически истекут к старту
-        // события. Переход через AFTER_COMMIT (Stage2StartedListener) — @Async DM должен читать
-        // уже закоммиченные строки.
-        // Поздний flip (событие уже началось) всё равно происходит — от него зависят цикл
-        // истечения и жизненный цикл завершения — но окно подтверждения уже закрыто
-        // (confirmParticipation отклоняет после старта события), так что DM был бы бесполезен.
-        if (event.eventDatetime.isAfter(OffsetDateTime.now())) {
-            eventPublisher.publishEvent(Stage2StartedEvent(event))
-        } else {
-            log.info("Stage 2 confirm DM skipped for event ${event.id} — flipped after event start (window closed)")
-        }
     }
 
     @Transactional
@@ -232,7 +215,7 @@ class Stage2Service(
             // Первый из очереди сразу занимает освободившийся слот — состав не пустеет.
             eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
             // DM повышенному: место его, с кнопкой на событие. AFTER_COMMIT (WaitlistPromotedListener) —
-            // @Async DM должен читать уже закоммиченное повышение. Зеркалит Stage2StartedEvent.
+            // @Async DM должен читать уже закоммиченное повышение.
             eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, firstWaitlisted.userId))
         }
         if (declineKind != null) {

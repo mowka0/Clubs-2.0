@@ -39,15 +39,13 @@ class LivePinRenderer(
     fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername?startapp=event_$eventId"
 
     /**
-     * Кнопка под статусом: на Этапе 2 зовём подтверждать, до него — голосовать. У встречи с
-     * порогом набора (V83) подтверждать нечего — место даёт голос, поэтому после закрытия состава
-     * кнопка просто открывает встречу.
+     * Кнопка под статусом: пока состав набирается голосами — «Проголосовать», после закрытия
+     * набора голосовать уже нечем, и кнопка просто открывает встречу. Отдельного «Подтвердить
+     * участие» больше нет ни у одного формата: у встречи с местами место даёт голос (V83), у
+     * открытой набор не закрывается вовсе (v3), а `stage2Triggered` у неё навсегда false.
      */
-    fun buttonText(event: Event): String = when {
-        event.isRosterEvent && event.stage2Triggered -> "Открыть встречу"
-        event.stage2Triggered -> "Подтвердить участие"
-        else -> "Проголосовать"
-    }
+    fun buttonText(event: Event): String =
+        if (event.stage2Triggered) "Открыть встречу" else "Проголосовать"
 
     /**
      * Идёт набор состава (формат 🎟): «собрались N из M — нужно ещё K» и дедлайн набора.
@@ -74,14 +72,6 @@ class LivePinRenderer(
             EventMessageTemplate.stage1Stats(event, going, maybe)
 
     /**
-     * Этап 2 (гонка за места) — тот же шаблон, но со счётчиком подтверждений и дедлайном
-     * (= старт события, граница окна на бэке).
-     */
-    fun stage2Text(event: Event, confirmed: Int, waitlisted: Int): String =
-        "${EventMessageTemplate.head(event, fmt)}\n\n" +
-            EventMessageTemplate.stage2Stats(event, confirmed, waitlisted, fmt)
-
-    /**
      * Финальный текст при старте события (закреп гаснет, итог придёт после отметки явки).
      * Не «Сбор закрыт» — слово «сбор» у нас занято складчиной и путало (фидбек PO 2026-07-08).
      */
@@ -89,8 +79,8 @@ class LivePinRenderer(
         "<b>${esc(EventMessageTemplate.formatName(event))} началась</b>\n\n" +
             "${esc(event.title)}\n" +
             "когда: ${event.eventDatetime.format(fmt)}\n\n" +
-            "✅ Подтвердили — " +
-            (event.participantLimit?.let { "$confirmed из $it" } ?: "$confirmed") +
+            // У открытой встречи никто ничего не подтверждал — люди просто сказали «Пойду» (v3).
+            (event.participantLimit?.let { "✅ Подтвердили — $confirmed из $it" } ?: "✅ Шли — $confirmed") +
             "\nИтог появится после отметки явки."
 
     /**

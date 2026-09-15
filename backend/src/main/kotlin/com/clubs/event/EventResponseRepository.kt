@@ -68,15 +68,6 @@ interface EventResponseRepository {
     fun findStage2TargetTelegramIds(eventId: UUID): List<Long>
 
     /**
-     * Telegram id аудитории приглашения на Этап 2 (sendStage2Started): участники клуба С ДОСТУПОМ,
-     * которые НЕ голосовали not_going на Этапе 1 — т.е. going / maybe / вообще не ответившие. Этап 2
-     * открыт всем участникам клуба, поэтому не ответивших тоже зовём подтвердить; проголосовавшим
-     * not_going DM НЕ шлём (но подтвердить они всё равно смогут — см. Stage2Service.confirmParticipation).
-     * Строится от memberships (LEFT JOIN event_responses), а не от голосов, иначе не ответившие бы выпали.
-     */
-    fun findStage2InviteTelegramIds(eventId: UUID): List<Long>
-
-    /**
      * Telegram id участников события с данным статусом Этапа 2 — адресаты DM «состав собран»
      * (V83): confirmed получают «ждём вас», waitlisted — «вы в очереди». Отдельный метод, потому
      * что существующие выборки строятся от голосов Этапа 1, а состав живёт в stage_2_vote.
