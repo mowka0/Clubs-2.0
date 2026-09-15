@@ -197,9 +197,15 @@ class SkladchinaChatStatusService(
 
     private fun buildView(skladchina: Skladchina): ChatStatusView {
         val totals = debtRepository.totals(skladchina.id)
-        val waitingIds = debtRepository.findBySkladchina(skladchina.id)
+        val debts = debtRepository.findBySkladchina(skladchina.id)
+        val waitingIds = debts
             .filter { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
             .map { it.debt.debtorId }
+        // С кого денег уже не ждут: перевёл, ждёт подтверждения, прощён или выбыл.
+        val settledIds = debts
+            .filterNot { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
+            .map { it.debt.debtorId }
+            .toSet()
         // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
         val enrolledIds = if (skladchina.enrollmentUntil != null || skladchina.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
         return ChatStatusView(
@@ -208,7 +214,9 @@ class SkladchinaChatStatusService(
             enrolledCount = enrolledIds.size,
             creatorName = userRepository.findById(skladchina.creatorId)?.firstName ?: "",
             waiting = mentions(waitingIds),
-            enrolled = mentions(enrolledIds),
+            // Строка «Скидываются» зовёт тех, с кого ещё ждут: оплативший в ней висел и после
+            // подтверждения (PO 2026-09-15). На этапе записи долгов нет — список не меняется.
+            enrolled = mentions(enrolledIds.filterNot { it in settledIds }),
             now = OffsetDateTime.now()
         )
     }

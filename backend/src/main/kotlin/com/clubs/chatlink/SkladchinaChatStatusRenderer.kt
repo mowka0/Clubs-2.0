@@ -27,7 +27,7 @@ data class ChatStatusView(
     val creatorName: String,
     /** Ещё не оплатили (waiting/promised) — «Ждём:» до срока. */
     val waiting: List<ChatMention>,
-    /** Отметились «В деле» на этапе записи. */
+    /** Отметились «В деле» на этапе записи; у «По желанию» — позванные, с кого ещё ждут денег. */
     val enrolled: List<ChatMention>,
     val now: OffsetDateTime
 )

@@ -12,6 +12,7 @@ import { ActivityFeedList } from '../../components/manage/ActivityFeedList';
 import type {
   ClubActivityFeed,
   EventActivityDto,
+  SkladchinaActivityDto,
 } from '../../api/activities';
 
 function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto {
@@ -33,6 +34,29 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     descriptionPreview: null,
     photoUrl: null,
     actionRequired: false,
+    ...overrides,
+  };
+}
+
+function buildSkladchina(overrides: Partial<SkladchinaActivityDto> = {}): SkladchinaActivityDto {
+  return {
+    type: 'skladchina',
+    id: 's-1',
+    clubId: 'club-1',
+    title: 'Ужин после игры',
+    createdAt: '2026-05-01T10:00:00Z',
+    isCompleted: true,
+    kind: 'shared',
+    amountKopecks: 600000,
+    targetKopecks: 600000,
+    receivedKopecks: 600000,
+    deadline: '2026-05-18T12:00:00Z',
+    closedAt: '2026-05-15T12:00:00Z',
+    debtCount: 6,
+    receivedCount: 6,
+    enrolledCount: 0,
+    status: 'collected',
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -96,6 +120,19 @@ describe('ActivityFeedList', () => {
     await user.click(screen.getByRole('button', { name: /old yoga/i }));
 
     expect(onActivityClick).toHaveBeenCalledWith(past);
+  });
+
+  it('прошедший сбор датируется закрытием, а не сроком оплаты', () => {
+    const feed: ClubActivityFeed = { upcoming: [], past: [buildSkladchina()] };
+    render(<ActivityFeedList feed={feed} onActivityClick={vi.fn()} />);
+    expect(screen.getByText('15 мая')).toBeInTheDocument();
+    expect(screen.queryByText('18 мая')).toBeNull();
+  });
+
+  it('у сбора, закрытого до появления closedAt, дата откатывается на срок', () => {
+    const feed: ClubActivityFeed = { upcoming: [], past: [buildSkladchina({ closedAt: null })] };
+    render(<ActivityFeedList feed={feed} onActivityClick={vi.fn()} />);
+    expect(screen.getByText('18 мая')).toBeInTheDocument();
   });
 
   it('omits the past accordion when there are no past activities', () => {

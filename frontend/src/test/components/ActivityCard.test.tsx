@@ -63,6 +63,7 @@ function buildSkladchina(
     targetKopecks: 500000,
     receivedKopecks: 100000,
     deadline: '2026-05-28T12:00:00Z',
+    closedAt: null,
     debtCount: 5,
     receivedCount: 1,
     enrolledCount: 0,

@@ -144,7 +144,8 @@ export const SkladchinasTab: FC = () => {
             group.key === 'history' ? (
               <HistoryCard
                 key={s.id}
-                dateISO={s.deadline ?? ''}
+                // В истории дата — когда сбор закрыли, а не до когда просили заплатить.
+                dateISO={s.closedAt ?? s.deadline ?? ''}
                 title={s.title}
                 subtitle={
                   finalStatusLabel(s.status)

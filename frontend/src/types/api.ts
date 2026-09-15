@@ -887,6 +887,8 @@ export interface MySkladchinaListItemDto {
   debtCount: number;
   receivedCount: number;
   deadline: string | null;
+  /** Дата фактического закрытия — по ней группа «История» показывает дату. */
+  closedAt: string | null;
   status: SkladchinaStatus;
   isCreator: boolean;
   myDebtStatus: DebtStatus | null;

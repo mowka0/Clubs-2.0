@@ -56,6 +56,8 @@ export interface SkladchinaActivityDto extends ActivityBase {
   receivedKopecks: number;
   // null у «По желанию» без срока.
   deadline: string | null;
+  /** Когда сбор закрыли фактически: у прошедших показываем и сортируем по ней, а не по сроку. */
+  closedAt: string | null;
   debtCount: number;
   receivedCount: number;
   enrolledCount: number;

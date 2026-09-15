@@ -2,8 +2,13 @@ package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.bot.PARSE_MODE_HTML
+import com.clubs.debt.Debt
+import com.clubs.debt.DebtPerson
 import com.clubs.debt.DebtRepository
 import com.clubs.debt.DebtTotals
+import com.clubs.debt.DebtWithContext
+import com.clubs.generated.jooq.enums.DebtStatus
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.skladchina.Skladchina
@@ -52,8 +57,56 @@ class SkladchinaChatStatusServiceTest {
         every { userRepository.findById(any()) } returns UsersRecord(id = UUID.randomUUID(), telegramId = 1L, firstName = "Иван")
     }
 
+    private fun debtOf(skladchinaId: UUID, debtorId: UUID, status: DebtStatus): DebtWithContext {
+        val person = DebtPerson(debtorId, "Саша", null, null, null)
+        val debt = Debt(
+            id = UUID.randomUUID(), skladchinaId = skladchinaId, debtorId = debtorId,
+            creditorId = UUID.randomUUID(), amountKopecks = 100_000L, quantity = 1, dueAt = null,
+            status = status, promisedAt = null, claimedAt = null, confirmedAt = null, rejectedAt = null,
+            rejectNote = null, note = null, receiptUrl = null, settlementId = null,
+            reputationPlusAt = null, reputationMinusAt = null,
+            createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now()
+        )
+        return DebtWithContext(
+            debt = debt, skladchinaTitle = "Ужин после игры", skladchinaKind = SkladchinaKind.voluntary,
+            skladchinaOrderedAt = null, clubId = clubId, clubName = "Партия",
+            paymentLink = "https://bank.example/pay", paymentMethodNote = null,
+            debtor = person, creditor = person
+        )
+    }
+
     private fun skladchina(status: SkladchinaStatus = SkladchinaStatus.active, hiddenFrom: UUID? = null): Skladchina =
         rendererSkladchina(status = status, hiddenFromUserId = hiddenFrom).copy(clubId = clubId)
+
+    @Test
+    fun `voluntary post drops from «Скидываются» everyone who already paid`() {
+        // Позвали двоих; один перевёл и его подтвердили — в строке должен остаться только второй.
+        val paid = UUID.randomUUID()
+        val stillOwes = UUID.randomUUID()
+        val s = rendererSkladchina(kind = SkladchinaKind.voluntary, deadline = null).copy(clubId = clubId)
+        every { skladchinaRepository.findById(s.id) } returns s
+        every { skladchinaRepository.findEnrolledUserIds(s.id) } returns listOf(paid, stillOwes)
+        every { debtRepository.findBySkladchina(s.id) } returns listOf(
+            debtOf(s.id, paid, DebtStatus.received),
+            debtOf(s.id, stillOwes, DebtStatus.waiting)
+        )
+        every { userRepository.findByIds(listOf(stillOwes)) } returns listOf(
+            UsersRecord(id = stillOwes, telegramId = 22L, firstName = "Оля")
+        )
+        every { postRepository.findBySkladchinaId(s.id) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), PARSE_MODE_HTML) } returns 777L
+        every { postRepository.insertIfAbsent(any()) } returns true
+
+        service.onSkladchinaCreated(clubId, s.id)
+
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId,
+                match { it.contains("Скидываются: ") && it.contains("Оля") && !it.contains("Саша") },
+                any(), any(), PARSE_MODE_HTML
+            )
+        }
+    }
 
     @Test
     fun `created posts a pinned status and returns the chat id`() {

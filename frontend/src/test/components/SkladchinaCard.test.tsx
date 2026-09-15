@@ -20,6 +20,7 @@ function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchi
     debtCount: 6,
     receivedCount: 1,
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
+    closedAt: null,
     status: 'active',
     isCreator: false,
     myDebtStatus: 'waiting',
