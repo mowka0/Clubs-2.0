@@ -1248,7 +1248,7 @@
 .rd-when-at {
   font-size: 12.5px; font-weight: 600; color: var(--text-dim);
   /* Черта выше текста на пару пикселей — иначе на строке в 12,5 px читается как случайная риска. */
-  border-left: 2px solid var(--accent); padding: 2px 0 2px 5px;
+  border-left: 2px solid var(--accent); padding: 2px 0 2px 3px;
   margin-bottom: 4px; width: fit-content;
 }
 /* Срок вышел — это не «скоро», а просроченное: акцентный оранжевый читался бы как обычный отсчёт. */
