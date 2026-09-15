@@ -253,6 +253,12 @@ data class CheckoutRequest(val invId: Long, val amountKopecks: Int, val descript
                            val recurring: Boolean, val email: String?, val successUrl: String, val failUrl: String)
 data class ResultNotification(val invId: Long, val amountKopecks: Int, val paymentMethod: String?, val fee: BigDecimal?)
 ```
+Оба провайдера объявлены `@ConditionalOnProperty` **без** `matchIfMissing`: пустое или незнакомое
+`billing.provider` не включает стаб молча. Чтобы причина падения читалась с первой строки лога,
+`payment/BillingProviderCheck` (`@DependsOn` на `BillingService`) проверяет значение на старте и
+называет переменную — Coolify игнорирует `${VAR:?…}` в compose и подставляет пустую строку
+(staging 2026-09-15).
+
 `StubPaymentProvider` — для dev/тестов: `createCheckout` отдаёт локальный URL-заглушку, `charge`
 всегда accepted, `queryState` = SUCCEEDED через N секунд (конфиг), чтобы staging без ключей
 проходил весь цикл.

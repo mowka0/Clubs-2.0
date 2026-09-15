@@ -391,6 +391,15 @@ volumes:
 `BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.
+**Coolify игнорирует `${VAR:?сообщение}`** (проверено на staging 2026-09-15): вместо падения на
+разборе compose он подставляет пустую строку, и контейнер стартует с пустым значением. Поэтому
+обязательность переменной нельзя обеспечить синтаксисом compose — она обеспечивается на старте
+приложения. Для `BILLING_PROVIDER` это делает `payment/BillingProviderCheck` (`@DependsOn` на
+`BillingService`): пустое или неизвестное значение роняет старт сообщением, называющим переменную,
+а не спринговым «no qualifying bean of type PaymentProvider». Молча включать стаб нельзя — у него
+страница оплаты открыта без авторизации. Родственный случай — `${VAR:-default}` в ключах
+Traefik-лейблов (CLAUDE.md § staging): там подстановки тоже не происходит.
+
 `TELEGRAM_BOT_USERNAME` (дефолт `clubs_v2_bot`) читают оба контейнера: бэкенд — как
 `telegram.bot-username`, фронтенд — как build arg `VITE_TELEGRAM_BOT_USERNAME`, чтобы страницы
 `/pay/return` и `/pay/fail` вели в того же бота (имя бота в адресе страницы не принимается).

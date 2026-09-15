@@ -16,6 +16,7 @@ import com.clubs.payment.PaymentProvider
 import com.clubs.payment.ResultNotification
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.annotation.DependsOn
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -39,6 +40,9 @@ enum class ResultOutcome {
  * Стена на создании встречи — в [BillingGate]; календарь продлений — в [BillingLifecycleService].
  */
 @Service
+// Проверка настройки провайдера — до сборки сервиса: иначе незаданный BILLING_PROVIDER падает
+// невнятным «no qualifying bean of type PaymentProvider» (staging 2026-09-15).
+@DependsOn("billingProviderCheck")
 class BillingService(
     private val subscriptionRepository: SubscriptionRepository,
     private val paymentRepository: PlatformPaymentRepository,
