@@ -411,6 +411,7 @@ SPA-фолбэк):
 | `Content-Security-Policy` | `frame-ancestors 'self' + домены Telegram` | вместо `X-Frame-Options`: `DENY`/`SAMEORIGIN` ломают Mini App в Telegram Web (белый экран), а whitelist доменов `X-Frame-Options` не умеет |
 | `Strict-Transport-Security` | `max-age=31536000` | требование `.claude/rules/security.md` § HTTPS. TLS терминирует Traefik, но заголовок обязан дойти клиенту. **Без** `includeSubDomains` и `preload`: домен `sslip.io` общий, жёсткая политика задела бы чужие поддоменные стенды |
 | `X-Content-Type-Options` | `nosniff` | — |
+| — | — | На `/uploads/` апстримные `Strict-Transport-Security` и `X-Content-Type-Options` от MinIO скрыты (`proxy_hide_header`): MinIO шлёт свой HSTS с `includeSubDomains`, и в ответе оказывалось два разных HSTS — по RFC 6797 браузер берёт первый и игнорирует второй, то есть политику сайта определял бы апстрим. На `/api/` HSTS добавлен отдельно: бэкенд его не шлёт, `nosniff` там ставит Spring Security |
 | `Cache-Control` | статика `public, max-age=31536000` (без `immutable`), `index.html` — `no-store` | см. «Вторая половина инцидента» ниже |
 
 ### Traefik routing: как prod и staging разведены
