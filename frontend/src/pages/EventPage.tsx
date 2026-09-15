@@ -1216,7 +1216,7 @@ export const EventPage: FC = () => {
           <div className="rd-addr-body">
             <div className="rd-a-ttl">{event.locationText ?? event.locationHint}</div>
             {event.locationText && event.locationHint && (
-              <div className="rd-a-met">{event.locationHint}</div>
+              <div className="rd-a-met rd-geo-hint">{event.locationHint}</div>
             )}
           </div>
         </div>

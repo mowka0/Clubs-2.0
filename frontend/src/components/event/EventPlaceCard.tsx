@@ -14,13 +14,14 @@ interface EventPlaceCardProps {
  * «Открыть в Картах» (бесключевые deep-link'и). Тап по карте открывает точку в Яндекс.Картах.
  * Если картинка Static API не загрузилась — прячется, адрес и кнопки остаются.
  *
- * Развёрнут по умолчанию: место известно — значит карта и маршрут нужны сразу (PO 2026-09-14).
- * Тап по адресу сворачивает карточку до одной строки, если она мешает.
+ * Свёрнут по умолчанию (PO 2026-09-14): карта с двумя кнопками занимала треть экрана и уводила
+ * кнопку «Пойду» за сгиб. Тап по адресу разворачивает карту и маршрут. Адрес и уточнение видны
+ * всегда — они и нужны чаще всего.
  */
 export const EventPlaceCard: FC<EventPlaceCardProps> = ({ locationText, locationHint, point }) => {
   const haptic = useHaptic();
   const [mapImageFailed, setMapImageFailed] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const openExternal = (url: string) => {
     haptic.impact('light');
@@ -38,7 +39,7 @@ export const EventPlaceCard: FC<EventPlaceCardProps> = ({ locationText, location
         <span className="rd-geo-addr-ic" aria-hidden="true">📍</span>
         <span className="rd-geo-addr-txt">
           <b>{locationText}</b>
-          {locationHint && <span>{locationHint}</span>}
+          {locationHint && <span className="rd-geo-hint">{locationHint}</span>}
         </span>
         <span className={`rd-geo-chev${expanded ? ' rd-open' : ''}`} aria-hidden="true">›</span>
       </button>

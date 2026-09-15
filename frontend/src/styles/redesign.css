@@ -1509,13 +1509,13 @@
 .rd-vote-btn.rd-vb-go,
 .rd-vote-btn.rd-vb-go.rd-active {
   color: var(--on-accent); background: var(--accent-grad); border-color: transparent;
-  box-shadow: none;
+  box-shadow: 0 4px 14px var(--accent-glow);
 }
 .rd-vote-btn.rd-vb-go .rd-vl { color: var(--on-accent); }
 .rd-vote-btn.rd-vb-go .rd-vm { background: var(--on-accent); }
 .rd-vote-btn.rd-vb-go .rd-vm svg { color: var(--accent); }
 /* Свой голос на залитой кнопке — тёмное кольцо внутри: обводка снаружи на заливке не читается. */
-.rd-vote-btn.rd-vb-go.rd-active { box-shadow: inset 0 0 0 2px var(--on-accent); }
+.rd-vote-btn.rd-vb-go.rd-active { box-shadow: inset 0 0 0 2px var(--on-accent), 0 4px 14px var(--accent-glow); }
 /* Два других ответа притушены на 20 %: цвета голоса остаются, вес — нет. Свой выбор снимает
    притушку, иначе выбранный ответ выглядел бы менее заметным, чем невыбранный. */
 .rd-vote-btn.rd-vb-maybe { color: var(--vote-maybe); filter: brightness(0.8); }
@@ -2619,6 +2619,12 @@
 .rd-geo-addr-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rd-geo-addr-txt b { font-size: 13.5px; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
 .rd-geo-addr-txt span { font-size: 11.5px; color: var(--text-dim); }
+/* Уточнение «где именно встречаемся» отделено оранжевой чертой (PO 2026-09-14): серым текстом
+   под жирным адресом оно терялось, а это то, что читают перед выходом из дома. */
+.rd-geo-hint {
+  border-left: 2px solid var(--accent); padding-left: 8px; margin-top: 3px;
+  color: var(--text-dim);
+}
 .rd-geo-minimap {
   display: block; width: 100%; height: 150px; object-fit: cover;
   border-radius: 14px; border: 1px solid var(--hairline-2, rgba(255, 255, 255, .1));
