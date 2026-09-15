@@ -13,9 +13,21 @@ import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 import java.util.UUID
 
+/** Человек в ответах события: автор встречи. Только публичные поля профиля. */
+data class EventPersonDto(
+    val id: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val username: String?,
+    val avatarUrl: String?
+)
+
 data class EventDetailDto(
     val id: UUID,
     val clubId: UUID,
+    // Кто ведёт встречу — карточка «организатор» на странице встречи (PO 2026-09-14).
+    // null только у легаси-строк, чей автор удалён.
+    val creator: EventPersonDto?,
     // Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06) — фронт гейтит кнопки.
     val createdBy: UUID,
     val title: String,

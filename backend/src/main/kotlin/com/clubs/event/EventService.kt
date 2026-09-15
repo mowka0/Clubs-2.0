@@ -1,6 +1,7 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
+import com.clubs.user.UserRepository
 import com.clubs.common.auth.ClubCapability
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.dto.PageResponse
@@ -23,6 +24,7 @@ class EventService(
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
     private val eventMapper: EventMapper,
+    private val userRepository: UserRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
@@ -68,7 +70,10 @@ class EventService(
         // транзакции позволяет слушателю вовсе не сработать, если внешний
         // @Transactional откатится. По аналогии с PaymentService / SkladchinaService.
         eventPublisher.publishEvent(EventCreatedEvent(event))
-        return eventMapper.toDetailDto(event, goingCount = 0, maybeCount = 0, notGoingCount = 0, confirmedCount = 0)
+        return eventMapper.toDetailDto(
+            event, goingCount = 0, maybeCount = 0, notGoingCount = 0, confirmedCount = 0,
+            creator = creatorOf(event.createdBy)
+        )
     }
 
     fun getClubEvents(clubId: UUID, statusStr: String?, page: Int, size: Int): PageResponse<EventListItemDto> {
@@ -120,9 +125,16 @@ class EventService(
             notGoingCount = counts["notGoing"] ?: 0,
             confirmedCount = counts["confirmed"] ?: 0,
             noAnswerCount = counts["noAnswer"] ?: 0,
-            waitlistedCount = counts["waitlisted"] ?: 0
+            waitlistedCount = counts["waitlisted"] ?: 0,
+            creator = creatorOf(event.createdBy)
         )
     }
+
+    /** Автор встречи человеком для карточки «организатор»: имя, @username и аватар. */
+    private fun creatorOf(userId: UUID): EventPersonDto? =
+        userRepository.findById(userId)?.let {
+            EventPersonDto(it.id!!, it.firstName, it.lastName, it.telegramUsername, it.avatarUrl)
+        }
 
     /**
      * Системная отмена встречи без участия человека: набор не собрался, а организатор не ответил

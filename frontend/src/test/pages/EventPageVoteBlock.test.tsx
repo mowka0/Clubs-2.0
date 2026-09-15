@@ -40,6 +40,7 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    creator: null,
     createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
@@ -234,14 +235,32 @@ describe('EventPage — шапка и голосование (PO 2026-09-14)', (
     expect(bg.style.backgroundImage).toBe('');
   });
 
-  it('клуб живёт в углу панели и открывает клуб; отдельной строки «организатор» нет', async () => {
-    mockEndpoints({ event: stage1Event() });
+  it('шапка — две плашки в ряд: «когда» и «организуют» (клуб и автор встречи)', async () => {
+    mockEndpoints({
+      event: stage1Event({
+        creator: { id: 'u9', firstName: 'Иван', lastName: 'Варламов', username: 'ivan', avatarUrl: null },
+      }),
+    });
     const { user } = renderEventPage();
 
-    const clubBtn = await screen.findByRole('button', { name: 'Открыть клуб Клуб' });
-    expect(clubBtn).toHaveClass('rd-when-club');
-    expect(screen.queryByText('организатор')).not.toBeInTheDocument();
-    await user.click(clubBtn);
+    const hostBtn = await screen.findByRole('button', { name: 'Открыть клуб Клуб' });
+    expect(hostBtn).toHaveClass('rd-host-panel');
+    expect(hostBtn.textContent).toContain('Клуб');
+    expect(hostBtn.textContent).toContain('Иван В.');
+    expect(screen.getByText('организуют')).toBeInTheDocument();
+    // Обе плашки стоят в одном ряду.
+    const row = document.querySelector('.rd-head-row')!;
+    expect(row.querySelector('.rd-when-panel')).toBeTruthy();
+    expect(row.querySelector('.rd-host-panel')).toBeTruthy();
+    await user.click(hostBtn);
+  });
+
+  it('без автора в ответе плашка «организуют» показывает только клуб', async () => {
+    mockEndpoints({ event: stage1Event({ creator: null }) });
+    renderEventPage();
+
+    const hostBtn = await screen.findByRole('button', { name: 'Открыть клуб Клуб' });
+    expect(hostBtn.querySelectorAll('.rd-host-line')).toHaveLength(1);
   });
 
   it('голос: три кнопки со счётчиками, «Пойду» залита акцентом, остальные притушены', async () => {

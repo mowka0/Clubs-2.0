@@ -45,6 +45,7 @@ function rosterEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    creator: null,
     createdBy: VIEWER_ID,
     title: 'Настолка по четвергам',
     description: null,

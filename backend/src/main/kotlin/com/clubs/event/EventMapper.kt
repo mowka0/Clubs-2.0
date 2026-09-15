@@ -53,11 +53,13 @@ class EventMapper(
         confirmedCount: Int,
         noAnswerCount: Int = 0,
         waitlistedCount: Int = 0,
+        creator: EventPersonDto? = null,
         now: OffsetDateTime = OffsetDateTime.now()
     ): EventDetailDto {
         val rosterClosed = isRosterClosed(event)
         return EventDetailDto(
             id = event.id,
+            creator = creator,
             clubId = event.clubId,
             createdBy = event.createdBy,
             title = event.title,

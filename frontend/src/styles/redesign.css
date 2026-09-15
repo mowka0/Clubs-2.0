@@ -1230,24 +1230,34 @@
    встреч нет, — слишком дорого. Без фото фон рисует градиент категории клуба (data-cat). */
 .rd-hero.rd-hero-event { height: calc(168px + var(--app-inset-top, 0px)); }
 
-/* Панель «когда» — обычная плашка под фото, с тем же отступом, что между остальными карточками
-   (PO 2026-09-14: наезд на фото убран). Дата и время были строкой 11-м кеглем поверх картинки и
-   терялись, хотя это главный факт встречи. Полосы обратного отсчёта нет намеренно — на встрече
-   через месяц она почти пуста и врёт, фраза «через 5 недель» честна на любом сроке. */
-.rd-when-panel { position: relative; margin: 0 0 14px; padding: 15px 16px; overflow: hidden; }
-.rd-when-day { font-size: 13px; font-weight: 600; color: var(--text-dim); padding-right: 58px; }
-.rd-when-time { font-size: 33px; font-weight: 850; letter-spacing: -0.03em; line-height: 1; margin: 5px 0 6px; }
-.rd-when-until { font-size: 12.5px; color: var(--accent); font-weight: 700; }
-/* Аватар клуба садится в скруглённый угол панели и заменяет прежнюю строку «клуб · организатор». */
-.rd-when-club {
-  position: absolute; top: 0; right: 0; width: 46px; height: 46px; z-index: 2;
-  border: 0; padding: 0; overflow: hidden; cursor: pointer;
-  border-radius: 0 18px 0 16px;
-  background: var(--accent-grad); color: #fff;
-  font-family: inherit; font-size: 13px; font-weight: 800;
-  box-shadow: -6px 6px 14px rgba(0, 0, 0, 0.3);
+/* Шапка встречи двумя плашками в ряд (PO 2026-09-14): слева когда, справа кто ведёт. Дата была
+   строкой 11-м кеглем поверх фото и терялась, хотя это главный факт встречи; клуб занимал отдельную
+   широкую строку. Полосы обратного отсчёта нет намеренно — на встрече через месяц она почти пуста
+   и врёт, фраза «через 5 недель» честна на любом сроке. */
+.rd-head-row { display: flex; gap: 10px; align-items: stretch; margin-bottom: 14px; }
+.rd-when-panel { flex: 1 1 0; min-width: 0; padding: 13px 14px; }
+.rd-when-day { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.rd-when-time { font-size: 30px; font-weight: 850; letter-spacing: -0.03em; line-height: 1; margin: 5px 0 6px; }
+.rd-when-until { font-size: 12px; color: var(--accent); font-weight: 700; }
+
+/* «Организуют»: клуб и автор встречи — одна кнопка, ведёт в клуб. */
+.rd-host-panel {
+  flex: 1 1 0; min-width: 0; padding: 13px 14px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 8px; justify-content: center;
+  font-family: inherit; text-align: left; color: var(--text);
 }
-.rd-when-club img { width: 100%; height: 100%; object-fit: cover; }
+.rd-host-cap { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
+.rd-host-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rd-host-av {
+  width: 26px; height: 26px; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 700; color: #fff;
+}
+.rd-host-av img { width: 100%; height: 100%; object-fit: cover; }
+/* Клуб — скруглённый квадрат, человек — круг: тот же язык, что в списках участников. */
+.rd-host-club { border-radius: 8px; background: var(--accent-grad); }
+.rd-host-man { border-radius: 50%; background: var(--vote-maybe); }
+.rd-host-nm { font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-hero-ttl { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .rd-hero-bg[data-cat] { background-size: cover; background-position: center; }
 .rd-hero-bg[data-cat="sport"]       { background-image: radial-gradient(circle at 70% 30%, rgba(255,205,168,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5c2c12 55%, #0a0a0e 100%); }
@@ -1493,16 +1503,19 @@
 /* Кнопка голоса несёт свой цвет через color (--vote-*): от него живут метка-кружок и счётчик
    (currentColor), подпись остаётся цветом текста. Те же цвета у точки статуса в ростере. */
 /* «Пойду» — главное действие экрана, поэтому единственная залитая кнопка (PO 2026-09-14).
-   Метка-кружок инвертируется: светлый круг, галочка акцентом. */
-.rd-vote-btn.rd-vb-go {
+   Метка-кружок инвертируется: светлый круг, галочка акцентом. Свечения нет: общая `.rd-active`
+   идёт ниже по файлу и перекрывала заливку — кнопка темнела, тёмный текст пропадал, а вокруг
+   оставался ореол. Поэтому и фон, и тень у выбранной «Пойду» задаются явно. */
+.rd-vote-btn.rd-vb-go,
+.rd-vote-btn.rd-vb-go.rd-active {
   color: var(--on-accent); background: var(--accent-grad); border-color: transparent;
-  box-shadow: 0 6px 16px var(--accent-glow);
+  box-shadow: none;
 }
 .rd-vote-btn.rd-vb-go .rd-vl { color: var(--on-accent); }
 .rd-vote-btn.rd-vb-go .rd-vm { background: var(--on-accent); }
 .rd-vote-btn.rd-vb-go .rd-vm svg { color: var(--accent); }
 /* Свой голос на залитой кнопке — тёмное кольцо внутри: обводка снаружи на заливке не читается. */
-.rd-vote-btn.rd-vb-go.rd-active { box-shadow: inset 0 0 0 2px var(--on-accent), 0 6px 16px var(--accent-glow); }
+.rd-vote-btn.rd-vb-go.rd-active { box-shadow: inset 0 0 0 2px var(--on-accent); }
 /* Два других ответа притушены на 20 %: цвета голоса остаются, вес — нет. Свой выбор снимает
    притушку, иначе выбранный ответ выглядел бы менее заметным, чем невыбранный. */
 .rd-vote-btn.rd-vb-maybe { color: var(--vote-maybe); filter: brightness(0.8); }

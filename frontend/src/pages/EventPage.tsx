@@ -1161,24 +1161,45 @@ export const EventPage: FC = () => {
         </div>
       </div>
 
-      {/* Когда: главный факт встречи вместо строки 11-м кеглем поверх фото. Аватар клуба сидит
-          в скруглённом углу панели и заменяет собой прежнюю строку «клуб · организатор». */}
-      <div className="rd-glass rd-when-panel">
+      {/* Две плашки в ряд (PO 2026-09-14): слева когда, справа кто ведёт. Прежде дата была
+          строкой 11-м кеглем поверх фото и терялась, а клуб жил отдельной широкой строкой. */}
+      <div className="rd-head-row">
+        <div className="rd-glass rd-when-panel">
+          <div className="rd-when-day">{eventDayLine(event.eventDatetime)}</div>
+          <div className="rd-when-time">{formatTimeHM(event.eventDatetime)}</div>
+          <div className="rd-when-until">{untilEventText(event.eventDatetime)}</div>
+        </div>
         {hostClubQuery.data && (
           <button
             type="button"
-            className="rd-when-club"
+            className="rd-glass rd-host-panel"
             aria-label={`Открыть клуб ${hostClubQuery.data.name}`}
             onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
           >
-            {hostClubQuery.data.avatarUrl
-              ? <img src={hostClubQuery.data.avatarUrl} alt="" />
-              : getInitials(hostClubQuery.data.name)}
+            <span className="rd-host-cap">организуют</span>
+            <span className="rd-host-line">
+              <span className="rd-host-av rd-host-club">
+                {hostClubQuery.data.avatarUrl
+                  ? <img src={hostClubQuery.data.avatarUrl} alt="" />
+                  : getInitials(hostClubQuery.data.name)}
+              </span>
+              <span className="rd-host-nm">{hostClubQuery.data.name}</span>
+            </span>
+            {event.creator && (
+              <span className="rd-host-line">
+                <span className="rd-host-av rd-host-man">
+                  {event.creator.avatarUrl
+                    ? <img src={event.creator.avatarUrl} alt="" />
+                    : getInitials(`${event.creator.firstName} ${event.creator.lastName ?? ''}`)}
+                </span>
+                <span className="rd-host-nm">
+                  {event.creator.firstName}
+                  {event.creator.lastName ? ` ${event.creator.lastName[0]}.` : ''}
+                </span>
+              </span>
+            )}
           </button>
         )}
-        <div className="rd-when-day">{eventDayLine(event.eventDatetime)}</div>
-        <div className="rd-when-time">{formatTimeHM(event.eventDatetime)}</div>
-        <div className="rd-when-until">{untilEventText(event.eventDatetime)}</div>
       </div>
 
       {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
