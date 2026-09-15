@@ -102,3 +102,8 @@ export function defaultPromiseDate(): string {
   d.setDate(d.getDate() + 3);
   return d.toISOString().slice(0, 10);
 }
+
+/** Реквизиты сбора: ссылка (СБП, банк) открывается кнопкой; номер телефона или свободный текст показываем как есть. */
+export function isHttpLink(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value.trim());
+}

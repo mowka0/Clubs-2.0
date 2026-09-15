@@ -404,4 +404,45 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     await user.click(screen.getByRole('button', { name: 'Подтвердить' }));
     expect(sent).toEqual({ amountKopecks: 150000, date: expect.any(String) });
   });
+
+  it('«По желанию», создатель: в «Скидываются» обещавшие и молчуны, перевёл — в «Перевели», пустой «Подтвердите» нет', async () => {
+    useAuthStore.setState({ user: { id: CREATOR, telegramId: 2, firstName: 'Иван' } as UserDto, isAuthenticated: true });
+    const olya = { ...me, id: 'u-2', firstName: 'Оля' };
+    const petya = { ...me, id: 'u-3', firstName: 'Петя' };
+    const masha = { ...me, id: 'u-4', firstName: 'Маша' };
+    mockDetail(buildDetail({
+      kind: 'voluntary', isCreator: true, canCancel: true, myDebt: null, enrolled: [olya, petya, masha], paid: [petya],
+      receivedCount: 1, promisedCount: 1, debtCount: 2, openCount: 1,
+      debts: [
+        buildDebt({ id: 'd-p', debtor: petya, status: 'received', confirmedAt: FUTURE }),
+        buildDebt({ id: 'd-o', debtor: olya, status: 'promised', promisedAt: FUTURE, amountKopecks: 150000 }),
+      ],
+    }));
+    renderPage();
+    expect(await screen.findByText('Скидываются')).toBeInTheDocument();
+    expect(screen.getByText(/обещал к/)).toBeInTheDocument(); // Оля — строкой долга
+    expect(screen.getByText('Маша')).toBeInTheDocument(); // молчун — человеком
+    expect(screen.getByText('Перевели')).toBeInTheDocument();
+    expect(screen.getAllByText('Петя').length).toBe(1); // только в «Перевели»
+    expect(screen.queryByText('Подтвердите')).not.toBeInTheDocument();
+    expect(screen.queryByText('Все переводы подтверждены.')).not.toBeInTheDocument();
+  });
+
+  it('«По желанию», участник: в «Скидываются» только те, кто ещё не перевёл, перевёл — в «Перевели»', async () => {
+    const olya = { ...me, id: 'u-2', firstName: 'Оля' };
+    mockDetail(buildDetail({ kind: 'voluntary', myDebt: null, enrolled: [me, olya], paid: [olya] }));
+    renderPage();
+    expect(await screen.findByText('Скидываются')).toBeInTheDocument();
+    expect(screen.getByText('Саша (вы)')).toBeInTheDocument();
+    expect(screen.getByText('Перевели')).toBeInTheDocument();
+    expect(screen.getAllByText('Оля').length).toBe(1);
+  });
+
+  it('реквизиты без ссылки (номер телефона) показываются текстом, без кнопки «Открыть в банке»', async () => {
+    mockDetail(buildDetail({ paymentLink: '+7 999 123-45-67' }));
+    renderPage();
+    expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
+    expect(screen.getByText('+7 999 123-45-67')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть в банке' })).not.toBeInTheDocument();
+  });
 });

@@ -48,45 +48,51 @@ describe('ActivityFeedList', () => {
     expect(screen.getByText('Upcoming yoga')).toBeInTheDocument();
   });
 
-  it('toggles the "Прошедшие (N)" accordion via aria-expanded', async () => {
+  it('три последних прошедших видны сразу, хвост — за «Показать все» (PO 2026-09-14)', async () => {
     const user = userEvent.setup();
     const feed: ClubActivityFeed = {
       upcoming: [],
-      past: [
-        buildEvent({ id: 'p-1', title: 'Old yoga', isCompleted: true, status: 'completed' }),
-        buildEvent({ id: 'p-2', title: 'Older yoga', isCompleted: true, status: 'completed' }),
-      ],
+      past: [1, 2, 3, 4, 5].map((n) => buildEvent({
+        id: `p-${n}`, title: `Old yoga ${n}`, isCompleted: true, status: 'completed',
+      })),
     };
-    const { container } = render(
-      <ActivityFeedList feed={feed} onActivityClick={vi.fn()} />,
-    );
+    const { container } = render(<ActivityFeedList feed={feed} onActivityClick={vi.fn()} />);
 
-    // По умолчанию свёрнуто (редизайн): rd-rep-panel со строками не смонтирована;
-    // видны только кнопка-тоггл (aria-expanded=false) и счётчик.
-    const toggle = screen.getByRole('button', { name: /прошедшие/i });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByText('(2)')).toBeInTheDocument();
-    expect(container.querySelector('.rd-rep-panel')).toBeNull();
-    expect(screen.queryByText('Old yoga')).toBeNull();
+    // Ярлык секции — такой же, как «Предстоящие», а не кнопка-шторка.
+    expect(screen.getByText('Прошедшие')).toBeInTheDocument();
+    expect(screen.getByText('· 5')).toBeInTheDocument();
+    expect(container.querySelectorAll('.rd-rep-row')).toHaveLength(3);
+    expect(screen.getByText('Old yoga 3')).toBeInTheDocument();
+    expect(screen.queryByText('Old yoga 4')).toBeNull();
 
-    await user.click(toggle);
+    const more = screen.getByRole('button', { name: /Показать все · 5/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    await user.click(more);
 
-    // Развёрнуто: панель монтируется с компактными строками rd-rep-row.
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    const panel = container.querySelector('.rd-rep-panel');
-    expect(panel).not.toBeNull();
-    expect(panel?.querySelectorAll('.rd-rep-row')).toHaveLength(2);
-    expect(screen.getByText('Old yoga')).toBeInTheDocument();
+    expect(container.querySelectorAll('.rd-rep-row')).toHaveLength(5);
+    expect(screen.getByText('Old yoga 5')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Свернуть' }));
+    expect(container.querySelectorAll('.rd-rep-row')).toHaveLength(3);
   });
 
-  it('fires onActivityClick with the tapped past activity after expanding', async () => {
+  it('три и меньше прошедших — кнопки «Показать все» нет', () => {
+    const feed: ClubActivityFeed = {
+      upcoming: [],
+      past: [buildEvent({ id: 'p-1', title: 'Old yoga', isCompleted: true, status: 'completed' })],
+    };
+    render(<ActivityFeedList feed={feed} onActivityClick={vi.fn()} />);
+
+    expect(screen.getByText('Old yoga')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Показать все/ })).toBeNull();
+  });
+
+  it('fires onActivityClick with the tapped past activity', async () => {
     const user = userEvent.setup();
     const onActivityClick = vi.fn();
     const past = buildEvent({ id: 'p-1', title: 'Old yoga', isCompleted: true });
     const feed: ClubActivityFeed = { upcoming: [], past: [past] };
 
     render(<ActivityFeedList feed={feed} onActivityClick={onActivityClick} />);
-    await user.click(screen.getByRole('button', { name: /прошедшие/i }));
     await user.click(screen.getByRole('button', { name: /old yoga/i }));
 
     expect(onActivityClick).toHaveBeenCalledWith(past);

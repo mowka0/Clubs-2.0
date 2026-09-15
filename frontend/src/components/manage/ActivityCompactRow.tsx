@@ -22,6 +22,10 @@ function activityDate(activity: ActivityItemDto): string {
   return formatShortDate(iso);
 }
 
+// Две иконки на всю историю (PO 2026-09-14): встреча и сбор, без зоопарка по видам сборов.
+const TYPE_ICON: Record<ActivityItemDto['type'], string> = { event: '📅', skladchina: '💰' };
+const TYPE_LABEL: Record<ActivityItemDto['type'], string> = { event: 'Встреча', skladchina: 'Сбор' };
+
 export const ActivityCompactRow: FC<ActivityCompactRowProps> = ({
   activity,
   onClick,
@@ -29,9 +33,10 @@ export const ActivityCompactRow: FC<ActivityCompactRowProps> = ({
   <button
     type="button"
     onClick={onClick}
-    aria-label={`${activity.title}. Завершено`}
-    className="rd-rep-row"
+    aria-label={`${TYPE_LABEL[activity.type]}: ${activity.title}. Завершено`}
+    className="rd-rep-row rd-past-row"
   >
+    <span className="rd-ico rd-past-ico" aria-hidden="true">{TYPE_ICON[activity.type]}</span>
     <div className="rd-info">
       <div className="rd-ttl">{activity.title}</div>
     </div>

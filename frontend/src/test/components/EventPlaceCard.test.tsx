@@ -19,7 +19,7 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders address, hint, static map and both route buttons', () => {
+  it('свёрнута по умолчанию: адрес и уточнение видны, карта и кнопки — после тапа', () => {
     render(
       <EventPlaceCard
         locationText="ул. Покровка, 47/24с1, Москва"
@@ -29,7 +29,12 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
     );
 
     expect(screen.getByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
-    expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+    // Уточнение видно и свёрнутым — оно отделено оранжевой чертой (PO 2026-09-14).
+    expect(screen.getByText('Вход со двора, домофон 12')).toHaveClass('rd-geo-hint');
+    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Покровка/ }));
     const img = screen.getByAltText('Карта места события');
     expect(img).toHaveAttribute('src', expect.stringContaining('static-maps.yandex.ru'));
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
@@ -40,6 +45,7 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<EventPlaceCard locationText="Адрес" locationHint={null} point={POINT} />);
 
+    fireEvent.click(screen.getByRole('button', { name: /Адрес/ }));
     fireEvent.click(screen.getByRole('button', { name: /Маршрут/ }));
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -52,6 +58,7 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
   it('hides the map image (but keeps address and buttons) when Static API fails', () => {
     render(<EventPlaceCard locationText="Адрес" locationHint={null} point={POINT} />);
 
+    fireEvent.click(screen.getByRole('button', { name: /Адрес/ }));
     fireEvent.error(screen.getByAltText('Карта места события'));
 
     expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
@@ -64,5 +71,7 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
 
     const addressBlock = screen.getByText('Адрес').parentElement;
     expect(addressBlock?.querySelectorAll('span:not([aria-hidden])')).toHaveLength(0);
+    // Шеврон не в блоке адреса, а в самой строке-кнопке.
+    expect(screen.getByRole('button', { name: /Адрес/ })).toHaveAttribute('aria-expanded', 'false');
   });
 });

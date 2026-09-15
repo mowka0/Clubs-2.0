@@ -597,9 +597,20 @@ export type EventFormat = 'normal' | 'open';
  */
 export type DeclineConsequence = 'open' | 'replaced' | 'roster_empty' | 'below_minimum' | 'seat_empty';
 
+/** Человек в ответах события: автор встречи. */
+export interface EventPersonDto {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
 export interface EventDetailDto {
   id: string;
   clubId: string;
+  /** Кто ведёт встречу — карточка «организатор». null у легаси-строк с удалённым автором. */
+  creator: EventPersonDto | null;
   /** Создатель встречи: проводит, отменяет и правит её он или владелец клуба (PO 2026-09-06). */
   createdBy: string;
   title: string;

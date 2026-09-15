@@ -37,6 +37,7 @@ class EventServiceTest {
     private lateinit var eventMapper: EventMapper
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var skladchinaRepository: SkladchinaRepository
+    private lateinit var userRepository: com.clubs.user.UserRepository
     private lateinit var eventService: EventService
 
     @BeforeEach
@@ -48,10 +49,11 @@ class EventServiceTest {
         eventMapper = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true)
         eventService = EventService(
             eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
-            rosterWarningMinutes = 180L
+            eventMapper, userRepository, eventPublisher, skladchinaRepository,
+            stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
         )
     }
 
@@ -510,8 +512,8 @@ class EventServiceTest {
     // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
     private fun teaserService() = EventService(
         eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, stage2TriggerMinutesBefore = 1080L,
-        rosterWarningMinutes = 180L
+        EventMapper(240L, 1080L), userRepository, eventPublisher, skladchinaRepository,
+        stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
     )
 
     @Test

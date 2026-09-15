@@ -202,14 +202,26 @@ function formatDeadlineShort(iso: string): string {
   return `${formatNearDay(iso)} в ${formatTimeHM(iso)}`;
 }
 
-function formatEventDate(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/** День встречи словами для панели «когда»: «суббота, 10 сентября». */
+function eventDayLine(iso: string): string {
+  return new Date(iso).toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+/**
+ * Сколько осталось до встречи одной фразой (PO 2026-09-14): полосу отсчёта не рисуем — на встрече
+ * через месяц она почти пуста и врёт, а текст честен на любом сроке.
+ */
+function untilEventText(iso: string): string {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs <= 0) return 'встреча уже прошла';
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 60) return `через ${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `через ${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+  const weeks = Math.round(days / 7);
+  return `через ${weeks} ${pluralRu(weeks, ['неделю', 'недели', 'недель'])}`;
 }
 
 export const EventPage: FC = () => {
@@ -1128,15 +1140,16 @@ export const EventPage: FC = () => {
   // формат, тем же словарём, что на карточках лент.
   const heroFormatBadge = formatBadge(event.format, event.participantLimit, event.minParticipants).toUpperCase();
 
-  // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
-  // фолбэк — аватар клуба, как раньше.
-  const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
+
+  // Фон хиро — только фото события. Без фото рисуем градиент категории клуба (data-cat):
+  // аватарка клуба растягивалась на всю ширину в кашу (PO 2026-09-14).
+  const heroImage = event.photoUrl ?? null;
 
   return (
     <div className="rd-page">
       {/* Хиро — фото события как фон (решение PO 2026-07-11: фото прежде нигде не
           показывалось); фолбэк — аватар клуба, как раньше. */}
-      <div className="rd-hero rd-compact">
+      <div className="rd-hero rd-compact rd-hero-event">
         <div
           className="rd-hero-bg"
           data-cat={hostClubQuery.data?.category ?? 'sport'}
@@ -1145,33 +1158,49 @@ export const EventPage: FC = () => {
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">{heroFormatBadge}</div>
           <div className="rd-hero-ttl">{event.title}</div>
-          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
-            {formatEventDate(event.eventDatetime)}
-          </div>
         </div>
       </div>
 
-      {/* Клуб-организатор */}
-      {hostClubQuery.data && (
-        <button
-          type="button"
-          className="rd-glass"
-          style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0, marginBottom: 14, cursor: 'pointer' }}
-          onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
-        >
-          <div className="rd-host-row">
-            <span className="rd-ico">
-              {hostClubQuery.data.avatarUrl
-                ? <img src={hostClubQuery.data.avatarUrl} alt="" />
-                : getInitials(hostClubQuery.data.name)}
+      {/* Две плашки в ряд (PO 2026-09-14): слева когда, справа кто ведёт. Прежде дата была
+          строкой 11-м кеглем поверх фото и терялась, а клуб жил отдельной широкой строкой. */}
+      <div className="rd-head-row">
+        <div className="rd-glass rd-when-panel">
+          <div className="rd-when-day">{eventDayLine(event.eventDatetime)}</div>
+          <div className="rd-when-time">{formatTimeHM(event.eventDatetime)}</div>
+          <div className="rd-when-until">{untilEventText(event.eventDatetime)}</div>
+        </div>
+        {hostClubQuery.data && (
+          <button
+            type="button"
+            className="rd-glass rd-host-panel"
+            aria-label={`Открыть клуб ${hostClubQuery.data.name}`}
+            onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
+          >
+            <span className="rd-host-cap">организуют</span>
+            <span className="rd-host-line">
+              <span className="rd-host-av rd-host-club">
+                {hostClubQuery.data.avatarUrl
+                  ? <img src={hostClubQuery.data.avatarUrl} alt="" />
+                  : getInitials(hostClubQuery.data.name)}
+              </span>
+              <span className="rd-host-nm">{hostClubQuery.data.name}</span>
             </span>
-            <div className="rd-info">
-              <div className="rd-ttl">{hostClubQuery.data.name}</div>
-              <div className="rd-met">организатор</div>
-            </div>
-          </div>
-        </button>
-      )}
+            {event.creator && (
+              <span className="rd-host-line">
+                <span className="rd-host-av rd-host-man">
+                  {event.creator.avatarUrl
+                    ? <img src={event.creator.avatarUrl} alt="" />
+                    : getInitials(`${event.creator.firstName} ${event.creator.lastName ?? ''}`)}
+                </span>
+                <span className="rd-host-nm">
+                  {event.creator.firstName}
+                  {event.creator.lastName ? ` ${event.creator.lastName[0]}.` : ''}
+                </span>
+              </span>
+            )}
+          </button>
+        )}
+      </div>
 
       {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
           без координат — текстом: адрес (легаси) и/или уточнение организатора (V58). */}
@@ -1187,7 +1216,7 @@ export const EventPage: FC = () => {
           <div className="rd-addr-body">
             <div className="rd-a-ttl">{event.locationText ?? event.locationHint}</div>
             {event.locationText && event.locationHint && (
-              <div className="rd-a-met">{event.locationHint}</div>
+              <div className="rd-a-met rd-geo-hint">{event.locationHint}</div>
             )}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -44,6 +44,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
+    creator: null,
     createdBy: VIEWER_ID,
     title: 'Событие',
     description: null,
@@ -379,6 +380,8 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
 
     expect(await screen.findByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
     expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+    // Карточка места свёрнута по умолчанию: карта и кнопки — после тапа по адресу.
+    fireEvent.click(screen.getByRole('button', { name: /Покровка/ }));
     expect(screen.getByAltText('Карта места события')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();
