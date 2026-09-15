@@ -145,7 +145,13 @@ describe('EventPage — блок «Набор» (event-vote-block.md)', () => {
   });
 
   it('AC-VB3: открытая — кольцо закрашено целиком, знаменателя нет', async () => {
-    mockEndpoints({ event: stage1Event({ format: 'open', participantLimit: null, goingCount: 9, stage2LeadMinutes: null }) });
+    // Модель v3 (§ 16): «Пойду» и есть состав, поэтому бэкенд отдаёт goingCount == confirmedCount,
+    // а кольцо считает состав — один источник числа на оба формата.
+    mockEndpoints({
+      event: stage1Event({
+        format: 'open', participantLimit: null, goingCount: 9, confirmedCount: 9, stage2LeadMinutes: null,
+      }),
+    });
     const { container } = renderEventPage();
 
     expect(await screen.findByText('идут')).toBeInTheDocument();

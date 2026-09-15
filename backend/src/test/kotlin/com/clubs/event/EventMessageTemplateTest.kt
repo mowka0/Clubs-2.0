@@ -44,6 +44,10 @@ class EventMessageTemplateTest {
     @Test
     fun `dmFacts без срока — только факт формата`() {
         assertEquals("👥 Мест — 6", EventMessageTemplate.dmFacts(event(limit = 6)))
-        assertTrue(!EventMessageTemplate.dmFacts(event(limit = null)).contains("передумать"))
+        // У открытой встречи срока нет по построению — в DM уходит одна строка формата (v3),
+        // и про репутацию она не говорит: долг из сбора по такой встрече её всё-таки трогает.
+        val open = EventMessageTemplate.dmFacts(event(limit = null))
+        assertEquals("🌊 Без мест и очереди — «Пойду» сразу записывает; передумать можно до начала", open)
+        assertTrue(!open.contains("без влияния на репутацию"))
     }
 }

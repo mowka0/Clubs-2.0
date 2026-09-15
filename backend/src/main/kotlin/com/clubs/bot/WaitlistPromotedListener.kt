@@ -12,7 +12,7 @@ import org.springframework.transaction.event.TransactionalEventListener
  * на страницу события. Реагирует AFTER_COMMIT: [NotificationService.sendWaitlistPromoted] помечен
  * @Async и читает закоммиченное повышение + telegram id на отдельном соединении. Событие несёт
  * только id — событие дозапрашиваем здесь по уже закоммиченному состоянию. Best-effort: ошибки
- * доставки глотаются внутри sendDm. Зеркалит Stage2StartedListener.
+ * доставки глотаются внутри sendDm. Зеркалит Stage2ReminderListener.
  */
 @Component
 class WaitlistPromotedListener(

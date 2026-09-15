@@ -4,7 +4,7 @@ import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
-import { formatBadge } from '../../utils/eventFormat';
+import { formatBadge, rosterCount } from '../../utils/eventFormat';
 
 interface ActivityCardProps {
   activity: ActivityItemDto;
@@ -38,8 +38,10 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
   // ростер — это список подтверждённых, поэтому показываем `confirmedCount`/"подтв." вместо
   // stage-1 "идёт" (F5-21).
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
-  const count = finalComposition ? event.confirmedCount : event.goingCount;
-  const countCaption = finalComposition ? 'подтв.' : 'идёт';
+  const count = rosterCount(event);
+  // У открытой встречи подтверждений не существует (event-formats.md § 16.8): голос «Пойду» и
+  // есть состав, поэтому подпись у неё одна на весь жизненный цикл.
+  const countCaption = finalComposition && event.participantLimit != null ? 'подтв.' : 'идёт';
   return (
     <>
       <div className="rd-ft-body">

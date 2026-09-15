@@ -88,13 +88,18 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
 function mockEndpoints(opts: {
   event: EventDetailDto;
   myVote: string | null;
+  mySeat?: string | null;
   responders?: EventResponderDto[];
+  pending?: EventResponderDto[];
   ownerId?: string;
 }) {
+  const pending = opts.pending ?? [];
   server.use(
     http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(opts.event)),
-    http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: opts.myVote })),
+    http.get(`*/api/events/${EVENT_ID}/my-vote`, () =>
+      HttpResponse.json({ vote: opts.myVote, seat: opts.mySeat ?? null })),
     http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(opts.responders ?? [])),
+    http.get(`*/api/events/${EVENT_ID}/pending`, () => HttpResponse.json(pending)),
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
       id: CLUB_ID,
       ownerId: opts.ownerId ?? 'someone-else',
@@ -200,26 +205,6 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     renderEventPage();
 
     expect(await screen.findByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
-  });
-
-  it('Этап 2: лист ожидания рендерится в порядке приоритета с номерами позиций', async () => {
-    // Бэкенд уже отдаёт респондеров по приоритету (stage_1_timestamp ASC); фронт сохраняет порядок.
-    const responders: EventResponderDto[] = [
-      { userId: 'u-conf', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
-      { userId: 'u-w1', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
-      { userId: 'u-w2', firstName: 'Вера', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
-    ];
-    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders });
-    const { container } = renderEventPage();
-
-    // ждём по уникальной подсказке секции (заголовок «Лист ожидания» дублируется в сводке-счётчике)
-    expect(await screen.findByText(/место получит первый в очереди/)).toBeInTheDocument();
-    const rows = container.querySelectorAll('.rd-wl-row');
-    expect(rows).toHaveLength(2);
-    expect(rows[0].querySelector('.rd-wl-pos')?.textContent).toBe('1');
-    expect(rows[0].textContent).toContain('Борис');
-    expect(rows[1].querySelector('.rd-wl-pos')?.textContent).toBe('2');
-    expect(rows[1].textContent).toContain('Вера');
   });
 
   it('на прошедшем событии «Кто идёт» = только confirmed; expired выпадает из состава и из отметки явки', async () => {
@@ -442,7 +427,12 @@ describe('EventPage — фото события как фон хиро', () => {
   });
 });
 
-describe('EventPage — открытая встреча (participantLimit = null, V62)', () => {
+/**
+ * Легаси-открытые встречи, зависшие в `stage_2` до реформы v3 (event-formats.md § 16.7, группа B):
+ * они доживают ровно по старым правилам — окно подтверждения, бесплатный отказ, отметка явки по
+ * подтверждённым. Новая модель открытой встречи — в describe ниже.
+ */
+describe('EventPage — открытая встреча в stage_2 (легаси, § 16.7 группа B)', () => {
   // Открытая встреча: дедлайн отказа с бэка = старт события (порога нет).
   function openEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     const eventDatetime = overrides.eventDatetime ?? FUTURE;
@@ -461,9 +451,9 @@ describe('EventPage — открытая встреча (participantLimit = null
     renderEventPage();
 
     expect(await screen.findByText('🌊 ОТКРЫТАЯ')).toBeInTheDocument();
-    // «Состав · 7» без « / limit»
-    expect(screen.getByText('Состав · 7')).toBeInTheDocument();
-    expect(screen.queryByText(/Состав · 7 \//)).not.toBeInTheDocument();
+    // Одно слово на весь жизненный цикл открытой (§ 16.8) и без « / limit».
+    expect(screen.getByText('Идут · 7')).toBeInTheDocument();
+    expect(screen.queryByText(/Идут · 7 \//)).not.toBeInTheDocument();
   });
 
   it('подтверждённый за <4ч до старта ВСЁ ЕЩЁ может отказаться — порога нет', async () => {
@@ -538,5 +528,138 @@ describe('EventPage — открытая встреча (participantLimit = null
 
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
     expect(screen.queryByText(/только для истории посещений/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Модель v3 (event-formats.md § 16): открытая встреча одноэтапна. Голос «Пойду» сразу кладёт в
+ * состав (`final_status = confirmed`), статуса `stage_2` у неё не бывает, голосование открыто до
+ * самого старта, отказ — это голос «Не пойду» и он бесплатен.
+ */
+describe('EventPage — открытая встреча v3: одноэтапная (§ 16)', () => {
+  /** Бэкенд после реформы отдаёт у открытой goingCount == confirmedCount и seat = confirmed. */
+  function openV3Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+    return stage2Event({
+      status: 'upcoming',
+      participantLimit: null,
+      format: 'open',
+      stage2LeadMinutes: null,
+      rosterDeadline: null,
+      declineConsequence: null,
+      goingCount: 1,
+      maybeCount: 0,
+      confirmedCount: 1,
+      ...overrides,
+    });
+  }
+
+  function goingResponder(userId: string, firstName: string): EventResponderDto {
+    return { userId, firstName, lastName: null, avatarUrl: null, status: 'going', seat: 'confirmed', attendance: null };
+  }
+
+  it('AC-OPEN1: голос «Пойду» и есть состав — подтверждать нечего', async () => {
+    mockEndpoints({
+      event: openV3Event(),
+      myVote: 'going',
+      mySeat: 'confirmed',
+      responders: [goingResponder(VIEWER_ID, 'Пётр')],
+    });
+    renderEventPage();
+
+    // Голос подсвечен на своей кнопке, человек в табе «Идут» и в заголовке состава.
+    expect(await screen.findByRole('button', { name: /Пойду/ })).toHaveClass('rd-active');
+    expect(screen.getByText('Идут · 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Идут (1)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Пётр')).toBeInTheDocument();
+    // Ритуала подтверждения у открытой больше нет ни в каком виде.
+    expect(screen.queryByText('Подтверждение участия')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Подтвердить участие/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+    // Передумать можно той же тройкой кнопок — и полоса статуса говорит об этом прямо.
+    expect(screen.getByRole('button', { name: /Не пойду/ })).toBeInTheDocument();
+    expect(screen.getByText('Вы идёте')).toBeInTheDocument();
+    expect(screen.getByText(/Передумать можно в любой момент/)).toBeInTheDocument();
+  });
+
+  it('не проголосовавший видит, что голосование открыто до начала встречи', async () => {
+    mockEndpoints({ event: openV3Event({ goingCount: 0, confirmedCount: 0 }), myVote: null });
+    renderEventPage();
+
+    expect(await screen.findByText('Голосование открыто до начала встречи')).toBeInTheDocument();
+    expect(screen.queryByText('Вы идёте')).not.toBeInTheDocument();
+  });
+
+  it('AC-OPEN3: отметить явку можно всем, кто голосовал «Пойду»', async () => {
+    // Завершённая встреча: бэкенд отдаёт проголосовавших «Пойду» как состав (final_status).
+    const responders: EventResponderDto[] = ['Анна', 'Борис', 'Вера'].map((name, i) => ({
+      userId: `u${i}`, firstName: name, lastName: null, avatarUrl: null,
+      status: 'confirmed', attendance: null,
+    }));
+    mockEndpoints({
+      event: openV3Event({ status: 'completed', eventDatetime: PAST, goingCount: 3, confirmedCount: 3 }),
+      myVote: 'confirmed',
+      responders,
+      ownerId: VIEWER_ID,
+    });
+    const { container } = renderEventPage();
+
+    expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
+    for (const name of ['Анна', 'Борис', 'Вера']) {
+      expect(screen.getByRole('button', { name: new RegExp(`${name}: пришёл`) })).toBeInTheDocument();
+    }
+    // Словарь тот же, что до завершения: подтверждений не было, «Подтвердили» здесь соврало бы.
+    expect(screen.getByText('Идут · 3')).toBeInTheDocument();
+    expect(container.querySelector('.rd-st-confirmed')?.textContent).toContain('Идут');
+    expect(screen.queryByText('Подтвердили')).not.toBeInTheDocument();
+  });
+
+  it('AC-OPEN7: после старта встречи голосовать уже нельзя', async () => {
+    // Статус остаётся 'upcoming' ещё до шести часов после старта — окно закрывает дата, не статус.
+    mockEndpoints({ event: openV3Event({ eventDatetime: PAST }), myVote: 'going' });
+    renderEventPage();
+
+    expect(await screen.findByText('Событие')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Пойду/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Не пойду/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Голосование открыто до начала встречи')).not.toBeInTheDocument();
+  });
+
+  it('AC-OPEN11: менеджер видит «Без ответа» и может напомнить до старта', async () => {
+    mockEndpoints({
+      event: openV3Event({ noAnswerCount: 1 }),
+      myVote: 'going',
+      mySeat: 'confirmed',
+      responders: [goingResponder(VIEWER_ID, 'Пётр')],
+      pending: [{
+        userId: 'p1', firstName: 'Молчун', lastName: null, avatarUrl: null,
+        status: 'no_answer', attendance: null, telegramUsername: 'silent', remindedAt: null,
+      }],
+      ownerId: VIEWER_ID,
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+
+    expect(screen.getByText('Молчун')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Напомнить всем/ })).toBeInTheDocument();
+  });
+
+  it('участник «Без ответа» не видит: таб менеджерский', async () => {
+    mockEndpoints({
+      event: openV3Event({ noAnswerCount: 1 }),
+      myVote: 'going',
+      mySeat: 'confirmed',
+      responders: [goingResponder(VIEWER_ID, 'Пётр')],
+      pending: [{
+        userId: 'p1', firstName: 'Молчун', lastName: null, avatarUrl: null,
+        status: 'no_answer', attendance: null, remindedAt: null,
+      }],
+      ownerId: 'someone-else',
+    });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: /Пойду/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Без ответа/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Молчун')).not.toBeInTheDocument();
   });
 });

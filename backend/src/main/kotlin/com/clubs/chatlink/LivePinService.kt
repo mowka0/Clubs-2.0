@@ -302,24 +302,18 @@ class LivePinService(
     }
 
     private fun renderStatus(event: Event): String =
-        // Встречи с лимитом (V85) живут своими двумя состояниями: идёт набор → «собрались N из
-        // M», состав закрыт → «состав собран». Подтверждений у них нет, поэтому общие тексты
-        // Этапа 1/Этапа 2 им не подходят.
-        if (event.isRosterEvent) {
+        // Встречи с местами (V85) живут своими двумя состояниями: идёт набор → «собрались N из
+        // M», состав закрыт → «состав собран». Открытая встреча (v3) набор не закрывает вовсе и
+        // остаётся в ветке голосования до самого старта — счётчик «Идут — N» больше не
+        // обнуляется флипом в Этап 2. Старая открытая, флипнутая ДО реформы, попадает туда же:
+        // «Идут — N» по голосам вместо снятого счётчика подтверждений.
+        if (event.hasSeatLimit) {
             val confirmed = eventResponseRepository.countConfirmed(event.id)
             if (event.stage2Triggered) {
                 renderer.rosterClosedText(event, confirmed, eventResponseRepository.countWaitlisted(event.id))
             } else {
                 renderer.rosterText(event, confirmed, rosterService.rosterDeadline(event))
             }
-        } else if (event.stage2Triggered) {
-            // Сюда доходит только формат «сколько придёт»: у остальных набор увёл выше. Очередь
-            // у него недостижима — COUNT-запрос на каждую перерисовку закрепа не тратим.
-            renderer.stage2Text(
-                event,
-                confirmed = eventResponseRepository.countConfirmed(event.id),
-                waitlisted = 0
-            )
         } else {
             val counts = eventResponseRepository.countByVote(event.id)
             renderer.stage1Text(event, going = counts["going"] ?: 0, maybe = counts["maybe"] ?: 0)
