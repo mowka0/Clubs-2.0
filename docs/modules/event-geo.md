@@ -92,6 +92,12 @@ ALTER TABLE events
 
 ### GET /api/events/{id} — новые поля EventDetailDto
 
+> **Кому уходят гео-поля.** Смотрящему без доступа к встрече `locationText`/`locationLat`/
+> `locationLon`/`locationHint` (вместе с фото и описанием) обнуляются на выходе из сервиса —
+> правило целиком в [`events.md`](./events.md) § «Кто видит карточку встречи целиком»
+> (bugfix 2026-09-15). То есть null в этих полях означает не только «точки нет», но и
+> «смотрящий её видеть не должен».
+
 `locationLat: Double?`, `locationLon: Double?`, `locationHint: String?` — null у событий без
 точки. `locationText` теперь тоже `String?` (V58) — во **всех** событийных DTO
 (`EventDetailDto`, `EventListItemDto`, `MyEventListItemDto`, `ActivityItemDto.EventActivity`);

@@ -1,6 +1,7 @@
 package com.clubs.event
 
 import com.clubs.auth.JwtService
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.hamcrest.Matchers.nullValue
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -22,6 +23,8 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.OffsetDateTime
 import java.util.UUID
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -59,6 +62,7 @@ class EventControllerSecurityTest {
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var clubId: UUID
+    private lateinit var nonMemberId: UUID
     private lateinit var organizerId: UUID
     private lateinit var memberId: UUID
     private lateinit var nonMemberToken: String
@@ -77,7 +81,7 @@ class EventControllerSecurityTest {
         dsl.execute("DELETE FROM clubs")
         dsl.execute("DELETE FROM users")
 
-        val nonMemberId = UUID.randomUUID()
+        nonMemberId = UUID.randomUUID()
         memberId = UUID.randomUUID()
         organizerId = UUID.randomUUID()
         clubId = UUID.randomUUID()
@@ -263,6 +267,184 @@ class EventControllerSecurityTest {
             .andExpect(jsonPath("$.upcoming[0].photoUrl").doesNotExist())
             .andExpect(jsonPath("$.past.length()").value(1))
             .andExpect(jsonPath("$.totalPastCount").value(1))
+    }
+
+    // ---- Карточка встречи: приватные поля только своим (bugfix 2026-09-15) ----
+
+    private fun insertEventWithPhoto(eventDatetime: OffsetDateTime, status: String): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, description, location_text, location_lat, location_lon, location_hint, photo_url, event_datetime, participant_limit, voting_opens_days_before, status)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Private Event', 'Берём мангал', 'Тверская 1', 55.76, 37.64, 'Домофон 12', 'https://cdn.example.com/c.jpg', '$eventDatetime', 10, 14, '$status'::event_status)
+            """.trimIndent()
+        )
+        return eventId
+    }
+
+    @Test
+    fun `GET event as member returns the private fields`() {
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $memberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value("Тверская 1"))
+            .andExpect(jsonPath("$.locationLat").value(55.76))
+            .andExpect(jsonPath("$.locationHint").value("Домофон 12"))
+            .andExpect(jsonPath("$.photoUrl").value("https://cdn.example.com/c.jpg"))
+            .andExpect(jsonPath("$.description").value("Берём мангал"))
+            .andExpect(jsonPath("$.creator.id").value(organizerId.toString()))
+    }
+
+    @Test
+    fun `GET event as non-member hides location, photo and organizer but keeps the club link`() {
+        // A01: до фикса любой авторизованный читал по UUID адрес и уточнение чужой встречи.
+        // Отказа здесь нет намеренно — по clubId страница уводит гостя из чата на клуб.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.title").value("Private Event"))
+            .andExpect(jsonPath("$.clubId").value(clubId.toString()))
+            .andExpect(jsonPath("$.locationText").value(nullValue()))
+            .andExpect(jsonPath("$.locationLat").value(nullValue()))
+            .andExpect(jsonPath("$.locationLon").value(nullValue()))
+            .andExpect(jsonPath("$.locationHint").value(nullValue()))
+            .andExpect(jsonPath("$.photoUrl").value(nullValue()))
+            .andExpect(jsonPath("$.description").value(nullValue()))
+            .andExpect(jsonPath("$.creator").value(nullValue()))
+    }
+
+    @Test
+    fun `GET event as club owner returns the private fields`() {
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value("Тверская 1"))
+    }
+
+    @Test
+    fun `GET past event as a former participant returns the private fields`() {
+        // F5-04: вышедший из клуба открывает встречу по ссылке из DM ради окна спора явки.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().minusDays(1), status = "completed")
+        dsl.execute(
+            "INSERT INTO event_responses (event_id, user_id, stage_1_vote, final_status, attendance) " +
+                "VALUES ('$eventId', '$nonMemberId', 'going', 'confirmed', 'absent')"
+        )
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value("Тверская 1"))
+    }
+
+    @Test
+    fun `GET past event with a response but no attendance mark stays redacted`() {
+        // Спорить не о чем, пока организатор не отметил состав: одного отклика мало.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().minusDays(1), status = "completed")
+        dsl.execute(
+            "INSERT INTO event_responses (event_id, user_id, stage_1_vote, final_status) " +
+                "VALUES ('$eventId', '$nonMemberId', 'going', 'confirmed')"
+        )
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value(nullValue()))
+    }
+
+    @Test
+    fun `GET future event as a former participant stays redacted`() {
+        // Отклик на БУДУЩУЮ встречу доступа не даёт: покинувшему клуб её место знать незачем.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+        dsl.execute(
+            "INSERT INTO event_responses (event_id, user_id, stage_1_vote) " +
+                "VALUES ('$eventId', '$nonMemberId', 'going')"
+        )
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value(nullValue()))
+    }
+
+    @Test
+    fun `GET event without token should return 401`() {
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+        mockMvc.perform(get("/api/events/$eventId"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `GET past event without any response stays redacted`() {
+        // Ловит инверсию условия окна спора: прошедшая встреча сама по себе доступа не даёт.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().minusDays(1), status = "completed")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value(nullValue()))
+            .andExpect(jsonPath("$.photoUrl").value(nullValue()))
+    }
+
+    @Test
+    fun `GET cancelled event as non-member hides the cancellation reason`() {
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "cancelled")
+        dsl.execute("UPDATE events SET cancellation_reason = 'Переносим в Тверская 1, кв 5' WHERE id = '$eventId'")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.cancellationReason").value(nullValue()))
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $memberToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.cancellationReason").value("Переносим в Тверская 1, кв 5"))
+    }
+
+    @Test
+    fun `GET event as club owner whose own membership expired still returns the private fields`() {
+        // Ветка owner-bypass: у владельца нет активного членства, но встречу своего клуба он
+        // обязан открывать — тот же принцип, что в капабилити-гейте ClubRoleGuard.
+        dsl.execute("UPDATE memberships SET status = 'expired' WHERE user_id = '$organizerId' AND club_id = '$clubId'")
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+
+        mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.locationText").value("Тверская 1"))
+            .andExpect(jsonPath("$.creator.id").value(organizerId.toString()))
+    }
+
+    @Test
+    fun `redacted card exposes exactly the agreed set of fields`() {
+        // Страж списка полей: урезание построено как denylist (copy(... = null)), поэтому НОВОЕ
+        // поле EventDetailDto по умолчанию уехало бы наружнику. Тест валится на любом изменении
+        // состава карточки — решение «приватное или нет» принимается явно, а не молча.
+        val eventId = insertEventWithPhoto(OffsetDateTime.now().plusDays(3), status = "upcoming")
+
+        val json = mockMvc.perform(get("/api/events/$eventId").header("Authorization", "Bearer $nonMemberToken"))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        val card = ObjectMapper().readTree(json)
+
+        assertEquals(
+            setOf(
+                "id", "clubId", "creator", "createdBy", "title", "description", "locationText",
+                "locationLat", "locationLon", "locationHint", "eventDatetime", "participantLimit",
+                "minParticipants", "votingOpensDaysBefore", "stage2LeadMinutes", "stage2LeadMinutesOverride",
+                "status", "format", "goingCount", "maybeCount", "notGoingCount", "confirmedCount",
+                "noAnswerCount", "rosterDeadline", "rosterClosed", "waitlistedCount", "rosterDecided",
+                "declineCostPoints", "declineConsequence", "attendanceMarked", "attendanceFinalized",
+                "cancellationReason", "photoUrl", "createdAt"
+            ),
+            card.fieldNames().asSequence().toSet(),
+            "состав EventDetailDto изменился — решить, приватное ли новое поле, и свериться с " +
+                "docs/modules/events.md § «Кто видит карточку встречи целиком»"
+        )
+
+        // Приватные поля — те и только те, что перечислены в EventMapper.redactForOutsider.
+        listOf(
+            "description", "locationText", "locationLat", "locationLon",
+            "locationHint", "photoUrl", "creator", "cancellationReason"
+        ).forEach { field ->
+            assertTrue(card.get(field).isNull, "поле $field уехало не-участнику")
+        }
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -21,6 +22,8 @@ import java.util.UUID
 @Service
 class EventService(
     private val eventRepository: EventRepository,
+    private val eventResponseRepository: EventResponseRepository,
+    private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
     private val eventMapper: EventMapper,
@@ -115,9 +118,52 @@ class EventService(
         )
     }
 
-    fun getEvent(id: UUID): EventDetailDto {
+    /**
+     * Карточка встречи для смотрящего. Целиком — место, фото, описание, организатор — её видит
+     * только тот, кто имеет к встрече отношение ([canSeeEventDetails]); остальным те же поля
+     * обнуляются ([EventMapper.redactForOutsider]). До 2026-09-15 карточка отдавалась целиком
+     * любому авторизованному по UUID встречи — утечка адреса чужого клуба (OWASP A01).
+     *
+     * 403 здесь намеренно не отдаётся: на встречу приходят по ссылке из чата клуба, ещё не вступив
+     * в него, и страница уводит такого гостя на клуб со вступлением — по clubId из этой же проекции.
+     */
+    fun getEvent(id: UUID, viewerId: UUID): EventDetailDto {
         val event = eventRepository.findById(id) ?: throw NotFoundException("Event not found")
-        val counts = eventRepository.getVoteCounts(id)
+        // Видимость считаем ДО сборки: карточка организатора наружнику всё равно не уедет, и
+        // тянуть его из БД на горячем пути гостя из чата незачем.
+        val visible = canSeeEventDetails(event, viewerId)
+        val detail = detailOf(event, creator = if (visible) creatorOf(event.createdBy) else null)
+        return if (visible) detail else eventMapper.redactForOutsider(detail)
+    }
+
+    /**
+     * Кому карточка видна целиком. Порядок — от самой частой и дешёвой проверки: почти каждый
+     * запрос приходит от участника клуба.
+     */
+    private fun canSeeEventDetails(event: Event, viewerId: UUID): Boolean {
+        if (membershipRepository.isMember(viewerId, event.clubId)) return true
+        // Владелец клуба проходит всегда (owner-bypass, как в капабилити-гейте): его собственное
+        // членство может быть просрочено, а встречу своего клуба он обязан открывать.
+        if (clubRepository.findById(event.clubId)?.ownerId == viewerId) return true
+        // Окно спора явки (F5-04): вышедший из клуба открывает по ссылке из DM встречу, на которой
+        // был. Пускаем по ОТМЕЧЕННОЙ явке, а не по любому отклику: спорить не о чем, пока
+        // организатор не отметил состав, а голос «не пойду» отношения к встрече не создаёт.
+        return !event.eventDatetime.isAfter(OffsetDateTime.now()) &&
+            eventResponseRepository.findByEventAndUser(event.id, viewerId)?.attendance != null
+    }
+
+    /**
+     * Полная карточка по свежему состоянию в БД — ответ вызову, который только что встречу изменил
+     * и уже прошёл менеджерский гейт. Гейта видимости здесь НЕТ: не звать из мест без такого гейта.
+     */
+    private fun detailForManager(id: UUID): EventDetailDto {
+        val event = eventRepository.findById(id) ?: throw NotFoundException("Event not found")
+        return detailOf(event, creatorOf(event.createdBy))
+    }
+
+    /** Сборка карточки: гейта видимости здесь нет, его накладывает [getEvent]. */
+    private fun detailOf(event: Event, creator: EventPersonDto?): EventDetailDto {
+        val counts = eventRepository.getVoteCounts(event.id)
         return eventMapper.toDetailDto(
             event,
             goingCount = counts["going"] ?: 0,
@@ -126,7 +172,7 @@ class EventService(
             confirmedCount = counts["confirmed"] ?: 0,
             noAnswerCount = counts["noAnswer"] ?: 0,
             waitlistedCount = counts["waitlisted"] ?: 0,
-            creator = creatorOf(event.createdBy)
+            creator = creator
         )
     }
 
@@ -176,7 +222,7 @@ class EventService(
 
         log.info("Event cancelled: id={} userId={} reasonGiven={}", eventId, userId, normalizedReason != null)
         eventPublisher.publishEvent(EventCancelledEvent(event, normalizedReason))
-        return getEvent(eventId)
+        return detailForManager(eventId)
     }
 
     /**
@@ -248,7 +294,7 @@ class EventService(
         // (там висят название, дата и место). Кого дёргать звуком, решает слушатель —
         // громкий пост и DM уходят только при критичных изменениях.
         eventPublisher.publishEvent(edited)
-        return getEvent(eventId)
+        return detailForManager(eventId)
     }
 
     /**
