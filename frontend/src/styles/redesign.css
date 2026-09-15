@@ -481,8 +481,8 @@
 .rd-rep-row .rd-v.rd-low  { color: #E08A7A; }
 /* Новичок / организатор своего клуба — нейтральный чип, числа ещё нет (см. reputation-v2). */
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
-/* «Прошедшие» в клубе (PO 2026-09-14): крупнее заголовок и дата, слева одна из двух иконок — встреча или сбор. */
-.rd-rep-row.rd-past-row .rd-ttl { font-size: 16px; }
+/* «Прошедшие» в клубе (PO 2026-09-14): дата читаемым кеглем вместо капители 9 px, слева одна из
+   двух иконок — встреча или сбор. Название строки осталось прежним: крупнее просили ярлык шторки. */
 .rd-rep-row.rd-past-row .rd-score .rd-cap { font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text-dim); }
 .rd-rep-row .rd-ico.rd-past-ico { background: var(--surface-2); box-shadow: none; font-size: 18px; }
 
