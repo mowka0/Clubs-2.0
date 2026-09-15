@@ -405,8 +405,11 @@ data class BillingStatusDto(
 ```
 Реализация: `BillingController` (`@RequiresCapability(MANAGE_EVENTS)` на статус, `@RequiresOrganizer`
 на чекаут и ползунок), `BillingService`, ResultURL там же; `StubCheckoutController`
-(`GET /api/billing/stub/pay?invId=&method=`) — только при `billing.provider=stub`: счёт «оплачивается»
-переходом по ссылке и уводит на `/pay/return`. Ответ ResultURL при неверной подписи/чужом IP — 403,
+(`GET /api/billing/stub/pay?invId=&method=&outcome=`) — только при `billing.provider=stub`. Без
+параметров показывает выбор исхода (карта · СБП · отказ) — у настоящей Robokassa этот выбор делает
+её собственная страница, и без него staging-прогон не проверил бы ни СБП (автопродление
+недоступно), ни неоплату. Карта и СБП подтверждают счёт и уводят на `/pay/return`, отказ оставляет
+счёт неоплаченным и уводит на `/pay/fail`. Ответ ResultURL при неверной подписи/чужом IP — 403,
 при расхождении суммы — 400, иначе `OK<InvId>` (в том числе для неизвестного InvId — чтобы
 провайдер не ретраил).
 `SecurityConfig`: `/api/billing/robokassa/result` permitAll (вместо `/api/subscriptions/webhook`).

@@ -48,7 +48,7 @@
 | `subscription/BillingLifecycleService.kt` | ежедневный календарь (напоминания, списания, `PAST_DUE`, `ENDED`) + почасовой опрос счетов |
 | `subscription/BillingNotifier.kt` | шесть DM владельцу; в чат — ничего |
 | `subscription/BillingController.kt` | `/api/clubs/{id}/billing[/checkout|/autopay]`, ResultURL |
-| `subscription/StubCheckoutController.kt` | страница «оплаты» стаба, только при `billing.provider=stub` |
+| `subscription/StubCheckoutController.kt` | страница «оплаты» стаба с выбором исхода (карта · СБП · отказ), только при `billing.provider=stub` |
 | `payment/PaymentProvider.kt` | переписанный сеам: чекаут, дочернее списание, разбор ResultURL, опрос состояния |
 | `payment/RobokassaPaymentProvider.kt` + `RobokassaSignature.kt` | адаптер по документации: SHA256, `Recurring=true`, `PreviousInvoiceID` вне подписи, allowlist IP, `OpStateExt` |
 | `common/security/ClientIpResolver.kt` | общий разбор `X-Forwarded-For` для rate limit и allowlist ResultURL |
