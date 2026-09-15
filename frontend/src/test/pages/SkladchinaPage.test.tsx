@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -7,6 +7,7 @@ import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { DebtDto, SkladchinaDetailDto, UserDto } from '../../types/api';
+import { SHORT_DAY_FMT } from '../../utils/skladchinaKind';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
@@ -33,6 +34,7 @@ const SKLADCHINA_ID = 's-1';
 const ME = 'me-1';
 const CREATOR = 'org-1';
 const FUTURE = new Date(Date.now() + 3 * 86_400_000).toISOString();
+const PAST = new Date(Date.now() - 86_400_000).toISOString();
 
 const creator = { id: CREATOR, firstName: 'Иван', lastName: null, username: 'ivan', avatarUrl: null };
 const me = { id: ME, firstName: 'Саша', lastName: null, username: null, avatarUrl: null };
@@ -336,14 +338,17 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
   });
 
-  it('плательщик видит «Кому переводить» с создателем, у «По желанию» заголовок «Ваш перевод», сбор из встречи — строку встречи', async () => {
+  it('плательщик видит «Кому переводить» с реквизитами, у «По желанию» заголовок «Ваш перевод», сбор из встречи — строку встречи', async () => {
     mockDetail(buildDetail({ kind: 'voluntary', myDebt: null, eventId: 'e-1', eventTitle: 'Покатушки', eventDatetime: FUTURE, paid: [{ ...me, id: 'u-2', firstName: 'Оля' }] }));
     renderPage();
     expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
-    expect(screen.getByText('Иван')).toBeInTheDocument();
-    expect(screen.getByText(/@ivan · собирает/)).toBeInTheDocument();
+    // Кто собирает, говорит шапка — в блоке реквизитов строки человека больше нет (PO 2026-09-15).
+    expect(screen.queryByText(/@ivan/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть в банке' })).toBeInTheDocument();
     expect(screen.getByText('Ваш перевод')).toBeInTheDocument();
-    expect(screen.getByText('Сбор в клубе · собирает Иван')).toBeInTheDocument();
+    // Шапка двумя плашками: справа клуб и тот, кто собирает, — кнопка ведёт в клуб.
+    expect(screen.getByRole('button', { name: 'Открыть клуб Партия' })).toBeInTheDocument();
+    expect(screen.getByText('собирает')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Открыть встречу Покатушки/ })).toBeInTheDocument();
     expect(screen.getByText('Покатушки')).toBeInTheDocument();
     // Оплативших видят все участники — людьми, без сумм (PO 2026-09-14).
@@ -356,7 +361,9 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     renderPage();
     expect(await screen.findByText('Оплатили')).toBeInTheDocument();
     expect(screen.getByText('Оля')).toBeInTheDocument();
-    expect(screen.getAllByText('Иван').length).toBe(3); // «Мой долг» (кредитор), «Кому переводить», «Оплатили»
+    // Кто собирает — в правой плашке шапки; в панели «Оплатили» он же строкой человека.
+    expect(within(screen.getByRole('button', { name: 'Открыть клуб Партия' })).getByText('Иван')).toBeInTheDocument();
+    expect(screen.getAllByText('Иван').length).toBeGreaterThan(1);
     expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
   });
 
@@ -373,7 +380,7 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByText('Подтвердите')).toBeInTheDocument();
     expect(screen.getByText('Перевели')).toBeInTheDocument();
     expect(screen.getByText('ваш взнос ✅')).toBeInTheDocument();
-    expect(screen.getByText('Сбор в клубе · собираете вы')).toBeInTheDocument();
+    expect(screen.getByText('Иван (вы)')).toBeInTheDocument();
     expect(screen.queryByText('Кто должен')).not.toBeInTheDocument();
     expect(screen.getByText(/перевели 1 · 1 ждут подтверждения/)).toBeInTheDocument();
   });
@@ -444,5 +451,63 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
     expect(screen.getByText('+7 999 123-45-67')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Открыть в банке' })).not.toBeInTheDocument();
+  });
+
+  it('плашка срока: «оплатить до», дата и остаток; у записи — «отметиться до», после срока — «срок вышел»', async () => {
+    mockDetail(buildDetail());
+    const { unmount } = renderPage();
+    expect(await screen.findByText('оплатить до')).toBeInTheDocument();
+    expect(screen.getByText(SHORT_DAY_FMT.format(new Date(FUTURE)))).toBeInTheDocument();
+    expect(screen.getByText('через 3 дня')).toBeInTheDocument();
+    unmount();
+
+    mockDetail(buildDetail({ isEnrolling: true, enrollmentUntil: PAST, deadline: null, myDebt: null }));
+    renderPage();
+    expect(await screen.findByText('отметиться до')).toBeInTheDocument();
+    expect(screen.getByText('срок вышел')).toBeInTheDocument();
+  });
+
+  it('плашка срока: «заказ сделан» у per_head после заказа, «Идёт · без срока» без дедлайна', async () => {
+    mockDetail(buildDetail({ kind: 'per_head', orderedAt: PAST, deadline: FUTURE, myDebt: null }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('заказ сделан')).toBeInTheDocument();
+    expect(screen.getByText('приём закрыт')).toBeInTheDocument();
+    expect(screen.queryByText('оплатить до')).not.toBeInTheDocument();
+    unmount();
+
+    mockDetail(buildDetail({ deadline: null, myDebt: null }));
+    renderPage();
+    expect(await screen.findByText('Идёт')).toBeInTheDocument();
+    expect(screen.getByText('без срока')).toBeInTheDocument();
+  });
+
+  it('плашка срока у закрытого сбора показывает его судьбу вместо срока', async () => {
+    mockDetail(buildDetail({ status: 'collected', closedAt: PAST, myDebt: null }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('Собран')).toBeInTheDocument();
+    expect(screen.queryByText('оплатить до')).not.toBeInTheDocument();
+    unmount();
+
+    // Даты закрытия может не быть — пустую строку под «Отменён» не рисуем.
+    mockDetail(buildDetail({ status: 'cancelled', closedAt: null, myDebt: null }));
+    renderPage();
+    expect(await screen.findByText('Отменён')).toBeInTheDocument();
+    expect(document.querySelector('.rd-when-until')).toBeNull();
+  });
+
+  it('обложка появляется только с фото: с ним заголовок в обложке и зум, без него — заголовок текстом', async () => {
+    mockDetail(buildDetail({ photoUrl: null }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('Ужин после игры')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /открыть фото сбора/i })).not.toBeInTheDocument();
+    unmount();
+
+    mockDetail(buildDetail({ photoUrl: 'https://cdn.example/check.jpg' }));
+    const { user } = renderPage();
+    const cover = await screen.findByRole('button', { name: 'Ужин после игры — открыть фото сбора' });
+    expect(cover).toHaveTextContent('Ужин после игры');
+    // Фото сбора — обычно чек: обложка его обрезает, поэтому тап открывает полный размер.
+    await user.click(cover);
+    expect(screen.getByAltText('Фото сбора')).toBeInTheDocument();
   });
 });

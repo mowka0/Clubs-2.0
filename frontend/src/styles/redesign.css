@@ -1227,7 +1227,8 @@
 .rd-hero-meta { position: absolute; left: 16px; right: 16px; bottom: 18px; color: #fff; z-index: 2; }
 .rd-hero-eyebrow { font-size: 11px; opacity: 0.85; margin-bottom: 4px; }
 /* Фото встречи ниже, чем было (PO 2026-09-14): полэкрана под картинку, которой у большинства
-   встреч нет, — слишком дорого. Без фото фон рисует градиент категории клуба (data-cat). */
+   встреч нет, — слишком дорого. Без фото фон рисует градиент категории клуба (data-cat).
+   Высоту делит с обложкой сбора (SkladchinaPage) — правка двигает оба экрана. */
 .rd-hero.rd-hero-event { height: calc(168px + var(--app-inset-top, 0px)); }
 
 /* Шапка встречи двумя плашками в ряд (PO 2026-09-14): слева когда, справа кто ведёт. Дата была
@@ -1239,6 +1240,23 @@
 .rd-when-day { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
 .rd-when-time { font-size: 30px; font-weight: 850; letter-spacing: -0.03em; line-height: 1; margin: 5px 0 6px; }
 .rd-when-until { font-size: 12px; color: var(--accent); font-weight: 700; }
+/* Сбор вместо времени показывает дату («20 сент.») — 30-м кеглем она в половину ширины не влезает. */
+.rd-when-date { font-size: 23px; }
+/* Срок вышел — это не «скоро», а просроченное: акцентный оранжевый читался бы как обычный отсчёт. */
+.rd-when-late { color: var(--danger); }
+/* Нижняя строка не отсчёт, а констатация (дата закрытия, «без срока») — акцент был бы ложной срочностью. */
+.rd-when-muted { color: var(--text-dim); font-weight: 600; }
+
+/* Обложка сбора кликабельна (открывает фото целиком), поэтому это <button> — снимаем с неё
+   кнопочные умолчания; заголовок внутри лежит в <span> (флоу-теги в button невалидны).
+   Имя `rd-hero-btn` уже занято круглыми кнопками действий в углу обложки — отсюда `rd-hero-tap`. */
+.rd-hero-tap {
+  /* width: auto у <button> — это shrink-to-fit, обложка схлопнулась бы по ширине надписи;
+     +32px компенсируют боковые отступы .rd-page, из-под которых обложка выходит margin'ом. */
+  display: block; width: calc(100% + 32px);
+  padding: 0; border: none; background: none; cursor: pointer; font-family: inherit; text-align: left;
+}
+.rd-hero-tap .rd-hero-ttl { display: block; }
 
 /* «Организуют»: клуб и автор встречи — одна кнопка, ведёт в клуб. */
 .rd-host-panel {
@@ -1930,7 +1948,6 @@
   font-size: 11px; color: var(--text-faint); margin-top: 8px;
   word-break: break-all; line-height: 1.4;
 }
-.rd-badge.rd-neutral2 { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
 
 /* ============================================================
    Нижние шторки (город / цена / редактирование профиля / рассмотрение заявки)

@@ -14,21 +14,20 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, defaultPromiseDate, initials, isHttpLink, personName, statusLabel } from '../utils/skladchinaKind';
+import { shortName, untilText } from '../utils/formatters';
+import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, SHORT_DAY_FMT, defaultPromiseDate, initials, isHttpLink, personName } from '../utils/skladchinaKind';
 
 // Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
 // потом ждём; прощённые и выбывшие в хвосте. `received` в эту панель не попадает.
 const OPEN_ORDER: Record<DebtStatus, number> = { claimed: 0, promised: 1, waiting: 2, forgiven: 3, dropped: 4, received: 5 };
 
-/** Строка человека в панелях сбора: аватар, имя (+ «(вы)»), @username и подпись, справа короткая пометка. */
-const PersonRow: FC<{ person: DebtPersonDto; viewerId?: string; subtitle?: string; meta?: string }> = ({ person, viewerId, subtitle, meta }) => (
+/** Строка человека в панелях сбора: аватар, имя (+ «(вы)»), @username, справа короткая пометка. */
+const PersonRow: FC<{ person: DebtPersonDto; viewerId?: string; meta?: string }> = ({ person, viewerId, meta }) => (
   <div className="rd-debt-head rd-enrolled-row">
     <span className="rd-av rd-debt-av">{person.avatarUrl ? <img src={person.avatarUrl} alt="" /> : initials(personName(person))}</span>
     <span className="rd-debt-who">
       <b>{personName(person)}{viewerId && person.id === viewerId ? ' (вы)' : ''}</b>
-      {(person.username || subtitle) && (
-        <span className="rd-debt-handle">{person.username ? `@${person.username}` : ''}{person.username && subtitle ? ' · ' : ''}{subtitle ?? ''}</span>
-      )}
+      {person.username && <span className="rd-debt-handle">@{person.username}</span>}
     </span>
     {meta && <span className="rd-debt-meta">{meta}</span>}
   </div>
@@ -60,6 +59,27 @@ function stageLine(s: SkladchinaDetailDto): string {
     parts.push(past ? `срок вышел · не оплатили ${s.openCount}` : `до ${DATE_FMT.format(new Date(s.deadline))}`);
   }
   return parts.join(' · ');
+}
+
+/**
+ * Левая плашка шапки — зеркало «когда» у встречи: срок сбора, крупно дата и сколько до неё осталось.
+ * У закрытого сбора срока уже нет, и крупной строкой становится его судьба («Собран» / «Отменён»).
+ */
+function deadlinePanel(s: SkladchinaDetailDto): { cap: string; value: string; note: string; late: boolean; mutedNote: boolean } {
+  const closedDay = s.closedAt ? SHORT_DAY_FMT.format(new Date(s.closedAt)) : '';
+  if (s.status === 'collected') return { cap: 'сбор', value: 'Собран', note: closedDay, late: false, mutedNote: true };
+  if (s.status === 'cancelled') return { cap: 'сбор', value: 'Отменён', note: closedDay, late: false, mutedNote: true };
+  if (s.isEnrolling && s.enrollmentUntil) {
+    const left = untilText(s.enrollmentUntil);
+    return { cap: 'отметиться до', value: SHORT_DAY_FMT.format(new Date(s.enrollmentUntil)), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
+  }
+  // «Кто берёт?» после заказа: платить ещё нужно, но главный факт экрана — что приём закрыт.
+  if (s.orderedAt) return { cap: 'заказ сделан', value: SHORT_DAY_FMT.format(new Date(s.orderedAt)), note: 'приём закрыт', late: false, mutedNote: true };
+  if (s.deadline) {
+    const left = untilText(s.deadline);
+    return { cap: 'оплатить до', value: SHORT_DAY_FMT.format(new Date(s.deadline)), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
+  }
+  return { cap: 'сбор', value: 'Идёт', note: 'без срока', late: false, mutedNote: true };
 }
 
 export const SkladchinaPage: FC = () => {
@@ -190,29 +210,67 @@ export const SkladchinaPage: FC = () => {
   };
 
   const clubInitials = initials(s.clubName);
-  const statusCls = s.status === 'cancelled' ? 'rd-neutral2' : s.status === 'collected' ? 'rd-going' : 'rd-warn';
+  const when = deadlinePanel(s);
+  // Вид сбора одной подписью: у сбора из встречи с суммой вместо «По желанию» — режим (§ 3.5).
+  const kindBadge = s.freeAmountRequired ? `💸 ${FREE_AMOUNT_LABEL}` : `${KIND_EMOJI[s.kind]} ${KIND_LABEL[s.kind]}`;
 
   return (
     <div className="rd-page">
-      <button
-        type="button"
-        className="rd-glass rd-host-row"
-        onClick={() => { haptic.impact('light'); navigate(`/clubs/${s.clubId}`); }}
-        aria-label={`Открыть клуб ${s.clubName}`}
-        style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-      >
-        <span className="rd-ico">{s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}</span>
-        <div className="rd-info">
-          <div className="rd-met">Сбор в клубе · {s.isCreator ? 'собираете вы' : `собирает ${s.creator.firstName}`}</div>
-          <div className="rd-ttl">{s.clubName}</div>
-        </div>
-        <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
-      </button>
+      {/* Обложка — только когда организатор приложил фото (PO 2026-09-15): у сбора без фото
+          градиент во весь экран ничего не сообщал бы. Тап открывает полный размер — на фото
+          сбора обычно чек, и его читают, а обрезанный под обложку он нечитаем. */}
+      {s.photoUrl ? (
+        <button
+          type="button"
+          className="rd-hero rd-compact rd-hero-event rd-hero-tap"
+          aria-label={`${s.title} — открыть фото сбора`}
+          onClick={() => { haptic.impact('light'); setPhotoZoomed(true); }}
+        >
+          <span className="rd-hero-bg" style={{ backgroundImage: `url(${s.photoUrl})` }} />
+          <span className="rd-hero-meta">
+            <span className="rd-hero-type-badge">{kindBadge.toUpperCase()}</span>
+            <span className="rd-hero-ttl">{s.title}</span>
+          </span>
+        </button>
+      ) : (
+        <>
+          <div className="rd-ft-eyebrow">{kindBadge}</div>
+          <h1 className="rd-page-h" style={{ marginBottom: 14 }}>{s.title}</h1>
+        </>
+      )}
+      <ImageLightbox src={photoZoomed ? s.photoUrl : null} alt="Фото сбора" onClose={() => setPhotoZoomed(false)} />
 
-      <div className="rd-ft-eyebrow">{s.freeAmountRequired ? `💸 ${FREE_AMOUNT_LABEL}` : `${KIND_EMOJI[s.kind]} ${KIND_LABEL[s.kind]}`}</div>
-      <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
-      <div className="rd-badges-row" style={{ marginBottom: 16 }}>
-        <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
+      {/* Две плашки в ряд, как на встрече (PO 2026-09-15): слева срок, справа кто собирает.
+          Статус сбора уехал в левую плашку — отдельный бейдж «Идёт» рядом со сроком повторял
+          то же самое. */}
+      <div className="rd-head-row">
+        <div className="rd-glass rd-when-panel">
+          <div className="rd-when-day">{when.cap}</div>
+          <div className="rd-when-time rd-when-date">{when.value}</div>
+          {when.note && (
+            <div className={`rd-when-until${when.late ? ' rd-when-late' : when.mutedNote ? ' rd-when-muted' : ''}`}>{when.note}</div>
+          )}
+        </div>
+        <button
+          type="button"
+          className="rd-glass rd-host-panel"
+          aria-label={`Открыть клуб ${s.clubName}`}
+          onClick={() => { haptic.impact('light'); navigate(`/clubs/${s.clubId}`); }}
+        >
+          <span className="rd-host-cap">собирает</span>
+          <span className="rd-host-line">
+            <span className="rd-host-av rd-host-club">
+              {s.clubAvatarUrl ? <img src={s.clubAvatarUrl} alt="" /> : clubInitials}
+            </span>
+            <span className="rd-host-nm">{s.clubName}</span>
+          </span>
+          <span className="rd-host-line">
+            <span className="rd-host-av rd-host-man">
+              {s.creator.avatarUrl ? <img src={s.creator.avatarUrl} alt="" /> : initials(personName(s.creator))}
+            </span>
+            <span className="rd-host-nm">{shortName(s.creator)}{s.isCreator ? ' (вы)' : ''}</span>
+          </span>
+        </button>
       </div>
 
       {/* Сбор из встречи: встреча отдельной строкой, как крошка клуба, с переходом (PO 2026-09-14). */}
@@ -232,18 +290,6 @@ export const SkladchinaPage: FC = () => {
           <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
         </button>
       )}
-
-      {s.photoUrl && (
-        <button
-          type="button"
-          className="rd-glass"
-          onClick={() => { haptic.impact('light'); setPhotoZoomed(true); }}
-          style={{ overflow: 'hidden', padding: 0, marginBottom: 14, border: 'none', cursor: 'pointer', display: 'block', width: '100%' }}
-        >
-          <img src={s.photoUrl} alt="Фото сбора" style={{ width: '100%', display: 'block' }} />
-        </button>
-      )}
-      <ImageLightbox src={photoZoomed ? s.photoUrl : null} onClose={() => setPhotoZoomed(false)} />
 
       {/* Прогресс: деньги — главная строка, полоса 🟩 получено / 🟨 говорят, что отдали. */}
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
@@ -281,8 +327,8 @@ export const SkladchinaPage: FC = () => {
       {!s.isCreator && !s.isEnrolling && (
         <>
           <div className="rd-section-sub-h">Кому переводить</div>
+          {/* Только реквизиты: кто собирает, видно в шапке — строка человека здесь его повторяла (PO 2026-09-15). */}
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-            <div style={{ marginBottom: 10 }}><PersonRow person={s.creator} subtitle="собирает" /></div>
             {s.paymentMethodNote && <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>}
             {isHttpLink(s.paymentLink) ? (
               <>
