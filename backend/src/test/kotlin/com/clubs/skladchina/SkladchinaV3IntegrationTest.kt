@@ -183,6 +183,41 @@ class SkladchinaV3IntegrationTest {
     }
 
     @Test
+    fun `a single attendee is enough to split an event bill, and an event with nobody marked is refused`() {
+        // PO 2026-09-15: пришедшим отмечают только того, кто был в составе встречи, поэтому один
+        // человек в списке — обычное дело; порога «нужно двое» больше нет.
+        val soloEvent = attendedEvent(listOf(aliceId))
+        val splittable = json(get("/api/clubs/$clubId/skladchinas/splittable-events", owner).andExpect(status().isOk))
+        assertTrue(
+            splittable.any { it["eventId"].asText() == soloEvent.toString() },
+            "встреча с одним пришедшим попадает в список «Скинуться после встречи»"
+        )
+        val soloBody = """
+            {
+              "title": "Кофе", "kind": "shared", "amountKopecks": 50000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}", "eventId": "$soloEvent"
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, soloBody).andExpect(status().isCreated))
+        assertEquals(
+            mapOf(aliceId.toString() to 50_000L),
+            created["debts"].associate { it["debtor"]["id"].asText() to it["amountKopecks"].asLong() },
+            "весь счёт на единственного пришедшего"
+        )
+
+        // Явка отмечена, но не пришёл никто: делить не с кем — просим указать состав руками.
+        val emptyEvent = attendedEvent(emptyList())
+        val emptyBody = soloBody.replace(soloEvent.toString(), emptyEvent.toString())
+        postJson("/api/clubs/$clubId/skladchinas", owner, emptyBody).andExpect(status().isBadRequest)
+        // Свой список должников такую встречу принимает: он и отвечает, с кем делить.
+        val withList = emptyBody.replace(
+            """"eventId": "$emptyEvent"""",
+            """"eventId": "$emptyEvent", "debtors": [{"userId":"$aliceId"}]"""
+        )
+        postJson("/api/clubs/$clubId/skladchinas", owner, withList).andExpect(status().isCreated)
+    }
+
+    @Test
     fun `free contributions after an event go as voluntary with invited people, event link and total bill`() {
         val eventId = UUID.randomUUID()
         dsl.execute(
