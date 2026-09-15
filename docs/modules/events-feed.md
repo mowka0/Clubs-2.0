@@ -636,8 +636,11 @@ Integration test `UserControllerMeEventsTest` (или дополнение су�
 **Ключевой аргумент.** Конфликт сортировок (предстоящие — по возрастанию, история — по
 убыванию) выглядит как аргумент за B, но он **уже решён в проекте** — ровно в той ленте,
 которую PO назвал эталоном. `JooqSkladchinaRepository.findMyFeed` (строки 173-206) держит
-в одном `ORDER BY` три ключа: `statusBucket` (active=0 / closed=1) → `actionRequired` →
-условный `activeSort` (deadline для active, NULL для closed) → `closed_at DESC` для истории.
+в одном `ORDER BY` ключи: `statusBucket` (active=0 / closed=1) → `actionRequired` →
+`closed_at DESC NULLS LAST` (история — свежее закрытие сверху) → `deadline ASC NULLS LAST`
+(активные — ближайший срок; `closed_at` у них NULL, поэтому предыдущий ключ их не трогает).
+До 2026-09-15 первым из этой пары стоял `deadline`, и историю сортировал срок оплаты, а не факт
+закрытия — отсюда сбор, закрытый 15-го, стоял в списке по своему сроку 18-го.
 Паттерн проверен в проде, ложится на jOOQ, требует `selectDistinct` с выносом выражений в
 select list. Раз конфликт снимается пятью строками SQL, платить за него вторым эндпоинтом
 и второй пагинацией на фронте — нарушение YAGNI.
@@ -829,7 +832,8 @@ Banco-Plata, «закрытая» рамка врёт при постранич�
 `attendedCount` — в бэклоге (см. Scope).
 
 - **События**: subtitle = `клуб · locationText` (при null-локации — только клуб).
-- **Сборы** (`SkladchinasTab`, история): тот же `HistoryCard`; dateISO = deadline,
+- **Сборы** (`SkladchinasTab`, история): тот же `HistoryCard`; dateISO = `closedAt ?? deadline`
+  (с 2026-09-15 — дата закрытия сбора, а не срок оплаты),
   subtitle = `клуб · <финальный статус>` («Завершён» / «Не собран» / «Отменён» —
   тексты из `pickBadge` SkladchinaCard). Единый визуальный язык истории в обоих табах.
 - `EventCard` историю больше не рендерит — его `isHistory`-ветки удалены как мёртвые;

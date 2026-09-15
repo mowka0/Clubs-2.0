@@ -14,7 +14,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { DebtRow } from '../components/debt/DebtRow';
 import type { DebtPersonDto, DebtStatus, SkladchinaDetailDto } from '../types/api';
 import { formatRub, rubToKopecks } from '../utils/money';
-import { shortName, untilText } from '../utils/formatters';
+import { formatTimeHM, shortName, untilText } from '../utils/formatters';
 import { DATE_FMT, DAY_FMT, FREE_AMOUNT_LABEL, KIND_EMOJI, KIND_LABEL, SHORT_DAY_FMT, defaultPromiseDate, initials, isHttpLink, personName } from '../utils/skladchinaKind';
 
 // Порядок в панели «не оплатили» у создателя: сначала те, кому нужен его ответ, потом обещавшие,
@@ -41,7 +41,7 @@ function errorMessage(e: unknown, fallback: string): string {
 /** Строка стадии под названием: что сейчас происходит со сбором и когда срок. */
 function stageLine(s: SkladchinaDetailDto): string {
   if (s.isEnrolling) {
-    return `В деле ${s.enrolledCount}${s.minParticipants ? ` · нужно ${s.minParticipants}` : ''} · отметиться до ${DATE_FMT.format(new Date(s.enrollmentUntil!))}`;
+    return `В деле ${s.enrolledCount}${s.minParticipants ? ` · нужно ${s.minParticipants}` : ''}`;
   }
   const parts: string[] = [];
   if (s.kind === 'per_head') parts.push(s.orderedAt ? `куплено ${s.receivedItems} · приём закрыт${s.openCount > 0 ? ` · ждём оплату ${s.openCount}` : ''}` : `берут ${s.debtCount} · оплатили ${s.receivedCount}`);
@@ -54,9 +54,10 @@ function stageLine(s: SkladchinaDetailDto): string {
     if (s.claimedCount > 0) parts.push(`${s.claimedCount} ждут подтверждения`);
   }
   else parts.push(`оплатили ${s.receivedCount} из ${s.debtCount}`);
-  if (s.deadline && s.status === 'active' && !s.orderedAt) {
-    const past = new Date(s.deadline).getTime() < Date.now();
-    parts.push(past ? `срок вышел · не оплатили ${s.openCount}` : `до ${DATE_FMT.format(new Date(s.deadline))}`);
+  // Сам срок здесь больше не повторяется — он крупно в плашке шапки (PO 2026-09-15); остаётся
+  // только то, чего в плашке нет: сколько человек не заплатило после срока.
+  if (s.deadline && s.status === 'active' && !s.orderedAt && new Date(s.deadline).getTime() < Date.now()) {
+    parts.push(`не оплатили ${s.openCount}`);
   }
   return parts.join(' · ');
 }
@@ -65,21 +66,21 @@ function stageLine(s: SkladchinaDetailDto): string {
  * Левая плашка шапки — зеркало «когда» у встречи: срок сбора, крупно дата и сколько до неё осталось.
  * У закрытого сбора срока уже нет, и крупной строкой становится его судьба («Собран» / «Отменён»).
  */
-function deadlinePanel(s: SkladchinaDetailDto): { cap: string; value: string; note: string; late: boolean; mutedNote: boolean } {
+function deadlinePanel(s: SkladchinaDetailDto): { cap: string; value: string; at: string | null; note: string; late: boolean; mutedNote: boolean } {
   const closedDay = s.closedAt ? SHORT_DAY_FMT.format(new Date(s.closedAt)) : '';
-  if (s.status === 'collected') return { cap: 'сбор', value: 'Собран', note: closedDay, late: false, mutedNote: true };
-  if (s.status === 'cancelled') return { cap: 'сбор', value: 'Отменён', note: closedDay, late: false, mutedNote: true };
+  if (s.status === 'collected') return { cap: 'сбор', value: 'Собран', at: null, note: closedDay, late: false, mutedNote: true };
+  if (s.status === 'cancelled') return { cap: 'сбор', value: 'Отменён', at: null, note: closedDay, late: false, mutedNote: true };
   if (s.isEnrolling && s.enrollmentUntil) {
     const left = untilText(s.enrollmentUntil);
-    return { cap: 'отметиться до', value: SHORT_DAY_FMT.format(new Date(s.enrollmentUntil)), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
+    return { cap: 'отметиться до', value: SHORT_DAY_FMT.format(new Date(s.enrollmentUntil)), at: formatTimeHM(s.enrollmentUntil), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
   }
   // «Кто берёт?» после заказа: платить ещё нужно, но главный факт экрана — что приём закрыт.
-  if (s.orderedAt) return { cap: 'заказ сделан', value: SHORT_DAY_FMT.format(new Date(s.orderedAt)), note: 'приём закрыт', late: false, mutedNote: true };
+  if (s.orderedAt) return { cap: 'заказ сделан', value: SHORT_DAY_FMT.format(new Date(s.orderedAt)), at: formatTimeHM(s.orderedAt), note: 'приём закрыт', late: false, mutedNote: true };
   if (s.deadline) {
     const left = untilText(s.deadline);
-    return { cap: 'оплатить до', value: SHORT_DAY_FMT.format(new Date(s.deadline)), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
+    return { cap: 'оплатить до', value: SHORT_DAY_FMT.format(new Date(s.deadline)), at: formatTimeHM(s.deadline), note: left ?? 'срок вышел', late: left === null, mutedNote: false };
   }
-  return { cap: 'сбор', value: 'Идёт', note: 'без срока', late: false, mutedNote: true };
+  return { cap: 'сбор', value: 'Идёт', at: null, note: 'без срока', late: false, mutedNote: true };
 }
 
 export const SkladchinaPage: FC = () => {
@@ -247,6 +248,7 @@ export const SkladchinaPage: FC = () => {
         <div className="rd-glass rd-when-panel">
           <div className="rd-when-day">{when.cap}</div>
           <div className="rd-when-time rd-when-date">{when.value}</div>
+          {when.at && <div className="rd-when-at">{when.at}</div>}
           {when.note && (
             <div className={`rd-when-until${when.late ? ' rd-when-late' : when.mutedNote ? ' rd-when-muted' : ''}`}>{when.note}</div>
           )}

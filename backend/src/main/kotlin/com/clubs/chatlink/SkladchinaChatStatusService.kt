@@ -197,15 +197,12 @@ class SkladchinaChatStatusService(
 
     private fun buildView(skladchina: Skladchina): ChatStatusView {
         val totals = debtRepository.totals(skladchina.id)
-        val debts = debtRepository.findBySkladchina(skladchina.id)
-        val waitingIds = debts
-            .filter { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
-            .map { it.debt.debtorId }
-        // С кого денег уже не ждут: перевёл, ждёт подтверждения, прощён или выбыл.
-        val settledIds = debts
-            .filterNot { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
-            .map { it.debt.debtorId }
-            .toSet()
+        // Ждём денег (waiting/promised) против «уже не ждём» (перевёл, ждёт подтверждения,
+        // прощён, выбыл) — один предикат на оба списка, чтобы они не разошлись.
+        val (pending, settled) = debtRepository.findBySkladchina(skladchina.id)
+            .partition { it.debt.status == DebtStatus.waiting || it.debt.status == DebtStatus.promised }
+        val waitingIds = pending.map { it.debt.debtorId }
+        val settledIds = settled.map { it.debt.debtorId }.toSet()
         // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
         val enrolledIds = if (skladchina.enrollmentUntil != null || skladchina.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
         return ChatStatusView(

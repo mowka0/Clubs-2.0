@@ -73,8 +73,7 @@ sealed class ActivityItemDto {
         // null у «По желанию» без срока.
         val deadline: OffsetDateTime?,
         // Когда сбор закрыли фактически: у прошедших лента показывает и сортирует именно по ней,
-        // а не по сроку оплаты — сбор со сроком 18-го могли закрыть 15-го. null у активных и у
-        // закрытых до появления поля.
+        // а не по сроку оплаты — сбор со сроком 18-го могли закрыть 15-го. null у активных.
         val closedAt: OffsetDateTime?,
         val debtCount: Int,
         val receivedCount: Int,

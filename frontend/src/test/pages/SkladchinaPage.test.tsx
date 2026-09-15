@@ -8,6 +8,7 @@ import { renderWithProviders } from '../utils/renderWithProviders';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { DebtDto, SkladchinaDetailDto, UserDto } from '../../types/api';
 import { SHORT_DAY_FMT } from '../../utils/skladchinaKind';
+import { formatTimeHM } from '../../utils/formatters';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
@@ -458,6 +459,10 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     const { unmount } = renderPage();
     expect(await screen.findByText('оплатить до')).toBeInTheDocument();
     expect(screen.getByText(SHORT_DAY_FMT.format(new Date(FUTURE)))).toBeInTheDocument();
+    // Час срока — строкой под датой; в строке стадии у прогресса срока больше нет (PO 2026-09-15).
+    expect(screen.getByText(formatTimeHM(FUTURE))).toBeInTheDocument();
+    // Срок остался только в плашке и в строке своего долга; строка стадии у прогресса его не повторяет.
+    expect(document.querySelector('.rd-sklad-stats')?.textContent ?? '').not.toContain('до ');
     expect(screen.getByText('через 3 дня')).toBeInTheDocument();
     unmount();
 
