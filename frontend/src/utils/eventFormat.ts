@@ -66,3 +66,25 @@ export function formatWords(
   if (minParticipants === participantLimit) return `ровно ${participantLimit} человек`;
   return `${minParticipants}–${participantLimit} человек`;
 }
+
+/**
+ * Число участников для карточек и афиши — один источник на все поверхности.
+ *
+ * У встречи с местами до закрытия набора это голоса «Иду», после — подтверждённый состав (F5-21).
+ * У открытой встречи (модель v3, event-formats.md § 16) подтверждений не существует вовсе: голос
+ * «Пойду» и есть состав, статуса `stage_2` она не достигает, поэтому источник один на весь
+ * жизненный цикл — `confirmedCount`, тот же, что у кольца на странице встречи.
+ *
+ * Без этого правила поверхности расходятся на встречах, созданных до реформы: голос там записан
+ * только в `stage_1_vote`, и карточка показала бы 5, а страница встречи — 0.
+ */
+export function rosterCount(event: {
+  status: string;
+  participantLimit: number | null;
+  goingCount: number;
+  confirmedCount: number;
+}): number {
+  if (event.participantLimit == null) return event.confirmedCount;
+  const finalComposition = event.status === 'stage_2' || event.status === 'completed';
+  return finalComposition ? event.confirmedCount : event.goingCount;
+}

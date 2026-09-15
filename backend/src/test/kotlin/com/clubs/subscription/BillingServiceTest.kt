@@ -44,7 +44,6 @@ class BillingServiceTest {
         freeMeetingRepository, funnelEventRepository, paymentProvider, notifier,
         graceDays = 7, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
-        botUsername = "clubs_test_bot",
         recipientName = "Варламов Иван Иванович",
     )
 
@@ -81,7 +80,9 @@ class BillingServiceTest {
         val request = slot<CheckoutRequest>()
         verify { paymentProvider.createCheckout(capture(request)) }
         assertTrue(request.captured.recurring, "карта сохраняется всегда — ползунок решает, списывать ли")
-        assertEquals("https://app.example/pay/return?club=${club.id}&bot=clubs_test_bot", request.captured.successUrl)
+        // Имя бота в адрес возврата не подставляем: страница берёт его из бандла (иначе
+        // `?bot=<чужой>` давал бы нашу страницу «Оплата принята» с кнопкой в чужого бота).
+        assertEquals("https://app.example/pay/return?club=${club.id}", request.captured.successUrl)
         assertEquals(PRICE, request.captured.amountKopecks)
     }
 
@@ -309,5 +310,15 @@ class BillingServiceTest {
 
         every { paymentRepository.hasPendingMother(club.id) } returns true
         assertTrue(service.status(club.id, club.ownerId).pendingCheckout)
+    }
+
+    @Test
+    fun `status tells a co-organizer that only the owner can pay`() {
+        val coOrganizer = UUID.randomUUID()
+        every { clubRoleGuard.requireCapability(club.id, any(), any()) } returns club
+        every { freeMeetingRepository.isUsed(link.chatId) } returns true
+
+        assertTrue(service.status(club.id, club.ownerId).canPay)
+        assertFalse(service.status(club.id, coOrganizer).canPay, "чекаут ответил бы со-организатору 403")
     }
 }

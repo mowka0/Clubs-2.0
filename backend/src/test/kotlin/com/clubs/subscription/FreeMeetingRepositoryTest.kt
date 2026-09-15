@@ -21,8 +21,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Признак бесплатной встречи на реальном Postgres (V94): атомарное взятие, возврат отменой (R5),
- * переезд chat_id, плюс цена плана CHAT из V95. Гоняется на полной Flyway-цепочке.
+ * Признак бесплатной встречи на реальном Postgres (V97): атомарное взятие, возврат отменой (R5),
+ * переезд chat_id, плюс цена плана CHAT из V98. Гоняется на полной Flyway-цепочке.
  */
 @SpringBootTest(
     properties = [
@@ -108,7 +108,7 @@ class FreeMeetingRepositoryTest {
     }
 
     @Test
-    fun `CHAT plan is priced at 199 rubles (V95)`() {
+    fun `CHAT plan is priced at 199 rubles (V98)`() {
         assertEquals(19900, subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT))
     }
 }

@@ -83,6 +83,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}  # 1ч по security.md; frontend apiClient автоматически повторяет 401 со свежим initData
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Username бота (без @) для deep link'ов t.me/<bot>?startapp=… Тот же дефолт, что в
+      # application.yml; этой же переменной собирается фронт (build arg VITE_TELEGRAM_BOT_USERNAME),
+      # чтобы страницы возврата после оплаты вели в того же бота.
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-clubs_v2_bot}
       # Username саппорт-аккаунта (без @) для баг-репортов из формы «Сообщить о проблеме»
       TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
       # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
@@ -163,6 +167,9 @@ services:
         # геокодинг проксирует backend, и в бандле ключа быть не должно.
         VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
         VITE_YANDEX_STATIC_API_KEY: ${VITE_YANDEX_STATIC_API_KEY}
+        # Тот же дефолт, что у telegram.bot-username бэкенда: страницы возврата после оплаты
+        # строят ссылку «Открыть Clubs в Telegram» из бандла, а не из адреса (ревью биллинга).
+        VITE_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-clubs_v2_bot}
     labels:
       - "traefik.docker.network=coolify"
       # Здесь намеренно нет явного лейбла traefik.http.services.*.loadbalancer.

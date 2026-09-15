@@ -9,8 +9,11 @@ COPY . .
 # Это НЕ секреты (уходят в браузер по определению), защита ключей — referer-ограничение в кабинете Яндекса.
 ARG VITE_YANDEX_MAPS_API_KEY
 ARG VITE_YANDEX_STATIC_API_KEY
+# Имя бота для кнопок возврата после оплаты (/pay/return вне Telegram, API там недоступен).
+ARG VITE_TELEGRAM_BOT_USERNAME
 ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
-    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
+    VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 RUN npm run build
 
 # Этап 2: раздача

@@ -88,8 +88,11 @@ staging-прогона по § 10. Трек **L**: миграции, деньг�
    `openLink` (внешний браузер / in-app browser Telegram).
 4. Оплата на странице Robokassa. `SuccessUrl2` ведёт на нашу страницу `/pay/return?club=<id>`
    (обычный веб, вне Mini App): «Оплата принята, возвращайтесь в Telegram» + кнопка
-   `https://t.me/<bot>/<app>?startapp=billing_<clubId>`. **SuccessURL не подтверждает оплату** —
-   только ResultURL (правило Robokassa).
+   `https://t.me/<bot>?startapp=billing_<clubId>`. Имя бота страница берёт **из бандла**
+   (`VITE_TELEGRAM_BOT_USERNAME`, дефолт зеркалит `telegram.bot-username`), а `club` принимает
+   только как UUID: адрес открыт всем, и параметр `bot` позволил бы показать нашу страницу
+   «Оплата принята» с кнопкой в чужого бота (ревью 2026-09-07). **SuccessURL не подтверждает
+   оплату** — только ResultURL (правило Robokassa).
 5. ResultURL → проверка IP и подписи → `platform_payment` → SUCCEEDED, подписка `ACTIVE`,
    `current_period_end = now + 30d`, `provider_token = InvId материнского платежа`,
    `autopay_possible = (PaymentMethod — карта)`; DM владельцу «Оплачено до дд.мм · автопродление
@@ -143,7 +146,7 @@ staging-прогона по § 10. Трек **L**: миграции, деньг�
 
 Две миграции (новое значение enum нельзя использовать в той же транзакции — как V37).
 
-### 5.1 `V94__platform_billing_chat.sql`
+### 5.1 `V97__platform_billing_chat.sql`
 ```sql
 ALTER TYPE subscription_plan ADD VALUE IF NOT EXISTS 'CHAT';
 
@@ -209,7 +212,7 @@ CREATE INDEX idx_funnel_event_kind_created ON funnel_event (kind, created_at);
 Все `COMMENT ON` — по-русски (конвенция). Планы `FREE/TRIO/UNLIMITED` в enum остаются (значения
 enum в PostgreSQL не удаляются), в коде не используются.
 
-Как реализовано (отличия от эскиза выше — в самой миграции `V94__platform_billing_chat.sql`):
+Как реализовано (отличия от эскиза выше — в самой миграции `V97__platform_billing_chat.sql`):
 - легаси-строки платформенного плана ёмкости (`payer_role = 'ORGANIZER' AND subject_club_id IS NULL`)
   переводятся в `ENDED` — в чат-модели у них нет предмета, реальных денег за ними нет
   (стаб-провайдер); `chk_service_subscription_org_club` добавлен как `NOT VALID`, чтобы эти строки
@@ -220,7 +223,7 @@ enum в PostgreSQL не удаляются), в коде не использую
 - у `chat_free_meeting.event_id` и `funnel_event.club_id` FK нет — признак и факты воронки
   переживают удаление клуба и его встреч.
 
-### 5.2 `V95__platform_billing_pricing.sql`
+### 5.2 `V98__platform_billing_pricing.sql`
 ```sql
 INSERT INTO subscription_pricing (plan, price_kopecks, effective_from) VALUES ('CHAT', 19900, NOW());
 ```
@@ -285,6 +288,8 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
 
 ### 6.3 Сервис `BillingService` (переименованный `SubscriptionService`)
 - `status(clubId, userId)` → `BillingStatusDto` (владелец/со-организатор с `MANAGE_EVENTS`; иначе 403).
+  `canPay = (club.ownerId == userId)`: со-организатор видит статус, но кнопку оплаты ему не
+  показывают — чекаут ответил бы 403.
 - `checkout(clubId, userId, autopay)`: только владелец (`ClubRoleGuard`, капабилити владельца);
   клуб обязан иметь привязку; создаёт `platform_payment(MOTHER, club_id, subscription_id = NULL)`;
   **строку подписки не создаёт** — она появляется в `onResult` с первым успешным платежом (строка
@@ -389,6 +394,7 @@ data class BillingStatusDto(
     val autopayPossible: Boolean,
     val pendingCheckout: Boolean, // есть PENDING MOTHER < 30 мин
     val recipientName: String,    // ФИО самозанятого целиком (billing.recipient-name), для шита и оферты
+    val canPay: Boolean,          // смотрящий — владелец клуба; со-организатору шит показывает «платит владелец»
 )
 ```
 Реализация: `BillingController` (`@RequiresCapability(MANAGE_EVENTS)` на статус, `@RequiresOrganizer`
@@ -437,6 +443,7 @@ subscription:
   `billing` + `events`).
 - `components/billing/BillingSheet.tsx` — донор `DuesPaymentSheet` (портал, шапка, `.rd-dues-amount`,
   `.rd-cl-feat`/`.rd-cl-tgl`, `.rd-btn-primary`), без загрузки скриншота и trust-карточки. Состояния:
+  «платит владелец» (со-организатору, когда `canPay = false`: кнопки и ползунка нет),
   «к оплате» (ползунок + карточка провайдера с ФИО + свёрнутая оферта `offerText.ts` + кнопка),
   «ждём подтверждения» (спиннер + опрос 3 с до 60 с, **без** кнопки «подожду в личке» — закрыть
   можно только шапкой), «оплачено до…» (кнопка «Вернуться к встрече» / «Готово»), «пока не видим
@@ -452,8 +459,10 @@ subscription:
   Разбор `startapp` уже есть — `components/DeepLinkHandler.tsx` (паттерны `club_`, `event_`,
   `skladchina_`, `invite_`); добавить `billing_<uuid>` → `/clubs/{id}/manage?billing=done`.
 - Страница `/pay/return` (обычный роут фронта, работает вне Telegram): «Оплата принята,
-  возвращайтесь в Telegram» + кнопка `https://t.me/<bot>/<app>?startapp=billing_<clubId>`;
+  возвращайтесь в Telegram» + кнопка `https://t.me/<bot>?startapp=billing_<clubId>`;
   `/pay/fail` — «Оплата не прошла» + та же кнопка. Обе без запросов к API (нет JWT вне Mini App).
+  Имя бота — из бандла (`VITE_TELEGRAM_BOT_USERNAME`), из адреса берётся только `club` и только
+  в формате UUID.
 - Мастер `ClubSetupWizard` и `ConnectChatScreen`: одна строка «Первая встреча бесплатно, дальше
   199 ₽ в месяц за чат».
 - Удалить: `components/subscription/*`, `api/subscription.ts`, `queries/subscription.ts`,

@@ -1408,7 +1408,7 @@ THEN строка username не отображается
 - `docs/modules/telegram-bot.md` — DM-инфраструктура.
 - `docs/modules/reputation.md` — семантика `total_confirmations` /
   `total_attendances`.
-- `docs/modules/skladchina.md` — паттерн `useSkladchinaActionRequiredCountQuery`,
+- `docs/modules/skladchina-v3.md` § 7 — паттерн `useSkladchinaActionRequiredCountQuery`,
   tab-dot, который зеркалируется здесь.
 - `PRD-Clubs.md` §4.2.2 — бизнес-контекст «Закрытый клуб».
 

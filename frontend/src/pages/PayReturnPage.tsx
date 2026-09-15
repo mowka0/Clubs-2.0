@@ -6,16 +6,28 @@ interface PayReturnPageProps {
 }
 
 /**
+ * Имя бота для кнопки «Открыть Clubs в Telegram». Берётся из бандла, а НЕ из адреса страницы:
+ * `?bot=<чужой>` давал бы брендированную страницу «Оплата принята» с кнопкой в чужого бота —
+ * фишинг на нашем домене (ревью 2026-09-07). Значение публичное, задаётся build-аргом
+ * VITE_TELEGRAM_BOT_USERNAME; дефолт совпадает с `telegram.bot-username` бэкенда.
+ */
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'clubs_v2_bot';
+/** Клуб из адреса подставляется в deep link, поэтому принимается только как UUID. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Страницы возврата из браузера после оплаты у провайдера (platform-billing.md § 7): обычный
  * веб вне Telegram, JWT нет, к API не ходим — только текст и кнопка обратно в Mini App.
  * Статус оплаты по этим страницам НЕ меняется: подтверждает только ResultURL на бэкенде.
  */
 export const PayReturnPage: FC<PayReturnPageProps> = ({ kind }) => {
   const [params] = useSearchParams();
-  const clubId = params.get('club');
-  const bot = params.get('bot');
+  const clubParam = params.get('club');
+  const clubId = clubParam && UUID_RE.test(clubParam) ? clubParam : null;
   // `t.me/<bot>?startapp=…` открывает главный Mini App бота; DeepLinkHandler разбирает `billing_<clubId>`.
-  const backUrl = bot && clubId ? `https://t.me/${bot}?startapp=billing_${clubId}` : bot ? `https://t.me/${bot}` : null;
+  const backUrl = clubId
+    ? `https://t.me/${BOT_USERNAME}?startapp=billing_${clubId}`
+    : `https://t.me/${BOT_USERNAME}`;
 
   return (
     <div className="rd-pay-return">
@@ -30,7 +42,7 @@ export const PayReturnPage: FC<PayReturnPageProps> = ({ kind }) => {
               : 'Деньги не списаны. Вернитесь в Telegram и попробуйте ещё раз — можно другой картой или по СБП.'}
           </p>
         </div>
-        {backUrl && <a className="btn" href={backUrl}>Открыть Clubs в Telegram</a>}
+        <a className="btn" href={backUrl}>Открыть Clubs в Telegram</a>
         <div className="small">
           {kind === 'success'
             ? 'Если кнопка не сработала — просто откройте Telegram: бот уже написал вам.'

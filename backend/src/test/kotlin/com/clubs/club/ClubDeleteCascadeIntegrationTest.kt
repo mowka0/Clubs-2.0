@@ -68,7 +68,7 @@ class ClubDeleteCascadeIntegrationTest {
 
     @BeforeEach
     fun setUp() {
-        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM debts")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
@@ -106,35 +106,34 @@ class ClubDeleteCascadeIntegrationTest {
     }
 
     @Test
-    fun `cancelActiveByClub cancels active skladchinas and releases pending participants without penalty`() {
+    fun `cancelActiveByClub cancels active skladchinas and forgives open debts without penalty`() {
         val active = insertSkladchina(clubA, "active")
-        val pendingUser = newUser()
+        val waitingUser = newUser()
         val paidUser = newUser()
-        insertParticipant(active, pendingUser, "pending")
-        insertParticipant(active, paidUser, "paid")
+        insertDebt(active, waitingUser, "waiting")
+        insertDebt(active, paidUser, "received")
 
-        val alreadyClosed = insertSkladchina(clubA, "closed_success")
-        val closedPending = newUser()
-        insertParticipant(alreadyClosed, closedPending, "pending")
+        val alreadyClosed = insertSkladchina(clubA, "collected")
+        val closedWaiting = newUser()
+        insertDebt(alreadyClosed, closedWaiting, "waiting")
 
         val otherClubSkladchina = insertSkladchina(clubB, "active")
-        val otherPending = newUser()
-        insertParticipant(otherClubSkladchina, otherPending, "pending")
+        val otherWaiting = newUser()
+        insertDebt(otherClubSkladchina, otherWaiting, "waiting")
 
         val cancelled = skladchinaRepository.cancelActiveByClub(clubA)
 
         assertEquals(1, cancelled)
         assertEquals("cancelled", statusOf("skladchinas", active))
-        // pending → released (reputation-neutral), NOT expired_no_response (which would penalize).
-        assertEquals("released", participantStatusOf(active, pendingUser))
-        // paid participants keep their status.
-        assertEquals("paid", participantStatusOf(active, paidUser))
-        // An already-closed skladchina and its participants are untouched.
-        assertEquals("closed_success", statusOf("skladchinas", alreadyClosed))
-        assertEquals("pending", participantStatusOf(alreadyClosed, closedPending))
-        // Another club's active skladchina and its pending participant are untouched.
+        // Открытый долг прощён (без репутации), полученный не трогаем.
+        assertEquals("forgiven", debtStatusOf(active, waitingUser))
+        assertEquals("received", debtStatusOf(active, paidUser))
+        // Уже закрытый сбор и его долги не трогаются.
+        assertEquals("collected", statusOf("skladchinas", alreadyClosed))
+        assertEquals("waiting", debtStatusOf(alreadyClosed, closedWaiting))
+        // Сбор другого клуба не трогается.
         assertEquals("active", statusOf("skladchinas", otherClubSkladchina))
-        assertEquals("pending", participantStatusOf(otherClubSkladchina, otherPending))
+        assertEquals("waiting", debtStatusOf(otherClubSkladchina, otherWaiting))
     }
 
     @Test
@@ -193,18 +192,18 @@ class ClubDeleteCascadeIntegrationTest {
         val deadline = OffsetDateTime.now().plusDays(3)
         dsl.execute(
             """
-            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, status)
-            VALUES ('$id', '$clubId', '$ownerId', 'Sklad', 'voluntary'::skladchina_mode, 'http://pay', '$deadline', '$status'::skladchina_status)
+            INSERT INTO skladchinas (id, club_id, creator_id, title, kind, payment_link, deadline, status)
+            VALUES ('$id', '$clubId', '$ownerId', 'Sklad', 'shared'::skladchina_kind, 'http://pay', '$deadline', '$status'::skladchina_status)
             """.trimIndent()
         )
         return id
     }
 
-    private fun insertParticipant(skladchinaId: UUID, userId: UUID, status: String) {
+    private fun insertDebt(skladchinaId: UUID, userId: UUID, status: String) {
         dsl.execute(
             """
-            INSERT INTO skladchina_participants (skladchina_id, user_id, status)
-            VALUES ('$skladchinaId', '$userId', '$status'::skladchina_participant_status)
+            INSERT INTO debts (skladchina_id, debtor_id, creditor_id, amount_kopecks, status)
+            VALUES ('$skladchinaId', '$userId', '$ownerId', 1000, '$status'::debt_status)
             """.trimIndent()
         )
     }
@@ -226,9 +225,9 @@ class ClubDeleteCascadeIntegrationTest {
     private fun statusOf(table: String, id: UUID): String? =
         dsl.fetchOne("SELECT status FROM $table WHERE id = ?", id)?.get(0, String::class.java)
 
-    private fun participantStatusOf(skladchinaId: UUID, userId: UUID): String? =
+    private fun debtStatusOf(skladchinaId: UUID, userId: UUID): String? =
         dsl.fetchOne(
-            "SELECT status FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            "SELECT status FROM debts WHERE skladchina_id = ? AND debtor_id = ?",
             skladchinaId, userId
         )?.get(0, String::class.java)
 }

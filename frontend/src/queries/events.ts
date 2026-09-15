@@ -6,7 +6,6 @@ import {
   createEvent,
   declineParticipation,
   disputeAttendance,
-  getClubEvents,
   getClubEventsTeaser,
   getEvent,
   getEventPendingMembers,
@@ -21,15 +20,7 @@ import {
   updateEvent,
 } from '../api/events';
 import type { CreateEventBody, UpdateEventBody } from '../api/events';
-import { queryKeys, type EventListParams } from './queryKeys';
-
-export function useClubEventsQuery(clubId: string | undefined, params?: EventListParams) {
-  return useQuery({
-    queryKey: queryKeys.events.byClub(clubId ?? '', params),
-    queryFn: () => getClubEvents(clubId!, params),
-    enabled: Boolean(clubId),
-  });
-}
+import { queryKeys } from './queryKeys';
 
 /** Тизер-афиша клуба: включается только у смотрящего БЕЗ доступа (гость / frozen / expired). */
 export function useClubEventsTeaserQuery(clubId: string | undefined, enabled: boolean) {

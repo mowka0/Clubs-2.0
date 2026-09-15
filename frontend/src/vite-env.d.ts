@@ -7,6 +7,9 @@ interface ImportMetaEnv {
   // Локально — frontend/.env.local (gitignored), в Docker-сборке — build args из Coolify env.
   readonly VITE_YANDEX_MAPS_API_KEY: string | undefined;
   readonly VITE_YANDEX_STATIC_API_KEY: string | undefined;
+  // Имя бота для кнопки возврата на страницах /pay/return и /pay/fail (они живут вне Telegram,
+  // API недоступен). Публичное значение, зеркалит TELEGRAM_BOT_USERNAME бэкенда.
+  readonly VITE_TELEGRAM_BOT_USERNAME: string | undefined;
 }
 
 interface ImportMeta {

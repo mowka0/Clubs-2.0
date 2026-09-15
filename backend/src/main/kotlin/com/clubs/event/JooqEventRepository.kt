@@ -125,7 +125,8 @@ class JooqEventRepository(
         // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
         // голос Этапа 1 (включая «Не пойду») не финален. Встречи с лимитом (V85) исключены: у них
         // состав закрывается сам, подтверждать нечего. Дискриминатор тот же, что у
-        // Event.isRosterEvent — наличие лимита.
+        // Event.hasSeatLimit — наличие лимита. Новая открытая встреча сюда не доходит (в stage_2
+        // она не попадает, v3); ветка живёт ради строк, флипнутых до реформы.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
             .and(EVENTS.PARTICIPANT_LIMIT.isNull)
@@ -349,6 +350,10 @@ class JooqEventRepository(
             .where(
                 EVENTS.STATUS.eq(EventStatus.upcoming)
                     .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
+                    // Открытая встреча одноэтапна (v3): дедлайна набора у неё нет, голосование
+                    // идёт до старта. Это ЕДИНСТВЕННАЯ точка, из-за которой она вообще попадала
+                    // во второй этап — без этого предиката вся модель v3 молчит.
+                    .and(EVENTS.PARTICIPANT_LIMIT.isNotNull)
                     // Пер-событийный интервал Этапа 2 (V67): событие «готово», когда до старта
                     // осталось ≤ его собственного lead (или глобального дефолта при NULL).
                     .and(
@@ -412,22 +417,6 @@ class JooqEventRepository(
             .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
             .where(EVENTS.ID.eq(id).and(EVENTS.ROSTER_DECIDED_AT.isNull))
             .execute()
-
-    /**
-     * Возвращает ближайшее предстоящее событие среди всех клубов.
-     * Используется в ClubsBot.handleWhoIsGoing (команда /кто_идет).
-     * Статус должен быть upcoming, stage_1 или stage_2, и event_datetime > now.
-     */
-    override fun findNextUpcomingEvent(now: OffsetDateTime): Event? =
-        dsl.selectFrom(EVENTS)
-            .where(
-                EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2)
-                    .and(EVENTS.EVENT_DATETIME.gt(now))
-            )
-            .orderBy(EVENTS.EVENT_DATETIME.asc())
-            .limit(1)
-            .fetchOne()
-            ?.let(mapper::toDomain)
 
     override fun findFutureEventsByClub(clubId: UUID, now: OffsetDateTime): List<Event> =
         dsl.selectFrom(EVENTS)

@@ -348,7 +348,7 @@ CREATE INDEX IF NOT EXISTS idx_user_interests_user ON user_interests (user_id);
 | `useMyInterestsQuery()` | `clubs.myInterests()` — мои интересы |
 | `useInterestSuggestQuery(q)` | автокомплит, `enabled = trimmed.length >= 2`, staleTime 60s |
 | `useUpdateProfileMutation()` | PATCH /me → `setUser(user)` + invalidate `clubs.myInterests()` |
-| `useSkladchinaActionRequiredCountQuery()` | бейдж на табе «Сборы» (см. [`skladchina.md`](./skladchina.md) § «Action-required count») |
+| `useSkladchinaActionRequiredCountQuery()` | бейдж на табе «Сборы» (см. [`skladchina-v3.md`](./skladchina-v3.md) § 7 «action-required-count») |
 
 ---
 
@@ -459,7 +459,7 @@ AND на повторном старте (V16 уже применена) — exi
 ## Связанные модули и backlog
 
 - [`reputation.md`](./reputation.md) § «Per-user reputation overview» — endpoint детали + правила порога «Новичок» (модель v2 ledger).
-- [`skladchina.md`](./skladchina.md) § «Action-required count» — связанный фронт-сигнал (бейдж на табе «Сборы») реализован в той же ветке.
+- [`skladchina-v3.md`](./skladchina-v3.md) § 7 «action-required-count» — связанный фронт-сигнал (бейдж на сегменте «Сборы» в «Активностях»).
 - [`club-page-unified.md`](./club-page-unified.md) — устаревшее «Мой профиль» upd-блок наверху.
 - [`ui-pages.md`](./ui-pages.md) § «ProfilePage» — это место в общей навигации фронт-страниц.
 - [`frontend-stores.md`](./frontend-stores.md) § «Query-хуки» — расширение таблицы хуками этой итерации + `AuthStore.setUser`.

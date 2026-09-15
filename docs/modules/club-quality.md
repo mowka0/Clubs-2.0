@@ -52,7 +52,7 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
 | `coreSize: Int` | Сплочённость (ядро) | distinct **НЕ-owner текущих участников** с ≥3 явками («attended») по НЕ-cancelled событиям клуба, all-time |
 | `ageMonths: Int` | Возраст (бейдж в строке-капшне) | полные месяцы от `clubs.created_at` до now |
 | `totalMeetings: Int` | Счётчик «N встреч» | held-события all-time (past, non-cancelled) |
-| `successfulSkladchinas: Int` | Счётчик «N сборов» | складчины со статусом `closed_success` |
+| `successfulSkladchinas: Int` | Счётчик «N сборов» | сборы со статусом `collected` (сборы v3; до V90 — `closed_success`) |
 
 **Определения (точные):**
 - **held-событие** = `events.event_datetime < now()` AND `events.status <> 'cancelled'`.
@@ -75,7 +75,7 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
   «дёргалось» бы каждый раз, когда у платящего участника ненадолго истекает окно.
 - **ageMonths** = `Period.between(created_at::date, now::date).toTotalMonths()`, не меньше 0.
 - **totalMeetings** = `count(held-событий all-time)` (past, non-cancelled), без окна — майлстон «N встреч».
-- **successfulSkladchinas** = `count(skladchinas WHERE club_id=? AND status='closed_success')` — майлстон «первый сбор».
+- **successfulSkladchinas** = `count(skladchinas WHERE club_id=? AND status='collected')` — майлстон «первый сбор».
 
 **Анти-фарм (важно для ревью):** в этом срезе факты — слой **L1/L2** (показываем, считаем щедро,
 owner-усилие в событиях допускается). Distinct-account / абсолюты / decay / min-K — защиты слоя **L3**
@@ -216,7 +216,7 @@ backend/src/main/kotlin/com/clubs/clubquality/
 7. Блок «Качество клуба» виден на странице клуба всем зрителям; молодой/пустой клуб не выглядит сломанным.
 8. Backend: `./gradlew test` зелёный; есть unit-тест на агрегации (позитив + пустой клуб + 404).
 9. Frontend: `npm run build` зелёный; `npm test` зелёный.
-10. `totalMeetings` = held all-time (без окна); `successfulSkladchinas` = только `closed_success`.
+10. `totalMeetings` = held all-time (без окна); `successfulSkladchinas` = только `collected`.
 11. Единый блок под ярлыком «Жизнь клуба» (ярлык внутри компонента — блок скрывается целиком при пустом ответе): строка-капшн всегда показывает возраст-бейдж; счётчики «N встреч»/«N сборов» — живые числа, показ при >0.
 12. `GET /api/clubs/quality/batch?ids=` возвращает по элементу на существующий клуб; несуществующие id пропускаются (без 404); пустой ввод → `[]`; дубликаты схлопываются; размер кэпится на 50.
 13. `engagementPercent` = distinct откликнувшихся за 90д ÷ живые участники (active+grace), 0..100; деление-на-ноль (0 участников) → 0; >100% клампится к 100. `ageDays` = целых дней с создания (дни, не месяцы).
@@ -254,7 +254,7 @@ ownership-проверки обязательны.
 - **Слой L1/L2** (показ, считаем щедро, owner-данные допустимы). Анти-фарм (distinct/абсолюты/decay/min-K) —
   это L3, которого здесь НЕТ.
 - **Модуль `clubquality`** (пир): читает `transactions`, `membership_history`, `applications`,
-  `event_responses`, `events`, `skladchina_participants`, `skladchinas`, `memberships`, `clubs` —
+  `event_responses`, `events`, `debts` (сборы v3, бывшая `skladchina_participants`), `skladchinas`, `memberships`, `clubs` —
   read-only jOOQ-агрегации (charter §10 дизайн-дока: clubquality читает события/транзакции/складчину).
 - **`reputation_ledger` НЕ читаем** (правило §2 спеки). Поэтому «споры по явке» считаем напрямую из
   `event_responses`. ⚠️ `attendance = 'disputed'` — **временное** состояние: резолв (организатором или по
@@ -312,11 +312,11 @@ ownership-проверки обязательны.
 - **engagementPercent** (оба): distinct откликнувшихся (`event_responses`) на non-cancelled события клуба
   за 90д ÷ участники с доступом (`memberships.status = active`; frozen/expired без доступа — исключены) × 100, clamp 0..100; 0 если живых нет.
   (То же определение, что `engagementPercent` карточки — консистентно.)
-- **skladchinaPaidPercent** (если есть складчины в окне): `paid / terminal × 100`, где по складчинам клуба,
-  **закрытым** (`closed_at`) в окне 90д: `paid` = участники `status='paid'`, `terminal` = участники в
-  статусах с принятым платёжным решением `{paid, declined, expired_no_response}`. **Исключены:** `pending`
-  (ещё не решили) и `released` (сбор закрыт досрочно, обязательства сняты — не должен занижать %).
-  `null` если закрытых складчин в окне нет.
+- **skladchinaPaidPercent** (если есть сборы в окне; сборы v3): `received / settled × 100`, где по
+  сборам клуба, **закрытым** (`closed_at`) в окне 90д: `received` = долги `status='received'`,
+  `settled` = долги в решённых статусах `{received, forgiven, dropped}`. **Исключены:** открытые
+  долги (`waiting`/`promised`/`claimed`) и собственная доля создателя (`debtor_id = creditor_id`).
+  `null` если закрытых сборов в окне нет.
 - **pendingApplications** (если `access_type='closed'`): count `applications` `status='pending'` клуба.
   `stalePendingApplications` ⊆ — те же, у кого `created_at < now-24ч`. `null` для open/private.
 
@@ -496,10 +496,10 @@ Footprint берётся через `LedgerReadPort.footprintByUser` (модул
 **Free-клуб** (`subscription_price=0`): Paying off, вес 0.30 перераспределён → Diversity 0.50 / Demand ≈0.286 / Activity ≈0.214.
 
 ### 10.5 Негативы и множители
-Негативы читаются **напрямую** из `event_responses`/`events`/`applications`/`skladchina_participants` (НЕ из ledger —
+Негативы читаются **напрямую** из `event_responses`/`events`/`applications`/`debts` (НЕ из ledger —
 в нём их нет как отдельного kind), identity спорщика **не селектится**. Все capped + decay (90д), вычитаются из base ∈ [0,1]:
 - Dispute (`disputed`∨`dispute_terminal`∨`dispute_note`) ·0.05, cap 0.30 · Ghosting (`finalized ∧ ¬marked`) ·0.07, cap 0.40 ·
-  AutoReject (closed-клубы) + SkladchinaGhost (`expired_no_response`) по ·0.03, совместный cap 0.20.
+  AutoReject (closed-клубы) + SkladchinaGhost (долг с `reputation_minus_at` — списан −40 за просрочку, сборы v3; момент = штамп) по ·0.03, совместный cap 0.20.
 - `anomalyMultiplier ∈ [0.7,1.0]`: «слишком чисто при объёме» (core ≥10 И ноль споров/ghosting/churn) → −0.1.
 - `tenureFactor = min(1, clubAgeDays/90)`. `CoOccurrenceCollapse`/`TransferProbation` = stub 1.0 (v2).
 - `rank_score = max(0, (base − penalties) × anomaly × tenure)` (clamp ≥0).

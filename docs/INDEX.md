@@ -45,7 +45,7 @@
 | `membership` | `membership.md`, `membership-lifecycle.md` |
 | `payment` | `payment.md`, `platform-billing.md` (сеам `PaymentProvider`, адаптер Robokassa); `payment-v2.md` — superseded |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
-| `skladchina` | `skladchina.md` |
+| `skladchina`, `debt` | `skladchina-v3.md` |
 | `storage` | `infrastructure.md` |
 | `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи), `membership-lifecycle.md`; `payment-v2.md` — superseded |
 | `user` | `profile.md`, `profile-quest.md` |
@@ -64,7 +64,7 @@
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
 | `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md`; 402 → шит оплаты — `platform-billing.md` § 7 |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
-| `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
+| `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `DebtsPage.tsx`, `DebtPairPage.tsx` (+ `components/debt/DebtRow.tsx`) | `skladchina-v3.md` § 9 |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7 |
@@ -95,7 +95,7 @@
 
 ## 2. Живые спеки (`docs/modules/`)
 
-48 файлов. Дата — последняя правка спеки, метка свежести, не гарантия актуальности.
+49 файлов. Дата — последняя правка спеки, метка свежести, не гарантия актуальности.
 
 ### Клубы и участники
 | Файл | О чём | Правлен |
@@ -110,7 +110,7 @@
 | `club-interests.md` | темы клуба поверх категории | 2026-08-05 |
 | `club-quality.md` | срезы качества, скрытый ранг L3 | 2026-08-05 |
 | `membership.md` | членство, статусы, вступление | 2026-07-07 |
-| `membership-lifecycle.md` | статусная модель, honor-system | 2026-08-10 |
+| `membership-lifecycle.md` | статусная модель, honor-system; известный пробел — заморозка не освобождает места в составах встреч (2026-09-15) | 2026-09-15 |
 | `member-admin-profile.md` | карточка участника, награды, кик | 2026-07-21 |
 | `application.md` | заявка на вступление | 2026-07-13 |
 | `applications-inbox.md` | кросс-клубовый инбокс заявок | 2026-07-13 |
@@ -119,22 +119,23 @@
 ### Встречи и активности
 | Файл | О чём | Правлен |
 |---|---|---|
-| `events.md` | встречи, двухэтапное подтверждение | 2026-08-21 |
-| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат; с 2026-09-05 режим «набор закроется сразу» убран — дата обязана быть дальше интервала. Отвергнутые модели V83/V85 — § 12 спеки, их тексты только в git-истории ветки | 2026-09-05 |
+| `events.md` | встречи, двухэтапное подтверждение (у открытой встречи его нет с 2026-09-15 — § «Открытая встреча») | 2026-09-15 |
+| `event-formats.md` | форматы встреч v2 (V86): обычная встреча «минимум по желанию + максимум всегда» + открытая; три правила (① отмена при недоборе, ② предупреждение, ③ распад), «Проводим», цена отказа одной формулой, `declineConsequence`, callback-кнопки бота, задел под платный формат; с 2026-09-05 режим «набор закроется сразу» убран — дата обязана быть дальше интервала. **§ 16 — модель v3 (2026-09-15): открытая встреча одноэтапна** (голос = состав, `stage_2` недостижим, `Stage2StartedEvent` удалён, V96 — только `COMMENT ON`, бэкфилл отменён PO, открытые вопросы `[→ User]`). Отвергнутые модели V83/V85 — § 12 спеки, их тексты только в git-истории ветки | 2026-09-15 |
 | `events-feed.md` | вкладка «Активности», история | 2026-08-16 |
 | `event-vote-block.md` | блок «Набор» на странице события | 2026-08-21 |
+| `open-events-v3-testplan.md` | тест-план ручной проверки модели v3 на staging: 45 кейсов в 11 блоках, 12 дымовых | 2026-09-15 |
 | `event-stage2-composition.md` | состав Этапа 2, таб «Без ответа» | 2026-08-21 |
 | `event-templates.md` | шаблоны встреч | 2026-08-12 |
 | `event-geo.md` | гео к событию, Яндекс.Карты | 2026-08-10 |
 | `venue-search.md` | поиск места по заведениям (не начат) | 2026-08-10 |
 | `unified-activity-creation.md` | единое создание активностей через «+» | 2026-08-12 |
-| `skladchina.md` | складчины и сборы внутри клуба | 2026-07-21 |
+| `skladchina-v3.md` | сборы и долги: три вида, долг как сущность, экран «Долги», шапка сбора двумя плашками (§ 9.1), даты прошедших сборов по `closedAt`, «Скидываются» без оплативших, V90–V93 — в проде | 2026-09-15 |
 
 ### Чат, бот, репутация
 | Файл | О чём | Правлен |
 |---|---|---|
-| `club-chat-link.md` | связка клуб ↔ чат, дверь, живой закреп | 2026-08-15 |
-| `telegram-bot.md` | бот, вебхуки, уведомления | 2026-08-11 |
+| `club-chat-link.md` | связка клуб ↔ чат, дверь, живой закреп; состояния закрепа «Этап 2» больше нет (v3, 2026-09-15) | 2026-09-15 |
+| `telegram-bot.md` | бот, вебхуки, уведомления (`sendStage2Started` удалён 2026-09-15) | 2026-09-15 |
 | `reputation.md` | базовая репутация | 2026-07-21 |
 | `reputation-v2.md` | ledger, XP, уровни | 2026-07-23 |
 | `reputation-path-back.md` | путь назад, асимметричная видимость Trust | 2026-07-05 |
@@ -144,7 +145,7 @@
 |---|---|---|
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
-| `platform-billing.md` | **биллинг платформы за чат**: первая встреча бесплатно, 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания (спека Дня 4) | 2026-09-07 |
+| `platform-billing.md` | **биллинг платформы за чат**: первая встреча бесплатно, 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания (спека Дня 4); миграции V97/V98, `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-15 |
 
 ### Пользователь и вход
 | Файл | О чём | Правлен |
@@ -210,7 +211,7 @@
 
 | Что | Объём | Статус |
 |---|---|---|
-| `docs/backlog/` | 92 файла, 10 149 строк | архив: хэндоффы, разборы багов, чек-листы прошлых сессий. Открывается **только по прямой ссылке**; греп по нему при alignment не делается |
+| `docs/backlog/` | 96 файлов, 12123 строк | архив: хэндоффы, разборы багов, чек-листы прошлых сессий. Открывается **только по прямой ссылке**; греп по нему при alignment не делается |
 | `docs/completion/` | 4 файла | отчёты TASK-001/002/007/023, историческое |
 | `docs/qa/` | 1 файл | `docs/qa/reputation-test-plan.md` — ручной тест-план |
 | `docs/design/**/mockups/` | ~250 файлов | HTML/PNG дизайн-сессий |

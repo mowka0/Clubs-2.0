@@ -23,6 +23,8 @@ export interface BillingStatusDto {
   pendingCheckout: boolean;
   /** ФИО самозанятого-получателя целиком; пусто = не настроено на сервере. */
   recipientName: string;
+  /** Смотрящий может платить: платит только владелец клуба, со-организатор видит статус, но не кнопку. */
+  canPay: boolean;
 }
 
 export interface CheckoutDto {

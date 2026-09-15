@@ -182,6 +182,21 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
     </>
   );
 
+  // Со-организатор доходит до стены при создании встречи, но платит только владелец (R1):
+  // кнопка чекаута ответила бы ему 403, поэтому вместо неё — что делать дальше.
+  const renderNotOwner = () => (
+    <div className="rd-billing-state">
+      <div className="ic" aria-hidden="true">🔑</div>
+      <p className="t">Оплачивает владелец клуба</p>
+      <p className="d">
+        Подписку за клуб {clubName ? <b>«{clubName}»</b> : 'этот клуб'}
+        {price ? ` — ${price} в месяц — ` : ' '}
+        оплачивает его владелец. Попросите его открыть клуб: кнопка оплаты ждёт на странице управления.
+      </p>
+      <button type="button" className="rd-btn-outline" style={{ marginTop: 14 }} onClick={onClose}>Понятно</button>
+    </div>
+  );
+
   // Кнопки «Закрыть» здесь нет намеренно (PO 2026-09-07): проверку не бросают, шит закрывается шапкой.
   const renderWaiting = () => (
     <div className="rd-billing-state">
@@ -233,7 +248,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           </div>
         </div>
         <div className="rd-sheet-body">
-          {mode === 'pay' && renderPay()}
+          {mode === 'pay' && (data && !data.canPay ? renderNotOwner() : renderPay())}
           {mode === 'waiting' && renderWaiting()}
           {mode === 'timeout' && renderTimeout()}
           {mode === 'paid' && renderPaid()}

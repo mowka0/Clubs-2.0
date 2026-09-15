@@ -57,8 +57,6 @@ class BillingService(
     @Value("\${billing.checkout-reuse-minutes:30}") private val checkoutReuseMinutes: Long,
     @Value("\${billing.success-url}") private val successUrl: String,
     @Value("\${billing.fail-url}") private val failUrl: String,
-    // Страницы возврата живут вне Telegram и без API: бот для кнопки «назад в Clubs» — в query.
-    @Value("\${telegram.bot-username}") private val botUsername: String,
     // ФИО самозанятого-получателя целиком — в шите и оферте (PO 2026-09-07); только из env.
     @Value("\${billing.recipient-name:}") private val recipientName: String,
 ) {
@@ -68,7 +66,7 @@ class BillingService(
     @Transactional(readOnly = true)
     fun status(clubId: UUID, userId: UUID): BillingStatusDto {
         val club = clubRoleGuard.requireCapability(clubId, userId, ClubCapability.MANAGE_EVENTS)
-        return buildStatus(club, OffsetDateTime.now())
+        return buildStatus(club, userId, OffsetDateTime.now())
     }
 
     @Transactional
@@ -105,8 +103,8 @@ class BillingService(
                 description = describe(club, link),
                 recurring = true,
                 clubId = clubId,
-                successUrl = "$successUrl?club=$clubId&bot=$botUsername",
-                failUrl = "$failUrl?club=$clubId&bot=$botUsername",
+                successUrl = "$successUrl?club=$clubId",
+                failUrl = "$failUrl?club=$clubId",
             ),
         )
         return CheckoutDto(url.value, payment.invId)
@@ -180,7 +178,7 @@ class BillingService(
         }
         subscriptionRepository.updateAutopay(subscription.id, autopay)
         log.info("Billing autopay set: clubId={} subscriptionId={} autopay={}", clubId, subscription.id, autopay)
-        return buildStatus(club, OffsetDateTime.now())
+        return buildStatus(club, userId, OffsetDateTime.now())
     }
 
     private fun settleMother(payment: PlatformPayment, club: Club, notification: ResultNotification, now: OffsetDateTime): ServiceSubscription {
@@ -227,10 +225,12 @@ class BillingService(
         return subscription.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
     }
 
-    private fun buildStatus(club: Club, now: OffsetDateTime): BillingStatusDto {
+    private fun buildStatus(club: Club, userId: UUID, now: OffsetDateTime): BillingStatusDto {
+        // Платит владелец (R1); со-организатору шит показывает «попросите владельца».
+        val canPay = club.ownerId == userId
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         val link = chatLinkRepository.findByClubId(club.id)
-            ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false, recipientName = recipientName)
+            ?: return mapper().toStatusDto(BillingState.NO_CHAT, price, null, null, pendingCheckout = false, recipientName = recipientName, canPay = canPay)
         val pending = paymentRepository.hasPendingMother(club.id)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
         val state = when {
@@ -241,7 +241,7 @@ class BillingService(
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
-        return mapper().toStatusDto(state, price, subscription, graceUntil, pending, recipientName)
+        return mapper().toStatusDto(state, price, subscription, graceUntil, pending, recipientName, canPay)
     }
 
     private fun requireOwner(clubId: UUID, userId: UUID): Club {

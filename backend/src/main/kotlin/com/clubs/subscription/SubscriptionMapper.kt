@@ -48,6 +48,7 @@ class SubscriptionMapper {
         graceUntil: OffsetDateTime?,
         pendingCheckout: Boolean,
         recipientName: String,
+        canPay: Boolean,
     ): BillingStatusDto = BillingStatusDto(
         state = state,
         priceKopecks = priceKopecks,
@@ -57,5 +58,6 @@ class SubscriptionMapper {
         autopayPossible = subscription?.autopayPossible ?: false,
         pendingCheckout = pendingCheckout,
         recipientName = recipientName,
+        canPay = canPay,
     )
 }

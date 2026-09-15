@@ -126,6 +126,7 @@ export const EventsTab: FC = () => {
                 dateISO={event.eventDatetime}
                 title={event.title}
                 subtitle={event.locationText ? `${event.clubName} · ${event.locationText}` : event.clubName}
+                kind="event"
                 onClick={() => handleEventClick(event.id)}
               />
             ) : (

@@ -397,7 +397,7 @@ class MembershipServiceTest {
 
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
         every { clubRepository.findById(clubId) } returns club
-        every { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) } returns
+        every { skladchinaRepository.removeEnrollmentsForUserInClub(userId, clubId) } returns
             listOf(UUID.randomUUID(), UUID.randomUUID())
         every { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) } returns 1
 
@@ -406,14 +406,14 @@ class MembershipServiceTest {
         assertEquals("cancelled", result.status)
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
-        verify(exactly = 1) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) }
+        verify(exactly = 1) { skladchinaRepository.removeEnrollmentsForUserInClub(userId, clubId) }
         verify(exactly = 1) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) }
         verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
     }
 
     @Test
-    fun `leaveClub free - open-event booking is not penalized but still frees the slot (AC-OPEN4)`() {
+    fun `leaveClub free - open-event booking is not penalized but still frees the slot (AC-OPEN12 v3)`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
@@ -466,7 +466,7 @@ class MembershipServiceTest {
         assertEquals(clubId, result.clubId)
         verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
         verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
-        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { skladchinaRepository.removeEnrollmentsForUserInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
     }
 
@@ -487,7 +487,7 @@ class MembershipServiceTest {
         membershipService.leaveClub(clubId, userId)
 
         verify(exactly = 1) { membershipRepository.cancel(paidPeriodMembership.id) }
-        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { skladchinaRepository.removeEnrollmentsForUserInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
         verify(exactly = 0) { reputationService.penalizeExit(any(), any(), any(), any()) }
     }
@@ -508,7 +508,7 @@ class MembershipServiceTest {
 
         assertEquals("Owner cannot leave the club", exception.message)
         verify(exactly = 0) { membershipRepository.cancel(any()) }
-        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { skladchinaRepository.removeEnrollmentsForUserInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
     }
 

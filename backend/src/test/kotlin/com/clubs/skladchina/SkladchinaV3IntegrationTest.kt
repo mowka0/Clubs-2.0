@@ -1,0 +1,930 @@
+package com.clubs.skladchina
+
+import com.clubs.auth.JwtService
+import com.clubs.debt.DebtReputationService
+import com.clubs.generated.jooq.enums.ReputationKind
+import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.jooq.DSLContext
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.MediaType
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.junit.jupiter.Container
+import org.testcontainers.junit.jupiter.Testcontainers
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.util.UUID
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * Сборы и долги v3 через API — критерии приёмки docs/modules/skladchina-v3.md § 11 (AC-1…AC-14).
+ * Клуб: владелец + три участника + посторонний. DM и чат-посты в тестовом профиле не уходят
+ * (бот не стартует), проверяется состояние в ответах API и в БД.
+ */
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = [
+        "spring.data.redis.host=localhost",
+        "spring.data.redis.port=0",
+        "telegram.bot-token=test-bot-token"
+    ]
+)
+@AutoConfigureMockMvc
+@Testcontainers
+@ActiveProfiles("test")
+class SkladchinaV3IntegrationTest {
+
+    companion object {
+        @Container
+        @JvmStatic
+        val postgres = PostgreSQLContainer("postgres:16-alpine")
+            .withDatabaseName("clubs_test")
+            .withUsername("test")
+            .withPassword("test")
+
+        @DynamicPropertySource
+        @JvmStatic
+        fun configureProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
+        }
+    }
+
+    @Autowired lateinit var mockMvc: MockMvc
+    @Autowired lateinit var jwtService: JwtService
+    @Autowired lateinit var dsl: DSLContext
+    @Autowired lateinit var objectMapper: ObjectMapper
+    @Autowired lateinit var debtReputationService: DebtReputationService
+    @Autowired lateinit var debtReminderService: com.clubs.debt.DebtReminderService
+    @Autowired lateinit var lifecycleService: SkladchinaLifecycleService
+    @Autowired lateinit var remainderService: SkladchinaRemainderService
+    @Autowired lateinit var skladchinaRepository: SkladchinaRepository
+    @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
+
+    private lateinit var ownerId: UUID
+    private lateinit var aliceId: UUID
+    private lateinit var bobId: UUID
+    private lateinit var carolId: UUID
+    private lateinit var outsiderId: UUID
+    private lateinit var clubId: UUID
+    private lateinit var owner: String
+    private lateinit var alice: String
+    private lateinit var bob: String
+    private lateinit var carol: String
+    private lateinit var outsider: String
+
+    @BeforeEach
+    fun setUp() {
+        rateLimitFilter.resetBuckets()
+        listOf(
+            "reputation_ledger", "debts", "debt_settlements", "skladchina_enrollments", "skladchina_chat_posts",
+            "skladchinas", "event_responses", "events", "applications", "transactions", "membership_history",
+            "memberships", "user_club_reputation", "clubs", "users"
+        ).forEach { dsl.execute("DELETE FROM $it") }
+
+        ownerId = newUser(4001, "Owner"); aliceId = newUser(4002, "Alice")
+        bobId = newUser(4003, "Bob"); carolId = newUser(4004, "Carol"); outsiderId = newUser(4005, "Outsider")
+        owner = jwtService.generateToken(ownerId, 4001L); alice = jwtService.generateToken(aliceId, 4002L)
+        bob = jwtService.generateToken(bobId, 4003L); carol = jwtService.generateToken(carolId, 4004L)
+        outsider = jwtService.generateToken(outsiderId, 4005L)
+
+        clubId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, member_limit, subscription_price)
+            VALUES ('$clubId', '$ownerId', 'Партия', 'desc', 'sport', 'open', 'Moscow', 20, 0)
+            """.trimIndent()
+        )
+        dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$ownerId', '$clubId', 'active', 'organizer')")
+        listOf(aliceId, bobId, carolId).forEach {
+            dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$it', '$clubId', 'active', 'member')")
+        }
+    }
+
+    // --- AC-1: «Скинуться» со списком, доля создателя received ---
+
+    @Test
+    fun `shared with listed debtors splits equally and creator share is received at once`() {
+        val detail = createShared(owner, listOf(aliceId, bobId, ownerId), amount = 300_000)
+        assertEquals("active", detail["status"].asText())
+        assertEquals(3, detail["debtCount"].asInt())
+        assertEquals(1, detail["receivedCount"].asInt())
+        assertEquals(100_000L, detail["receivedKopecks"].asLong())
+        assertEquals(300_000L, detail["targetKopecks"].asLong())
+        assertTrue(detail["isCreator"].asBoolean())
+        assertTrue(detail["myDebt"].isNull, "своя доля создателя — не «мой долг»")
+        assertEquals(3, detail["debts"].size())
+        val ownShare = detail["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals("received", ownShare["status"].asText())
+    }
+
+    @Test
+    fun `any active member may create, outsider gets 403, non-creator sees no debt list`() {
+        val detail = createShared(alice, listOf(bobId), amount = 1_000)
+        assertEquals(aliceId.toString(), detail["creatorId"].asText())
+
+        postJson("/api/clubs/$clubId/skladchinas", outsider, sharedBody(listOf(bobId), 1_000))
+            .andExpect(status().isForbidden)
+
+        val asBob = json(get("/api/skladchinas/${detail["id"].asText()}", bob).andExpect(status().isOk))
+        assertTrue(asBob["debts"].isNull)
+        assertEquals("waiting", asBob["myDebt"]["status"].asText())
+        get("/api/skladchinas/${detail["id"].asText()}", outsider).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `after an event the attendees are the default list, but custom people and amounts are allowed with the event link kept`() {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Ужин', 'Ресторан', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        listOf(ownerId, aliceId, bobId).forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        val splittable = json(get("/api/clubs/$clubId/skladchinas/splittable-events", owner).andExpect(status().isOk))
+        assertEquals(setOf(ownerId, aliceId, bobId).map { it.toString() }.toSet(), splittable[0]["attendedUserIds"].map { it.asText() }.toSet())
+
+        // Свой состав и суммы: Bob не участвует, Carol не была, но платит; привязка к встрече остаётся.
+        val body = """
+            {
+              "title": "Ужин", "kind": "shared", "amountKopecks": 100000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}", "eventId": "$eventId",
+              "debtors": [{"userId":"$aliceId","amountKopecks":70000},{"userId":"$carolId","amountKopecks":30000},{"userId":"$ownerId","amountKopecks":50000}]
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        assertEquals(eventId.toString(), created["eventId"].asText())
+        assertEquals(150_000L, created["targetKopecks"].asLong(), "цель = сумма долей, не поле «Сумма»")
+        val rows = created["debts"].associate { it["debtor"]["id"].asText() to it["amountKopecks"].asLong() }
+        assertEquals(mapOf(aliceId.toString() to 70_000L, carolId.toString() to 30_000L, ownerId.toString() to 50_000L), rows)
+        assertEquals(50_000L, created["receivedKopecks"].asLong())
+        assertEquals("active", json(get("/api/events/$eventId/skladchina", alice))["status"].asText())
+    }
+
+    @Test
+    fun `a single attendee is enough to split an event bill, and an event with nobody marked is refused`() {
+        // PO 2026-09-15: пришедшим отмечают только того, кто был в составе встречи, поэтому один
+        // человек в списке — обычное дело; порога «нужно двое» больше нет.
+        val soloEvent = attendedEvent(listOf(aliceId))
+        val splittable = json(get("/api/clubs/$clubId/skladchinas/splittable-events", owner).andExpect(status().isOk))
+        assertTrue(
+            splittable.any { it["eventId"].asText() == soloEvent.toString() },
+            "встреча с одним пришедшим попадает в список «Скинуться после встречи»"
+        )
+        val soloBody = """
+            {
+              "title": "Кофе", "kind": "shared", "amountKopecks": 50000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}", "eventId": "$soloEvent"
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, soloBody).andExpect(status().isCreated))
+        assertEquals(
+            mapOf(aliceId.toString() to 50_000L),
+            created["debts"].associate { it["debtor"]["id"].asText() to it["amountKopecks"].asLong() },
+            "весь счёт на единственного пришедшего"
+        )
+
+        // Явка отмечена, но не пришёл никто: делить не с кем — просим указать состав руками.
+        val emptyEvent = attendedEvent(emptyList())
+        val emptyBody = soloBody.replace(soloEvent.toString(), emptyEvent.toString())
+        postJson("/api/clubs/$clubId/skladchinas", owner, emptyBody).andExpect(status().isBadRequest)
+        // Свой список должников такую встречу принимает: он и отвечает, с кем делить.
+        val withList = emptyBody.replace(
+            """"eventId": "$emptyEvent"""",
+            """"eventId": "$emptyEvent", "debtors": [{"userId":"$aliceId"}]"""
+        )
+        postJson("/api/clubs/$clubId/skladchinas", owner, withList).andExpect(status().isCreated)
+
+        // Пришёл только сам создатель: долг самому себе рождается `received`, сбор выглядел бы
+        // собранным на 100 %, сам никогда не закрылся бы и держал встречу занятой.
+        val selfEvent = attendedEvent(listOf(ownerId))
+        postJson("/api/clubs/$clubId/skladchinas", owner, soloBody.replace(soloEvent.toString(), selfEvent.toString()))
+            .andExpect(status().isBadRequest)
+        // ...но со списком должников та же встреча принимается: делить есть с кем.
+        val selfWithList = soloBody
+            .replace(soloEvent.toString(), selfEvent.toString())
+            .replace(""""eventId": "$selfEvent"""", """"eventId": "$selfEvent", "debtors": [{"userId":"$bobId"}]""")
+        postJson("/api/clubs/$clubId/skladchinas", owner, selfWithList).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `my feed keeps active skladchinas by nearest deadline and closed ones by the freshest closing`() {
+        // Порядок истории решает дата закрытия (PO 2026-09-15): раньше первым ключом был срок
+        // оплаты, и закрытый вчера сбор со старым сроком проваливался вниз списка.
+        val soonActive = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val lateActive = createShared(owner, listOf(bobId), amount = 1_000)["id"].asText()
+        val freshClosed = createShared(owner, listOf(carolId), amount = 1_000)["id"].asText()
+        val oldClosed = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        dsl.execute("UPDATE skladchinas SET deadline = now() + interval '1 day' WHERE id = ?", UUID.fromString(soonActive))
+        dsl.execute("UPDATE skladchinas SET deadline = now() + interval '9 days' WHERE id = ?", UUID.fromString(lateActive))
+        // У закрытых срок нарочно «ближе» — если бы сортировка шла по нему, они бы перемешались.
+        dsl.execute(
+            "UPDATE skladchinas SET status = 'collected'::skladchina_status, closed_at = now() - interval '1 hour', deadline = now() + interval '2 hours' WHERE id = ?",
+            UUID.fromString(freshClosed)
+        )
+        dsl.execute(
+            "UPDATE skladchinas SET status = 'collected'::skladchina_status, closed_at = now() - interval '10 days', deadline = now() + interval '3 hours' WHERE id = ?",
+            UUID.fromString(oldClosed)
+        )
+
+        val feed = json(get("/api/users/me/skladchinas", owner).andExpect(status().isOk))["content"].map { it["id"].asText() }
+        assertEquals(listOf(soonActive, lateActive, freshClosed, oldClosed), feed)
+    }
+
+    @Test
+    fun `free contributions after an event go as voluntary with invited people, event link and total bill`() {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Бар', 'Бар', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        listOf(ownerId, aliceId).forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        val body = """
+            {
+              "title": "Бар", "kind": "voluntary", "amountKopecks": 600000, "paymentLink": "https://pay.example/owner",
+              "deadline": "${OffsetDateTime.now().plusDays(3)}",
+              "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId", "$ownerId"]
+            }
+        """.trimIndent()
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        assertEquals("voluntary", created["kind"].asText())
+        assertEquals(eventId.toString(), created["eventId"].asText())
+        assertEquals(listOf("Alice", "Bob"), created["enrolled"].map { it["firstName"].asText() }, "позвали без создателя")
+        assertEquals(600_000L, created["targetKopecks"].asLong(), "общий чек — знаменатель")
+        assertEquals("active", json(get("/api/events/$eventId/skladchina", alice))["status"].asText())
+        // Скидывается любой участник клуба, не только приглашённый; сумму выбирает сам.
+        postJson("/api/skladchinas/${created["id"].asText()}/contribute", carol, """{"amountKopecks":15000}""").andExpect(status().isOk)
+    }
+
+    // --- AC-2, AC-4: Отдал → Получил, сбор закрывается сам ---
+
+    @Test
+    fun `claim then confirm closes the debt and the skladchina when it was the last open one`() {
+        val detail = createShared(owner, listOf(aliceId), amount = 1_000)
+        val skladchinaId = detail["id"].asText()
+        val debtId = myDebtId(skladchinaId, alice)
+
+        post("/api/debts/$debtId/claim", bob).andExpect(status().isForbidden)
+        val claimed = json(post("/api/debts/$debtId/claim", alice).andExpect(status().isOk))
+        assertEquals("claimed", claimed["status"].asText())
+
+        post("/api/debts/$debtId/confirm", alice).andExpect(status().isForbidden)
+        val received = json(post("/api/debts/$debtId/confirm", owner).andExpect(status().isOk))
+        assertEquals("received", received["status"].asText())
+
+        val after = json(get("/api/skladchinas/$skladchinaId", owner))
+        assertEquals("collected", after["status"].asText())
+        assertEquals(0, json(get("/api/debts", alice))["people"].size())
+    }
+
+    // --- AC-3: Не получил, чек ---
+
+    @Test
+    fun `reject returns debt to waiting with a note and receipt is accepted only from our uploads`() {
+        val skladchinaId = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val debtId = myDebtId(skladchinaId, alice)
+        post("/api/debts/$debtId/claim", alice).andExpect(status().isOk)
+
+        val rejected = json(postJson("/api/debts/$debtId/reject", owner, """{"note":"в выписке нет"}""").andExpect(status().isOk))
+        assertEquals("waiting", rejected["status"].asText())
+        assertEquals("в выписке нет", rejected["rejectNote"].asText())
+        assertTrue(!rejected["rejectedAt"].isNull)
+
+        postJson("/api/debts/$debtId/note", alice, """{"receiptUrl":"https://evil.com/uploads/x.png"}""")
+            .andExpect(status().isBadRequest)
+        postJson("/api/debts/$debtId/note", alice, """{}""").andExpect(status().isBadRequest)
+        val withReceipt = json(postJson("/api/debts/$debtId/note", alice, """{"note":"перевёл на старый номер","receiptUrl":"http://localhost:9000/test-bucket/uploads/abc.png"}""").andExpect(status().isOk))
+        assertEquals("http://localhost:9000/test-bucket/uploads/abc.png", withReceipt["receiptUrl"].asText())
+        assertEquals("перевёл на старый номер", withReceipt["note"].asText())
+        // Получатель видит чек в строке долга сбора.
+        val creatorView = json(get("/api/skladchinas/$skladchinaId", owner))
+        assertEquals("http://localhost:9000/test-bucket/uploads/abc.png", creatorView["debts"].first { it["id"].asText() == debtId }["receiptUrl"].asText())
+    }
+
+    // --- AC-5: срок не стена ---
+
+    @Test
+    fun `claim after the deadline is accepted and the row is marked overdue`() {
+        val skladchinaId = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val debtId = myDebtId(skladchinaId, alice)
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 day' WHERE id = '$skladchinaId'")
+        dsl.execute("UPDATE debts SET due_at = now() - interval '1 day' WHERE id = '$debtId'")
+
+        val claimed = json(post("/api/debts/$debtId/claim", alice).andExpect(status().isOk))
+        assertEquals("claimed", claimed["status"].asText())
+        assertTrue(claimed["isOverdue"].asBoolean())
+    }
+
+    // --- AC-6: Оплачу позже ---
+
+    @Test
+    fun `promise moves debt to promised with the date and rejects past dates`() {
+        val skladchinaId = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val debtId = myDebtId(skladchinaId, alice)
+        val date = LocalDate.now().plusDays(3)
+        val promised = json(postJson("/api/debts/$debtId/promise", alice, """{"date":"$date"}""").andExpect(status().isOk))
+        assertEquals("promised", promised["status"].asText())
+        assertEquals(date.toString(), promised["promisedAt"].asText())
+        postJson("/api/debts/$debtId/promise", alice, """{"date":"${LocalDate.now().minusDays(1)}"}""")
+            .andExpect(status().isBadRequest)
+    }
+
+    // --- AC-7: Кто в деле? ---
+
+    @Test
+    fun `enrollment stage locks into equal debts when the minimum is met and cancels on shortfall`() {
+        val enrolling = json(postJson("/api/clubs/$clubId/skladchinas", owner, enrollingBody(amount = 3_000, min = 3)).andExpect(status().isCreated))
+        val id = enrolling["id"].asText()
+        assertTrue(enrolling["isEnrolling"].asBoolean())
+        assertEquals(1, enrolling["enrolledCount"].asInt(), "создатель в деле по умолчанию")
+        assertEquals(0, enrolling["debtCount"].asInt())
+
+        post("/api/skladchinas/$id/join", alice).andExpect(status().isOk)
+        val afterBob = json(post("/api/skladchinas/$id/join", bob).andExpect(status().isOk))
+        assertEquals(3, afterBob["enrolledCount"].asInt())
+        assertTrue(afterBob["myEnrolled"].asBoolean())
+        assertEquals(listOf("Owner", "Alice", "Bob"), afterBob["enrolled"].map { it["firstName"].asText() }, "кто в деле виден всем, в порядке записи")
+
+        post("/api/skladchinas/$id/lock", alice).andExpect(status().isForbidden)
+        val locked = json(post("/api/skladchinas/$id/lock", owner).andExpect(status().isOk))
+        assertEquals("active", locked["status"].asText())
+        assertTrue(!locked["isEnrolling"].asBoolean())
+        assertEquals(3, locked["debtCount"].asInt())
+        assertTrue(locked["debts"].all { it["amountKopecks"].asLong() == 1_000L })
+        assertEquals(1, locked["receivedCount"].asInt())
+
+        // Недобор: только Alice отметилась при минимуме 3 → отмена без долгов.
+        val short = json(postJson("/api/clubs/$clubId/skladchinas", owner, enrollingBody(amount = 3_000, min = 3)).andExpect(status().isCreated))
+        val shortId = short["id"].asText()
+        post("/api/skladchinas/$shortId/join", alice).andExpect(status().isOk)
+        val cancelled = json(post("/api/skladchinas/$shortId/lock", owner).andExpect(status().isOk))
+        assertEquals("cancelled", cancelled["status"].asText())
+        assertEquals(0, cancelled["debtCount"].asInt())
+        assertEquals(0, cancelled["enrolled"].size(), "вне этапа записи список пустой")
+
+        // Чекбокс «я в деле» снят: создатель не отмечен, список начинается с нуля.
+        val withoutCreator = json(postJson("/api/clubs/$clubId/skladchinas", owner, enrollingBody(amount = 3_000, min = 1).replace("\"minParticipants\"", "\"enrollCreator\": false, \"minParticipants\"")).andExpect(status().isCreated))
+        assertEquals(0, withoutCreator["enrolledCount"].asInt())
+        assertTrue(!withoutCreator["myEnrolled"].asBoolean())
+    }
+
+    // --- AC-8: Заказываю ---
+
+    @Test
+    fun `per_head take then order drops unpaid, closes when nothing open and refuses new takes`() {
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_500)).andExpect(status().isCreated))
+        val id = created["id"].asText()
+        // Создатель берёт себе чекбоксом формы (по умолчанию 1 шт.): своя доля сразу received.
+        assertEquals(1, created["debtCount"].asInt())
+        assertEquals(1, created["receivedItems"].asInt())
+        post("/api/skladchinas/$id/join", owner).andExpect(status().isBadRequest)
+
+        val aliceTake = json(postJson("/api/skladchinas/$id/join", alice, """{"note":"размер M","quantity":3}""").andExpect(status().isOk))
+        assertEquals("waiting", aliceTake["myDebt"]["status"].asText())
+        assertEquals(4_500L, aliceTake["myDebt"]["amountKopecks"].asLong(), "сумма = штуки × цена")
+        assertEquals(3, aliceTake["myDebt"]["quantity"].asInt())
+        assertEquals("размер M", aliceTake["myDebt"]["note"].asText())
+        post("/api/skladchinas/$id/join", alice).andExpect(status().isBadRequest)
+        // «Передумал» → снова «Беру» с другим числом штук: тот же долг оживает.
+        post("/api/skladchinas/$id/leave", alice).andExpect(status().isOk)
+        val retaken = json(postJson("/api/skladchinas/$id/join", alice, """{"quantity":2}""").andExpect(status().isOk))
+        assertEquals("waiting", retaken["myDebt"]["status"].asText())
+        assertEquals(3_000L, retaken["myDebt"]["amountKopecks"].asLong())
+        assertTrue(retaken["myDebt"]["note"].isNull)
+
+        post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
+        val bobDebt = myDebtId(id, bob)
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isOk)
+        post("/api/debts/$bobDebt/confirm", owner).andExpect(status().isOk)
+
+        post("/api/skladchinas/$id/order", bob).andExpect(status().isForbidden)
+        val ordered = json(post("/api/skladchinas/$id/order", owner).andExpect(status().isOk))
+        assertTrue(!ordered["orderedAt"].isNull)
+        assertEquals("collected", ordered["status"].asText(), "после заказа открытых нет — собран")
+        val aliceRow = ordered["debts"].first { it["debtor"]["id"].asText() == aliceId.toString() }
+        assertEquals("dropped", aliceRow["status"].asText())
+        assertEquals(2, ordered["receivedCount"].asInt(), "создатель и Bob")
+        assertEquals(2, ordered["receivedItems"].asInt())
+
+        post("/api/skladchinas/$id/join", carol).andExpect(status().isBadRequest)
+        assertEquals(0, dsl.fetchCount(REPUTATION_LEDGER))
+    }
+
+    @Test
+    fun `order keeps those who promised when the creator agrees, otherwise they drop and the promise is void`() {
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_000)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$id/join", alice).andExpect(status().isOk)
+        post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
+        val aliceDebt = myDebtId(id, alice)
+        postJson("/api/debts/$aliceDebt/promise", alice, """{"date":"${LocalDate.now().plusDays(3)}"}""").andExpect(status().isOk)
+
+        val ordered = json(postJson("/api/skladchinas/$id/order", owner, """{"includePromised":true}""").andExpect(status().isOk))
+        assertEquals("active", ordered["status"].asText(), "обещавшую взяли в долг — сбор ещё идёт")
+        val rows = ordered["debts"].associate { it["debtor"]["id"].asText() to it["status"].asText() }
+        assertEquals("promised", rows[aliceId.toString()])
+        assertEquals("dropped", rows[bobId.toString()])
+        post("/api/skladchinas/$id/leave", alice).andExpect(status().isBadRequest)
+        post("/api/debts/$aliceDebt/claim", alice).andExpect(status().isOk)
+        post("/api/debts/$aliceDebt/confirm", owner).andExpect(status().isOk)
+        assertEquals("collected", json(get("/api/skladchinas/$id", owner))["status"].asText())
+
+        // Без согласия: обещавший выбывает, обещание аннулировано.
+        val id2 = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 1_000)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$id2/join", alice).andExpect(status().isOk)
+        postJson("/api/debts/${myDebtId(id2, alice)}/promise", alice, """{"date":"${LocalDate.now().plusDays(3)}"}""").andExpect(status().isOk)
+        val ordered2 = json(post("/api/skladchinas/$id2/order", owner).andExpect(status().isOk))
+        val aliceRow = ordered2["debts"].first { it["debtor"]["id"].asText() == aliceId.toString() }
+        assertEquals("dropped", aliceRow["status"].asText())
+        assertTrue(aliceRow["promisedAt"].isNull)
+        assertEquals("collected", ordered2["status"].asText())
+    }
+
+    // --- AC-9: тихий сбор ---
+
+    @Test
+    fun `hidden voluntary is 404 for the hidden user, contributions arrive as claimed and close needs them handled`() {
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, voluntaryBody(hiddenFrom = carolId)).andExpect(status().isCreated))
+        val id = created["id"].asText()
+        get("/api/skladchinas/$id", carol).andExpect(status().isNotFound)
+        get("/api/skladchinas/$id", alice).andExpect(status().isOk)
+        val carolFeed = json(get("/api/clubs/$clubId/activities?type=skladchina", carol).andExpect(status().isOk))
+        assertEquals(0, carolFeed["upcoming"].size() + carolFeed["past"].size())
+        assertEquals(1, json(get("/api/clubs/$clubId/activities?type=skladchina", alice))["upcoming"].size())
+
+        val contributed = json(postJson("/api/skladchinas/$id/contribute", alice, """{"amountKopecks":50000}""").andExpect(status().isOk))
+        assertEquals("claimed", contributed["myDebt"]["status"].asText())
+        assertEquals(50_000L, contributed["claimedKopecks"].asLong())
+        postJson("/api/skladchinas/$id/contribute", alice, """{"amountKopecks":100}""").andExpect(status().isBadRequest)
+
+        post("/api/skladchinas/$id/close", owner).andExpect(status().isBadRequest)
+        post("/api/debts/${myDebtId(id, alice)}/confirm", owner).andExpect(status().isOk)
+        val closed = json(post("/api/skladchinas/$id/close", owner).andExpect(status().isOk))
+        assertEquals("collected", closed["status"].asText())
+        assertEquals(50_000L, closed["receivedKopecks"].asLong())
+
+        // Создатель тоже скидывается: взнос из формы ложится сразу received, ориентир остаётся знаменателем.
+        val withOwn = json(postJson("/api/clubs/$clubId/skladchinas", owner, voluntaryBody(hiddenFrom = null).replace("\"kind\": \"voluntary\",", "\"kind\": \"voluntary\", \"creatorContributionKopecks\": 30000,")).andExpect(status().isCreated))
+        val ownRow = withOwn["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals("received", ownRow["status"].asText())
+        assertEquals(30_000L, withOwn["receivedKopecks"].asLong())
+        assertEquals(50_000L, withOwn["targetKopecks"].asLong())
+        assertTrue(withOwn["myDebt"].isNull)
+    }
+
+    // --- AC-10: сальдо пары ---
+
+    @Test
+    fun `pair settlement claims all open debts at once, confirm receives them, reject reopens`() {
+        val s1 = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val s2 = createShared(alice, listOf(bobId), amount = 857)["id"].asText()
+        val s3 = createShared(bob, listOf(aliceId), amount = 400)["id"].asText()
+
+        val bobView = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertEquals(2, bobView["owe"].size()); assertEquals(1, bobView["owed"].size())
+        assertEquals(-1_457L, bobView["balanceKopecks"].asLong())
+
+        post("/api/debts/with/$bobId/settle", alice).andExpect(status().isBadRequest)
+        val settled = json(post("/api/debts/with/$aliceId/settle", bob).andExpect(status().isOk))
+        assertEquals(1_457L, settled["settlement"]["amountKopecks"].asLong())
+        assertEquals("claimed", settled["settlement"]["status"].asText())
+        assertTrue((settled["owe"] + settled["owed"]).all { it["status"].asText() == "claimed" && !it["settlementId"].isNull })
+        val settlementId = settled["settlement"]["id"].asText()
+
+        // Одиночные кнопки скрыты: долг в составе сальдо не подтверждается отдельно.
+        post("/api/debts/${settled["owe"][0]["id"].asText()}/confirm", alice).andExpect(status().isBadRequest)
+        val overview = json(get("/api/debts", alice))
+        assertEquals(1, overview["awaitingMyConfirmation"].asInt())
+
+        post("/api/debts/settlements/$settlementId/confirm", bob).andExpect(status().isForbidden)
+        val confirmed = json(post("/api/debts/settlements/$settlementId/confirm", alice).andExpect(status().isOk))
+        assertEquals(0, confirmed["owe"].size() + confirmed["owed"].size())
+        listOf(s1, s2, s3).forEach { assertEquals("collected", json(get("/api/skladchinas/$it", alice))["status"].asText()) }
+
+        // Второй раунд: «Не получил» по сальдо возвращает все долги в waiting.
+        createShared(alice, listOf(bobId), amount = 500); createShared(bob, listOf(aliceId), amount = 200)
+        val again = json(post("/api/debts/with/$aliceId/settle", bob).andExpect(status().isOk))
+        val rejected = json(post("/api/debts/settlements/${again["settlement"]["id"].asText()}/reject", alice).andExpect(status().isOk))
+        assertTrue((rejected["owe"] + rejected["owed"]).all { it["status"].asText() == "waiting" && it["settlementId"].isNull })
+        assertTrue(rejected["settlement"].isNull)
+    }
+
+    // --- AC-11: репутация ---
+
+    @Test
+    fun `reputation plus for an on-time received shared debt, minus once for long overdue, none for the club owner`() {
+        val onTime = createShared(owner, listOf(aliceId), amount = 1_000)["id"].asText()
+        val aliceDebt = myDebtId(onTime, alice)
+        post("/api/debts/$aliceDebt/claim", alice).andExpect(status().isOk)
+        post("/api/debts/$aliceDebt/confirm", owner).andExpect(status().isOk)
+
+        val overdue = createShared(owner, listOf(bobId), amount = 1_000)["id"].asText()
+        dsl.execute("UPDATE debts SET due_at = now() - interval '30 days' WHERE skladchina_id = '$overdue'")
+
+        val claimedLong = createShared(owner, listOf(carolId), amount = 1_000)["id"].asText()
+        post("/api/debts/${myDebtId(claimedLong, carol)}/claim", carol).andExpect(status().isOk)
+        dsl.execute("UPDATE debts SET due_at = now() - interval '30 days' WHERE skladchina_id = '$claimedLong'")
+
+        // Владелец клуба — должник у Alice: очков не получает.
+        val ownerDebtSkladchina = createShared(alice, listOf(ownerId), amount = 700)["id"].asText()
+        val ownerDebt = myDebtId(ownerDebtSkladchina, owner)
+        post("/api/debts/$ownerDebt/claim", owner).andExpect(status().isOk)
+        post("/api/debts/$ownerDebt/confirm", alice).andExpect(status().isOk)
+
+        val now = OffsetDateTime.now()
+        assertEquals(1, debtReputationService.applyPlus(now))
+        assertEquals(1, debtReputationService.applyMinus(now).size)
+        assertEquals(0, debtReputationService.applyPlus(now))
+        assertEquals(0, debtReputationService.applyMinus(now).size, "второй проход ничего не списывает")
+
+        assertEquals(ReputationKind.skladchina_paid, soleKind(aliceId))
+        assertEquals(ReputationKind.skladchina_expired, soleKind(bobId))
+        assertEquals(0, ledgerRows(carolId), "claimed останавливает часы")
+        assertEquals(0, ledgerRows(ownerId), "владелец клуба очков не получает")
+    }
+
+    @Test
+    fun `before the minus the debtor gets a warning a week and a day ahead, even while promising, once each`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        postJson("/api/debts/$bobDebt/promise", bob, """{"date":"${LocalDate.now().plusDays(5)}"}""").andExpect(status().isOk)
+        val now = OffsetDateTime.now()
+
+        // Просрочка 15 дней при окне 3 недели: до −40 неделя → одно предупреждение, повтор молчит.
+        dsl.execute("UPDATE debts SET due_at = now() - interval '15 days 1 hour' WHERE id = ?", UUID.fromString(bobDebt))
+        val week = debtReminderService.collect(now).filter { it.debt.debt.id.toString() == bobDebt }
+        assertEquals(listOf(com.clubs.debt.DebtReminderKind.MINUS_IN_WEEK), week.map { it.kind })
+        assertTrue(debtReminderService.collect(now).none { it.debt.debt.id.toString() == bobDebt })
+
+        // Просрочка 20 дней: до −40 день → второе предупреждение; сам минус ещё не списан.
+        dsl.execute("UPDATE debts SET due_at = now() - interval '20 days 1 hour' WHERE id = ?", UUID.fromString(bobDebt))
+        val day = debtReminderService.collect(now).filter { it.debt.debt.id.toString() == bobDebt }
+        assertEquals(listOf(com.clubs.debt.DebtReminderKind.MINUS_TOMORROW), day.map { it.kind })
+        assertEquals(0, ledgerRows(bobId))
+    }
+
+    @Test
+    fun `voluntary with a deadline reminds the creator to close once the deadline has passed, once`() {
+        val body = voluntaryBody(hiddenFrom = null).replace("\"paymentLink\"", "\"deadline\": \"${OffsetDateTime.now().plusHours(2)}\", \"paymentLink\"")
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        assertTrue(lifecycleService.claimCloseReminders(OffsetDateTime.now()).isEmpty(), "срок ещё не прошёл")
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", UUID.fromString(id))
+        assertEquals(listOf(id), lifecycleService.claimCloseReminders(OffsetDateTime.now()).map { it.id.toString() })
+        assertTrue(lifecycleService.claimCloseReminders(OffsetDateTime.now()).isEmpty(), "второй раз не напоминаем")
+    }
+
+    // --- § 3.5: «Сумму выбираете сами» ---
+
+    @Test
+    fun `free amount from an event needs a deadline, is flagged, and a promise becomes a promised debt with its amount`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId, bobId))
+        val noDeadline = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId"]}"""
+        postJson("/api/clubs/$clubId/skladchinas", owner, noDeadline).andExpect(status().isBadRequest)
+        val withDeadline = noDeadline.replace("\"paymentLink\"", "\"deadline\": \"${OffsetDateTime.now().plusDays(3)}\", \"paymentLink\"")
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, withDeadline).andExpect(status().isCreated))
+        val id = created["id"].asText()
+        assertTrue(created["freeAmountRequired"].asBoolean(), "из встречи с суммой — режим включён")
+        val date = LocalDate.now().plusDays(5)
+        val afterPromise = json(postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":150000,"date":"$date"}""").andExpect(status().isOk))
+        assertEquals("promised", afterPromise["myDebt"]["status"].asText())
+        assertEquals(150_000L, afterPromise["myDebt"]["amountKopecks"].asLong())
+        assertEquals(150_000L, afterPromise["promisedKopecks"].asLong())
+        assertEquals(1, afterPromise["promisedCount"].asInt())
+        postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+        // Подарок без встречи обещаний не знает; создатель себе не обещает.
+        val plain = json(postJson("/api/clubs/$clubId/skladchinas", owner, voluntaryBody(hiddenFrom = null)).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$plain/promise", alice, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+        postJson("/api/skladchinas/$id/promise", owner, """{"amountKopecks":1000,"date":"$date"}""").andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `at the deadline the remainder is split equally among the silent, promised and own amounts are excluded, once, and paying closes the skladchina`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId, bobId, carolId))
+        val body = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId", "$bobId", "$carolId"], "deadline": "${OffsetDateTime.now().plusHours(2)}", "creatorContributionKopecks": 200000}"""
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        val uuid = UUID.fromString(id)
+        postJson("/api/skladchinas/$id/promise", alice, """{"amountKopecks":150000,"date":"${LocalDate.now().plusDays(5)}"}""").andExpect(status().isOk)
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", uuid)
+        assertEquals(listOf(id), lifecycleService.claimCloseReminders(OffsetDateTime.now()).map { it.id.toString() }, "тик «срок вышел» видит сбор")
+        val outcome = remainderService.splitAmongSilent(skladchinaRepository.findById(uuid)!!, OffsetDateTime.now())
+        val split = outcome as? SkladchinaRemainderService.Outcome.Split ?: error("ожидали раздел, получили $outcome")
+        assertEquals(550_000L, split.remainderKopecks, "9 000 − 2 000 своих − 1 500 обещанных")
+        assertEquals(setOf(bobId, carolId), split.debts.map { it.debtorId }.toSet(), "долги только молчунам")
+        assertEquals(listOf(275_000L, 275_000L), split.debts.map { it.amountKopecks })
+        assertTrue(split.debts.all { it.status == com.clubs.generated.jooq.enums.DebtStatus.waiting && it.dueAt != null })
+        assertTrue(remainderService.splitAmongSilent(skladchinaRepository.findById(uuid)!!, OffsetDateTime.now()) is SkladchinaRemainderService.Outcome.Nothing, "повторный проход ничего не создаёт")
+        // Долги обычные: Отдал → Получил; когда счёт закрыт и открытых нет — сбор закрывается сам.
+        listOf(alice, bob, carol).forEach { token ->
+            val debtId = myDebtId(id, token)
+            post("/api/debts/$debtId/claim", token).andExpect(status().isOk)
+            post("/api/debts/$debtId/confirm", owner).andExpect(status().isOk)
+        }
+        val after = json(get("/api/skladchinas/$id", owner))
+        assertEquals(900_000L, after["receivedKopecks"].asLong())
+        assertEquals("collected", after["status"].asText())
+        // Репутация как у shared: долг молчуна закрыт до срока — +10.
+        debtReputationService.applyPlus(OffsetDateTime.now())
+        assertEquals(ReputationKind.skladchina_paid, soleKind(bobId))
+    }
+
+    @Test
+    fun `when nobody is silent but the bill is not covered the creator is told about the shortfall`() {
+        val eventId = attendedEvent(listOf(ownerId, aliceId))
+        val body = """{"title": "Ужин", "kind": "voluntary", "amountKopecks": 900000, "paymentLink": "https://pay.example/owner", "eventId": "$eventId", "invitedUserIds": ["$aliceId"], "deadline": "${OffsetDateTime.now().plusHours(2)}"}"""
+        val id = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$id/contribute", alice, """{"amountKopecks":100000}""").andExpect(status().isOk)
+        dsl.execute("UPDATE skladchinas SET deadline = now() - interval '1 minute' WHERE id = ?", UUID.fromString(id))
+        val outcome = remainderService.splitAmongSilent(skladchinaRepository.findById(UUID.fromString(id))!!, OffsetDateTime.now())
+        assertEquals(SkladchinaRemainderService.Outcome.Shortfall(800_000L), outcome)
+    }
+
+    // --- AC-12: чужие долги невидимы ---
+
+    @Test
+    fun `owner sees neither the pair of two other members nor the debt list of someone else's skladchina`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        // Пара «владелец ↔ Алиса» не существует: долгов между ними не было — 404, а не пустой экран.
+        get("/api/debts/with/$aliceId", owner).andExpect(status().isNotFound)
+        assertEquals(0, json(get("/api/debts", owner))["people"].size())
+        val ownerView = json(get("/api/skladchinas/$id", owner).andExpect(status().isOk))
+        assertTrue(ownerView["debts"].isNull)
+        assertTrue(ownerView["canCancel"].asBoolean())
+    }
+
+    // --- AC-13: права на отмену ---
+
+    @Test
+    fun `club owner may cancel someone else's skladchina, other members get 403, open debts are forgiven`() {
+        val id = createShared(alice, listOf(bobId, carolId), amount = 2_000)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isOk)
+        post("/api/debts/$bobDebt/confirm", alice).andExpect(status().isOk)
+
+        post("/api/skladchinas/$id/cancel", carol).andExpect(status().isForbidden)
+        val cancelled = json(post("/api/skladchinas/$id/cancel", owner).andExpect(status().isOk))
+        assertEquals("cancelled", cancelled["status"].asText())
+        val statuses = dsl.fetch("SELECT debtor_id, status::text AS s FROM debts WHERE skladchina_id = ?", UUID.fromString(id))
+            .associate { UUID.fromString(it.get("debtor_id").toString()) to it.get("s", String::class.java) }
+        assertEquals("received", statuses[bobId])
+        assertEquals("forgiven", statuses[carolId])
+        post("/api/skladchinas/$id/cancel", alice).andExpect(status().isBadRequest)
+    }
+
+    // --- AC-14: сортировка пары ---
+
+    @Test
+    fun `pair rows are ordered by due date ascending with nulls last`() {
+        createShared(alice, listOf(bobId), amount = 300, deadlineDays = 9)
+        val voluntary = json(postJson("/api/clubs/$clubId/skladchinas", alice, voluntaryBody(hiddenFrom = null)).andExpect(status().isCreated))
+        postJson("/api/skladchinas/${voluntary["id"].asText()}/contribute", bob, """{"amountKopecks":100}""").andExpect(status().isOk)
+        createShared(alice, listOf(bobId), amount = 200, deadlineDays = 2)
+
+        val pair = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertEquals(listOf(200L, 300L, 100L), pair["owe"].map { it["amountKopecks"].asLong() })
+        assertTrue(pair["owe"][2]["dueAt"].isNull)
+
+        // «Оплачу позже» на завтра по долгу 300 ₽: обещанная дата ближе срока сбора — строка поднимается,
+        // а на экране «Долги» ближайшая дата у Алисы становится завтрашней, не сроком сбора через 2 дня.
+        val debt300 = pair["owe"][1]["id"].asText()
+        postJson("/api/debts/$debt300/promise", bob, """{"date":"${LocalDate.now().plusDays(1)}"}""").andExpect(status().isOk)
+        val promised = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertEquals(listOf(300L, 200L, 100L), promised["owe"].map { it["amountKopecks"].asLong() })
+        val overview = json(get("/api/debts", bob).andExpect(status().isOk))
+        assertEquals(LocalDate.now().plusDays(1).toString(), overview["people"][0]["nearestDueAt"].asText().substring(0, 10))
+    }
+
+    // --- Замена и добавление должника ---
+
+    @Test
+    fun `replace forgives the old debt and creates the same amount for the replacement, add uses the last share`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        val replaced = json(postJson("/api/skladchinas/$id/debts/$bobDebt/replace", alice, """{"userId":"$carolId"}""").andExpect(status().isOk))
+        val rows = replaced["debts"].associate { it["debtor"]["id"].asText() to it }
+        assertEquals("forgiven", rows[bobId.toString()]!!["status"].asText())
+        assertEquals("waiting", rows[carolId.toString()]!!["status"].asText())
+        assertEquals(1_000L, rows[carolId.toString()]!!["amountKopecks"].asLong())
+
+        val added = json(postJson("/api/skladchinas/$id/debts", alice, """{"userId":"$ownerId"}""").andExpect(status().isOk))
+        val ownerRow = added["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals(1_000L, ownerRow["amountKopecks"].asLong())
+        assertEquals("waiting", ownerRow["status"].asText())
+        assertEquals(2_000L, added["targetKopecks"].asLong(), "знаменатель — сумма живых долгов")
+        postJson("/api/skladchinas/$id/debts", alice, """{"userId":"$outsiderId"}""").andExpect(status().isBadRequest)
+    }
+
+    // --- Правки по ревью: закрытие «всех простили», отмена при живом сальдо, замена на себя, повторный тап ---
+
+    @Test
+    fun `forgiving the last open debt closes the shared skladchina`() {
+        val id = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val forgiven = json(post("/api/debts/${myDebtId(id, bob)}/forgive", alice).andExpect(status().isOk))
+        assertEquals("forgiven", forgiven["status"].asText())
+        assertEquals("collected", json(get("/api/skladchinas/$id", alice))["status"].asText(), "открытых долгов нет — сбор не висит active")
+    }
+
+    @Test
+    fun `cancel while a pair settlement is claimed rejects the settlement and reopens the untouched debts`() {
+        val s1 = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        val s2 = createShared(alice, listOf(bobId), amount = 500)["id"].asText()
+        val settled = json(post("/api/debts/with/$aliceId/settle", bob).andExpect(status().isOk))
+        val settlementId = settled["settlement"]["id"].asText()
+
+        post("/api/skladchinas/$s1/cancel", alice).andExpect(status().isOk)
+
+        val settlementStatus = dsl.fetchOne("SELECT status::text AS s FROM debt_settlements WHERE id = ?", UUID.fromString(settlementId))!!.get("s", String::class.java)
+        assertEquals("rejected", settlementStatus, "сальдо с прощённым долгом внутри не подтверждается")
+        val bobPair = json(get("/api/debts/with/$aliceId", bob).andExpect(status().isOk))
+        assertTrue(bobPair["settlement"].isNull)
+        assertEquals(listOf(500L), bobPair["owe"].map { it["amountKopecks"].asLong() }, "долг второго сбора снова открыт")
+        assertEquals("waiting", bobPair["owe"][0]["status"].asText())
+        assertEquals("forgiven", dsl.fetchOne("SELECT status::text AS s FROM debts WHERE skladchina_id = ? AND debtor_id = ?", UUID.fromString(s1), bobId)!!.get("s", String::class.java))
+        assertEquals("active", json(get("/api/skladchinas/$s2", alice))["status"].asText())
+    }
+
+    @Test
+    fun `replace onto the creator is refused, reject after order drops the debt`() {
+        val shared = createShared(alice, listOf(bobId), amount = 1_000)["id"].asText()
+        postJson("/api/skladchinas/$shared/debts/${myDebtId(shared, bob)}/replace", alice, """{"userId":"$aliceId"}""").andExpect(status().isBadRequest)
+
+        val perHead = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700)).andExpect(status().isCreated))["id"].asText()
+        post("/api/skladchinas/$perHead/join", bob).andExpect(status().isOk)
+        val bobDebt = myDebtId(perHead, bob)
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isOk)
+        post("/api/skladchinas/$perHead/order", owner).andExpect(status().isOk)
+        val rejected = json(post("/api/debts/$bobDebt/reject", owner).andExpect(status().isOk))
+        assertEquals("dropped", rejected["status"].asText(), "после заказа «Не получил» = выбыл, долга нет")
+        val closed = json(get("/api/skladchinas/$perHead", owner))
+        assertEquals("collected", closed["status"].asText())
+        assertEquals(1, closed["receivedItems"].asInt(), "куплено только создателю")
+    }
+
+    @Test
+    fun `creator takes for himself with the form checkbox, three items land received at once, unchecked means no own row`() {
+        val body = perHeadBody(price = 700).replace("\"kind\": \"per_head\",", "\"kind\": \"per_head\", \"creatorQuantity\": 3,")
+        val created = json(postJson("/api/clubs/$clubId/skladchinas", owner, body).andExpect(status().isCreated))
+        val ownRow = created["debts"].first { it["debtor"]["id"].asText() == ownerId.toString() }
+        assertEquals("received", ownRow["status"].asText())
+        assertEquals(3, ownRow["quantity"].asInt())
+        assertEquals(2_100L, ownRow["amountKopecks"].asLong())
+        assertEquals(3, created["receivedItems"].asInt())
+        assertTrue(created["myDebt"].isNull)
+
+        val without = json(postJson("/api/clubs/$clubId/skladchinas", owner, perHeadBody(price = 700).replace("\"kind\": \"per_head\",", "\"kind\": \"per_head\", \"takeCreator\": false,")).andExpect(status().isCreated))
+        assertEquals(0, without["debtCount"].asInt())
+    }
+
+    // --- Security-ревью: лимит суммы, схема ссылки, чужая пара, встреча чужого клуба ---
+
+    @Test
+    fun `amount above the cap and a non-https payment link are rejected, free-text requisites pass`() {
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 10_000_001)).andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, perHeadBody(price = 10_000_001)).andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 100).replace("https://pay.example/owner", "javascript:alert(1)"))
+            .andExpect(status().isBadRequest)
+        postJson("/api/clubs/$clubId/skladchinas", alice, sharedBody(listOf(bobId), amount = 100).replace("https://pay.example/owner", "+7 999 123-45-67, Сбер"))
+            .andExpect(status().isCreated)
+        val voluntary = json(postJson("/api/clubs/$clubId/skladchinas", alice, voluntaryBody(hiddenFrom = null)).andExpect(status().isCreated))["id"].asText()
+        postJson("/api/skladchinas/$voluntary/contribute", bob, """{"amountKopecks":10000001}""").andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `pair with someone you never had a debt with is 404 and event split state needs club membership`() {
+        get("/api/debts/with/$carolId", bob).andExpect(status().isNotFound)
+        createShared(bob, listOf(carolId), amount = 100)
+        get("/api/debts/with/$carolId", bob).andExpect(status().isOk)
+
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Игра', 'Парк', now() + interval '1 day', 10, 'upcoming'::event_status, false)
+            """.trimIndent()
+        )
+        get("/api/events/$eventId/skladchina", alice).andExpect(status().isOk)
+        get("/api/events/$eventId/skladchina", outsider).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `money claims have their own rate limit bucket`() {
+        val id = createShared(alice, listOf(bobId), amount = 100)["id"].asText()
+        val bobDebt = myDebtId(id, bob)
+        repeat(10) { post("/api/debts/$bobDebt/claim", bob).andReturn() }
+        post("/api/debts/$bobDebt/claim", bob).andExpect(status().isTooManyRequests)
+        get("/api/skladchinas/$id", bob).andExpect(status().isOk)
+    }
+
+    // ---- helpers ----
+
+    /** Завершённая встреча с отмеченной явкой — вход для сборов «из встречи». */
+    private fun attendedEvent(attended: List<UUID>): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked, attendance_finalized)
+            VALUES ('$eventId', '$clubId', '$ownerId', 'Покатушки', 'Парк', now() - interval '1 day', 10, 'completed'::event_status, true, true)
+            """.trimIndent()
+        )
+        attended.forEach {
+            dsl.execute("INSERT INTO event_responses (id, event_id, user_id, attendance) VALUES ('${UUID.randomUUID()}', '$eventId', '$it', 'attended'::attendance_status)")
+        }
+        return eventId
+    }
+
+    private fun newUser(telegramId: Long, name: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name, telegram_username) VALUES ('$id', $telegramId, '$name', '${name.lowercase()}')")
+        return id
+    }
+
+    private fun sharedBody(debtors: List<UUID>, amount: Long, deadlineDays: Long = 5): String = """
+        {
+          "title": "Ужин после игры",
+          "kind": "shared",
+          "amountKopecks": $amount,
+          "paymentLink": "https://pay.example/owner",
+          "deadline": "${OffsetDateTime.now().plusDays(deadlineDays)}",
+          "debtors": [${debtors.joinToString(",") { "{\"userId\":\"$it\"}" }}]
+        }
+    """.trimIndent()
+
+    private fun enrollingBody(amount: Long, min: Int): String = """
+        {
+          "title": "Тренер на субботу",
+          "kind": "shared",
+          "amountKopecks": $amount,
+          "paymentLink": "https://pay.example/owner",
+          "deadline": "${OffsetDateTime.now().plusDays(5)}",
+          "enrollmentUntil": "${OffsetDateTime.now().plusDays(1)}",
+          "minParticipants": $min
+        }
+    """.trimIndent()
+
+    private fun perHeadBody(price: Long): String = """
+        {
+          "title": "Билеты на матч",
+          "kind": "per_head",
+          "amountKopecks": $price,
+          "paymentLink": "https://pay.example/owner",
+          "deadline": "${OffsetDateTime.now().plusDays(3)}"
+        }
+    """.trimIndent()
+
+    private fun voluntaryBody(hiddenFrom: UUID?): String = """
+        {
+          "title": "Подарок",
+          "kind": "voluntary",
+          "amountKopecks": 50000,
+          "paymentLink": "https://pay.example/owner"
+          ${hiddenFrom?.let { ", \"hiddenFromUserId\": \"$it\"" } ?: ""}
+        }
+    """.trimIndent()
+
+    private fun createShared(token: String, debtors: List<UUID>, amount: Long, deadlineDays: Long = 5): JsonNode =
+        json(postJson("/api/clubs/$clubId/skladchinas", token, sharedBody(debtors, amount, deadlineDays)).andExpect(status().isCreated))
+
+    private fun myDebtId(skladchinaId: String, token: String): String =
+        json(get("/api/skladchinas/$skladchinaId", token).andExpect(status().isOk))["myDebt"]["id"].asText()
+
+    private fun get(path: String, token: String): ResultActions =
+        mockMvc.perform(get(path).header("Authorization", "Bearer $token"))
+
+    private fun post(path: String, token: String): ResultActions =
+        mockMvc.perform(post(path).header("Authorization", "Bearer $token"))
+
+    private fun postJson(path: String, token: String, body: String): ResultActions =
+        mockMvc.perform(post(path).header("Authorization", "Bearer $token").contentType(MediaType.APPLICATION_JSON).content(body))
+
+    private fun json(result: ResultActions): JsonNode =
+        objectMapper.readTree(result.andReturn().response.contentAsString)
+
+    private fun ledgerRows(userId: UUID): Int =
+        dsl.fetchCount(REPUTATION_LEDGER, REPUTATION_LEDGER.USER_ID.eq(userId))
+
+    private fun soleKind(userId: UUID): ReputationKind? =
+        dsl.select(REPUTATION_LEDGER.KIND).from(REPUTATION_LEDGER).where(REPUTATION_LEDGER.USER_ID.eq(userId)).fetchOne()?.value1()
+}

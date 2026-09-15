@@ -15,11 +15,21 @@ function formatShortDate(iso: string): string {
   return DATE_FMT.format(new Date(iso));
 }
 
+/**
+ * Дата прошедшей активности: у встречи — когда она была, у сбора — когда его закрыли. Срок оплаты
+ * тут врал: сбор со сроком 18-го могли закрыть 15-го. Откат на срок и дату создания — страховка
+ * (у закрытого сбора дата закрытия есть всегда) и случай «По желанию» без срока.
+ */
 function activityDate(activity: ActivityItemDto): string {
-  const iso =
-    activity.type === 'event' ? activity.eventDatetime : activity.deadline;
+  const iso = activity.type === 'event'
+    ? activity.eventDatetime
+    : activity.closedAt ?? activity.deadline ?? activity.createdAt;
   return formatShortDate(iso);
 }
+
+// Две иконки на всю историю (PO 2026-09-14): встреча и сбор, без зоопарка по видам сборов.
+const TYPE_ICON: Record<ActivityItemDto['type'], string> = { event: '📅', skladchina: '💰' };
+const TYPE_LABEL: Record<ActivityItemDto['type'], string> = { event: 'Встреча', skladchina: 'Сбор' };
 
 export const ActivityCompactRow: FC<ActivityCompactRowProps> = ({
   activity,
@@ -28,9 +38,10 @@ export const ActivityCompactRow: FC<ActivityCompactRowProps> = ({
   <button
     type="button"
     onClick={onClick}
-    aria-label={`${activity.title}. Завершено`}
-    className="rd-rep-row"
+    aria-label={`${TYPE_LABEL[activity.type]}: ${activity.title}. Завершено`}
+    className="rd-rep-row rd-past-row"
   >
+    <span className="rd-ico rd-past-ico" aria-hidden="true">{TYPE_ICON[activity.type]}</span>
     <div className="rd-info">
       <div className="rd-ttl">{activity.title}</div>
     </div>

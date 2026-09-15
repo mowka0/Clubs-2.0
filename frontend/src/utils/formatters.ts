@@ -94,3 +94,28 @@ export function formatDatetime(iso: string): string {
     minute: '2-digit',
   });
 }
+
+/** Имя для узких плашек: «Иван П.» — фамилия целиком туда не влезает. */
+export function shortName(p: { firstName: string; lastName: string | null }): string {
+  return p.lastName ? `${p.firstName} ${p.lastName[0]}.` : p.firstName;
+}
+
+/**
+ * Сколько осталось до момента одной фразой: «через 20 минут», «через 3 дня», «через 5 недель».
+ * null = момент уже прошёл: слова для прошедшего у каждого экрана свои («встреча уже прошла» на
+ * встрече, «срок вышел» в сборе). Полосы обратного отсчёта нет намеренно (PO 2026-09-14) — на
+ * дальнем сроке она почти пуста и врёт, а фраза честна на любом.
+ */
+export function untilText(iso: string): string | null {
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs <= 0) return null;
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return 'меньше минуты';
+  if (minutes < 60) return `через ${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `через ${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+  const weeks = Math.round(days / 7);
+  return `через ${weeks} ${pluralRu(weeks, ['неделю', 'недели', 'недель'])}`;
+}

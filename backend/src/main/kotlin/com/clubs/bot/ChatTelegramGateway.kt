@@ -39,6 +39,13 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
+/** Кнопка DM для [ChatTelegramGateway.sendDmWithButtons]: либо callback-действие, либо переход в Mini App по пути. */
+data class DmButton(
+    val text: String,
+    val callbackData: String? = null,
+    val webAppPath: String? = null
+)
+
 /**
  * Присутствие и права БОТА в конкретном чате — перевод телеграмного ChatMember в наши
  * примитивы, чтобы сервисы chatlink не зависели от типов библиотеки бота.
@@ -572,6 +579,31 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("sendDmWithWebAppAndCallbackButton failed: telegramId={} error={}", telegramId, e.message)
+        false
+    }
+
+    /**
+     * DM с произвольной клавиатурой: строки из callback-действий и переходов в Mini App
+     * (например «Получил / Не получил» в одной строке и «Открыть сбор» под ними). Best-effort.
+     */
+    fun sendDmWithButtons(telegramId: Long, text: String, rows: List<List<DmButton>>): Boolean = try {
+        val keyboard = InlineKeyboardMarkup(rows.map { row ->
+            InlineKeyboardRow(row.map { button ->
+                val builder = InlineKeyboardButton.builder().text(button.text)
+                if (button.callbackData != null) builder.callbackData(button.callbackData)
+                else builder.webApp(WebAppInfo(webAppBaseUrl + (button.webAppPath ?: "")))
+                builder.build()
+            })
+        })
+        val msg = SendMessage.builder()
+            .chatId(telegramId.toString())
+            .text(text)
+            .replyMarkup(keyboard)
+            .build()
+        telegramClient.execute(msg)
+        true
+    } catch (e: Exception) {
+        log.warn("sendDmWithButtons failed: telegramId={} error={}", telegramId, e.message)
         false
     }
 

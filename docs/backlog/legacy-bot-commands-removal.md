@@ -27,7 +27,7 @@
 - `ClubsBot.handleWhoIsGoing` (~30 строк)
 - `ClubsBot.handleMyRating` (~30 строк)
 - `dispatch`-ветка для этих команд в `consume()`
-- `EventRepository.findNextUpcomingEvent` — становится unused
+- ~~`EventRepository.findNextUpcomingEvent` — становится unused~~ — метод удалён 2026-09-15 вместе с фиксом скоупа команды (см. `docs/modules/telegram-bot.md` § `/кто_идет`); сама команда жива, теперь club-scoped
 - `ReputationRepository.findLatestByUserId` — становится unused
 - `EventResponseRepository.findResponderTelegramIdsByEventId` — **остаётся** (используется в orphan `sendStage2Started`, который сам по себе GAP-004 — отдельный вопрос). *(Update 2026-06-13: метод переименован в `findStage2TargetTelegramIds` + фильтр going/maybe, `sendStage2Started` подключён — GAP-004/GAP-009 закрыты в `bugfix/stage2-dm-and-slot-races`.)*
 - Тесты `ClubsBotTest.kt` для этих команд (если будут добавлены)
@@ -64,7 +64,7 @@
 ## Связанные
 
 - `backend/src/main/kotlin/com/clubs/bot/ClubsBot.kt` — `handleWhoIsGoing` (lines ~140-195), `handleMyRating` (lines ~197-235)
-- `backend/src/main/kotlin/com/clubs/event/EventRepository.kt` — `findNextUpcomingEvent` будет unused
+- ~~`backend/src/main/kotlin/com/clubs/event/EventRepository.kt` — `findNextUpcomingEvent` будет unused~~ — удалён 2026-09-15
 - `backend/src/main/kotlin/com/clubs/reputation/ReputationRepository.kt` — `findLatestByUserId` будет unused
 - `docs/modules/telegram-bot.md` § «Команды» — нужно подрезать
 - `docs/backlog/telegram-bot-prd-gaps.md` GAP-001, GAP-008 — закрываются с удалением

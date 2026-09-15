@@ -4,6 +4,9 @@ import { ActivityCard } from './ActivityCard';
 import { ActivityCompactRow } from './ActivityCompactRow';
 import type { ActivityItemDto, ClubActivityFeed } from '../../api/activities';
 
+/** Сколько прошедших активностей видно без раскрытия шторки (PO 2026-09-14). */
+const PAST_PREVIEW_COUNT = 3;
+
 interface ActivityFeedListProps {
   feed: ClubActivityFeed;
   onActivityClick: (activity: ActivityItemDto) => void;
@@ -20,6 +23,11 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
     haptic.impact('light');
     setPastExpanded((prev) => !prev);
   };
+
+  // Прошедшие смотрят часто, поэтому три последних видны сразу, а шторка прячет только хвост
+  // (PO 2026-09-14). Заголовок — обычный ярлык секции, как «Предстоящие»: кнопка рисовалась
+  // шрифтом браузера и выглядела чужой.
+  const visiblePast = pastExpanded ? feed.past : feed.past.slice(0, PAST_PREVIEW_COUNT);
 
   return (
     <>
@@ -38,28 +46,28 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
 
       {feed.past.length > 0 && (
         <section>
-          <button
-            type="button"
-            className="rd-section-sub-h"
-            aria-expanded={pastExpanded}
-            onClick={togglePast}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 0, cursor: 'pointer', width: '100%' }}
-          >
-            <span aria-hidden="true">{pastExpanded ? '▾' : '▸'}</span>
-            Прошедшие
-            <span className="rd-count">({feed.past.length})</span>
-          </button>
-          {pastExpanded && (
-            <div className="rd-glass rd-rep-panel">
-              {feed.past.map((item) => (
-                <ActivityCompactRow
-                  key={item.id}
-                  activity={item}
-                  onClick={() => onActivityClick(item)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="rd-section-sub-h">
+            Прошедшие <span className="rd-count">· {feed.past.length}</span>
+          </div>
+          <div className="rd-glass rd-rep-panel">
+            {visiblePast.map((item) => (
+              <ActivityCompactRow
+                key={item.id}
+                activity={item}
+                onClick={() => onActivityClick(item)}
+              />
+            ))}
+            {feed.past.length > PAST_PREVIEW_COUNT && (
+              <button
+                type="button"
+                className="rd-resp-more"
+                aria-expanded={pastExpanded}
+                onClick={togglePast}
+              >
+                {pastExpanded ? 'Свернуть' : `Показать все · ${feed.past.length}`}
+              </button>
+            )}
+          </div>
         </section>
       )}
     </>

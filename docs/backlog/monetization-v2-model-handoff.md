@@ -305,5 +305,5 @@ Retention-движок, на котором держится §10 («доказ�
 
 - **`docs/design/payment-monetization-v2.md`** — decision record (источник; §6.3/§7/§11 — форки, которые лочит эта сессия; §10 — стратегическая рамка).
 - **`docs/modules/payment.md`** — v1 as-built (Stars-путь; **НЕ перезаписывать**, новая спека идёт в `payment-v2.md`).
-- **`docs/modules/skladchina.md`** — механика P2P-out (org-toggle, honor-system markPaid — паттерн для декаплинг-гейта B4/B9).
+- **`docs/backlog/skladchina-pre-v3.md`** (архив, тогда `docs/modules/skladchina.md`) — механика P2P-out (org-toggle, honor-system markPaid — паттерн для декаплинг-гейта B4/B9).
 - **`docs/modules/reputation-v2.md`** — retention-движок, на котором держится §10 «доказать цикл первым»; монетизация к нему пристёгивается, не подменяет.

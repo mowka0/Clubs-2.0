@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatPrice, formatDatetime, pluralRu, formatLeadInterval } from '../../utils/formatters';
+import { formatPrice, formatDatetime, pluralRu, formatLeadInterval, shortName, untilText } from '../../utils/formatters';
 
 // Интервал Этапа 2 полными словами (V67/V68): часы до кратных суток, дни от 2 дней,
 // staging-минуты не превращаются в «0 часов».
@@ -100,5 +100,32 @@ describe('formatDatetime', () => {
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
     expect(result).toMatch(/2025/);
+  });
+});
+
+describe('untilText', () => {
+  const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
+
+  it('прошедший момент — null: слова о прошедшем у каждого экрана свои', () => {
+    expect(untilText(inMs(-60_000))).toBeNull();
+  });
+
+  it('меньше минуты не превращается в «через 0 минут»', () => {
+    expect(untilText(inMs(20_000))).toBe('меньше минуты');
+  });
+
+  it('минуты, часы, дни и недели — с правильной формой слова', () => {
+    expect(untilText(inMs(21 * 60_000))).toBe('через 21 минуту');
+    expect(untilText(inMs(3 * 3_600_000))).toBe('через 3 часа');
+    expect(untilText(inMs(13 * 86_400_000))).toBe('через 13 дней');
+    // От двух недель считаем неделями — «через 14 дней» на дальнем сроке читается хуже.
+    expect(untilText(inMs(14 * 86_400_000))).toBe('через 2 недели');
+  });
+});
+
+describe('shortName', () => {
+  it('фамилия сокращается до инициала, без фамилии — только имя', () => {
+    expect(shortName({ firstName: 'Иван', lastName: 'Петров' })).toBe('Иван П.');
+    expect(shortName({ firstName: 'Иван', lastName: null })).toBe('Иван');
   });
 });

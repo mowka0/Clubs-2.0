@@ -53,11 +53,13 @@ class EventMapper(
         confirmedCount: Int,
         noAnswerCount: Int = 0,
         waitlistedCount: Int = 0,
+        creator: EventPersonDto? = null,
         now: OffsetDateTime = OffsetDateTime.now()
     ): EventDetailDto {
         val rosterClosed = isRosterClosed(event)
         return EventDetailDto(
             id = event.id,
+            creator = creator,
             clubId = event.clubId,
             createdBy = event.createdBy,
             title = event.title,
@@ -172,8 +174,9 @@ class EventMapper(
                 // Встреча с лимитом: состав закрыт, подтверждать нечего — действий от участника
                 // больше не требуется. Встать в очередь можно, но это возможность, а не долг,
                 // и бейджем «требуется действие» она бы врала.
-                if (event.isRosterEvent) false
-                // Открытая: Этап 2 открыт всем участникам (PR #92), поэтому и действие требуется
+                if (event.hasSeatLimit) false
+                // Открытая, флипнутая в Этап 2 ДО реформы v3 (у новых этой ветки не бывает):
+                // Этап 2 открыт всем участникам (PR #92), поэтому и действие требуется
                 // от КАЖДОГО, кто ещё не решил на самом Этапе 2 (решение PO 2026-07-23): голос
                 // Этапа 1 — в том числе «Не пойду» — не финален, планы меняются. Финальны
                 // только confirmed/waitlisted/declined/expired.
@@ -182,6 +185,23 @@ class EventMapper(
             else -> false
         }
     }
+
+    /**
+     * Карточка для смотрящего без доступа к встрече: убираем ровно то, что не отдаёт и тизер-афиша,
+     * — место (адрес, точку, уточнение), фото и описание, плюс карточку организатора и причину
+     * отмены: в свободный текст организатора попадает что угодно, вплоть до того же адреса.
+     * Остаются название, дата, статус и счётчики — по ним страница уводит гостя на клуб.
+     */
+    fun redactForOutsider(detail: EventDetailDto): EventDetailDto = detail.copy(
+        description = null,
+        locationText = null,
+        locationLat = null,
+        locationLon = null,
+        locationHint = null,
+        photoUrl = null,
+        creator = null,
+        cancellationReason = null
+    )
 
     // Тизер-афиша: проекция БЕЗ места/фото — приватное не попадает в DTO по построению.
     fun toTeaserDto(item: EventWithGoingCount) = TeaserEventDto(

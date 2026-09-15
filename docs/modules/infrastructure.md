@@ -292,8 +292,11 @@ COPY . .
 # Публичные фронтовые ключи Яндекс.Карт (event-geo): Vite инлайнит VITE_* в бандл на сборке
 ARG VITE_YANDEX_MAPS_API_KEY
 ARG VITE_YANDEX_STATIC_API_KEY
+# Имя бота для кнопок возврата после оплаты (/pay/return живёт вне Telegram, API там недоступен)
+ARG VITE_TELEGRAM_BOT_USERNAME
 ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
-    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
+    VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 # Ключа геокодера здесь НЕТ с 2026-08-05: геокодинг проксирует бэкенд, ключ живёт в его env
 # (YANDEX_GEOCODER_API_KEY), в бандл не попадает. См. docs/modules/event-geo.md.
 RUN npm run build
@@ -388,6 +391,9 @@ volumes:
 `BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.
+`TELEGRAM_BOT_USERNAME` (дефолт `clubs_v2_bot`) читают оба контейнера: бэкенд — как
+`telegram.bot-username`, фронтенд — как build arg `VITE_TELEGRAM_BOT_USERNAME`, чтобы страницы
+`/pay/return` и `/pay/fail` вели в того же бота (имя бота в адресе страницы не принимается).
 Staging без ключей работает на `stub` (счёт «оплачивается» переходом по ссылке
 `/api/billing/stub/pay`); Robokassa на staging — тестовые пароли и `ROBOKASSA_TEST_MODE=true`.
 
@@ -415,6 +421,20 @@ server {
     }
 }
 ```
+
+#### Заголовки безопасности (факт, 2026-09-15)
+
+`add_header` внутри `location` **заменяет**, а не дополняет заголовки внешнего уровня, поэтому весь
+набор повторяется в каждом из четырёх location (`/uploads/`, статика с хэшем, `index.html`,
+SPA-фолбэк):
+
+| Заголовок | Значение | Почему так |
+|---|---|---|
+| `Content-Security-Policy` | `frame-ancestors 'self' + домены Telegram` | вместо `X-Frame-Options`: `DENY`/`SAMEORIGIN` ломают Mini App в Telegram Web (белый экран), а whitelist доменов `X-Frame-Options` не умеет |
+| `Strict-Transport-Security` | `max-age=31536000` | требование `.claude/rules/security.md` § HTTPS. TLS терминирует Traefik, но заголовок обязан дойти клиенту. **Без** `includeSubDomains` и `preload`: домен `sslip.io` общий, жёсткая политика задела бы чужие поддоменные стенды |
+| `X-Content-Type-Options` | `nosniff` | — |
+| — | — | На `/uploads/` апстримные `Strict-Transport-Security` и `X-Content-Type-Options` от MinIO скрыты (`proxy_hide_header`): MinIO шлёт свой HSTS с `includeSubDomains`, и в ответе оказывалось два разных HSTS — по RFC 6797 браузер берёт первый и игнорирует второй, то есть политику сайта определял бы апстрим. На `/api/` HSTS добавлен отдельно: бэкенд его не шлёт, `nosniff` там ставит Spring Security |
+| `Cache-Control` | статика `public, max-age=31536000` (без `immutable`), `index.html` — `no-store` | см. «Вторая половина инцидента» ниже |
 
 ### Traefik routing: как prod и staging разведены
 
@@ -641,12 +661,17 @@ ssh root@77.42.23.177 "/usr/local/sbin/clubs-mss-clamp status"   # обе стр
 Скрипт идемпотентен: `apply` не плодит дубли, `remove` снимает ровно свои правила, `status`
 возвращает ненулевой код, когда правил нет — годится для мониторинга.
 
-### Что ещё осталось от того инцидента
+### Вторая половина инцидента — закрыта 2026-09-15
 
-Вторая половина проблемы — `Cache-Control: public, max-age=31536000, immutable` на JS/CSS
-(`frontend/nginx.conf`): один оборванный запрос сохраняет в кэше WebView обрезанный бандл, и
-белый экран становится вечным, потому что перепроверка запрещена на год. Пересмотр `immutable`
-не сделан — заведён в `docs/backlog/immutable-bundle-cache.md`.
+Была: `Cache-Control: public, max-age=31536000, immutable` на JS/CSS (`frontend/nginx.conf`). Один
+оборванный запрос сохранял в кэше WebView обрезанный бандл, и белый экран становился вечным —
+`immutable` запрещает перепроверку на год, так что человек не мог починить его ничем, кроме ручной
+чистки данных сайта.
+
+Стало: `immutable` снят в обоих кэширующих location (статика с хэшем и `/uploads/`), `max-age`
+оставлен прежним. Имя файла всё равно меняется при каждой сборке, поэтому трафик почти не растёт —
+обычная перезагрузка теперь шлёт условный запрос и получает `304`, а битый кэш чинится сама собой.
+Заодно убран дубль `Cache-Control` (`expires 1y` + `add_header` давали два заголовка подряд).
 
 ### Проверено на живых пакетах (2026-08-15)
 
@@ -665,5 +690,5 @@ ssh root@77.42.23.177 "/usr/local/sbin/clubs-mss-clamp status"   # обе стр
 а не просто соглашается с уже применёнными вручную. Именно он выполняется при загрузке.
 
 > Повторять этот тест на живом проде без нужды не стоит: пока правил нет, любой пользователь
-> может получить оборванный бандл, который осядет в кэше на год
-> (`docs/backlog/immutable-bundle-cache.md`).
+> может получить оборванный бандл. С 2026-09-15 он больше не вечен (`immutable` снят), но экран
+> всё равно белый до перезагрузки.

@@ -155,12 +155,48 @@ class RosterServiceTest {
         verify(exactly = 0) { eventResponseRepository.findFirstWaitlisted(any()) }
     }
 
+    // ---- открытая встреча одноэтапна (v3, § 16) ----
+
     @Test
-    fun `AC-12 открытая встреча набор не трогает`() {
+    fun `AC-OPEN1 голос «Пойду» на открытой сразу кладёт в состав`() {
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns response()
+
+        service.applyVote(event(participantLimit = null), userId, Stage_1Vote.going)
+
+        verify(exactly = 1) {
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
+        }
+        // Потолка нет — занятые места не считаем.
+        verify(exactly = 0) { eventResponseRepository.countConfirmed(any()) }
+        // Слот-лок берём и здесь: им же держат свои транзакции выход из клуба и кик, которые
+        // удаляют строки откликов. Без него голос в момент удаления пережил бы каскад.
+        verify(exactly = 1) { eventResponseRepository.lockEventSlots(eventId) }
+    }
+
+    @Test
+    fun `AC-OPEN1 повторный «Пойду» на открытой идемпотентен`() {
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(Stage_2Vote.confirmed)
+
         service.applyVote(event(participantLimit = null), userId, Stage_1Vote.going)
 
         verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
-        verify(exactly = 0) { eventResponseRepository.lockEventSlots(any()) }
+    }
+
+    @Test
+    fun `AC-OPEN2 «Не пойду» и «Возможно» на открытой вынимают из состава бесплатно`() {
+        // Очередь у открытой пуста по построению — повышать после выхода некого.
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        listOf(Stage_1Vote.not_going, Stage_1Vote.maybe).forEach { vote ->
+            every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+                response(Stage_2Vote.confirmed)
+
+            service.applyVote(event(participantLimit = null), userId, vote)
+        }
+
+        // Строка обнуляется, а не становится declined: отказ голосом бесплатен и обратим.
+        verify(exactly = 2) { eventResponseRepository.clearStage2Vote(any()) }
+        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
     }
 
     // ---- правило ①: дедлайн набора ----
@@ -227,7 +263,13 @@ class RosterServiceTest {
 
     @Test
     fun `открытая встреча идёт мимо набора`() {
+        // Страховка второго уровня (v3): в тик открытая уже не попадает
+        // (findEventsToTriggerStage2 фильтрует по participant_limit), но если попадёт —
+        // ни закрытия состава, ни отмены по недобору у неё быть не должно.
         assertFalse(service.handleRosterDeadline(event(participantLimit = null)))
+
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+        verify(exactly = 0) { eventService.cancelBySystem(any(), any()) }
     }
 
     @Test

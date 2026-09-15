@@ -4,9 +4,8 @@
 package com.clubs.generated.jooq.tables.pojos
 
 
-import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.enums.SkladchinaStatus
-import com.clubs.generated.jooq.enums.SkladchinaTemplate
 
 import java.io.Serializable
 import java.time.OffsetDateTime
@@ -14,9 +13,10 @@ import java.util.UUID
 
 
 /**
- * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта и
- * т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую (СБП)
- * мимо платформы, приложение ведёт учёт статусов и напоминания.
+ * Сбор денег внутри клуба: повод и обёртка над долгами (название, вид, срок,
+ * реквизиты, чат-пост, пачка долгов в debts). Создать может любой активный
+ * участник клуба; отменить — создатель или владелец клуба. Спека:
+ * docs/modules/skladchina-v3.md.
  */
 @Suppress("UNCHECKED_CAST")
 data class Skladchinas(
@@ -27,20 +27,23 @@ data class Skladchinas(
     var description: String? = null,
     var rules: String? = null,
     var photoUrl: String? = null,
-    var paymentMode: SkladchinaMode,
-    var totalGoalKopecks: Long? = null,
+    var amountKopecks: Long? = null,
     var paymentLink: String,
     var paymentMethodNote: String? = null,
-    var deadline: OffsetDateTime,
-    var affectsReputation: Boolean? = null,
+    var deadline: OffsetDateTime? = null,
     var status: SkladchinaStatus? = null,
     var closedAt: OffsetDateTime? = null,
-    var closedBy: UUID? = null,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
     var reminderSentAt: OffsetDateTime? = null,
-    var template: SkladchinaTemplate? = null,
-    var eventId: UUID? = null
+    var eventId: UUID? = null,
+    var kind: SkladchinaKind,
+    var enrollmentUntil: OffsetDateTime? = null,
+    var minParticipants: Int? = null,
+    var lockedAt: OffsetDateTime? = null,
+    var orderedAt: OffsetDateTime? = null,
+    var hiddenFromUserId: UUID? = null,
+    var orderRemindedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -82,13 +85,11 @@ data class Skladchinas(
         }
         else if (this.photoUrl != o.photoUrl)
             return false
-        if (this.paymentMode != o.paymentMode)
-            return false
-        if (this.totalGoalKopecks == null) {
-            if (o.totalGoalKopecks != null)
+        if (this.amountKopecks == null) {
+            if (o.amountKopecks != null)
                 return false
         }
-        else if (this.totalGoalKopecks != o.totalGoalKopecks)
+        else if (this.amountKopecks != o.amountKopecks)
             return false
         if (this.paymentLink != o.paymentLink)
             return false
@@ -98,13 +99,11 @@ data class Skladchinas(
         }
         else if (this.paymentMethodNote != o.paymentMethodNote)
             return false
-        if (this.deadline != o.deadline)
-            return false
-        if (this.affectsReputation == null) {
-            if (o.affectsReputation != null)
+        if (this.deadline == null) {
+            if (o.deadline != null)
                 return false
         }
-        else if (this.affectsReputation != o.affectsReputation)
+        else if (this.deadline != o.deadline)
             return false
         if (this.status == null) {
             if (o.status != null)
@@ -117,12 +116,6 @@ data class Skladchinas(
                 return false
         }
         else if (this.closedAt != o.closedAt)
-            return false
-        if (this.closedBy == null) {
-            if (o.closedBy != null)
-                return false
-        }
-        else if (this.closedBy != o.closedBy)
             return false
         if (this.createdAt == null) {
             if (o.createdAt != null)
@@ -142,17 +135,49 @@ data class Skladchinas(
         }
         else if (this.reminderSentAt != o.reminderSentAt)
             return false
-        if (this.template == null) {
-            if (o.template != null)
-                return false
-        }
-        else if (this.template != o.template)
-            return false
         if (this.eventId == null) {
             if (o.eventId != null)
                 return false
         }
         else if (this.eventId != o.eventId)
+            return false
+        if (this.kind != o.kind)
+            return false
+        if (this.enrollmentUntil == null) {
+            if (o.enrollmentUntil != null)
+                return false
+        }
+        else if (this.enrollmentUntil != o.enrollmentUntil)
+            return false
+        if (this.minParticipants == null) {
+            if (o.minParticipants != null)
+                return false
+        }
+        else if (this.minParticipants != o.minParticipants)
+            return false
+        if (this.lockedAt == null) {
+            if (o.lockedAt != null)
+                return false
+        }
+        else if (this.lockedAt != o.lockedAt)
+            return false
+        if (this.orderedAt == null) {
+            if (o.orderedAt != null)
+                return false
+        }
+        else if (this.orderedAt != o.orderedAt)
+            return false
+        if (this.hiddenFromUserId == null) {
+            if (o.hiddenFromUserId != null)
+                return false
+        }
+        else if (this.hiddenFromUserId != o.hiddenFromUserId)
+            return false
+        if (this.orderRemindedAt == null) {
+            if (o.orderRemindedAt != null)
+                return false
+        }
+        else if (this.orderRemindedAt != o.orderRemindedAt)
             return false
         return true
     }
@@ -167,20 +192,23 @@ data class Skladchinas(
         result = prime * result + (if (this.description == null) 0 else this.description.hashCode())
         result = prime * result + (if (this.rules == null) 0 else this.rules.hashCode())
         result = prime * result + (if (this.photoUrl == null) 0 else this.photoUrl.hashCode())
-        result = prime * result + this.paymentMode.hashCode()
-        result = prime * result + (if (this.totalGoalKopecks == null) 0 else this.totalGoalKopecks.hashCode())
+        result = prime * result + (if (this.amountKopecks == null) 0 else this.amountKopecks.hashCode())
         result = prime * result + this.paymentLink.hashCode()
         result = prime * result + (if (this.paymentMethodNote == null) 0 else this.paymentMethodNote.hashCode())
-        result = prime * result + this.deadline.hashCode()
-        result = prime * result + (if (this.affectsReputation == null) 0 else this.affectsReputation.hashCode())
+        result = prime * result + (if (this.deadline == null) 0 else this.deadline.hashCode())
         result = prime * result + (if (this.status == null) 0 else this.status.hashCode())
         result = prime * result + (if (this.closedAt == null) 0 else this.closedAt.hashCode())
-        result = prime * result + (if (this.closedBy == null) 0 else this.closedBy.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.reminderSentAt == null) 0 else this.reminderSentAt.hashCode())
-        result = prime * result + (if (this.template == null) 0 else this.template.hashCode())
         result = prime * result + (if (this.eventId == null) 0 else this.eventId.hashCode())
+        result = prime * result + this.kind.hashCode()
+        result = prime * result + (if (this.enrollmentUntil == null) 0 else this.enrollmentUntil.hashCode())
+        result = prime * result + (if (this.minParticipants == null) 0 else this.minParticipants.hashCode())
+        result = prime * result + (if (this.lockedAt == null) 0 else this.lockedAt.hashCode())
+        result = prime * result + (if (this.orderedAt == null) 0 else this.orderedAt.hashCode())
+        result = prime * result + (if (this.hiddenFromUserId == null) 0 else this.hiddenFromUserId.hashCode())
+        result = prime * result + (if (this.orderRemindedAt == null) 0 else this.orderRemindedAt.hashCode())
         return result
     }
 
@@ -194,20 +222,23 @@ data class Skladchinas(
         sb.append(", ").append(description)
         sb.append(", ").append(rules)
         sb.append(", ").append(photoUrl)
-        sb.append(", ").append(paymentMode)
-        sb.append(", ").append(totalGoalKopecks)
+        sb.append(", ").append(amountKopecks)
         sb.append(", ").append(paymentLink)
         sb.append(", ").append(paymentMethodNote)
         sb.append(", ").append(deadline)
-        sb.append(", ").append(affectsReputation)
         sb.append(", ").append(status)
         sb.append(", ").append(closedAt)
-        sb.append(", ").append(closedBy)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(reminderSentAt)
-        sb.append(", ").append(template)
         sb.append(", ").append(eventId)
+        sb.append(", ").append(kind)
+        sb.append(", ").append(enrollmentUntil)
+        sb.append(", ").append(minParticipants)
+        sb.append(", ").append(lockedAt)
+        sb.append(", ").append(orderedAt)
+        sb.append(", ").append(hiddenFromUserId)
+        sb.append(", ").append(orderRemindedAt)
 
         sb.append(")")
         return sb.toString()

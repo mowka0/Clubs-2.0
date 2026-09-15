@@ -44,6 +44,7 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     autopayPossible: false,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
+    canPay: true,
     ...over,
   };
 }
@@ -127,6 +128,16 @@ describe('BillingSheet', () => {
 
     expect(await screen.findByText('Проверяем оплату…')).toBeInTheDocument();
     expect(screen.queryByText(/Оплачено до/)).toBeNull();
+  });
+
+  it('со-организатору вместо кнопки оплаты объясняет, что платит владелец', async () => {
+    // Со-организатор доходит до стены при создании встречи, но чекаут ему ответил бы 403.
+    mockBilling(status({ canPay: false }));
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="FREE_MEETING_USED" onClose={() => {}} />);
+
+    expect(await screen.findByText('Оплачивает владелец клуба')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оплатить/ })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Продлевать автоматически' })).toBeNull();
   });
 
   it('возврат из браузера: уже погашенный счёт сразу показывает «оплачено»', async () => {

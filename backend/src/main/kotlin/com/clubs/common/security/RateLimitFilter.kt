@@ -24,6 +24,7 @@ class RateLimitFilter : OncePerRequestFilter() {
     private val feedbackBuckets = ConcurrentHashMap<String, Bucket>()
     private val geoBuckets = ConcurrentHashMap<String, Bucket>()
     private val billingBuckets = ConcurrentHashMap<String, Bucket>()
+    private val moneyClaimBuckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -44,12 +45,14 @@ class RateLimitFilter : OncePerRequestFilter() {
         val isFeedbackEndpoint = path == "/api/feedback"
         val isGeoEndpoint = path.startsWith("/api/geo/")
         val isBillingCheckout = BILLING_CHECKOUT_PATH.matches(path)
+        val isMoneyClaimEndpoint = MONEY_CLAIM_PATH.matches(path)
         val key = resolveKey(request)
         val bucket = when {
             isAuthEndpoint -> authBuckets.computeIfAbsent(key) { createAuthBucket() }
             isFeedbackEndpoint -> feedbackBuckets.computeIfAbsent(key) { createFeedbackBucket() }
             isGeoEndpoint -> geoBuckets.computeIfAbsent(key) { createGeoBucket() }
             isBillingCheckout -> billingBuckets.computeIfAbsent(key) { createBillingBucket() }
+            isMoneyClaimEndpoint -> moneyClaimBuckets.computeIfAbsent(key) { createMoneyClaimBucket() }
             else -> apiBuckets.computeIfAbsent(key) { createApiBucket() }
         }
 
@@ -61,6 +64,7 @@ class RateLimitFilter : OncePerRequestFilter() {
                 isFeedbackEndpoint -> FEEDBACK_LIMIT_PER_MIN
                 isGeoEndpoint -> GEO_LIMIT_PER_MIN
                 isBillingCheckout -> BILLING_LIMIT_PER_MIN
+                isMoneyClaimEndpoint -> MONEY_CLAIM_LIMIT_PER_MIN
                 else -> API_LIMIT_PER_MIN
             }
             logger.warn(
@@ -87,6 +91,7 @@ class RateLimitFilter : OncePerRequestFilter() {
         feedbackBuckets.clear()
         geoBuckets.clear()
         billingBuckets.clear()
+        moneyClaimBuckets.clear()
     }
 
     private fun resolveKey(request: HttpServletRequest): String {
@@ -144,6 +149,15 @@ class RateLimitFilter : OncePerRequestFilter() {
         )
         .build()
 
+    private fun createMoneyClaimBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(MONEY_CLAIM_LIMIT_PER_MIN)
+                .refillGreedy(MONEY_CLAIM_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .build()
+
     companion object {
         // Чекаут подписки за чат: каждый вызов создаёт счёт у провайдера (platform-billing.md § 9).
         private val BILLING_CHECKOUT_PATH = Regex("/api/clubs/[^/]+/billing/checkout")
@@ -169,5 +183,10 @@ class RateLimitFilter : OncePerRequestFilter() {
         private const val GEO_LIMIT_PER_MIN = 12L
         // Жёсткий лимит чекаута: счета у провайдера не должны плодиться (security.md § Rate Limiting).
         private const val BILLING_LIMIT_PER_MIN = 5L
+        // Жёсткий лимит на «Отдал» / «Передумал» / «Перевёл» / «Отдал Σ» по долгам — каждое такое
+        // действие превращается в DM с кнопками получателю; под общим лимитом 120/мин один человек
+        // мог бы заспамить чужую личку серией «Перевёл» / «Отдал Σ» (security-ревью v3).
+        private const val MONEY_CLAIM_LIMIT_PER_MIN = 10L
+        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute|skladchinas/[^/]+/promise)$")
     }
 }

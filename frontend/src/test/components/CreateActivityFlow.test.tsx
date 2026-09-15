@@ -99,7 +99,6 @@ function renderFlow(clubs: ClubPickerOption[], presetClubId?: string) {
       <Route path="/clubs/:id/events/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/event-templates/:templateId/edit" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/new" element={<LocationProbe />} />
-      <Route path="/clubs/:id/skladchina/split" element={<LocationProbe />} />
       <Route path="/feedback" element={<LocationProbe />} />
     </Routes>,
     { routerEntries: ['/'] },
@@ -162,25 +161,25 @@ describe('CreateActivityFlow', () => {
 
     await user.click(screen.getByText('Сбор'));
 
-    // New step: pick the skladchina template before the club.
-    expect(screen.getByText('Разделить счёт')).toBeInTheDocument();
-    await user.click(screen.getByText('Свой сбор'));
+    // Шаг входа в сбор перед клубом (skladchina-v3): четыре вопроса.
+    expect(screen.getByText('Кто берёт?')).toBeInTheDocument();
+    await user.click(screen.getByText('Кто сколько должен?'));
 
     // Then the club picker appears with all organizer clubs.
     expect(screen.getByText('Alpha Club')).toBeInTheDocument();
     await user.click(screen.getByText('Beta Club'));
 
-    expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/skladchina/new');
+    expect(screen.getByTestId('location').textContent + screen.getByTestId('location-search').textContent).toBe('/clubs/club-2/skladchina/new?flow=split');
   });
 
-  it('Сбор → «Разделить счёт» routes to the split-bill page', async () => {
+  it('Сбор → «Кто сколько хочет?» несёт вход в форму через ?flow', async () => {
     const { user } = renderFlow(TWO_CLUBS);
 
     await user.click(screen.getByText('Сбор'));
-    await user.click(screen.getByText('Разделить счёт'));
+    await user.click(screen.getByText('Кто сколько хочет?'));
     await user.click(screen.getByText('Beta Club'));
 
-    expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/skladchina/split');
+    expect(screen.getByTestId('location').textContent + screen.getByTestId('location-search').textContent).toBe('/clubs/club-2/skladchina/new?flow=voluntary');
   });
 
   it('«Сообщить о проблеме» ведёт на форму обратной связи, минуя выбор клуба', async () => {
@@ -351,15 +350,15 @@ describe('CreateActivityFlow', () => {
     it('с выбора клуба возвращает на тот шаг, откуда пришли', async () => {
       const { user } = renderFlow(TWO_CLUBS);
 
-      // Через «Сбор» → «Свой сбор» → клуб: назад должно вернуть к типам сбора, а не к формату события.
+      // Через «Сбор» → «Кто сколько должен?» → клуб: назад должно вернуть к входам в сбор, а не к формату события.
       await user.click(screen.getByText('Сбор'));
-      await user.click(screen.getByText('Свой сбор'));
+      await user.click(screen.getByText('Кто сколько должен?'));
       expect(screen.getByText('Alpha Club')).toBeInTheDocument();
 
       await user.click(screen.getByText('Назад'));
 
-      // Вернулись к типам сбора, а не к форматам события.
-      expect(screen.getByText('Разделить счёт')).toBeInTheDocument();
+      // Вернулись к видам сбора, а не к форматам события.
+      expect(screen.getByText('Кто берёт?')).toBeInTheDocument();
       expect(screen.queryByText('С местами')).toBeNull();
     });
   });

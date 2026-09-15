@@ -120,11 +120,11 @@ Backend явно не принимает category/accessType в `UpdateClubReque
     (`status IN upcoming/stage_1/stage_2 AND attendance_finalized = false`) → `cancelled`.
     Завершённые (`completed`) / уже финализированные / уже `cancelled` события **не трогаются** —
     их репутация заперта. Подробности lifecycle — `docs/modules/events.md` § «Каскадная отмена…».
-  - `skladchinaRepository.cancelActiveByClub(id)` — все `active`-складчины клуба → `cancelled`,
-    их `pending`-участники → `released` (репутационно-нейтрально, **без ledger-строк**, минуя
-    `SkladchinaService.closeInternal`, чтобы не начислить штраф и не разослать DM). Уже
-    закрытые/отменённые складчины не трогаются. Подробности — `docs/modules/skladchina.md`
-    § «Удаление клуба».
+  - `skladchinaRepository.cancelActiveByClub(id)` — все `active`-сборы клуба → `cancelled`:
+    неразобранные сальдо пар отклоняются, открытые долги → `forgiven` (репутационно-нейтрально,
+    **без ledger-строк**, минуя сервисы сборов — ни штрафа, ни DM; чат-пост снимает close-проход
+    flush-планировщика). Уже закрытые/отменённые сборы не трогаются. Подробности —
+    `docs/modules/skladchina-v3.md` § 13 п. 11.
   - `applicationRepository.deleteActiveByClub(id)` — `pending`/`approved` заявки в клуб
     hard-удаляются (зеркало `deleteActiveByUserAndClub` из `leaveClub`), чтобы не висели сиротами
     в «Моих заявках». Терминальные `rejected`/`auto_rejected` сохраняются как аудит-история.

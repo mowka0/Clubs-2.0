@@ -72,15 +72,6 @@ class LivePinRendererTest {
         assertEquals(1, Regex("<b>").findAll(text).count())
     }
 
-    @Test
-    fun `stage2 — подтверждённые, очередь и дедлайн = старт события`() {
-        val text = renderer.stage2Text(event, confirmed = 12, waitlisted = 2)
-        assertTrue(text.contains("<b>Встреча: до 15 человек</b>"))
-        assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
-        assertTrue(text.contains("📋 В очереди — 2"))
-        assertTrue(text.contains("⏳ Подтвердить до — 12.07.2026 19:00 МСК"))
-    }
-
     // Открытая: лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
     @Test
     fun `открытая встреча — без лимита мест, счёт без знаменателя и без строки очереди`() {
@@ -88,27 +79,25 @@ class LivePinRendererTest {
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
         assertTrue(stage1.contains("<b>Встреча: открытая</b>"))
-        assertTrue(stage1.contains("👥 Без ограничений — приходят все желающие, репутация не считается"))
+        assertTrue(stage1.contains("🌊 Без мест и очереди — «Пойду» сразу записывает; передумать можно до начала"))
         assertFalse(stage1.contains("Мест —"))
 
-        val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)
-        assertTrue(stage2.contains("<b>Встреча: открытая</b>"))
-        assertTrue(stage2.contains("✅ Подтвердили — 12\n"))
-        assertFalse(stage2.contains("Подтвердили — 12 из"))
-        assertFalse(stage2.contains("В очереди"))
-
+        // При старте никто ничего не подтверждал — люди просто сказали «Пойду» (v3).
         val closed = renderer.closedText(open, confirmed = 12)
-        assertTrue(closed.contains("✅ Подтвердили — 12"))
+        assertTrue(closed.contains("✅ Шли — 12"))
+        assertFalse(closed.contains("Подтвердили"))
     }
 
     @Test
     fun `кнопка зависит от этапа`() {
-        // У форматов с лимитом (V85) подтверждать нечего — после закрытия состава кнопка просто
-        // открывает встречу. Подтверждение осталось у формата «сколько придёт».
+        // Пока состав набирается голосами — «Проголосовать»; после закрытия набора голосовать
+        // нечем, и кнопка просто открывает встречу. Отдельного «Подтвердить участие» больше нет
+        // ни у одного формата (v3) — в том числе у открытой, флипнутой в Этап 2 до реформы.
         assertEquals("Проголосовать", renderer.buttonText(event))
         assertEquals("Открыть встречу", renderer.buttonText(event.copy(stage2Triggered = true)))
+        assertEquals("Проголосовать", renderer.buttonText(event.copy(participantLimit = null)))
         assertEquals(
-            "Подтвердить участие",
+            "Открыть встречу",
             renderer.buttonText(event.copy(stage2Triggered = true, participantLimit = null))
         )
     }

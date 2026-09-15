@@ -4,7 +4,7 @@ import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
-import { formatBadge } from '../../utils/eventFormat';
+import { formatBadge, rosterCount } from '../../utils/eventFormat';
 
 interface ActivityCardProps {
   activity: ActivityItemDto;
@@ -38,8 +38,10 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
   // ростер — это список подтверждённых, поэтому показываем `confirmedCount`/"подтв." вместо
   // stage-1 "идёт" (F5-21).
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
-  const count = finalComposition ? event.confirmedCount : event.goingCount;
-  const countCaption = finalComposition ? 'подтв.' : 'идёт';
+  const count = rosterCount(event);
+  // У открытой встречи подтверждений не существует (event-formats.md § 16.8): голос «Пойду» и
+  // есть состав, поэтому подпись у неё одна на весь жизненный цикл.
+  const countCaption = finalComposition && event.participantLimit != null ? 'подтв.' : 'идёт';
   return (
     <>
       <div className="rd-ft-body">
@@ -76,31 +78,32 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
 };
 
 const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladchina }) => {
-  const hasGoal = skladchina.totalGoalKopecks !== null && skladchina.totalGoalKopecks > 0;
-  const pct = hasGoal
-    ? progressPercent(skladchina.collectedKopecks, skladchina.totalGoalKopecks!)
-    : 0;
+  // Знаменатель — сумма живых долгов, до их появления — сумма сбора; у «По желанию» может не быть.
+  const target = skladchina.targetKopecks ?? skladchina.amountKopecks;
+  const hasTarget = target !== null && target > 0;
+  const pct = hasTarget ? progressPercent(skladchina.receivedKopecks, target!) : 0;
 
   return (
     <>
       <div className="rd-ft-body">
         <div className="rd-ft-title">{skladchina.title}</div>
         <div className="rd-ft-sub">
-          {hasGoal
-            ? `${formatRub(skladchina.collectedKopecks)} / ${formatRub(skladchina.totalGoalKopecks!)}`
-            : `${formatRub(skladchina.collectedKopecks)} собрано`}
-          {skladchina.affectsReputation && ' · ⚠️ Важный сбор'}
+          {hasTarget
+            ? `${formatRub(skladchina.receivedKopecks)} / ${formatRub(target!)}`
+            : `${formatRub(skladchina.receivedKopecks)} получено`}
+          {' · '}
+          {skladchina.kind === 'shared' ? 'скинуться' : skladchina.kind === 'per_head' ? 'кто берёт?' : 'по желанию'}
         </div>
       </div>
       <div className="rd-ft-stat">
-        {hasGoal ? (
+        {hasTarget ? (
           <>
             <div className="rd-ft-stat-num">{pct}%</div>
-            <div className="rd-ft-stat-cap">собрано</div>
+            <div className="rd-ft-stat-cap">получено</div>
           </>
         ) : (
           <>
-            <div className="rd-ft-stat-num">{skladchina.paidCount}</div>
+            <div className="rd-ft-stat-num">{skladchina.receivedCount}</div>
             <div className="rd-ft-stat-cap">оплат</div>
           </>
         )}

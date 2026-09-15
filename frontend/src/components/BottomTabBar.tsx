@@ -62,6 +62,8 @@ export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
   if (TABLESS_DOCK_PATHS.has(pathname)) return true;
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return true;
+  // Долги (/debts, /debts/with/:userId) — подстраницы профиля: док остаётся, таб «Профиль» активен.
+  if (/^\/debts(\/with\/[^/]+)?$/.test(pathname)) return true;
   return /^\/(clubs|events|skladchina)\/[^/]+(\/manage|\/skladchina\/new)?$/.test(pathname);
 }
 
@@ -70,6 +72,7 @@ function resolveActivePath(pathname: string): string {
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return '/activities';
   if (/^\/(events|skladchina)\/[^/]+$/.test(pathname)) return '/activities';
   if (/^\/clubs\/[^/]+\/skladchina\/new$/.test(pathname)) return '/my-clubs';
+  if (/^\/debts(\/with\/[^/]+)?$/.test(pathname)) return '/profile';
   return pathname;
 }
 
@@ -93,7 +96,7 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
+  const { data: actionRequiredCount = 0 } = useSkladchinaActionRequiredCountQuery();
   // Организатору требуется действие на «Мои клубы»: заявки в ожидании (inbox) + платные участники,
   // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы».
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
@@ -122,7 +125,7 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
         {TABS.map((tab) => {
           const isActive = activePath === tab.path;
           const showDot =
-            (tab.path === '/activities' && unpaidCount > 0) ||
+            (tab.path === '/activities' && actionRequiredCount > 0) ||
             (tab.path === '/my-clubs' && myClubsActionTotal > 0);
           return (
             <button

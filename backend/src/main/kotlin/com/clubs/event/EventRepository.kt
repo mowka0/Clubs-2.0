@@ -65,8 +65,6 @@ interface EventRepository {
      */
     fun markRosterDecided(id: UUID): Int
 
-    fun findNextUpcomingEvent(now: OffsetDateTime): Event?
-
     /**
      * Будущие неотменённые события клуба (status IN upcoming/stage_1/stage_2, event_datetime > now),
      * ближайшее первым. «Живой закреп»: backfill пинов при включении тумблера и строка

@@ -7,7 +7,7 @@ package com.clubs.clubquality
  * а НЕ сюда.
  *
  * Read-only агрегации по `transactions`, `membership_history`, `applications`, `event_responses`,
- * `events`, `skladchina_participants`, `skladchinas`, `memberships`, `clubs`. Ledger репутации
+ * `events`, `debts` (сборы v3), `skladchinas`, `memberships`, `clubs`. Ledger репутации
  * НЕ читается (правило §2): «споры по явке» считаются напрямую из `event_responses` (текущие
  * открытые споры), а не из ledger'а.
  *

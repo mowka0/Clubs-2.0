@@ -49,7 +49,7 @@ near-black/off-white палитра + оранжево-розово-фиолет
   отдельный круглый FAB.
 - Табы (маршруты прежние): **Главная** `/` · **Активности** `/activities` · **Клубы**
   `/my-clubs` · **Профиль** `/profile`. Иконки — инлайн-SVG (brass-PNG больше не используются).
-- Точки-уведомления на табах: Клубы (`myClubsActionTotal`), Активности (`unpaidCount`).
+- Точки-уведомления на табах: Клубы (`myClubsActionTotal`), Активности (`actionRequiredCount` — сборы, где от вас ждут действия).
   FAB **без бейджа**.
 - FAB = **всегда «создать»**: логика поднята в `Layout.tsx`. Через `useOrganizerClubs`:
   организатор → открыть `CreateActivityFlow`; не организатор → `Toast`-подсказка.
@@ -100,7 +100,7 @@ stat-grid (Надёжность средняя+tier / В клубах; ⚠️ 20
   (ClubActivitiesTab/ClubMembersTab) пока легаси-стиль (recolor).
 - **EventPage** (`frontend/src/pages/EventPage.tsx`): ушли от telegram-ui List/Section на
   `rd-page` + `rd-hero` (бейдж «СОБЫТИЕ», дата) + `rd-mini-map` + адрес, описание `rd-glass`,
-  набор (`rd-progress` + счётчики), голосование `rd-vote-btn`, stage-2 подтверждение/отказ
+  набор (`rd-progress` + счётчики), голосование `rd-vote-main` + `rd-vote-alt`, stage-2 подтверждение/отказ
   на `rd-btn-*`, статус-бейджи `rd-badge`. Логика голосования/подтверждения сохранена.
 - Новые CSS в `redesign.css`: `rd-hero-btn`/`rd-hero-bg[data-cat]`/`rd-hero-type-badge`,
   `rd-btn-primary`/`rd-btn-outline`/`rd-cta-*`/`rd-note`/`rd-error`, `rd-locked`, `rd-host-row`,

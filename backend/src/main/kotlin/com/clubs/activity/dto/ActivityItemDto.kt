@@ -58,20 +58,27 @@ sealed class ActivityItemDto {
         override val type: String = "event"
     }
 
+    /** Карточка сбора в ленте (skladchina-v3 § 9): вид, «получено X из Y», «оплатили N из M». */
     data class SkladchinaActivity(
         override val id: UUID,
         override val clubId: UUID,
         override val title: String,
         override val createdAt: OffsetDateTime,
         override val isCompleted: Boolean,
-        val paymentMode: String,
-        val totalGoalKopecks: Long?,
-        val collectedKopecks: Long,
-        val deadline: OffsetDateTime,
-        val participantCount: Int,
-        val paidCount: Int,
+        val kind: String,
+        val amountKopecks: Long?,
+        // Знаменатель «получено X из Y»: сумма живых долгов, до их появления — amountKopecks.
+        val targetKopecks: Long?,
+        val receivedKopecks: Long,
+        // null у «По желанию» без срока.
+        val deadline: OffsetDateTime?,
+        // Когда сбор закрыли фактически: у прошедших лента показывает и сортирует именно по ней,
+        // а не по сроку оплаты — сбор со сроком 18-го могли закрыть 15-го. null у активных.
+        val closedAt: OffsetDateTime?,
+        val debtCount: Int,
+        val receivedCount: Int,
+        val enrolledCount: Int,
         val status: String,
-        val affectsReputation: Boolean,
         val photoUrl: String?
     ) : ActivityItemDto() {
         override val type: String = "skladchina"

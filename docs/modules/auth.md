@@ -75,6 +75,7 @@ user/
 | `/api/auth/*` | **5/мин** на IP | Агрессивная защита от brute-force HMAC (security.md § Authentication) |
 | `/api/feedback` | **3/мин** | Форма обратной связи уходит в DM саппорту |
 | `/api/geo/*` | **12/мин** | Внешний геокодер платный по запросам |
+| `/api/debts/{id}/claim`, `/api/debts/with/{userId}/settle`, `/api/skladchinas/{id}/contribute`, `/api/skladchinas/{id}/promise` | **10/мин** на user | Каждое «Отдал» / «Перевёл» / «Отдал Σ» — DM с кнопками получателю; серией таких действий под общим лимитом можно было бы заспамить чужую личку (skladchina-v3 § 13 п. 16) |
 | Остальные `/api/**` | **120/мин** на user (или IP если не авторизован) | Штатная защита от flood |
 | `/actuator/health` | без лимита | Healthcheck для Docker / Traefik |
 

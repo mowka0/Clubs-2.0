@@ -36,6 +36,7 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     autopayPossible: false,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
+    canPay: true,
     ...over,
   };
 }

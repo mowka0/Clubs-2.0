@@ -2,6 +2,7 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.membership.MembershipRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
@@ -36,17 +37,23 @@ import java.util.UUID
 class EventServiceTest {
 
     private lateinit var eventRepository: EventRepository
+    private lateinit var eventResponseRepository: EventResponseRepository
+    // Членство для гейта видимости карточки (EventService), не для ClubRoleGuard ниже.
+    private lateinit var accessMembershipRepository: MembershipRepository
     private lateinit var clubRepository: ClubRepository
-    private lateinit var guardMembershipRepository: com.clubs.membership.MembershipRepository
+    private lateinit var guardMembershipRepository: MembershipRepository
     private lateinit var eventMapper: EventMapper
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var billingGate: BillingGate
+    private lateinit var userRepository: com.clubs.user.UserRepository
     private lateinit var eventService: EventService
 
     @BeforeEach
     fun setUp() {
         eventRepository = mockk(relaxed = true)
+        eventResponseRepository = mockk(relaxed = true)
+        accessMembershipRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
         // Вызывающий по умолчанию не со-орг (null): owner-путь guard'а membership-репозиторий не трогает.
         guardMembershipRepository = mockk { every { findByUserAndClub(any(), any()) } returns null }
@@ -55,10 +62,12 @@ class EventServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         // Гейт биллинга по умолчанию пропускает: клуб без чата / бесплатная встреча.
         billingGate = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true)
         eventService = EventService(
-            eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, eventPublisher, skladchinaRepository, billingGate, stage2TriggerMinutesBefore = 1080L,
-            rosterWarningMinutes = 180L
+            eventRepository, eventResponseRepository, accessMembershipRepository, clubRepository,
+            ClubRoleGuard(clubRepository, guardMembershipRepository),
+            eventMapper, userRepository, eventPublisher, skladchinaRepository, billingGate,
+            stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
         )
     }
 
@@ -579,9 +588,10 @@ class EventServiceTest {
     // Тизер-тесты строят сервис с НАСТОЯЩИМ маппером: относительный порядок и содержимое
     // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
     private fun teaserService() = EventService(
-        eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository, billingGate, stage2TriggerMinutesBefore = 1080L,
-        rosterWarningMinutes = 180L
+        eventRepository, eventResponseRepository, accessMembershipRepository, clubRepository,
+        ClubRoleGuard(clubRepository, guardMembershipRepository),
+        EventMapper(240L, 1080L), userRepository, eventPublisher, skladchinaRepository, billingGate,
+        stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
     )
 
     @Test
