@@ -99,6 +99,7 @@ class ActivityItemDtoTest {
             targetKopecks = 500000L,
             receivedKopecks = 120000L,
             deadline = OffsetDateTime.parse("2026-05-20T23:59:59Z"),
+            closedAt = null,
             debtCount = 10,
             receivedCount = 3,
             enrolledCount = 0,

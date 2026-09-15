@@ -106,6 +106,9 @@ export const CreateSkladchinaPage: FC = () => {
   const events = splittableQuery.data ?? [];
   const selectedEvent = events.find((ev) => ev.eventId === eventId);
   const attendedIds = useMemo(() => new Set(selectedEvent?.attendedUserIds ?? []), [selectedEvent]);
+  // Отметить пришедшим можно только подтвердившего участие, поэтому список нередко состоит из
+  // одного создателя: предотмечать в форме тогда некого.
+  const onlyMeAttended = attendedIds.size > 0 && [...attendedIds].every((id) => id === myId);
   // После встречи: сначала пришедшие, ниже остальные участники клуба; своей строки у создателя нет.
   const orderedMembers = useMemo(() => {
     const others = members.filter((m) => m.userId !== myId);
@@ -250,9 +253,13 @@ export const CreateSkladchinaPage: FC = () => {
     <div className="rd-field">
       <span className="rd-label">За встречу</span>
       <div className="rd-hint">
-        {selectedEvent
-          ? `${selectedEvent.title} · ${DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли ${selectedEvent.attendedCount} — они отмечены ниже, состав можно поправить`
-          : 'Пришедшие будут отмечены ниже, состав можно поправить'}
+        {!selectedEvent
+          ? 'Пришедшие будут отмечены ниже, состав можно поправить'
+          // Пришедшим отмечают только тех, кто подтвердил участие, поэтому «пришли 1» нередко
+          // означает одного тебя — тогда отмечать ниже нечего, и подсказка зовёт выбрать людей.
+          : onlyMeAttended
+            ? `${selectedEvent.title} · ${DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · кроме вас на встрече никого не отмечено — выберите, с кем делите счёт`
+            : `${selectedEvent.title} · ${DATE_FMT.format(new Date(selectedEvent.eventDatetime))} · пришли ${selectedEvent.attendedCount} — они отмечены ниже, состав можно поправить`}
       </div>
     </div>
   );

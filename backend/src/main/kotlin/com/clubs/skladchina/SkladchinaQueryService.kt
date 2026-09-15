@@ -38,7 +38,7 @@ class SkladchinaQueryService(
         return skladchinaRepository.findSplittableEvents(
             clubId = clubId,
             notOlderThan = OffsetDateTime.now().minusDays(SkladchinaCreationService.MAX_EVENT_AGE_DAYS),
-            minAttended = SkladchinaCreationService.MIN_ATTENDED
+            minAttended = MIN_ATTENDED
         ).map { SplittableEventDto(it.eventId, it.title, it.eventDatetime, it.attendedCount, it.attendedUserIds) }
     }
 
@@ -112,5 +112,11 @@ class SkladchinaQueryService(
         if (!membershipRepository.isActiveMemberInActiveClub(callerId, clubId)) {
             throw ForbiddenException("Только для участников клуба")
         }
+    }
+
+    companion object {
+        // Сколько пришедших должно быть у встречи, чтобы предлагать по ней скинуться. Один — тоже
+        // повод: с ним и делят счёт (PO 2026-09-15, до этого требовалось двое).
+        private const val MIN_ATTENDED = 1
     }
 }

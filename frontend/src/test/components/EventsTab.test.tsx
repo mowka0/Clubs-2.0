@@ -235,6 +235,8 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     expect(day?.textContent?.trim()).toBeTruthy();
     expect(month?.textContent?.trim()).toBeTruthy();
     expect(day?.textContent).not.toEqual(month?.textContent);
+    // Маркер вида справа — встреча (в «Сборах» на его месте «Сбор»).
+    expect(container.querySelector('.rd-hist-kind')?.textContent).toContain('Встреча');
   });
 
   it('isHistory — единственный признак: событие в status=stage_2 попадает в «Историю» (лаг крона, AC-H14)', async () => {

@@ -175,8 +175,8 @@ class JooqSkladchinaRepository(
             .orderBy(
                 statusBucket.asc(),                          // активные первыми
                 actionBucket.asc(),                          // внутри активных — где ждут меня
-                SKLADCHINAS.DEADLINE.asc().nullsLast(),      // ближайший срок
                 SKLADCHINAS.CLOSED_AT.desc().nullsLast(),    // закрытые: свежее закрытие сверху
+                SKLADCHINAS.DEADLINE.asc().nullsLast(),      // активные (closed_at пуст): ближайший срок
                 SKLADCHINAS.ID.asc()
             )
             .limit(size)

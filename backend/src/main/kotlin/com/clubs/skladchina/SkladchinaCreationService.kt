@@ -195,8 +195,16 @@ class SkladchinaCreationService(
                 // Встреча даёт привязку и явку; состав и суммы — как в «Списке» (PO 2026-09-13: пришедшие
                 // предотмечены, можно поправить, «Суммы по людям» работает). Без списка — поровну между пришедшими.
                 val attended = resolveAttended(clubId, eventId, now)
-                val shares = if (request.debtors.isEmpty()) SkladchinaShares.equal(amount, attended).toMap()
-                else resolveListedShares(clubId, creatorId, request, amount)
+                val shares = if (request.debtors.isEmpty()) {
+                    // Делить не с кем: пришедших нет вовсе или отмечен один создатель. Долг самому
+                    // себе рождается сразу `received` — сбор выглядел бы собранным на 100 %, сам
+                    // никогда не закрылся бы и держал встречу занятой. Свой список должников это
+                    // не затрагивает: он и есть ответ, с кем делить.
+                    if (attended.none { it != creatorId }) {
+                        throw ValidationException("Некому назначить доли — укажите, кто скидывается")
+                    }
+                    SkladchinaShares.equal(amount, attended).toMap()
+                } else resolveListedShares(clubId, creatorId, request, amount)
                 CreationPlan(shares, shares.values.sum(), eventId, shares.keys.filter { it != creatorId }, enrolling = false)
             }
             enrollmentUntil != null -> {
@@ -252,7 +260,12 @@ class SkladchinaCreationService(
         return CreationPlan(own, request.amountKopecks, eventId, members, enrolling = false, invited = invited)
     }
 
-    /** Пришедшие на встречу активные участники; те же условия, что отбирают встречи в списке «Скинуться после встречи». */
+    /**
+     * Проверяет встречу (тот же набор условий, что отбирает встречи в списке «Скинуться после
+     * встречи») и отдаёт пришедших активных участников. Состав отсюда берёт только `shared` без
+     * своего списка должников — и он же решает, есть ли между кем делить; `voluntary` зовёт метод
+     * ради проверок встречи, круг там задают приглашённые.
+     */
     private fun resolveAttended(clubId: UUID, eventId: UUID, now: OffsetDateTime): List<UUID> {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Встреча не найдена")
         if (event.clubId != clubId) throw ValidationException("Встреча из другого клуба")
@@ -268,12 +281,10 @@ class SkladchinaCreationService(
         }
         val attendedAll = eventResponseRepository.findAttendedUserIds(eventId)
         val notActive = skladchinaRepository.findNonActiveMembers(clubId, attendedAll)
-        val attended = attendedAll.filter { it !in notActive }
-        // Пришедшие считаются целиком, создатель среди них может быть, а может и нет: нужно как минимум двое.
-        if (attended.size < MIN_ATTENDED) {
-            throw ValidationException("Нужно минимум $MIN_ATTENDED пришедших участника, чтобы скинуться")
-        }
-        return attended
+        // Порога «нужно двое» здесь нет (PO 2026-09-15): пришедшим отмечают только того, кто был в
+        // составе встречи, поэтому у живых встреч в списке нередко один человек, а скинуться всё
+        // равно надо.
+        return attendedAll.filter { it !in notActive }
     }
 
     /** Список от создателя: суммы либо у всех (по людям), либо ни у кого (поровну); все — активные участники. */
@@ -322,7 +333,5 @@ class SkladchinaCreationService(
         private const val MAX_DEADLINE_DAYS = 90L   // максимальный горизонт срока вперёд
         // Встреча, по которой ещё можно скинуться: не старше 30 дней (общее с findSplittableEvents).
         const val MAX_EVENT_AGE_DAYS = 30L
-        // Минимум пришедших, чтобы было между кем делить счёт.
-        const val MIN_ATTENDED = 2
     }
 }

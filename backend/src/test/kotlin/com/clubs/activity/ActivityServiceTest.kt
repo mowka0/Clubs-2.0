@@ -97,6 +97,42 @@ class ActivityServiceTest {
     }
 
     @Test
+    fun `past skladchina sorted by actual closing date, not by payment deadline`() {
+        // Сбор со сроком 8 дней назад, но закрытый вчера, стоит выше встречи двухдневной давности:
+        // в «Прошедших» важно, когда сбор закрыли, а не до когда просили заплатить.
+        val event = makeEvent(
+            status = EventStatus.completed, eventDatetime = now.minusDays(2), title = "Event -2d"
+        )
+        val closedYesterday = makeSkladchina(
+            status = SkladchinaStatus.collected,
+            deadline = now.minusDays(8),
+            closedAt = now.minusDays(1),
+            title = "Sklad closed -1d"
+        )
+        // Старый сбор без closed_at (закрыт до появления поля) — откат на срок.
+        val legacy = makeSkladchina(
+            status = SkladchinaStatus.cancelled, deadline = now.minusDays(5), title = "Sklad legacy -5d"
+        )
+
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(event, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true, userId) } returns listOf(
+            SkladchinaWithAggregates(closedYesterday, DebtTotals.EMPTY, 0),
+            SkladchinaWithAggregates(legacy, DebtTotals.EMPTY, 0)
+        )
+
+        val result = service.getClubActivities(clubId, userId, null)
+
+        assertEquals(
+            listOf("Sklad closed -1d", "Event -2d", "Sklad legacy -5d"),
+            result.past.map { it.title }
+        )
+        val closed = result.past.first() as ActivityItemDto.SkladchinaActivity
+        assertEquals(closedYesterday.closedAt, closed.closedAt)
+    }
+
+    @Test
     fun `past sorted most-recent-first by relevant date, interleaving events and skladchinas`() {
         val event1 = makeEvent(
             status = EventStatus.completed, eventDatetime = now.minusDays(2), title = "Event -2d"
@@ -390,7 +426,8 @@ class ActivityServiceTest {
         deadline: OffsetDateTime = now.plusDays(7),
         status: SkladchinaStatus = SkladchinaStatus.active,
         title: String = "Sklad",
-        photoUrl: String? = null
+        photoUrl: String? = null,
+        closedAt: OffsetDateTime? = null
     ): Skladchina = Skladchina(
         id = id,
         clubId = clubId,
@@ -411,7 +448,7 @@ class ActivityServiceTest {
         orderedAt = null,
         hiddenFromUserId = null,
         status = status,
-        closedAt = null,
+        closedAt = closedAt,
         reminderSentAt = null,
         orderRemindedAt = null,
         createdAt = createdAt,

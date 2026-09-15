@@ -63,6 +63,7 @@ class ActivityMapper {
             targetKopecks = item.totals.targetKopecks ?: s.amountKopecks,
             receivedKopecks = item.totals.receivedKopecks,
             deadline = s.deadline,
+            closedAt = s.closedAt,
             debtCount = item.totals.debtCount,
             receivedCount = item.totals.receivedCount,
             enrolledCount = item.enrolledCount,

@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { formatNearDay, formatTimeHM, pluralRu, toDatetimeLocalValue } from '../utils/formatters';
+import { formatNearDay, formatTimeHM, pluralRu, shortName, toDatetimeLocalValue, untilText } from '../utils/formatters';
 import { eventToTemplateBody } from '../utils/eventTemplate';
 import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
@@ -207,21 +207,9 @@ function eventDayLine(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-/**
- * Сколько осталось до встречи одной фразой (PO 2026-09-14): полосу отсчёта не рисуем — на встрече
- * через месяц она почти пуста и врёт, а текст честен на любом сроке.
- */
+/** Сколько осталось до встречи одной фразой; прошедшую называем словами, а не «через −5 дней». */
 function untilEventText(iso: string): string {
-  const diffMs = new Date(iso).getTime() - Date.now();
-  if (diffMs <= 0) return 'встреча уже прошла';
-  const minutes = Math.round(diffMs / 60000);
-  if (minutes < 60) return `через ${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `через ${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
-  const days = Math.round(hours / 24);
-  if (days < 14) return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
-  const weeks = Math.round(days / 7);
-  return `через ${weeks} ${pluralRu(weeks, ['неделю', 'недели', 'недель'])}`;
+  return untilText(iso) ?? 'встреча уже прошла';
 }
 
 export const EventPage: FC = () => {
@@ -1212,10 +1200,7 @@ export const EventPage: FC = () => {
                     ? <img src={event.creator.avatarUrl} alt="" />
                     : getInitials(`${event.creator.firstName} ${event.creator.lastName ?? ''}`)}
                 </span>
-                <span className="rd-host-nm">
-                  {event.creator.firstName}
-                  {event.creator.lastName ? ` ${event.creator.lastName[0]}.` : ''}
-                </span>
+                <span className="rd-host-nm">{shortName(event.creator)}</span>
               </span>
             )}
           </button>

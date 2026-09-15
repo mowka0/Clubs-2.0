@@ -812,7 +812,7 @@ export interface SkladchinaDetailDto {
   clubName: string;
   clubAvatarUrl: string | null;
   creatorId: string;
-  /** Кто собирает: панель «Кому переводить» и крошка «собирает …». */
+  /** Кто собирает: правая плашка шапки «собирает» и адресат подтверждений. */
   creator: DebtPersonDto;
   /** «Сумму выбираете сами» (§ 3.5): voluntary из встречи с суммой — все из списка должны, сумма своя. */
   freeAmountRequired: boolean;
@@ -887,6 +887,8 @@ export interface MySkladchinaListItemDto {
   debtCount: number;
   receivedCount: number;
   deadline: string | null;
+  /** Дата фактического закрытия — по ней группа «История» показывает дату. */
+  closedAt: string | null;
   status: SkladchinaStatus;
   isCreator: boolean;
   myDebtStatus: DebtStatus | null;

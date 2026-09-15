@@ -44,7 +44,7 @@ export function useSkladchinaActionRequiredCountQuery() {
   });
 }
 
-/** Встречи, по которым ещё можно скинуться. Фильтры (явка, ≥2 пришедших, ≤30 дней, без сбора) — на бэкенде. */
+/** Встречи, по которым ещё можно скинуться. Фильтры (явка, ≥1 пришедший, ≤30 дней, без сбора) — на бэкенде. */
 export function useSplittableEventsQuery(clubId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.skladchinas.splittableEvents(clubId ?? ''),
