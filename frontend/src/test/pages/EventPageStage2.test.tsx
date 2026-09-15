@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -380,9 +380,6 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
 
     expect(await screen.findByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
     expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
-    // Карточка места свёрнута по умолчанию (PO 2026-09-14): карта и кнопки — после тапа.
-    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Покровка/ }));
     expect(screen.getByAltText('Карта места события')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();

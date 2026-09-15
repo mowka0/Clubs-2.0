@@ -14,13 +14,13 @@ interface EventPlaceCardProps {
  * «Открыть в Картах» (бесключевые deep-link'и). Тап по карте открывает точку в Яндекс.Картах.
  * Если картинка Static API не загрузилась — прячется, адрес и кнопки остаются.
  *
- * Свёрнут по умолчанию (PO 2026-09-14): на экране встречи важнее «когда» и «иду ли я», а карта
- * с двумя кнопками занимала треть первого экрана. Тап по адресу разворачивает её целиком.
+ * Развёрнут по умолчанию: место известно — значит карта и маршрут нужны сразу (PO 2026-09-14).
+ * Тап по адресу сворачивает карточку до одной строки, если она мешает.
  */
 export const EventPlaceCard: FC<EventPlaceCardProps> = ({ locationText, locationHint, point }) => {
   const haptic = useHaptic();
   const [mapImageFailed, setMapImageFailed] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const openExternal = (url: string) => {
     haptic.impact('light');

@@ -293,18 +293,18 @@ describe('EventPage — шапка и голосование (PO 2026-09-14)', (
     expect(screen.getByText(/Ваш голос:/)).toBeInTheDocument();
   });
 
-  it('место свёрнуто по умолчанию: карта и кнопки появляются по тапу', async () => {
+  it('место развёрнуто по умолчанию и сворачивается тапом', async () => {
     mockEndpoints({ event: stage1Event({ locationLat: 55.75, locationLon: 37.61 }) });
     const { user } = renderEventPage();
 
     const toggle = await screen.findByRole('button', { name: /Бар/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
-
-    await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Открыть в Картах/ })).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
   });
 });
 
