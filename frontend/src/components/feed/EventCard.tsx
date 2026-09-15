@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import type { MyEventListItemDto } from '../../types/api';
-import { formatBadge } from '../../utils/eventFormat';
+import { formatBadge, rosterCount } from '../../utils/eventFormat';
 
 interface EventCardProps {
   event: MyEventListItemDto;
@@ -55,13 +55,6 @@ function pickBadge(event: MyEventListItemDto): Badge | null {
   return null;
 }
 
-/** Текущее число участников: confirmed после закрытия голосования (stage_2/completed, F5-21), иначе — "going". */
-function currentCount(event: MyEventListItemDto): number {
-  return event.status === 'stage_2' || event.status === 'completed'
-    ? event.confirmedCount
-    : event.goingCount;
-}
-
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
   const clubInitials = getInitials(event.clubName);
@@ -69,7 +62,9 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   // тот же вид, что на карточке активностей страницы клуба (rd-ft-stat). Фаза как там (F5-21):
   // после закрытия голосования — подтверждённые, у открытой встречи знаменателя нет.
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
-  const countCaption = finalComposition ? 'подтв.' : 'идёт';
+  // У открытой встречи подтверждений не существует (event-formats.md § 16.8): голос «Пойду» и
+  // есть состав, поэтому подпись у неё одна на весь жизненный цикл.
+  const countCaption = finalComposition && event.participantLimit != null ? 'подтв.' : 'идёт';
   const meta = event.locationText ?? '';
   // Обложка: фото события (PO 2026-07-11), фолбэк — аватар клуба; с картинкой — тёмный
   // скрим сверху вниз (rd-act-photo), как у клубных карточек.
@@ -111,8 +106,8 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         <div className="rd-ft-stat">
           <div className="rd-ft-stat-num">
             {event.participantLimit == null
-              ? currentCount(event)
-              : `${currentCount(event)}/${event.participantLimit}`}
+              ? rosterCount(event)
+              : `${rosterCount(event)}/${event.participantLimit}`}
           </div>
           <div className="rd-ft-stat-cap">{countCaption}</div>
         </div>

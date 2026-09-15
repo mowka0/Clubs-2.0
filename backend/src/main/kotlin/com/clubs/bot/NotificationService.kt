@@ -3,7 +3,6 @@ package com.clubs.bot
 import com.clubs.common.util.absolutePhotoUrl
 import com.clubs.event.Event
 import com.clubs.event.RosterSchedule
-import com.clubs.event.EventFormat
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventResponseRepository
@@ -153,33 +152,11 @@ class NotificationService(
     }
 
     /**
-     * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,
-     * поэтому DM идёт going / maybe / НЕ ответившим на Этапе 1 (findStage2InviteTelegramIds).
-     * Проголосовавшим "не иду" DM НЕ шлём — но подтвердить участие они всё равно смогут, если
-     * передумают (Stage2Service.confirmParticipation открыт всем).
-     */
-    @Async
-    fun sendStage2Started(event: Event) {
-        val voterTelegramIds = eventResponseRepository.findStage2InviteTelegramIds(event.id)
-        if (voterTelegramIds.isEmpty()) {
-            log.info("Stage 2 DM SKIPPED — no eligible members for eventId={}", event.id)
-            return
-        }
-        log.info("Stage 2 DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
-        val text = "⏰ Этап 2 начался!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\nПодтвердите или откажитесь от участия в приложении:"
-        val webAppPath = "/events/${event.id}"
-
-        voterTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "✅ Подтвердить участие")
-        }
-    }
-
-    /**
      * Ручное напоминание ответить: организатор (или со-организатор) жмёт колокольчик у участника,
-     * от которого ещё нет ответа. Отличается от [sendStage2Started] адресностью и тем, что
-     * инициатор — человек: автоматический пинг «за 2 часа до встречи» был удалён как лишний
-     * (V51, PO 2026-07-08), и возвращать его сюда нельзя. Одно напоминание на участника на
-     * событие гарантирует `markStage2Reminded`: сюда приходят telegram id только помеченных строк.
+     * от которого ещё нет ответа. Инициатор — человек: автоматический пинг «за 2 часа до встречи»
+     * был удалён как лишний (V51, PO 2026-07-08), и возвращать его сюда нельзя. Одно напоминание
+     * на участника на событие гарантирует `markStage2Reminded`: сюда приходят telegram id только
+     * помеченных строк.
      *
      * Текст НЕ ссылается на голос Этапа 1: напоминание уходит и тем, кто голосовал «возможно»,
      * и тем, кто вообще промолчал, — формулировка «ты голосовал, но не подтвердил» для половины
@@ -192,18 +169,26 @@ class NotificationService(
             return
         }
         log.info("Stage 2 reminder DM: eventId={} recipients={} collecting={}", event.id, telegramIds.size, rosterDeadline != null)
-        // Текст зависит от этапа (V86): на наборе просим проголосовать до дедлайна — подтверждать
-        // там нечего, место даёт голос; после закрытия — подтвердить участие, как раньше.
-        val text = if (rosterDeadline != null) {
-            "🔔 Организатор ждёт ответа\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-                "Идёте или нет? Ответьте до ${rosterDeadline.format(fmt)} — до этого момента " +
-                "передумать можно без влияния на репутацию."
-        } else {
-            "🔔 Скоро встреча\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-                "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
-                "чтобы он знал, на сколько человек рассчитывать."
+        // Три текста на три ситуации. Ветвление по формату, а не по «дедлайн пуст» (v3): у
+        // открытой встречи дедлайна нет по построению, и ветка подтверждения ей соврала бы —
+        // подтверждать там нечего, ответить можно до самого старта. Исключение — открытая,
+        // флипнутая в Этап 2 ДО реформы: ей подтверждение как раз и осталось единственным
+        // доступным действием, поэтому её пускаем в общую ветку по `stage2Triggered`.
+        val head = "📌 ${event.title} — ${event.eventDatetime.format(fmt)}"
+        val text = when {
+            event.isOpenEvent && !event.stage2Triggered ->
+                "🔔 Организатор ждёт ответа\n\n$head\n\n" +
+                    "Идёте или нет? Ответить можно до самого начала — на репутацию это не влияет."
+            rosterDeadline != null ->
+                "🔔 Организатор ждёт ответа\n\n$head\n\n" +
+                    "Идёте или нет? Ответьте до ${rosterDeadline.format(fmt)} — до этого момента " +
+                    "передумать можно без влияния на репутацию."
+            else ->
+                "🔔 Скоро встреча\n\n$head\n\n" +
+                    "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
+                    "чтобы он знал, на сколько человек рассчитывать."
         }
-        val buttonText = if (rosterDeadline != null) "Открыть встречу" else "✅ Подтвердить участие"
+        val buttonText = if (event.isOpenEvent || rosterDeadline != null) "Открыть встречу" else "✅ Подтвердить участие"
         val webAppPath = "/events/${event.id}"
 
         telegramIds.forEach { telegramId ->
@@ -220,10 +205,9 @@ class NotificationService(
     @Async
     fun sendRosterClosed(event: Event, confirmedCount: Int) {
         val webAppPath = "/events/${event.id}"
-        val countPart = when (event.format) {
-            EventFormat.NORMAL -> "Идут $confirmedCount из ${event.participantLimit}"
-            EventFormat.OPEN -> "Идут $confirmedCount"
-        }
+        // Набор закрывается только у встречи с местами — знаменатель есть всегда (v3: открытая
+        // сюда не доходит, у неё дедлайна набора нет).
+        val countPart = "Идут $confirmedCount из ${event.participantLimit}"
 
         val confirmedIds = eventResponseRepository.findTelegramIdsByStage2Vote(event.id, Stage_2Vote.confirmed)
         val confirmedText = "✅ Состав собран\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
@@ -310,7 +294,7 @@ class NotificationService(
      * DM участнику, автоматически повышённому из листа ожидания в confirmed (освободился слот —
      * подтверждённый отказался или вышел из клуба). Кнопка ведёт на страницу события. Best-effort
      * @Async: telegram id резолвим из строки ответа участника; если её/id нет — тихо пропускаем
-     * (повышение уже закоммичено, DM не критичен). Зеркалит sendStage2Started.
+     * (повышение уже закоммичено, DM не критичен).
      */
     @Async
     fun sendWaitlistPromoted(event: Event, promotedUserId: UUID) {
@@ -482,8 +466,15 @@ class NotificationService(
     @Async
     fun sendAttendanceDisputed(event: Event, organizerTelegramId: Long, disputerName: String) {
         log.info("Attendance-disputed DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
+        // У открытой встречи репутации за посещение нет — обещать штраф было бы ложью (v3).
+        // Спор всё равно не пустой: он исправляет факт в истории участника и в проценте прихода.
+        val consequence = if (event.isOpenEvent) {
+            "иначе в истории участника останется отметка «не пришёл»"
+        } else {
+            "иначе останется исходная отметка, и участник получит штраф"
+        }
         val text = "⚖️ $disputerName оспорил отметку «не пришёл» на событии «${event.title}».\n\n" +
-            "Разберите спор до закрытия окна оспаривания — иначе останется исходная отметка, и участник получит штраф:"
+            "Разберите спор до закрытия окна оспаривания — $consequence:"
         sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Разобрать спор")
     }
 

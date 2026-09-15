@@ -13,7 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener
 /**
  * Чат-механика членства (club-chat-link): «дверь» (слайс 2) и «строгий режим» (слайс 5)
  * реагируют на изменение доступа к клубу ПОСЛЕ коммита исходной транзакции — как
- * EventBotNotifier/Stage2StartedListener, AFTER_COMMIT гарантирует, что откат мутации
+ * EventBotNotifier/Stage2ReminderListener, AFTER_COMMIT гарантирует, что откат мутации
  * membership не оставит человека впущенным/забаненным. Сами действия — @Async в
  * [ChatDoorService]/[StrictModeService] (Telegram-вызовы вне request-потока), best-effort;
  * действия двери и строгого режима независимы (unban ≠ unmute), порядок не важен.

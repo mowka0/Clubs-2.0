@@ -41,6 +41,14 @@ class VoteService(
             throw ValidationException("Voting is not available for this event")
         }
 
+        // Голосование закрывает СТАРТ встречи, а не смена статуса: `upcoming` держится ещё до
+        // шести часов после старта (grace-период EventCompletionService), и у открытой встречи,
+        // которая больше не флипается в Этап 2, без этого гарда можно было бы записаться в состав
+        // уже прошедшей встречи — прямо перед тем, как организатор откроет отметку явки.
+        if (!event.eventDatetime.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Встреча уже началась")
+        }
+
         // S1-001: окно голосования должно использовать ТУ ЖЕ точную границу, что и лента
         // (EventMapper.computeActionRequired / JooqEventRepository.findMyFeed):
         // открыто ⇔ event_datetime - votingOpensDaysBefore дней <= now. ChronoUnit.DAYS.between
@@ -55,8 +63,9 @@ class VoteService(
             ?: throw ValidationException("Invalid vote value: ${request.vote}")
 
         eventResponseRepository.upsertStage1Vote(eventId, userId, voteEnum)
-        // Встреча с порогом набора (V83): голос «Иду» сразу кладёт в состав или в очередь, любой
-        // другой — выводит оттуда. У формата «сколько придёт» голос по-прежнему только мнение.
+        // Голос «Иду» сразу кладёт в состав (или в очередь, если места кончились), любой другой —
+        // выводит оттуда. С модели v3 это верно для ОБОИХ форматов: у открытой встречи отдельного
+        // подтверждения не существует, «Пойду» и есть запись.
         rosterService.applyVote(event, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
         // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
@@ -82,25 +91,22 @@ class VoteService(
         // никогда не отразит подтверждение/отказ. Тот же приоритет, что в getEventResponders ниже.
         return MyVoteDto(
             vote = effectiveStatus(event, response?.stage1Vote?.literal, response?.finalStatus?.literal),
-            // Место показываем только пока идёт набор: после закрытия состава его несёт сам vote.
-            seat = if (isCollectingRoster(event)) response?.stage2Vote?.literal else null
+            // Место показываем только пока идёт голосование: после закрытия состава его несёт сам vote.
+            seat = if (event.isVotingOpen) response?.stage2Vote?.literal else null
         )
     }
 
     /**
      * Действующий статус участника для UI. Обычно это final_status с откатом на голос Этапа 1,
-     * но у встречи с ПОРОГОМ НАБОРА (V83), пока набор идёт, приоритет обратный: голос «Иду» сразу
-     * пишет final_status = confirmed, и если отдать его наружу, человек выпадет из вкладки «Идут»,
-     * а кнопка его голоса перестанет подсвечиваться — состав в этой фазе показывает кольцо, а
-     * список и кнопки живут голосами.
+     * но пока голосование открыто, приоритет обратный: голос «Иду» сразу пишет
+     * final_status = confirmed, и если отдать его наружу, человек выпадет из вкладки «Идут», а
+     * кнопка его голоса перестанет подсвечиваться — состав в этой фазе показывает кольцо, а
+     * список и кнопки живут голосами. С модели v3 это касается обоих форматов: у открытой
+     * встречи голосование открыто всю её жизнь.
      */
     private fun effectiveStatus(event: Event, stage1: String?, finalStatus: String?): String? =
-        if (isCollectingRoster(event)) stage1 ?: finalStatus
+        if (event.isVotingOpen) stage1 ?: finalStatus
         else finalStatus ?: stage1
-
-    /** Встреча с лимитом, у которой набор ещё идёт: голос и место значат разное. */
-    private fun isCollectingRoster(event: Event): Boolean =
-        event.isRosterEvent && event.status == EventStatus.upcoming
 
     /**
      * Возвращает список откликнувшихся на событие (с данными пользователя + текущим намерением).
@@ -131,7 +137,7 @@ class VoteService(
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
                 status = effectiveStatus(event, r.stage1Vote?.literal, r.finalStatus?.literal) ?: "going",
-                seat = if (isCollectingRoster(event)) r.finalStatus?.literal else null,
+                seat = if (event.isVotingOpen) r.finalStatus?.literal else null,
                 attendance = r.attendance?.literal,
                 disputeNote = if (isManager) r.disputeNote else null,
                 telegramUsername = if (isManager) r.telegramUsername else null
@@ -168,11 +174,11 @@ class VoteService(
     @Transactional
     fun remind(eventId: UUID, userId: UUID, targetUserId: UUID?): RemindResultDto {
         val event = requireEventManager(eventId, userId)
-        // Окно то же, в котором участник может ответить: подтверждение (Этап 2) либо идущий набор
-        // состава. Второе — событие ещё `upcoming` — и есть главный случай напоминания у форматов
-        // с лимитом: после закрытия состава отвечать уже нечего, а до него молчание участников
-        // решает, наберётся ли встреча вообще.
-        if (event.status != EventStatus.stage_2 && !isCollectingRoster(event)) {
+        // Окно то же, в котором участник может ответить: открытое голосование (`upcoming`) либо
+        // легаси-подтверждение в `stage_2`. Первое — главный случай напоминания: у встречи с
+        // местами молчание решает, наберётся ли состав, у открытой отвечать можно до самого
+        // старта, и другого окна у неё нет вовсе.
+        if (event.status != EventStatus.stage_2 && !event.isVotingOpen) {
             throw ValidationException("Confirmation is not open for this event")
         }
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")
@@ -187,7 +193,10 @@ class VoteService(
         // DM — на AFTER_COMMIT: уведомление без закоммиченной отметки означало бы повторную отправку.
         // Текст зависит от этапа: на наборе зовём проголосовать до дедлайна, после — подтвердить.
         if (telegramIds.isNotEmpty()) {
-            val rosterDeadline = if (isCollectingRoster(event)) rosterService.rosterDeadline(event) else null
+            // Срок в тексте — только у встречи с местами: у открытой дедлайна набора нет,
+            // и подставленный «старт минус 18 ч» назвал бы несуществующую границу.
+            val rosterDeadline =
+                if (event.hasSeatLimit && event.isVotingOpen) rosterService.rosterDeadline(event) else null
             eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds, rosterDeadline))
         }
         log.info("Stage 2 reminder: eventId={} userId={} reminded={}", eventId, userId, telegramIds.size)

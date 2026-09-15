@@ -223,25 +223,6 @@ class JooqEventResponseRepository(
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 
-    override fun findStage2InviteTelegramIds(eventId: UUID): List<Long> =
-        // Аудитория приглашения на Этап 2 строится от УЧАСТНИКОВ КЛУБА с доступом (не от голосов),
-        // чтобы включить не ответивших на Этапе 1. LEFT JOIN на ответы: у не ответившего строки нет
-        // (stage_1_vote читается как NULL). IS DISTINCT FROM 'not_going' истинно для NULL и для
-        // going/maybe → включаем всех, КРОМЕ проголосовавших not_going.
-        dsl.selectDistinct(USERS.TELEGRAM_ID)
-            .from(EVENTS)
-            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MembershipAccess.hasAccess()))
-            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
-            .leftJoin(EVENT_RESPONSES).on(
-                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
-            )
-            .where(
-                EVENTS.ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
-            )
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
-
     /**
      * «Ответа ещё нет»: шага Этапа 2 не сделал И на Этапе 1 не отказывался. `IS DISTINCT FROM`
      * истинно и для NULL, поэтому промолчавший (строка-заглушка) сюда попадает, а сказавший

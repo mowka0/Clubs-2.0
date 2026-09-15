@@ -29,7 +29,11 @@ const teaser: ClubEventsTeaserDto = {
     },
     {
       id: 'e2', title: 'Марафонский бранч', eventDatetime: '2026-08-03T11:00:00Z',
-      status: 'stage_2', format: 'open', participantLimit: null, minParticipants: null, goingCount: 4, confirmedCount: 6,
+      status: 'stage_2', format: 'normal', participantLimit: 12, minParticipants: null, goingCount: 4, confirmedCount: 6,
+    },
+    {
+      id: 'e4', title: 'Прогулка по набережной', eventDatetime: '2026-08-05T18:00:00Z',
+      status: 'upcoming', format: 'open', participantLimit: null, minParticipants: null, goingCount: 5, confirmedCount: 5,
     },
   ],
   past: [
@@ -57,9 +61,11 @@ describe('ClubEventsTeaser — афиша клуба для смотрящего
     renderTeaser();
 
     expect(await screen.findByText('Пробежка 7 км')).toBeInTheDocument();
-    // Фаза голосования — «идут», Этап 2 — «подтвердили» (F5-21).
+    // Фаза голосования — «идут», Этап 2 — «подтвердили» (F5-21). Вторая половина правила живёт
+    // только у встречи с местами: у открытой подтверждения нет вовсе (модель v3), она всегда «идут».
     expect(screen.getByText('идут 9')).toBeInTheDocument();
     expect(screen.getByText('подтвердили 6')).toBeInTheDocument();
+    expect(screen.getByText('идут 5')).toBeInTheDocument();
     expect(screen.getByText('Интервалы в Битце')).toBeInTheDocument();
     expect(screen.getByText('прошла')).toBeInTheDocument();
     expect(screen.getByText('Уже прошло — 12')).toBeInTheDocument();

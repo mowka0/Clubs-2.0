@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { useClubEventsTeaserQuery } from '../../queries/events';
-import { formatEmoji } from '../../utils/eventFormat';
+import { formatEmoji, rosterCount } from '../../utils/eventFormat';
 import type { TeaserEventDto } from '../../types/api';
 
 function formatTeaserDate(iso: string): string {
@@ -12,10 +12,16 @@ function formatTeaserDate(iso: string): string {
   });
 }
 
-/** Счётчик по фазе (F5-21): до Этапа 2 — голоса «идут», после — подтверждённый состав. */
+/**
+ * Счётчик по фазе (F5-21): до Этапа 2 — голоса «идут», после — подтверждённый состав.
+ * У открытой встречи (модель v3, event-formats.md § 16) подтверждения нет вовсе — место даёт
+ * голос, поэтому она говорит «идут» на всём жизненном цикле, включая завершённую.
+ */
 function countLabel(event: TeaserEventDto): string {
-  const finalComposition = event.status === 'stage_2' || event.status === 'completed';
-  return finalComposition ? `подтвердили ${event.confirmedCount}` : `идут ${event.goingCount}`;
+  const count = rosterCount(event);
+  const confirmedWording = event.participantLimit != null
+    && (event.status === 'stage_2' || event.status === 'completed');
+  return confirmedWording ? `подтвердили ${count}` : `идут ${count}`;
 }
 
 interface ClubEventsTeaserProps {

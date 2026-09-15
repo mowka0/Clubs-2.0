@@ -9,7 +9,6 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
-import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
@@ -21,10 +20,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Stage 2 window-close (Bug B), auto-expire delegation (Feature A), Stage-2-started DM
- * publication (S2T-2) and slot-lock ordering (S2-01/F5-07, F5-11).
+ * Stage 2 window-close (Bug B), auto-expire delegation (Feature A), делегирование дедлайна набора
+ * и slot-lock ordering (S2-01/F5-07, F5-11).
  * Bug B: confirm/decline must be rejected once the event has started, even while the
  * status still reads stage_2 (the hourly completion sweep hasn't run yet).
+ * Модель v3: второй этап не начинается ни у одной новой встречи — confirm/decline проверяются на
+ * строках, флипнутых до реформы (docs/modules/event-formats.md § 16).
  */
 class Stage2ServiceTest {
 
@@ -160,13 +161,14 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `open event - confirm beyond any count is still confirmed, waitlist unreachable (AC-OPEN1)`() {
+    fun `легаси-открытая в stage_2 - confirm сверх любого счёта всё ещё confirmed, очередь недостижима`() {
         every { eventRepository.findById(eventId) } returns
             event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)
         every { membershipRepository.isMember(userId, clubId) } returns true
         every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
             response(stage1 = Stage_1Vote.going, stage2 = null)
-        // Подтвердившихся уже 50 — у события с лимитом 10 это дало бы waitlisted.
+        // Новая открытая встреча в stage_2 не попадает вовсе (v3) — путь живёт для строк,
+        // флипнутых до реформы. Подтвердившихся уже 50: у события с лимитом 10 это дало бы waitlisted.
         every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(50, 51)
         every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
             response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
@@ -181,7 +183,7 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `open event - confirmed decline inside cutoff window is allowed and penalty-free (AC-OPEN2)`() {
+    fun `легаси-открытая в stage_2 - отказ внутри порога разрешён и бесплатен`() {
         // Реальный порог 4ч; событие через 2ч. У события с лимитом это был бы отказ «не позже чем…»,
         // у открытой встречи порога нет, штраф и промоут не существуют.
         val strict = Stage2Service(
@@ -308,45 +310,29 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `stage 2 trigger publishes Stage2StartedEvent so voters get the confirm DM`() {
-        // S2T-2: without this publication nobody learns Stage 2 started and everyone
-        // auto-expires at event start.
-        val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
-        justRun { eventRepository.transitionToStage2(eventId) }
+    fun `AC-OPEN5 тик только закрывает наборы — второго этапа больше не начинает`() {
+        // Модель v3: приглашения «подтвердите участие» не существует, Stage2StartedEvent удалён.
+        // Единственное, что делает тик, — отдаёт встречу в правило ① набора; сам он ни статуса
+        // не двигает, ни мест не раздаёт.
+        val ready = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.upcoming)
+        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(ready)
 
         service.triggerStage2ForReadyEvents()
 
-        verify(exactly = 1) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
-    }
-
-    @Test
-    fun `stage 2 trigger for an already-started event flips status but skips the confirm DM`() {
-        // A late flip (coarse scheduler tick / event created inside the trigger lead) must still
-        // transition — the expiry sweep and completion depend on it — but the confirm window is
-        // already closed, so the «Подтвердите участие» DM would be a dead end.
-        val event = event(eventDatetime = OffsetDateTime.now().minusMinutes(2), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
-        justRun { eventRepository.transitionToStage2(eventId) }
-
-        service.triggerStage2ForReadyEvents()
-
-        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
-        verify(exactly = 0) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
-    }
-
-    @Test
-    fun `stage 2 trigger does not pre-assign any waitlist — places are raced on stage 2`() {
-        // Этап 1 больше не резервирует места и не формирует очередь: при старте Этапа 2 никто не
-        // помечается waitlisted, все места разыгрываются подтверждениями на Этапе 2 (гонка за места).
-        val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
-        justRun { eventRepository.transitionToStage2(eventId) }
-
-        service.triggerStage2ForReadyEvents()
-
+        verify(exactly = 1) { rosterService.handleRosterDeadline(ready) }
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
         verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
-        verify(exactly = 1) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
+    }
+
+    @Test
+    fun `сбой на одной встрече не роняет весь проход и не отменяет правило ②`() {
+        val broken = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.upcoming)
+        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(broken)
+        every { rosterService.handleRosterDeadline(broken) } throws IllegalStateException("boom")
+
+        service.triggerStage2ForReadyEvents()
+
+        verify(exactly = 1) { rosterService.sendDueRosterWarnings(any()) }
     }
 
     @Test
@@ -474,7 +460,7 @@ class Stage2ServiceTest {
     private fun event(
         eventDatetime: OffsetDateTime,
         status: EventStatus = EventStatus.stage_2,
-        // null = формат «сколько придёт» — кейсы AC-OPEN1/2 передают null явно.
+        // null = открытая встреча — легаси-кейсы stage_2 передают null явно.
         participantLimit: Int? = 10,
         minParticipants: Int? = null
     ) = Event(

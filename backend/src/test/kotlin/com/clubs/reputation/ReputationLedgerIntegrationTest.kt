@@ -122,9 +122,12 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
-    fun `open event is fully outside reputation - zero ledger rows for any outcome (AC-OPEN3)`() {
-        // Решение PO 2026-07-21 (итерация 2): открытая встреча ВНЕ репутации целиком.
+    fun `open event is fully outside reputation - zero ledger rows for any outcome`() {
+        // Решение PO 2026-07-21 (итерация 2): открытая встреча вне репутации по оси посещаемости.
         // Ни посещение, ни молчаливая неявка, ни неотмеченная явка не создают строк.
+        // Регресс модели v3: состав открытой встречи теперь НЕПУСТОЙ по построению (голос «Пойду»
+        // сразу пишет final_status = confirmed), и единственное, что стоит между ним и
+        // раздачей +100 / −200 каждому, — гейт isOpenEvent в ReputationService.
         val eventId = insertFinalizedEvent(participantLimit = null)
         val attended = insertUser("Attended")
         val absentGoing = insertUser("AbsentGoing")
