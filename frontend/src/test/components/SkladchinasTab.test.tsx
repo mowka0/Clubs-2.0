@@ -193,6 +193,8 @@ describe('SkladchinasTab — роль-развилка пустого состо
     const { container } = renderTab();
 
     expect(await screen.findByText('История')).toBeInTheDocument();
+    // Справа маркер вида: во вкладке история смешанная, по названию сбор от встречи не отличить.
+    expect(container.querySelector('.rd-hist-kind')?.textContent).toContain('Сбор');
     expect(container.querySelector('.rd-hist-day')?.textContent).toBe('12');
     expect(container.querySelector('.rd-hist-month')?.textContent).toBe('июня');
   });

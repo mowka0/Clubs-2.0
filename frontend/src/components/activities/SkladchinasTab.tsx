@@ -152,6 +152,7 @@ export const SkladchinasTab: FC = () => {
                     ? `${s.clubName} · ${finalStatusLabel(s.status)}`
                     : s.clubName
                 }
+                kind="skladchina"
                 onClick={() => handleClick(s.id)}
               />
             ) : (
