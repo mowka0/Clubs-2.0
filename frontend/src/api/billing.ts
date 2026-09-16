@@ -91,6 +91,14 @@ export function formatRubles(kopecks: number): string {
   return kop === 0 ? `${rub} ₽` : `${rub},${String(kop).padStart(2, '0')} ₽`;
 }
 
+/**
+ * «первые 15 дней были бесплатными» / «первый день был бесплатным» — подпись под ценой в шите.
+ * Единица отдельной веткой: «первые 1 день» не читается ни при каком склонении.
+ */
+export function trialPassedLabel(days: number, pluralize: (n: number) => string): string {
+  return days === 1 ? 'первый день был бесплатным' : `первые ${days} ${pluralize(days)} были бесплатными`;
+}
+
 /** «7 октября» — даты биллинга в DM и на экранах одним форматом. */
 export function formatBillingDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });

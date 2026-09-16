@@ -6,6 +6,7 @@ import {
   Modal,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { useClubPageUnderneath } from '../hooks/useClubPageUnderneath';
 import { useHaptic } from '../hooks/useHaptic';
 import { CityPicker } from '../components/CityPicker';
 import { useCities } from '../queries/cities';
@@ -528,6 +529,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
 
 export const OrganizerClubManage: FC = () => {
   useBackButton(true);
+  // Возврат из браузера после оплаты и кнопка из DM открывают этот экран первым: без страницы
+  // клуба под низом «назад» и свайп молчат (PO 2026-09-16).
+  useClubPageUnderneath();
   const haptic = useHaptic();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();

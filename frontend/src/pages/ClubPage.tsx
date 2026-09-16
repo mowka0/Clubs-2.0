@@ -530,10 +530,10 @@ export const ClubPage: FC = () => {
           на «Управлении» полоску видят не все и не каждый день, а сроки бесплатного периода
           пропускать нельзя. Видна владельцу и со-организаторам (у них статус тоже читается,
           `MANAGE_EVENTS`), кнопка ведёт в шит — со-организатору он объяснит, что платит владелец.
-          Состояние «Оплачено до …» здесь скрыто: оно ничего не требует, а ползунок автопродления
-          остаётся на «Управлении». */}
+          Ползунка автопродления здесь нет: переключать его — действие управления, и со-организатор
+          всё равно получил бы 403. */}
       {isManager && club.chatLinked && (
-        <BillingStatusStrip clubId={club.id} hideWhenPaid onPay={() => setBillingSheet(true)} />
+        <BillingStatusStrip clubId={club.id} withAutopayToggle={false} onPay={() => setBillingSheet(true)} />
       )}
       {billingSheet && (
         <BillingSheet clubId={club.id} reason={null} onClose={() => setBillingSheet(false)} />

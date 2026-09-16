@@ -9,11 +9,12 @@ interface BillingStatusStripProps {
   /** «Оплатить» / «Продлить» — открыть шит оплаты. */
   onPay: () => void;
   /**
-   * Не показывать состояние ACTIVE. На странице клуба полоска — напоминание о том, что требует
-   * внимания; «Оплачено до …» вместе с ползунком автопродления живёт на «Управлении клубом»,
-   * иначе одно и то же висело бы на двух экранах сразу (PO 2026-09-16).
+   * Показывать ползунок автопродления внутри полоски. На странице клуба его нет: переключать
+   * автопродление — действие управления, его место на «Управлении клубом», а со-организатор
+   * (он полоску тоже видит) всё равно получил бы 403. Сама полоска показывается во всех
+   * состояниях на обоих экранах (PO 2026-09-16).
    */
-  hideWhenPaid?: boolean;
+  withAutopayToggle?: boolean;
 }
 
 /**
@@ -22,14 +23,13 @@ interface BillingStatusStripProps {
  * отдельного экрана «подписка» нет. У клуба без чата полоски нет: ему не за что платить.
  * По тексту платят «за клуб», хотя единица счёта — чат (PO 2026-09-07).
  */
-export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, hideWhenPaid = false }) => {
+export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, withAutopayToggle = true }) => {
   const haptic = useHaptic();
   const { data } = useBillingQuery(clubId);
   const setAutopay = useSetAutopayMutation();
   const [autopayError, setAutopayError] = useState<string | null>(null);
 
   if (!data || data.state === 'NO_CHAT') return null;
-  if (hideWhenPaid && data.state === 'ACTIVE') return null;
 
   const price = formatRubles(data.priceKopecks);
   const periodEnd = data.currentPeriodEnd ? formatBillingDate(data.currentPeriodEnd) : null;
@@ -99,7 +99,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <div className="tx">
             <div className="t">Оплачено до {periodEnd}</div>
             <div className="d">{price} в месяц за клуб · Robokassa</div>
-            <div className="sub">
+            {withAutopayToggle && <div className="sub">
               <div className="fi">
                 <div className="ft">Продлевать автоматически</div>
                 <div className="fd">
@@ -121,7 +121,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
                 disabled={!data.autopayPossible || setAutopay.isPending}
                 onClick={toggleAutopay}
               />
-            </div>
+            </div>}
           </div>
         </div>
       );

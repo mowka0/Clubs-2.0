@@ -6,7 +6,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { openExternalLink } from '../../utils/telegramLinks';
 import { pluralRu } from '../../utils/formatters';
-import { formatBillingDate, formatRubles, type PaywallReason } from '../../api/billing';
+import { formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason } from '../../api/billing';
 import { OFFER_TITLE, offerParagraphs } from './offerText';
 
 /** Опрос статуса после ухода на оплату: ResultURL провайдера может отставать от возврата. */
@@ -144,7 +144,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       <div className="rd-billing-for">
         за клуб <b>«{clubName}»</b>
         {reason === 'TRIAL_ENDED' && data
-          && ` · первые ${data.trialDays} ${pluralRu(data.trialDays, ['день', 'дня', 'дней'])} были бесплатными`}
+          && ` · ${trialPassedLabel(data.trialDays, (n) => pluralRu(n, ['день', 'дня', 'дней']))}`}
       </div>
 
       <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
