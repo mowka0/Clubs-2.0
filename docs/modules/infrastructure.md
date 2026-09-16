@@ -392,6 +392,19 @@ volumes:
 `BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.
+**Домен `clubsapp.ru`** (куплен 2026-09-16 на Timeweb, только регистрация — без хостинга и без их
+SSL). До этого прод жил на `77-42-23-177.sslip.io`: это не домен, а публичный DNS-трюк, в имени
+которого зашит IP сервера — переезд на другой сервер менял бы адрес целиком, вместе с URL Mini App
+в BotFather, адресами в Robokassa и всеми уже разосланными ссылками. DNS остаётся у регистратора:
+`A @ → 77.42.23.177`, `A www → 77.42.23.177` (MX/TXT Timeweb не мешают). Сертификат выпускает
+Coolify/Traefik (Let's Encrypt) после добавления домена приложению; при переезде сервера меняется
+только A-запись. `TELEGRAM_WEBAPP_BASE_URL` = `https://clubsapp.ru` на проде (дефолт в
+`application.yml` и compose), на staging — по-прежнему `https://staging.77-42-23-177.sslip.io`, и
+там переменная **обязана** быть задана в Coolify. Ключи Яндекс.Карт ограничены по Referer — после
+переезда `clubsapp.ru` нужно добавить в белый список обоих ключей в кабинете Яндекса, иначе карта
+на новом домене не загрузится. Корень домена вне Telegram отдаёт публичную страницу сервиса
+(`platform-billing.md` § 7).
+
 **Coolify игнорирует `${VAR:?сообщение}`** (проверено на staging 2026-09-15): вместо падения на
 разборе compose он подставляет пустую строку, и контейнер стартует с пустым значением. Поэтому
 обязательность переменной нельзя обеспечить синтаксисом compose — она обеспечивается на старте

@@ -494,6 +494,13 @@ subscription:
   `/pay/fail` — «Оплата не прошла» + та же кнопка. Обе без запросов к API (нет JWT вне Mini App).
   Имя бота — из бандла (`VITE_TELEGRAM_BOT_USERNAME`), из адреса берётся только `club` и только
   в формате UUID.
+- **Публичная страница сервиса** `pages/LandingPage.tsx` (2026-09-16, для модерации Robokassa и
+  ссылки на оферту): описание, «что делает бот», цена и условия, возврат, полный текст оферты
+  (тот же `offerText.ts`, что в шите), продавец с ИНН и контакты. Роут `/about` вне Layout; корень
+  домена показывает её сам, когда нет `initData` (`entry.ts::shouldShowLanding` в `main.tsx`), из
+  Telegram — приложение как раньше. Реквизиты продавца — `pages/landingContent.ts` (ФИО должно
+  совпадать с `BILLING_RECIPIENT_NAME`); числа цены и периода — `TRIAL_DAYS_DEFAULT` и
+  `CHAT_PRICE_LABEL` в `api/billing.ts`, одно место на все публичные тексты.
 - Мастер `ClubSetupWizard` и `ConnectChatScreen`: одна строка «Первые 15 дней бесплатно. Дальше
   199 ₽ в месяц за клуб» (`CHAT_PRICE_LINE`).
 - Удалить: `components/subscription/*`, `api/subscription.ts`, `queries/subscription.ts`,

@@ -87,6 +87,22 @@
 
 Воронка: шаг `free_meeting_used` заменён на `trial_started`.
 
+## 2b. 2026-09-16: домен `clubsapp.ru` и публичная страница
+
+Для модерации Robokassa нужен сайт с описанием услуги, ценой, продавцом и офертой; sslip.io-адрес
+с пустым Mini App снаружи её бы не прошёл. Сделано: домен куплен (Timeweb, A-записи на VPS),
+`TELEGRAM_WEBAPP_BASE_URL` по умолчанию `https://clubsapp.ru`, лендинг `/about` + корень вне
+Telegram (`entry.ts`). **Мержить в master только когда `https://clubsapp.ru` уже открывается** —
+иначе WebAppInfo-кнопки бота на проде уведут на мёртвый адрес.
+
+Осталось руками (PO): реквизиты в `pages/landingContent.ts` (ФИО, ИНН, e-mail), домен в Coolify
+у прод-приложения (frontend-сервис → Domains → `https://clubsapp.ru,https://www.clubsapp.ru`,
+redeploy), `TELEGRAM_WEBAPP_BASE_URL` в Coolify (прод — clubsapp.ru, staging — sslip staging),
+URL Mini App в BotFather → `https://clubsapp.ru`, `clubsapp.ru` в белый список Referer обоих
+ключей Яндекс.Карт, адреса в кабинете Robokassa: ResultURL
+`https://clubsapp.ru/api/billing/robokassa/result`, SuccessURL `https://clubsapp.ru/pay/return`,
+FailURL `https://clubsapp.ru/pay/fail` (метод GET у обоих возвратов).
+
 ## 3. Решения PO, которые нельзя переоткрывать
 
 Из `monetization-v3-research-2026-09.md` § 8 (деньги) и правок по мокапам 2026-09-07 (тексты и UI):

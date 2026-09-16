@@ -50,7 +50,9 @@ export interface PaywallInfo {
  * у которого можно спросить цену. Меняется вместе с subscription_pricing на бэкенде.
  * По тексту платят «за клуб» (PO 2026-09-07), хотя единица счёта — чат.
  */
-export const CHAT_PRICE_LINE = 'Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.';
+export const TRIAL_DAYS_DEFAULT = 15;
+export const CHAT_PRICE_LABEL = '199 ₽';
+export const CHAT_PRICE_LINE = `Первые ${TRIAL_DAYS_DEFAULT} дней бесплатно. Дальше ${CHAT_PRICE_LABEL} в месяц за клуб.`;
 
 export function getBilling(clubId: string): Promise<BillingStatusDto> {
   return apiClient.get<BillingStatusDto>(`/api/clubs/${clubId}/billing`);

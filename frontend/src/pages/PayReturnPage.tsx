@@ -1,17 +1,11 @@
 import { FC } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { BOT_LINK, BOT_USERNAME } from '../utils/telegramLinks';
 
 interface PayReturnPageProps {
   kind: 'success' | 'fail';
 }
 
-/**
- * Имя бота для кнопки «Открыть Clubs в Telegram». Берётся из бандла, а НЕ из адреса страницы:
- * `?bot=<чужой>` давал бы брендированную страницу «Оплата принята» с кнопкой в чужого бота —
- * фишинг на нашем домене (ревью 2026-09-07). Значение публичное, задаётся build-аргом
- * VITE_TELEGRAM_BOT_USERNAME; дефолт совпадает с `telegram.bot-username` бэкенда.
- */
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'clubs_v2_bot';
 /** Клуб из адреса подставляется в deep link, поэтому принимается только как UUID. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,7 +21,7 @@ export const PayReturnPage: FC<PayReturnPageProps> = ({ kind }) => {
   // `t.me/<bot>?startapp=…` открывает главный Mini App бота; DeepLinkHandler разбирает `billing_<clubId>`.
   const backUrl = clubId
     ? `https://t.me/${BOT_USERNAME}?startapp=billing_${clubId}`
-    : `https://t.me/${BOT_USERNAME}`;
+    : BOT_LINK;
 
   return (
     <div className="rd-pay-return">

@@ -5,11 +5,17 @@ import { ErrorBoundary } from 'react-error-boundary';
 import '@telegram-apps/telegram-ui/dist/styles.css';
 import './styles/brand-theme.css';
 import './styles/redesign.css';
-import { initTelegramSdk } from './telegram/sdk';
+import { hasTelegramInitData, initTelegramSdk } from './telegram/sdk';
 import { App } from './App';
 import { RootErrorFallback } from './components/RootErrorFallback';
+import { LandingPage } from './pages/LandingPage';
+import { shouldShowLanding } from './entry';
 
 initTelegramSdk();
+
+// Не из Telegram и не на публичный адрес — это модератор провайдера или человек из рекламы:
+// ему нужна страница сервиса, а не приложение, которое без initData не стартует.
+const showLanding = shouldShowLanding(window.location.pathname, hasTelegramInitData());
 
 // Единый экземпляр QueryClient на всё приложение. Настройки по умолчанию ниже отражают реальность
 // Telegram Mini App — короткие ретраи, более длинный staleTime, чтобы не перезапрашивать данные
@@ -32,11 +38,15 @@ const Devtools = import.meta.env.DEV
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary FallbackComponent={RootErrorFallback}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-        {Devtools ? <Devtools initialIsOpen={false} buttonPosition="bottom-left" /> : null}
-      </QueryClientProvider>
-    </ErrorBoundary>
+    {showLanding ? (
+      <LandingPage />
+    ) : (
+      <ErrorBoundary FallbackComponent={RootErrorFallback}>
+        <QueryClientProvider client={queryClient}>
+          <App />
+          {Devtools ? <Devtools initialIsOpen={false} buttonPosition="bottom-left" /> : null}
+        </QueryClientProvider>
+      </ErrorBoundary>
+    )}
   </StrictMode>
 );

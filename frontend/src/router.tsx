@@ -2,6 +2,7 @@ import { lazy, FC } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { HomeRoute } from './components/HomeRoute';
+import { LandingPage } from './pages/LandingPage';
 
 // Страницы основных табов — импортируются сразу, для мгновенного переключения таба
 import { DiscoveryPage } from './pages/DiscoveryPage';
@@ -168,5 +169,11 @@ export const router = createBrowserRouter([
   {
     path: '/pay/fail',
     element: <PayReturnPage kind="fail" />,
+  },
+  // Публичная страница сервиса: описание, цена, оферта, продавец. Корень домена показывает её
+  // сам, когда открыт не из Telegram (entry.ts); этот адрес — для прямой ссылки на условия.
+  {
+    path: '/about',
+    element: <LandingPage />,
   },
 ]);

@@ -3760,3 +3760,29 @@
   display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 999px;
   background: var(--accent); color: #fff; font-size: 12px; text-align: center;
 }
+
+/* ---------- Публичная страница сервиса (/about и корень домена вне Telegram) ---------- */
+.rd-landing { max-width: 640px; margin: 0 auto; padding: 20px 20px 48px; background: var(--bg); color: var(--text); line-height: 1.5; }
+.rd-landing .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 18px; }
+.rd-landing .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; }
+.rd-landing .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); }
+.rd-landing .btn { display: inline-block; background: var(--accent-grad); color: var(--on-accent); text-decoration: none; border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.rd-landing .btn.big { padding: 14px 20px; font-size: 16px; margin-top: 6px; }
+.rd-landing .hero h1 { font-size: 26px; line-height: 1.2; margin: 14px 0 12px; letter-spacing: -0.01em; }
+.rd-landing .hero p { color: var(--text-dim); margin: 0 0 12px; }
+.rd-landing .hero .promise { color: var(--text); font-weight: 600; }
+.rd-landing section { margin-top: 32px; }
+.rd-landing h2 { font-size: 19px; margin: 0 0 12px; }
+.rd-landing .feat, .rd-landing .terms { padding-left: 20px; margin: 0; color: var(--text-dim); }
+.rd-landing .feat li, .rd-landing .terms li { margin-bottom: 8px; }
+.rd-landing .feat b, .rd-landing .terms b { color: var(--text); }
+.rd-landing .price { background: var(--card-solid); border: 1px solid var(--hairline-2); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; }
+.rd-landing .price .p1 { font-size: 20px; font-weight: 800; }
+.rd-landing .price .p2 { color: var(--text-dim); margin-top: 4px; }
+.rd-landing .price .p2 b { color: var(--text); }
+.rd-landing .offer { padding-left: 20px; margin: 0; color: var(--text-dim); font-size: 14px; }
+.rd-landing .offer li { margin-bottom: 10px; }
+.rd-landing .seller p { color: var(--text-dim); margin: 0 0 8px; }
+.rd-landing .seller b { color: var(--text); }
+.rd-landing a:not(.btn) { color: var(--accent); }
+.rd-landing footer { margin-top: 40px; color: var(--text-faint); font-size: 12.5px; }

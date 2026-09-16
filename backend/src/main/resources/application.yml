@@ -69,8 +69,11 @@ telegram:
   # Telegram не позволяет ботам шлать t.me/<self-bot>/... ссылки в DM
   # с тем же ботом (циклическая ссылка), поэтому используем именно
   # frontend URL через WebAppInfo.
-  # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
-  webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
+  # Prod: https://clubsapp.ru (свой домен с 2026-09-16; до этого технический
+  # 77-42-23-177.sslip.io, в котором зашит IP сервера), Staging: https://staging.77-42-23-177.sslip.io.
+  # На staging переменная ОБЯЗАНА быть задана в Coolify — иначе ссылки возврата из оплаты и
+  # WebAppInfo-кнопки бота уведут на прод.
+  webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://clubsapp.ru}
   # Username саппорт-аккаунта (без @) — сюда бот шлёт баг-репорты из формы «Сообщить о проблеме».
   # Bot API не отправляет по @username, поэтому chat id резолвится через нашу таблицу users:
   # аккаунт должен хотя бы раз открыть Mini App этого окружения, иначе POST /api/feedback → 503.
