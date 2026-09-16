@@ -89,6 +89,20 @@ describe('BillingStatusStrip', () => {
     expect(onPay).toHaveBeenCalled();
   });
 
+  it('на странице клуба «всё оплачено» не показывается — там нечего делать', async () => {
+    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true }));
+    const { container } = renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} hideWhenPaid onPay={() => {}} />);
+    await waitFor(() => expect(container.querySelector('.rd-billing-strip')).toBeNull());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(container.querySelector('.rd-billing-strip')).toBeNull();
+  });
+
+  it('но состояния, требующие внимания, на странице клуба видны', async () => {
+    mockStatus(status({ state: 'TRIAL_ENDED', trialUntil: null }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} hideWhenPaid onPay={() => {}} />);
+    expect(await screen.findByText('Бесплатный период закончился')).toBeInTheDocument();
+  });
+
   it('оплачено — дата, ползунок шлёт PATCH и принимает ответ', async () => {
     mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: true }));
     const bodies: unknown[] = [];

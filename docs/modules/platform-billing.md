@@ -492,8 +492,13 @@ subscription:
   оплату» (повтор). Открывает URL через `openExternalLink` (`openLink` из `@telegram-apps/sdk-react`,
   не `window.open` — в Mini App это разное поведение на iOS). «Оплачено» определяется по сдвигу
   `currentPeriodEnd` относительно снимка на момент чекаута и погашенному `pendingCheckout`.
-- `components/billing/BillingStatusStrip.tsx` на `OrganizerClubManage` (владелец) — состояния из
-  `BillingStatusDto`; ползунок автопродления здесь же.
+- `components/billing/BillingStatusStrip.tsx` в двух местах:
+  **`ClubPage` над блоком «О клубе»** (PO 2026-09-16) — владельцу и со-организаторам (`isManager`),
+  с `hideWhenPaid`: состояние `ACTIVE` там скрыто, потому что ничего не требует. Это главный экран
+  клуба, и сроки бесплатного периода не должны зависеть от того, зашёл ли человек в «Управление».
+  Кнопка открывает тот же `BillingSheet`; со-организатору он покажет «Оплачивает владелец клуба».
+  **`OrganizerClubManage`** (владелец) — все состояния, включая «Оплачено до …», и ползунок
+  автопродления.
 - Форма создания встречи: `catch 402` → `paywallFromError` → `BillingSheet`; после успешной оплаты
   форма остаётся заполненной, кнопка «Создать» активна.
 - `ClubPage`/`OrganizerClubManage`: `?billing=1` (из DM) → открыть шит; `?billing=done` /

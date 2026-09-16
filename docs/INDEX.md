@@ -58,7 +58,7 @@
 | Страница | Спеки для сверки |
 |---|---|
 | `DiscoveryPage.tsx` | `discovery-card.md`, `discovery-redesign.md` |
-| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md` |
+| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md`; полоска биллинга над «О клубе» — `platform-billing.md` § 7 |
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |

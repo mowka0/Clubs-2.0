@@ -8,6 +8,12 @@ interface BillingStatusStripProps {
   clubId: string;
   /** «Оплатить» / «Продлить» — открыть шит оплаты. */
   onPay: () => void;
+  /**
+   * Не показывать состояние ACTIVE. На странице клуба полоска — напоминание о том, что требует
+   * внимания; «Оплачено до …» вместе с ползунком автопродления живёт на «Управлении клубом»,
+   * иначе одно и то же висело бы на двух экранах сразу (PO 2026-09-16).
+   */
+  hideWhenPaid?: boolean;
 }
 
 /**
@@ -16,13 +22,14 @@ interface BillingStatusStripProps {
  * отдельного экрана «подписка» нет. У клуба без чата полоски нет: ему не за что платить.
  * По тексту платят «за клуб», хотя единица счёта — чат (PO 2026-09-07).
  */
-export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay }) => {
+export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, hideWhenPaid = false }) => {
   const haptic = useHaptic();
   const { data } = useBillingQuery(clubId);
   const setAutopay = useSetAutopayMutation();
   const [autopayError, setAutopayError] = useState<string | null>(null);
 
   if (!data || data.state === 'NO_CHAT') return null;
+  if (hideWhenPaid && data.state === 'ACTIVE') return null;
 
   const price = formatRubles(data.priceKopecks);
   const periodEnd = data.currentPeriodEnd ? formatBillingDate(data.currentPeriodEnd) : null;
