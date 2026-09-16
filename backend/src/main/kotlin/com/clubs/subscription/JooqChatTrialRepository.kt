@@ -1,5 +1,6 @@
 package com.clubs.subscription
 
+import com.clubs.chatlink.BotChatStatus
 import com.clubs.generated.jooq.enums.SubscriptionStatus
 import com.clubs.generated.jooq.tables.references.CHAT_TRIAL
 import com.clubs.generated.jooq.tables.references.CLUB_CHAT_LINKS
@@ -43,6 +44,8 @@ class JooqChatTrialRepository(private val dsl: DSLContext) : ChatTrialRepository
             .from(CHAT_TRIAL)
             .join(CLUB_CHAT_LINKS).on(CLUB_CHAT_LINKS.CHAT_ID.eq(CHAT_TRIAL.CHAT_ID))
             .where(CHAT_TRIAL.STARTED_AT.le(until.minusDays(trialDays)))
+            // Выгнанному боту напоминать не о чем: без него чат бесплатен.
+            .and(CLUB_CHAT_LINKS.BOT_STATUS.`in`(BotChatStatus.ADMINISTRATOR.literal, BotChatStatus.MEMBER.literal))
             .andNotExists(
                 dsl.selectOne().from(SERVICE_SUBSCRIPTION).where(
                     SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID.eq(CLUB_CHAT_LINKS.CLUB_ID)

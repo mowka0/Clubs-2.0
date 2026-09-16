@@ -40,6 +40,19 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay 
   };
 
   switch (data.state) {
+    case 'BOT_REMOVED':
+      return (
+        <div className="rd-billing-strip grace" data-state={data.state}>
+          <span className="ic" aria-hidden="true">🤖</span>
+          <div className="tx">
+            <div className="t">Бот удалён из чата — подписка на паузе</div>
+            <div className="d">
+              Пока бота нет, встречи бесплатны, напоминаний и списаний не будет
+              {periodEnd ? `; оплачено до ${periodEnd}, эта дата не сдвигается` : ''}. Верните бота в чат — всё продолжится само.
+            </div>
+          </div>
+        </div>
+      );
     case 'TRIAL_NOT_STARTED':
       return (
         <div className="rd-billing-strip free" data-state={data.state}>

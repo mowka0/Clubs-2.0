@@ -56,6 +56,14 @@ describe('BillingStatusStrip', () => {
     expect(container.querySelector('.rd-billing-strip')).toBeNull();
   });
 
+  it('бота выгнали из чата — пауза без кнопки, оплаченная дата на виду', async () => {
+    mockStatus(status({ state: 'BOT_REMOVED', currentPeriodEnd: '2026-10-07T10:00:00Z', trialUntil: null }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
+    expect(await screen.findByText('Бот удалён из чата — подписка на паузе')).toBeInTheDocument();
+    expect(screen.getByText(/оплачено до 7 октября/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('чат подключён, встреч ещё не было — обещание без даты и без кнопки', async () => {
     mockStatus(status({ state: 'TRIAL_NOT_STARTED', trialUntil: null }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);

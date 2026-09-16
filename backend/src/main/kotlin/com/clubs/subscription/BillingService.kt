@@ -246,6 +246,8 @@ class BillingService(
         // Бесплатный период идёт по чату и от первой встречи: до неё строки нет вовсе.
         val trialUntil = chatTrialRepository.findStartedAt(link.chatId)?.plusDays(trialDays)
         val state = when {
+            // Бота выгнали: подписка на паузе, даты сохраняем — владелец видит, что ничего не пропало.
+            !link.botStatus.isInChat -> BillingState.BOT_REMOVED
             subscription == null -> when {
                 trialUntil == null -> BillingState.TRIAL_NOT_STARTED
                 now.isBefore(trialUntil) -> BillingState.TRIAL

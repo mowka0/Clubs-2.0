@@ -88,6 +88,18 @@ class BillingGateTest {
     }
 
     @Test
+    fun `bot kicked from the chat means the club is free — no wall, no trial start`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns link().copy(botStatus = BotChatStatus.KICKED)
+        every { subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT) } returns 19900
+        every { subscriptionRepository.findLatestByClub(clubId) } returns
+            subscription(SubscriptionStatus.ENDED, OffsetDateTime.now().minusDays(40))
+
+        gate.requireBillable(club, eventId, ownerId)
+
+        verify(exactly = 0) { chatTrialRepository.startOrGet(any(), any(), any()) }
+    }
+
+    @Test
     fun `first meeting of a chat starts the trial and passes`() {
         linked()
         every { subscriptionRepository.findLatestByClub(clubId) } returns null

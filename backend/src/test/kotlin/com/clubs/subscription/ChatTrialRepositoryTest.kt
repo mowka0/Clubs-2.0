@@ -64,7 +64,7 @@ class ChatTrialRepositoryTest {
     private fun freshChatId(): Long = chatSeq.decrementAndGet()
 
     /** Живая привязка чата к клубу: выборка кандидатов на напоминание идёт через club_chat_links. */
-    private fun linkChatToClub(chatId: Long, clubId: UUID, ownerId: UUID) {
+    private fun linkChatToClub(chatId: Long, clubId: UUID, ownerId: UUID, botStatus: String = "administrator") {
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$ownerId', ${telegramSeq.incrementAndGet()}, 'U')")
         dsl.execute(
             """
@@ -75,7 +75,7 @@ class ChatTrialRepositoryTest {
         dsl.execute(
             """
             INSERT INTO club_chat_links (club_id, chat_id, chat_title, linked_by_user_id, bot_status)
-            VALUES ('$clubId', $chatId, 'Чат', '$ownerId', 'administrator')
+            VALUES ('$clubId', $chatId, 'Чат', '$ownerId', '$botStatus')
             """.trimIndent()
         )
     }
@@ -119,6 +119,18 @@ class ChatTrialRepositoryTest {
         val afterMark = repository.findTrialsEndingBefore(inNineDays.plusDays(7), trialDays = 15)
             .single { it.chatId == chatId }
         assertEquals(7, afterMark.reminderDaysLeft)
+    }
+
+    @Test
+    fun `a chat the bot was kicked from is not reminded about its trial`() {
+        val chatId = freshChatId()
+        val clubId = UUID.randomUUID()
+        linkChatToClub(chatId, clubId, UUID.randomUUID(), botStatus = "kicked")
+        repository.startOrGet(chatId, clubId, UUID.randomUUID())
+
+        val ending = repository.findTrialsEndingBefore(OffsetDateTime.now().plusDays(30), trialDays = 15)
+
+        assertTrue(ending.none { it.chatId == chatId }, "без бота чат бесплатен — напоминать не о чем")
     }
 
     @Test

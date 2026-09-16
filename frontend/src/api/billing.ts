@@ -3,6 +3,7 @@ import { apiClient, ApiError } from './apiClient';
 /** Зеркалит backend BillingState (platform-billing.md § 6.6). */
 export type BillingState =
   | 'NO_CHAT'
+  | 'BOT_REMOVED'
   | 'TRIAL_NOT_STARTED'
   | 'TRIAL'
   | 'TRIAL_ENDED'

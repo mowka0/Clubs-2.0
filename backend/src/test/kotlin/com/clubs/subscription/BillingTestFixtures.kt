@@ -27,9 +27,9 @@ internal object BillingTestFixtures {
         )
     }
 
-    fun link(club: Club, chatId: Long = -1001234567890L) = ChatLink(
+    fun link(club: Club, chatId: Long = -1001234567890L, botStatus: BotChatStatus = BotChatStatus.ADMINISTRATOR) = ChatLink(
         clubId = club.id, chatId = chatId, chatTitle = "Бег по средам", linkedByUserId = club.ownerId,
-        linkedAt = OffsetDateTime.now(), botStatus = BotChatStatus.ADMINISTRATOR,
+        linkedAt = OffsetDateTime.now(), botStatus = botStatus,
         canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true,
         doorEnabled = false, doorInviteLink = null, livePinEnabled = true, skladchinaStatusEnabled = true,
         strictModeEnabled = false, awardTagsEnabled = false,

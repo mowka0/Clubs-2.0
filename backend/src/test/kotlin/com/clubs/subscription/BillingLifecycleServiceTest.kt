@@ -276,6 +276,22 @@ class BillingLifecycleServiceTest {
         verify(exactly = 0) { chatTrialRepository.markReminded(any(), any()) }
     }
 
+    @Test
+    fun `kicked bot pauses billing — no charge, no reminder, quiet end after grace`() {
+        every { chatLinkRepository.findByClubId(club.id) } returns
+            BillingTestFixtures.link(club, botStatus = com.clubs.chatlink.BotChatStatus.KICKED)
+        val due = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1))
+        val expiringNoAutopay = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(1), autopay = false)
+        live(due, expiringNoAutopay)
+
+        service.runDaily(now)
+
+        verify(exactly = 0) { paymentProvider.charge(any()) }
+        verify(exactly = 0) { notifier.expiringSoon(any(), any(), any(), any()) }
+        verify(exactly = 0) { notifier.periodEnded(any(), any()) }
+        assertThrows<ConflictException> { service.chargeNow(club.id, now) }
+    }
+
     // ---------- служебное «списать сейчас» ----------
 
     @Test

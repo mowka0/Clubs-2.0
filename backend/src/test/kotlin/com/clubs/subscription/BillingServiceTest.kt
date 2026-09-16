@@ -324,6 +324,20 @@ class BillingServiceTest {
     }
 
     @Test
+    fun `status shows the pause when the bot was kicked, keeping the paid period visible`() {
+        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
+        every { chatLinkRepository.findByClubId(club.id) } returns
+            BillingTestFixtures.link(club, botStatus = com.clubs.chatlink.BotChatStatus.KICKED)
+        val sub = BillingTestFixtures.subscription(club)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns sub
+
+        val status = service.status(club.id, club.ownerId)
+
+        assertEquals(BillingState.BOT_REMOVED, status.state)
+        assertEquals(sub.currentPeriodEnd, status.currentPeriodEnd, "оплаченный период не прячем")
+    }
+
+    @Test
     fun `status tells a co-organizer that only the owner can pay`() {
         val coOrganizer = UUID.randomUUID()
         every { clubRoleGuard.requireCapability(club.id, any(), any()) } returns club

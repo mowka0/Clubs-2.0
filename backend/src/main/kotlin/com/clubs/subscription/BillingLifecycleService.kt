@@ -100,7 +100,9 @@ class BillingLifecycleService(
     private fun processSubscription(subscription: ServiceSubscription, now: OffsetDateTime, price: Int) {
         val clubId = subscription.subjectClubId ?: return
         val club = clubRepository.findById(clubId)
-        val hasChat = club != null && chatLinkRepository.findByClubId(clubId) != null
+        // «Есть чат» = бот в нём присутствует: выгнанный бот равен отсутствию чата — период
+        // доживает тихо, без списаний и DM (PO 2026-09-16).
+        val hasChat = club != null && chatLinkRepository.findByClubId(clubId)?.botStatus?.isInChat == true
         val periodEnd = subscription.currentPeriodEnd
         val graceEnd = periodEnd.plusDays(graceDays)
 
@@ -203,6 +205,9 @@ class BillingLifecycleService(
             ?: throw ConflictException("У клуба нет живой подписки — списывать нечего")
         if (!subscription.autopayPossible || subscription.providerToken == null) {
             throw ConflictException("Материнский платёж был не картой — сохранённого способа оплаты нет")
+        }
+        if (chatLinkRepository.findByClubId(clubId)?.botStatus?.isInChat != true) {
+            throw ConflictException("Бота нет в чате клуба — списывать не за что")
         }
         if (paymentRepository.hasPendingRecurring(subscription.id)) {
             throw ConflictException("Предыдущее списание ещё не подтверждено провайдером")

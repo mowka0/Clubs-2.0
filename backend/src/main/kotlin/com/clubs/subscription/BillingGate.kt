@@ -37,7 +37,9 @@ class BillingGate(
      * закончился. Первая встреча чата запускает отсчёт и всегда проходит.
      */
     fun requireBillable(club: Club, eventId: UUID, actorUserId: UUID) {
-        val link = chatLinkRepository.findByClubId(club.id) ?: return
+        // Бота выгнали из чата — привязка остаётся ради оживления (club-chat-link), но платить
+        // за чат, где бота нет, не за что: ни стены, ни старта периода (PO 2026-09-16).
+        val link = chatLinkRepository.findByClubId(club.id)?.takeIf { it.botStatus.isInChat } ?: return
         val now = OffsetDateTime.now()
         val subscription = subscriptionRepository.findLatestByClub(club.id)
         if (subscription != null && subscription.allowsNewMeetings(now, graceDays)) return
