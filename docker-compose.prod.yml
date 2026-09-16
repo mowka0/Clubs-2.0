@@ -83,6 +83,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}  # 1ч по security.md; frontend apiClient автоматически повторяет 401 со свежим initData
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Username бота (без @) для deep link'ов t.me/<bot>?startapp=… Тот же дефолт, что в
+      # application.yml; этой же переменной собирается фронт (build arg VITE_TELEGRAM_BOT_USERNAME),
+      # чтобы страницы возврата после оплаты вели в того же бота.
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-clubs_v2_bot}
+      # Публичный адрес фронта: WebAppInfo-кнопки бота и страницы возврата после оплаты.
+      # Дефолт — прод-домен; у staging переменная задаётся в Coolify (иначе ссылки уведут на прод).
+      TELEGRAM_WEBAPP_BASE_URL: ${TELEGRAM_WEBAPP_BASE_URL:-https://clubsapp.ru}
       # Username саппорт-аккаунта (без @) для баг-репортов из формы «Сообщить о проблеме»
       TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
       # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
@@ -97,6 +104,32 @@ services:
       # (ключ геокодера тут не работает) и тоже только серверный: в бандл фронтенда не уезжает.
       # Пусто = /api/geo/suggest отвечает 503, точку всё ещё можно поставить пином.
       YANDEX_SUGGEST_API_KEY: ${YANDEX_SUGGEST_API_KEY:-}
+      # Биллинг платформы за чат (platform-billing.md § 6.7). Провайдер: stub — staging без
+      # ключей, счёт «оплачивается» ссылкой; robokassa — прод и staging с тестовыми паролями.
+      # Дефолты совпадают с application.yml — здесь только прокидывание из env Coolify.
+      # Без дефолта намеренно: незаданная переменная роняет деплой, а не запускает прод со стабом,
+      # у которого страница оплаты открыта без авторизации (ревью 2026-09-07).
+      BILLING_PROVIDER: ${BILLING_PROVIDER:?set BILLING_PROVIDER=stub for staging or robokassa for prod}
+      # Бесплатный период чата в днях от первой встречи (PO 2026-09-15); дефолт как в application.yml.
+      BILLING_TRIAL_DAYS: ${BILLING_TRIAL_DAYS:-15}
+      BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
+      BILLING_PENDING_TIMEOUT_HOURS: ${BILLING_PENDING_TIMEOUT_HOURS:-6}
+      BILLING_STUB_SETTLE_SECONDS: ${BILLING_STUB_SETTLE_SECONDS:-5}
+      # Служебный триггер «списать сейчас» — только на время проверки первого боевого автосписания.
+      BILLING_MANUAL_CHARGE_ENABLED: ${BILLING_MANUAL_CHARGE_ENABLED:-false}
+      PLATFORM_ADMIN_TELEGRAM_IDS: ${PLATFORM_ADMIN_TELEGRAM_IDS:-}
+      # ФИО самозанятого-получателя целиком (шит оплаты, оферта).
+      BILLING_RECIPIENT_NAME: ${BILLING_RECIPIENT_NAME:-}
+      # Период подписки и крон календаря — staging ужимает их для прогона цикла (тест-план § 10).
+      SUBSCRIPTION_PERIOD_DAYS: ${SUBSCRIPTION_PERIOD_DAYS:-30}
+      SUBSCRIPTION_LIFECYCLE_CRON: ${SUBSCRIPTION_LIFECYCLE_CRON:-0 30 9 * * *}
+      BILLING_RECONCILE_CRON: ${BILLING_RECONCILE_CRON:-0 15 * * * *}
+      # Ключи Robokassa — только из env, в compose значений нет. Пароли не логируются.
+      ROBOKASSA_MERCHANT_LOGIN: ${ROBOKASSA_MERCHANT_LOGIN:-}
+      ROBOKASSA_PASSWORD_1: ${ROBOKASSA_PASSWORD_1:-}
+      ROBOKASSA_PASSWORD_2: ${ROBOKASSA_PASSWORD_2:-}
+      ROBOKASSA_TEST_MODE: ${ROBOKASSA_TEST_MODE:-true}
+      ROBOKASSA_HASH: ${ROBOKASSA_HASH:-SHA256}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000
@@ -142,6 +175,9 @@ services:
         # геокодинг проксирует backend, и в бандле ключа быть не должно.
         VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
         VITE_YANDEX_STATIC_API_KEY: ${VITE_YANDEX_STATIC_API_KEY}
+        # Тот же дефолт, что у telegram.bot-username бэкенда: страницы возврата после оплаты
+        # строят ссылку «Открыть Clubs в Telegram» из бандла, а не из адреса (ревью биллинга).
+        VITE_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-clubs_v2_bot}
     labels:
       - "traefik.docker.network=coolify"
       # Здесь намеренно нет явного лейбла traefik.http.services.*.loadbalancer.

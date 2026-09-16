@@ -69,8 +69,11 @@ telegram:
   # Telegram не позволяет ботам шлать t.me/<self-bot>/... ссылки в DM
   # с тем же ботом (циклическая ссылка), поэтому используем именно
   # frontend URL через WebAppInfo.
-  # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
-  webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
+  # Prod: https://clubsapp.ru (свой домен с 2026-09-16; до этого технический
+  # 77-42-23-177.sslip.io, в котором зашит IP сервера), Staging: https://staging.77-42-23-177.sslip.io.
+  # На staging переменная ОБЯЗАНА быть задана в Coolify — иначе ссылки возврата из оплаты и
+  # WebAppInfo-кнопки бота уведут на прод.
+  webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://clubsapp.ru}
   # Username саппорт-аккаунта (без @) — сюда бот шлёт баг-репорты из формы «Сообщить о проблеме».
   # Bot API не отправляет по @username, поэтому chat id резолвится через нашу таблицу users:
   # аккаунт должен хотя бы раз открыть Mini App этого окружения, иначе POST /api/feedback → 503.
@@ -91,6 +94,55 @@ features:
   # не появится HQ-премиум, который есть смысл разблокировать (payment-v2.md §2.2, §10). Organizer-pays
   # работает всегда и этим флагом не гейтится. Включение: MEMBER_PAYS_ENABLED=true в Coolify (без пересборки).
   member-pays-enabled: ${MEMBER_PAYS_ENABLED:false}
+
+billing:
+  # Биллинг платформы за чат (platform-billing.md § 6.7). Провайдер: stub (dev/staging без
+  # ключей — счёт «оплачивается» переходом по ссылке) | robokassa (прод и staging с тестовыми
+  # паролями). Все переменные прокидываются через docker-compose.prod.yml.
+  provider: ${BILLING_PROVIDER:stub}
+  # Бесплатный период чата: сколько дней клуб живёт без подписки после ПЕРВОЙ созданной встречи
+  # (решение PO 2026-09-15). Ручка на живых данных: видно, что воронка обрывается — меняем число,
+  # не трогая код. DM о конце уходят за 7 дней и за день (BillingLifecycleService).
+  trial-days: ${BILLING_TRIAL_DAYS:15}
+  # Грейс после конца оплаченного периода: всё работает, ждём оплату; по истечении — новые
+  # встречи нельзя, начатое доживает (R10).
+  grace-days: ${BILLING_GRACE_DAYS:7}
+  # Слоты дочерних списаний в днях от конца периода; четвёртой попытки нет — грейс кончился.
+  retry-days: ${BILLING_RETRY_DAYS:0,1,3}
+  # Через сколько часов счёт без ответа провайдера опрашивается через OpStateExt.
+  pending-timeout-hours: ${BILLING_PENDING_TIMEOUT_HOURS:6}
+  # Материнский счёт без оплаты дольше этого срока закрывается как брошенный.
+  mother-expire-hours: ${BILLING_MOTHER_EXPIRE_HOURS:24}
+  # Повторный чекаут при живом неоплаченном счёте моложе окна отдаёт ту же ссылку (идемпотентность).
+  checkout-reuse-minutes: ${BILLING_CHECKOUT_REUSE_MINUTES:30}
+  # Почасовой тик опроса счетов без ответа (BillingLifecycleService.reconcilePending).
+  reconcile-cron: ${BILLING_RECONCILE_CRON:0 15 * * * *}
+  # ФИО самозанятого-получателя целиком — показывается в шите оплаты и в оферте (PO 2026-09-07).
+  recipient-name: ${BILLING_RECIPIENT_NAME:}
+  # Куда провайдер возвращает человека из браузера: обычные веб-страницы фронта вне Mini App.
+  success-url: ${BILLING_SUCCESS_URL:${telegram.webapp-base-url}/pay/return}
+  fail-url: ${BILLING_FAIL_URL:${telegram.webapp-base-url}/pay/fail}
+  stub:
+    # Через сколько секунд стаб считает дочернее списание прошедшим (staging-прогон цикла).
+    settle-seconds: ${BILLING_STUB_SETTLE_SECONDS:5}
+  manual-charge:
+    # Служебный триггер «списать сейчас» (platform-billing.md § 11): у Robokassa нет тестового
+    # режима для рекуррента, первое боевое дочернее списание проверяется на проде на чате PO.
+    # Выключен по умолчанию; включается на время проверки и выключается обратно.
+    enabled: ${BILLING_MANUAL_CHARGE_ENABLED:false}
+    # Telegram id тех, кому доступен триггер (через запятую). Пусто = никому, даже при включённом флаге.
+    admin-telegram-ids: ${PLATFORM_ADMIN_TELEGRAM_IDS:}
+  robokassa:
+    merchant-login: ${ROBOKASSA_MERCHANT_LOGIN:}
+    # Password#1 подписывает наши запросы, Password#2 — уведомления провайдера. Только env, в логи не попадают.
+    password1: ${ROBOKASSA_PASSWORD_1:}
+    password2: ${ROBOKASSA_PASSWORD_2:}
+    # IsTest=1: платежи не проводятся, уведомления подписываются тестовыми паролями (staging).
+    test-mode: ${ROBOKASSA_TEST_MODE:true}
+    # Алгоритм подписи — должен совпадать с настройками магазина в кабинете Robokassa.
+    hash: ${ROBOKASSA_HASH:SHA256}
+    # Адреса, с которых Robokassa шлёт ResultURL (docs.robokassa.ru, «Уведомления»).
+    allowed-ips: ${ROBOKASSA_ALLOWED_IPS:185.59.216.65,185.59.217.65}
 
 subscription:
   # Оплаченный период за одно списание (стаб-провайдер). В днях, чтобы staging мог

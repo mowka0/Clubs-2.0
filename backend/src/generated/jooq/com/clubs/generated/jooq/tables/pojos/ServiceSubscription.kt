@@ -30,7 +30,11 @@ data class ServiceSubscription(
     var currentPeriodEnd: OffsetDateTime,
     var providerToken: String? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var autopay: Boolean? = null,
+    var autopayPossible: Boolean? = null,
+    var chargeAttempts: Int? = null,
+    var lastChargeAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -86,6 +90,30 @@ data class ServiceSubscription(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.autopay == null) {
+            if (o.autopay != null)
+                return false
+        }
+        else if (this.autopay != o.autopay)
+            return false
+        if (this.autopayPossible == null) {
+            if (o.autopayPossible != null)
+                return false
+        }
+        else if (this.autopayPossible != o.autopayPossible)
+            return false
+        if (this.chargeAttempts == null) {
+            if (o.chargeAttempts != null)
+                return false
+        }
+        else if (this.chargeAttempts != o.chargeAttempts)
+            return false
+        if (this.lastChargeAt == null) {
+            if (o.lastChargeAt != null)
+                return false
+        }
+        else if (this.lastChargeAt != o.lastChargeAt)
+            return false
         return true
     }
 
@@ -102,6 +130,10 @@ data class ServiceSubscription(
         result = prime * result + (if (this.providerToken == null) 0 else this.providerToken.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.autopay == null) 0 else this.autopay.hashCode())
+        result = prime * result + (if (this.autopayPossible == null) 0 else this.autopayPossible.hashCode())
+        result = prime * result + (if (this.chargeAttempts == null) 0 else this.chargeAttempts.hashCode())
+        result = prime * result + (if (this.lastChargeAt == null) 0 else this.lastChargeAt.hashCode())
         return result
     }
 
@@ -118,6 +150,10 @@ data class ServiceSubscription(
         sb.append(", ").append(providerToken)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(autopay)
+        sb.append(", ").append(autopayPossible)
+        sb.append(", ").append(chargeAttempts)
+        sb.append(", ").append(lastChargeAt)
 
         sb.append(")")
         return sb.toString()

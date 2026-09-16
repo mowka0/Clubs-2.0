@@ -18,6 +18,7 @@ import com.clubs.generated.jooq.keys.DEBT_SETTLEMENTS__DEBT_SETTLEMENTS_PAYER_ID
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENT_TEMPLATES__EVENT_TEMPLATES_CREATED_BY_FKEY
+import com.clubs.generated.jooq.keys.FUNNEL_EVENT__FUNNEL_EVENT_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_USER_ID_FKEY
@@ -44,6 +45,7 @@ import com.clubs.generated.jooq.tables.Debts.DebtsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.EventTemplates.EventTemplatesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
+import com.clubs.generated.jooq.tables.FunnelEvent.FunnelEventPath
 import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
@@ -479,6 +481,22 @@ open class Users(
 
     val events: EventsPath
         get(): EventsPath = events()
+
+    private lateinit var _funnelEvent: FunnelEventPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.funnel_event</code> table
+     */
+    fun funnelEvent(): FunnelEventPath {
+        if (!this::_funnelEvent.isInitialized)
+            _funnelEvent = FunnelEventPath(this, null, FUNNEL_EVENT__FUNNEL_EVENT_USER_ID_FKEY.inverseKey)
+
+        return _funnelEvent;
+    }
+
+    val funnelEvent: FunnelEventPath
+        get(): FunnelEventPath = funnelEvent()
 
     private lateinit var _membershipHistory: MembershipHistoryPath
 

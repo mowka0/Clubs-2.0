@@ -39,6 +39,8 @@ export const queryKeys = {
     /** Батч фактов для Discovery-карточек, ключ — (отсортированный) набор id клубов на экране. */
     cardFacts: (sortedIds: string[]) => ['clubs', 'card-facts', sortedIds] as const,
   },
+  /** Биллинг за чат — статус для полоски и шита (platform-billing.md § 7). Инвалидируется после оплаты вместе с events. */
+  billing: (clubId: string) => ['clubs', 'detail', clubId, 'billing'] as const,
   events: {
     all: ['events'] as const,
     byClubAll: (clubId: string) => ['events', 'by-club', clubId] as const,
@@ -86,10 +88,6 @@ export const queryKeys = {
     byClubAll: (clubId: string) => ['activities', 'by-club', clubId] as const,
     byClub: (clubId: string, filters?: ClubActivitiesFilters) =>
       ['activities', 'by-club', clubId, filters ?? {}] as const,
-  },
-  subscription: {
-    status: ['subscription', 'status'] as const,
-    plans: ['subscription', 'plans'] as const,
   },
   cities: {
     // Справочник меняется только с релизом миграции, поэтому ключ без параметров.

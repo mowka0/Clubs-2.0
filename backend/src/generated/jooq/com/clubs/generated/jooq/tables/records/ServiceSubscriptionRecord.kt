@@ -65,6 +65,22 @@ open class ServiceSubscriptionRecord private constructor() : UpdatableRecordImpl
         set(value): Unit = set(9, value)
         get(): OffsetDateTime? = get(9) as OffsetDateTime?
 
+    open var autopay: Boolean?
+        set(value): Unit = set(10, value)
+        get(): Boolean? = get(10) as Boolean?
+
+    open var autopayPossible: Boolean?
+        set(value): Unit = set(11, value)
+        get(): Boolean? = get(11) as Boolean?
+
+    open var chargeAttempts: Int?
+        set(value): Unit = set(12, value)
+        get(): Int? = get(12) as Int?
+
+    open var lastChargeAt: OffsetDateTime?
+        set(value): Unit = set(13, value)
+        get(): OffsetDateTime? = get(13) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -74,7 +90,7 @@ open class ServiceSubscriptionRecord private constructor() : UpdatableRecordImpl
     /**
      * Create a detached, initialised ServiceSubscriptionRecord
      */
-    constructor(id: UUID? = null, payerUserId: UUID, payerRole: SubscriptionPayerRole, plan: SubscriptionPlan, subjectClubId: UUID? = null, status: SubscriptionStatus? = null, currentPeriodEnd: OffsetDateTime, providerToken: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, payerUserId: UUID, payerRole: SubscriptionPayerRole, plan: SubscriptionPlan, subjectClubId: UUID? = null, status: SubscriptionStatus? = null, currentPeriodEnd: OffsetDateTime, providerToken: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, autopay: Boolean? = null, autopayPossible: Boolean? = null, chargeAttempts: Int? = null, lastChargeAt: OffsetDateTime? = null): this() {
         this.id = id
         this.payerUserId = payerUserId
         this.payerRole = payerRole
@@ -85,6 +101,10 @@ open class ServiceSubscriptionRecord private constructor() : UpdatableRecordImpl
         this.providerToken = providerToken
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.autopay = autopay
+        this.autopayPossible = autopayPossible
+        this.chargeAttempts = chargeAttempts
+        this.lastChargeAt = lastChargeAt
         resetChangedOnNotNull()
     }
 
@@ -103,6 +123,10 @@ open class ServiceSubscriptionRecord private constructor() : UpdatableRecordImpl
             this.providerToken = value.providerToken
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.autopay = value.autopay
+            this.autopayPossible = value.autopayPossible
+            this.chargeAttempts = value.chargeAttempts
+            this.lastChargeAt = value.lastChargeAt
             resetChangedOnNotNull()
         }
     }

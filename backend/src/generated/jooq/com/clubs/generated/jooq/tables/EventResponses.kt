@@ -122,14 +122,15 @@ open class EventResponses(
     val STAGE_1_TIMESTAMP: TableField<EventResponsesRecord, OffsetDateTime?> = createField(DSL.name("stage_1_timestamp"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда отдан голос Этапа 1 (NULL = не голосовал). Задаёт порядок очереди при продвижении из листа ожидания.")
 
     /**
-     * The column <code>public.event_responses.stage_2_vote</code>. Действие
-     * Этапа 2 (enum stage_2_vote): confirmed = подтвердил бронь; declined =
-     * отказался; waitlisted = в листе ожидания (лимит исчерпан);
-     * expired_no_confirm = бронь сгорела — не подтвердил до начала события
-     * (авто-статус, отличается от явного отказа). NULL = ещё не действовал на
-     * Этапе 2.
+     * The column <code>public.event_responses.stage_2_vote</code>. Место в
+     * составе (enum stage_2_vote): confirmed = в составе; waitlisted = в
+     * очереди (места кончились); declined = отказался от занятого места;
+     * expired_no_confirm = легаси-статус двухэтапки — не подтвердил до старта.
+     * NULL = места не занимает. С V83/V96 пишется ГОЛОСОМ Этапа 1 у обоих
+     * форматов: «Иду» → confirmed (у встречи с местами — waitlisted, если
+     * потолок исчерпан), любой другой голос → NULL.
      */
-    val STAGE_2_VOTE: TableField<EventResponsesRecord, Stage_2Vote?> = createField(DSL.name("stage_2_vote"), SQLDataType.VARCHAR.asEnumDataType(Stage_2Vote::class.java), this, "Действие Этапа 2 (enum stage_2_vote): confirmed = подтвердил бронь; declined = отказался; waitlisted = в листе ожидания (лимит исчерпан); expired_no_confirm = бронь сгорела — не подтвердил до начала события (авто-статус, отличается от явного отказа). NULL = ещё не действовал на Этапе 2.")
+    val STAGE_2_VOTE: TableField<EventResponsesRecord, Stage_2Vote?> = createField(DSL.name("stage_2_vote"), SQLDataType.VARCHAR.asEnumDataType(Stage_2Vote::class.java), this, "Место в составе (enum stage_2_vote): confirmed = в составе; waitlisted = в очереди (места кончились); declined = отказался от занятого места; expired_no_confirm = легаси-статус двухэтапки — не подтвердил до старта. NULL = места не занимает. С V83/V96 пишется ГОЛОСОМ Этапа 1 у обоих форматов: «Иду» → confirmed (у встречи с местами — waitlisted, если потолок исчерпан), любой другой голос → NULL.")
 
     /**
      * The column <code>public.event_responses.stage_2_timestamp</code>. Когда
@@ -139,12 +140,14 @@ open class EventResponses(
 
     /**
      * The column <code>public.event_responses.final_status</code>. Итоговый
-     * статус участия (enum final_status): confirmed = в финальном списке
-     * (только по нему начисляется репутация); waitlisted = остался в листе
-     * ожидания; declined = отказался; expired_no_confirm = не подтвердил до
-     * начала. NULL = итог не определён.
+     * статус участия (enum final_status): confirmed = в составе (по нему идут
+     * отметка явки и репутация); waitlisted = в очереди; declined = отказался;
+     * expired_no_confirm = легаси-статус двухэтапки. NULL = места не занимает.
+     * У открытой встречи (V96) достижимы только confirmed и NULL:
+     * expired_no_confirm ей больше не выставляется, а отказ — это голос «Не
+     * пойду».
      */
-    val FINAL_STATUS: TableField<EventResponsesRecord, FinalStatus?> = createField(DSL.name("final_status"), SQLDataType.VARCHAR.asEnumDataType(FinalStatus::class.java), this, "Итоговый статус участия (enum final_status): confirmed = в финальном списке (только по нему начисляется репутация); waitlisted = остался в листе ожидания; declined = отказался; expired_no_confirm = не подтвердил до начала. NULL = итог не определён.")
+    val FINAL_STATUS: TableField<EventResponsesRecord, FinalStatus?> = createField(DSL.name("final_status"), SQLDataType.VARCHAR.asEnumDataType(FinalStatus::class.java), this, "Итоговый статус участия (enum final_status): confirmed = в составе (по нему идут отметка явки и репутация); waitlisted = в очереди; declined = отказался; expired_no_confirm = легаси-статус двухэтапки. NULL = места не занимает. У открытой встречи (V96) достижимы только confirmed и NULL: expired_no_confirm ей больше не выставляется, а отказ — это голос «Не пойду».")
 
     /**
      * The column <code>public.event_responses.attendance</code>. Отметка явки

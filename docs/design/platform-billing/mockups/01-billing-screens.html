@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Биллинг за чат — экраны (шит оплаты, полоска статуса, возврат из браузера)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Токены — копия brand-theme.css (Banco-Plata). Тёмная тема по умолчанию, светлая — кнопкой сверху. */
+:root {
+  --bg:            #0B0B0E;
+  --text:          #F4F4F6;
+  --text-dim:      rgba(244, 244, 246, 0.6);
+  --text-faint:    rgba(244, 244, 246, 0.45);
+  --surface:       rgba(255, 255, 255, 0.04);
+  --surface-2:     rgba(255, 255, 255, 0.06);
+  --hairline:      rgba(255, 255, 255, 0.06);
+  --hairline-2:    rgba(255, 255, 255, 0.1);
+  --card-solid:    #17171C;
+  --accent:        #F47B3C;
+  --accent-soft:   rgba(244, 123, 60, 0.14);
+  --accent-grad:   linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
+  --accent-shadow: rgba(244, 123, 60, 0.30);
+  --accent-shadow-soft: rgba(244, 123, 60, 0.15);
+  --on-accent:     #2A0E04;
+  --live:          #66D49A;
+  --live-soft:     rgba(79, 160, 120, 0.18);
+  --danger:        #FF8B8B;
+  --danger-soft:   rgba(255, 139, 139, 0.14);
+  --ice:           #8FC7E8;
+  --ice-soft:      rgba(143, 199, 232, 0.10);
+  --warn:          #F5C462;
+  --warn-soft:     rgba(245, 196, 98, 0.14);
+  --neu-lo:        rgba(255, 255, 255, 0.055);
+  --neu-hi:        rgba(0, 0, 0, 0.55);
+  --glass-strong-bg: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 100%), rgba(20, 22, 32, 0.92);
+  --glass-strong-border: rgba(255, 255, 255, 0.09);
+  --phone-bg:      #0B0B0E;
+  --tgl-off:       rgba(255, 255, 255, 0.14);
+}
+[data-theme="light"] {
+  --bg:            #F7F6F3;
+  --text:          #1A1A1A;
+  --text-dim:      #6B6B70;
+  --text-faint:    #8A8A8E;
+  --surface:       rgba(255, 255, 255, 0.85);
+  --surface-2:     #FFFFFF;
+  --hairline:      rgba(0, 0, 0, 0.06);
+  --hairline-2:    rgba(0, 0, 0, 0.1);
+  --card-solid:    #FFFFFF;
+  --accent-soft:   rgba(244, 123, 60, 0.12);
+  --accent-grad:   linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+  --accent-shadow: rgba(213, 97, 28, 0.24);
+  --accent-shadow-soft: rgba(213, 97, 28, 0.12);
+  --on-accent:     #FFFFFF;
+  --live:          #2E7D5A;
+  --live-soft:     rgba(46, 125, 90, 0.12);
+  --danger:        #D84040;
+  --danger-soft:   rgba(216, 64, 64, 0.10);
+  --ice:           #3B82A6;
+  --ice-soft:      rgba(59, 130, 166, 0.08);
+  --warn:          #B7860B;
+  --warn-soft:     rgba(183, 134, 11, 0.12);
+  --neu-lo:        rgba(255, 255, 255, 0.9);
+  --neu-hi:        rgba(0, 0, 0, 0.08);
+  --glass-strong-bg: linear-gradient(135deg, rgba(255,251,242,0.97) 0%, rgba(252,247,235,0.94) 100%);
+  --glass-strong-border: rgba(213, 97, 28, 0.14);
+  --phone-bg:      #F7F6F3;
+  --tgl-off:       rgba(0, 0, 0, 0.16);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.page { max-width: 1280px; margin: 0 auto; padding: 28px 22px 80px; }
+h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 8px; }
+h2 { font-size: 18px; font-weight: 800; margin: 44px 0 6px; display: flex; align-items: center; gap: 10px; }
+h2 .num { display: inline-flex; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 14px; align-items: center; justify-content: center; }
+.lead { color: var(--text-dim); font-size: 14.5px; line-height: 1.55; max-width: 880px; margin: 0 0 14px; }
+.lead b { color: var(--text); font-weight: 600; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.theme-btn { border: 1px solid var(--hairline-2); background: var(--surface); color: var(--text); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* ---- ряд телефонов ---- */
+.row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.col { width: 390px; max-width: 100%; }
+.col .vh { font-size: 13px; font-weight: 700; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.col .vd { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin: 0 0 10px; min-height: 52px; }
+.chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--hairline-2); }
+.chip.ok { color: var(--live); background: var(--live-soft); border-color: transparent; }
+.chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.chip.bad { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+
+.phone { position: relative; width: 390px; height: 780px; border-radius: 34px; background: var(--phone-bg); border: 1px solid var(--hairline-2); overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+.phone.short { height: 520px; }
+.screen { position: absolute; inset: 0; padding: 54px 16px 20px; overflow: hidden; }
+
+/* форма создания встречи за шитом (упрощённая) */
+.form-h { font-size: 20px; font-weight: 800; margin: 0 0 12px; }
+.field { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; font-size: 14px; }
+.field .lbl { font-size: 11px; color: var(--text-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.seg { display: flex; gap: 5px; padding: 5px; margin: 6px 0 12px; border-radius: 16px; background: var(--surface); box-shadow: inset 2px 2px 6px var(--neu-hi), inset -2px -2px 6px var(--neu-lo); }
+.seg b { flex: 1; text-align: center; padding: 9px; border-radius: 12px; font-size: 12.5px; font-weight: 700; color: var(--text-dim); }
+.seg b.on { color: var(--text); background: var(--bg); box-shadow: -3px -3px 8px var(--neu-lo), 4px 4px 10px var(--neu-hi); }
+
+/* оверлей + шит — копия .rd-sheet */
+.overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; display: flex; flex-direction: column; background: var(--glass-strong-bg); border-top: 1px solid var(--glass-strong-border); border-radius: 26px 26px 0 0; box-shadow: 0 -16px 50px rgba(0,0,0,0.45); padding: 8px 16px 22px; }
+.grab { width: 40px; height: 4px; border-radius: 2px; background: var(--hairline-2); margin: 4px auto 14px; }
+.sh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.sh h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.sh .close { color: var(--accent); font-size: 15px; font-weight: 600; }
+.body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.amt { display: flex; align-items: baseline; gap: 8px; }
+.amt .em { font-size: 22px; line-height: 1; }
+.amt .sum { font-size: 28px; font-weight: 800; }
+.amt .per { font-size: 13px; color: var(--text-dim); }
+.forchat { font-size: 13px; color: var(--text-dim); margin-top: -8px; }
+.forchat b { color: var(--text); font-weight: 600; }
+.note { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+.note.warn { background: var(--warn-soft); border-color: transparent; color: var(--text); }
+.note.bad { background: var(--danger-soft); border-color: transparent; color: var(--text); }
+.note.ok { background: var(--live-soft); border-color: transparent; color: var(--text); }
+.note b { color: var(--text); font-weight: 600; }
+
+/* строка с тумблером — копия .rd-cl-feat / .rd-cl-tgl */
+.feat { display: flex; align-items: flex-start; gap: 11px; padding: 12px 2px; }
+.feat .fi { flex: 1; min-width: 0; }
+.feat .ft { font-size: 13px; font-weight: 600; }
+.feat .fd { font-size: 11.5px; color: var(--text-faint); line-height: 1.45; margin-top: 3px; }
+.tgl { position: relative; flex: none; width: 38px; height: 22px; border-radius: 11px; background: var(--tgl-off); border: 1px solid var(--hairline-2); margin-top: 2px; }
+.tgl::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.tgl.on { background: var(--accent); border-color: var(--accent); }
+.tgl.on::after { left: 18px; }
+.tgl.dis { opacity: 0.4; }
+
+/* карточка «через кого платите» */
+.prov { background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 14px; padding: 12px 13px; }
+.prov .cap { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+.prov .l { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-top: 6px; }
+.prov .l .ic { width: 16px; text-align: center; flex: none; }
+.prov .l b { color: var(--text); font-weight: 600; }
+.prov a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 15px 20px; border-radius: 14px; border: 0; font: inherit; font-size: 14px; font-weight: 700; }
+.btn.p { background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.25); }
+.btn.o { background: var(--surface); color: var(--text); border: 1px solid var(--hairline); font-weight: 600; padding: 14px 20px; }
+.btn.dis { opacity: 0.55; box-shadow: none; }
+.hint { font-size: 12px; color: var(--text-dim); text-align: center; line-height: 1.45; padding: 0 8px; margin-top: -6px; }
+.spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--hairline-2); border-top-color: var(--accent); margin: 8px auto 0; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.center { text-align: center; }
+.big-ic { font-size: 42px; line-height: 1; margin: 6px 0 4px; }
+.st-t { font-size: 17px; font-weight: 800; margin: 0; }
+.st-d { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 0; }
+
+/* ---- страница управления клубом: шапка, сегменты, полоска ---- */
+.hero { border-radius: 20px; height: 112px; background: linear-gradient(135deg, #2C1A12 0%, #4A2A17 55%, #1A1A22 100%); position: relative; overflow: hidden; margin-bottom: 12px; }
+[data-theme="light"] .hero { background: linear-gradient(135deg, #F6D9C4 0%, #F1C7A6 55%, #EDE3F5 100%); }
+.hero .ttl { position: absolute; left: 16px; bottom: 30px; font-size: 20px; font-weight: 800; }
+.hero .eb { position: absolute; left: 16px; bottom: 12px; font-size: 11.5px; color: var(--text-dim); }
+.strip { display: flex; align-items: flex-start; gap: 11px; border-radius: 14px; padding: 11px 13px; margin-bottom: 12px; border: 1px solid transparent; }
+.strip .ic { font-size: 18px; line-height: 1.2; flex: none; align-self: center; } /* эмодзи по центру блока (PO 2026-09-07) */
+.strip .tx { flex: 1; min-width: 0; }
+.strip .t { font-size: 13px; font-weight: 700; line-height: 1.35; }
+.strip .d { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+.strip .d b { color: var(--text); font-weight: 600; }
+.strip .act { flex: none; align-self: center; background: var(--accent-grad); color: var(--on-accent); border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.strip.free { background: var(--live-soft); }
+.strip.info { background: var(--surface-2); border-color: var(--hairline); }
+.strip.pay { background: var(--accent-soft); }
+.strip.grace { background: var(--warn-soft); }
+.strip.ended { background: var(--danger-soft); }
+.strip .sub { margin-top: 8px; border-top: 1px solid var(--hairline-2); padding-top: 8px; display: flex; align-items: center; gap: 10px; }
+.strip .sub .fi { flex: 1; }
+.strip .sub .ft { font-size: 12.5px; font-weight: 600; }
+.strip .sub .fd { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+.subh { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 14px 0 8px; }
+.stat { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat .c { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 10px 12px; }
+.stat .c .v { font-size: 18px; font-weight: 800; }
+.stat .c .k { font-size: 11px; color: var(--text-faint); }
+
+/* ---- веб-страницы возврата (вне Telegram, обычный браузер) ---- */
+.web { width: 420px; max-width: 100%; border-radius: 16px; border: 1px solid var(--hairline-2); background: var(--card-solid); overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.web .bar { height: 34px; background: var(--surface-2); border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 11px; color: var(--text-faint); }
+.web .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--hairline-2); display: inline-block; }
+.web .bar .url { margin-left: 8px; background: var(--bg); border-radius: 6px; padding: 3px 8px; flex: 1; }
+.web .in { padding: 38px 26px 30px; text-align: center; }
+.web .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; color: var(--text-dim); margin-bottom: 22px; }
+.web .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); display: inline-block; }
+.web .btn { width: auto; display: inline-flex; padding: 13px 22px; margin-top: 18px; }
+.web .small { font-size: 12px; color: var(--text-faint); margin-top: 14px; line-height: 1.45; }
+
+/* ---- точки входа с одной строкой ---- */
+.entry { background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 16px; padding: 14px 16px; }
+.entry h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+.entry p { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.entry .line { margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--live-soft); font-size: 12.5px; font-weight: 600; color: var(--text); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
+
+/* ---- DM ---- */
+.dms { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.bub { background: #1E2A38; border-radius: 14px 14px 14px 4px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; }
+[data-theme="light"] .bub { background: #E8F1FB; }
+.bub .from { color: var(--ice); font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+.bub .when { color: var(--text-faint); font-size: 11px; margin-bottom: 6px; }
+.bub .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.bub .b { font-size: 11.5px; font-weight: 700; padding: 5px 9px; border-radius: 8px; background: var(--accent); color: var(--on-accent); white-space: nowrap; }
+.q { border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 14px 0; }
+.q b { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div>
+      <h1>Биллинг за чат — экраны</h1>
+      <p class="lead">Спека <b>docs/modules/platform-billing.md</b> § 7–8. Модель: <b>первые 15 дней бесплатно</b> (отсчёт с первой созданной встречи, решение PO 2026-09-15), дальше <b>199 ₽ в месяц за клуб</b> (по логике единица счёта — чат, по тексту — клуб), оплата через Robokassa самозанятому, ползунок автопродления. Ниже — всё, что человек увидит глазами; бэкенд-часть на экранах не показана. <b>Версия после правок PO 2026-09-07</b>: «за клуб», списание в день окончания периода, ФИО целиком, оферта текстом, без кнопки «Закрыть» в состоянии ②, без DM «завтра спишем». <b>⟳ 2026-09-15</b>: бесплатная встреча заменена бесплатным периодом 15 дней (<code>BILLING_TRIAL_DAYS</code>), напоминания за неделю и за день, отмена встречи срок не возвращает.</p>
+    </div>
+    <button class="theme-btn" onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">Тема: тёмная / светлая</button>
+  </div>
+
+  <!-- ====================== 1. ШИТ ОПЛАТЫ ====================== -->
+  <h2><span class="num">1</span> Шит оплаты поверх формы встречи (<code>BillingSheet</code>)</h2>
+  <p class="lead">Открывается, когда сервер ответил 402 на «Создать встречу». <b>Форма под шитом не теряется</b>: после оплаты шит закрывается, кнопка «Создать» снова активна. Донор вёрстки — шит взноса участника (<code>DuesPaymentSheet</code>): сумма, шаги, кнопка, портал.</p>
+
+  <div class="row">
+    <!-- ① к оплате -->
+    <div class="col">
+      <div class="vh">① К оплате <span class="chip warn">402 · TRIAL_ENDED</span></div>
+      <div class="vd">Бесплатная встреча чата уже была. Ползунок включён по умолчанию; под ним честно — когда и сколько спишем. Карточка «через кого платите» вместо trust-карточки организатора.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="form-h">Новая встреча</div>
+          <div class="field"><div class="lbl">Название</div>Бег по набережной</div>
+          <div class="field"><div class="lbl">Когда</div>сб, 13 сентября · 09:00</div>
+          <div class="field"><div class="lbl">Где</div>Парк Горького, главный вход</div>
+          <div class="seg"><b class="on">Обычная</b><b>С местами</b><b>Открытая</b></div>
+          <div class="field"><div class="lbl">Минимум участников</div>4</div>
+          <div class="overlay"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
+            <div class="body">
+              <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес · 30 дней с момента оплаты</span></div>
+              <div class="forchat">за клуб <b>«Бег по средам»</b> · первые 15 дней были бесплатными</div>
+
+              <div class="feat" style="padding-top:2px">
+                <div class="fi">
+                  <div class="ft">Продлевать автоматически</div>
+                  <div class="fd">Спишем 199 ₽ с этой же карты в день окончания оплаченного периода. Отключить можно в любой момент на странице клуба.</div>
+                </div>
+                <span class="tgl on"></span>
+              </div>
+
+              <div class="prov">
+                <div class="cap">Как проходит оплата</div>
+                <div class="l"><span class="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП. Реквизиты карты мы не видим.</span></div>
+                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Варламов Иван Иванович</b>, чек придёт на e-mail или в Telegram.</span></div>
+                <div class="l" style="margin-top:10px"><span class="ic"></span><span style="color:var(--accent);font-weight:600">Условия (публичная оферта) ▾</span></div>
+              </div>
+
+              <button class="btn p">Оплатить 199 ₽</button>
+              <div class="hint">Оплачивая, вы принимаете условия оферты. Откроется страница оплаты в браузере; после оплаты вернитесь в Telegram — кнопка будет на странице.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② ждём подтверждения -->
+    <div class="col">
+      <div class="vh">② Ждём подтверждения <span class="chip">опрос 3 с × 20</span></div>
+      <div class="vd">Человек вернулся из браузера (<code>startapp=billing_&lt;clubId&gt;</code> или <code>?billing=done</code>). Возврат <b>не</b> подтверждает оплату — только ResultURL. Опрашиваем статус до 60 с, дальше честно: «сообщим в личку». Кнопки «подожду в личке» нет (PO): закрыть можно только шапкой.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="form-h">Новая встреча</div>
+          <div class="field"><div class="lbl">Название</div>Бег по набережной</div>
+          <div class="field"><div class="lbl">Когда</div>сб, 13 сентября · 09:00</div>
+          <div class="field"><div class="lbl">Где</div>Парк Горького, главный вход</div>
+          <div class="seg"><b class="on">Обычная</b><b>С местами</b><b>Открытая</b></div>
+          <div class="overlay"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
+            <div class="body center">
+              <div class="spin"></div>
+              <p class="st-t">Проверяем оплату…</p>
+              <p class="st-d">Обычно это несколько секунд. Если оплата прошла, а мы всё ещё проверяем — не волнуйтесь: подтверждение придёт в личку от бота, встречу можно будет создать оттуда.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ оплачено -->
+    <div class="col">
+      <div class="vh">③ Оплачено <span class="chip ok">ACTIVE</span></div>
+      <div class="vd">Опрос увидел ACTIVE. Один экран благодарности с датой и состоянием ползунка, кнопка возвращает к заполненной форме.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="form-h">Новая встреча</div>
+          <div class="field"><div class="lbl">Название</div>Бег по набережной</div>
+          <div class="field"><div class="lbl">Когда</div>сб, 13 сентября · 09:00</div>
+          <div class="field"><div class="lbl">Где</div>Парк Горького, главный вход</div>
+          <div class="seg"><b class="on">Обычная</b><b>С местами</b><b>Открытая</b></div>
+          <div class="overlay"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="sh"><h3>Оплата за клуб</h3><span class="close">Закрыть</span></div>
+            <div class="body center">
+              <div class="big-ic">✅</div>
+              <p class="st-t">Оплачено до 7 октября</p>
+              <p class="st-d">Автопродление включено: 7 октября спишем 199 ₽ с этой же карты. Отключить можно на странице клуба.</p>
+              <button class="btn p" style="margin-top:6px">Вернуться к встрече</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ подписка кончилась -->
+    <div class="col">
+      <div class="vh">④ Подписка закончилась <span class="chip bad">402 · SUBSCRIPTION_EXPIRED</span></div>
+      <div class="vd">Тот же шит, другая шапка: грейс исчерпан или оплата не прошла. Кнопка — тот же чекаут. Если материнский платёж был по СБП, ползунок недоступен и объясняет почему.</div>
+      <div class="phone">
+        <div class="screen">
+          <div class="form-h">Новая встреча</div>
+          <div class="field"><div class="lbl">Название</div>Бег по набережной</div>
+          <div class="field"><div class="lbl">Когда</div>сб, 13 сентября · 09:00</div>
+          <div class="field"><div class="lbl">Где</div>Парк Горького, главный вход</div>
+          <div class="seg"><b class="on">Обычная</b><b>С местами</b><b>Открытая</b></div>
+          <div class="overlay"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="sh"><h3>Продлить подписку</h3><span class="close">Закрыть</span></div>
+            <div class="body">
+              <div class="note bad">Подписка за клуб <b>«Бег по средам»</b> закончилась 3 сентября. Начатые встречи доживут, новые — после оплаты.</div>
+              <div class="amt"><span class="em">💬</span><span class="sum">199 ₽</span><span class="per">/ мес · 30 дней с момента оплаты</span></div>
+              <div class="feat" style="padding-top:2px">
+                <div class="fi">
+                  <div class="ft">Продлевать автоматически</div>
+                  <div class="fd">Прошлая оплата была по СБП — автопродление работает только для карт. Оплатите картой, и ползунок станет доступен.</div>
+                </div>
+                <span class="tgl dis"></span>
+              </div>
+              <div class="prov">
+                <div class="cap">Как проходит оплата</div>
+                <div class="l"><span class="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП.</span></div>
+                <div class="l"><span class="ic">🧾</span><span>Получатель — самозанятый <b>Варламов Иван Иванович</b>, чек придёт на e-mail или в Telegram.</span></div>
+                <div class="l" style="margin-top:10px"><span class="ic"></span><span style="color:var(--accent);font-weight:600">Условия (публичная оферта) ▾</span></div>
+              </div>
+              <button class="btn p">Продлить на месяц — 199 ₽</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q"><b>Решения PO 2026-09-07 по шиту:</b> ФИО самозанятого целиком; оферта — текстом внутри шита (свёрнутый блок «Условия (публичная оферта)»); кнопку «Закрыть, подожду в личке» на состоянии ② спрятать; списание — в день окончания оплаченного периода («оплачено до 7 октября» = спишем 7-го).</div>
+
+  <!-- ====================== 2. ПОЛОСКА СТАТУСА ====================== -->
+  <h2><span class="num">2</span> Полоска статуса на странице управления клубом (<code>BillingStatusStrip</code>)</h2>
+  <p class="lead">Видит владелец (со-организатор с правом встреч — только читает). Стоит под шапкой, над сегментами, потому что касается всех вкладок. Одна полоска, шесть состояний из <code>BillingStatusDto.state</code>; ползунок автопродления живёт прямо в ней — отдельного экрана «подписка» нет.</p>
+
+  <div class="row">
+    <div class="col">
+      <div class="vh">TRIAL <span class="chip ok">бесплатно</span></div>
+      <div class="vd">Чат подключён, встреч ещё не было. Полоска — это и есть обещание из рекламы.</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip free"><span class="ic">🎁</span><div class="tx"><div class="t">Бесплатно до 30 сентября</div><div class="d">Дальше 199 ₽ в месяц за клуб. Напомним в личке за неделю и за день — можно оплатить заранее.</div></div><span class="act">Оплатить</span></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="vh">TRIAL_ENDED <span class="chip warn">стена</span></div>
+      <div class="vd">Бесплатная встреча создана (или прошла). Ещё ничего не должен; кнопка позволяет оплатить заранее, не дожидаясь 402 на форме.</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip pay"><span class="ic">💬</span><div class="tx"><div class="t">Бесплатный период закончился</div><div class="d">Новые встречи — по подписке 199 ₽ в месяц за клуб. Начатое доживёт, бот из чата не уходит.</div></div><span class="act">Оплатить</span></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="vh">ACTIVE · автопродление вкл. <span class="chip ok">оплачено</span></div>
+      <div class="vd">Дата окончания и ползунок. Под ползунком — когда и сколько спишем (прозрачность, не тёмный паттерн).</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за клуб · Robokassa</div>
+            <div class="sub"><div class="fi"><div class="ft">Продлевать автоматически</div><div class="fd">7 октября спишем 199 ₽ с карты ···4242.</div></div><span class="tgl on"></span></div>
+          </div></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="vh">ACTIVE · выкл. / СБП <span class="chip ok">оплачено</span></div>
+      <div class="vd">Ползунок выключен (напомним за 3 и 1 день) — или недоступен, потому что платили по СБП: Robokassa делает автосписания только по картам.</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip info"><span class="ic">✅</span><div class="tx"><div class="t">Оплачено до 7 октября</div><div class="d">199 ₽ в месяц за клуб · Robokassa</div>
+            <div class="sub"><div class="fi"><div class="ft">Продлевать автоматически</div><div class="fd">Недоступно для СБП — напомним в личке за 3 дня и за день. Оплатите картой в следующий раз, и ползунок включится.</div></div><span class="tgl dis"></span></div>
+          </div></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="vh">GRACE <span class="chip warn">7 дней</span></div>
+      <div class="vd">Период кончился, оплаты нет (или списание не прошло). Всё работает до конца грейса; кнопка — тот же чекаут.</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip grace"><span class="ic">⏳</span><div class="tx"><div class="t">Подписка закончилась 3 сентября</div><div class="d">До <b>10 сентября</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.</div></div><span class="act">Продлить</span></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="vh">ENDED <span class="chip bad">стена</span></div>
+      <div class="vd">Грейс исчерпан. Отмена, явка, закреп, складчина по начатым встречам работают; недоступно только создание новой.</div>
+      <div class="phone short">
+        <div class="screen">
+          <div class="hero"><div class="ttl">Бег по средам</div><div class="eb">Управление клубом · 14 участников</div></div>
+          <div class="strip ended"><span class="ic">🚫</span><div class="tx"><div class="t">Новые встречи недоступны до оплаты</div><div class="d">Подписка закончилась 3 сентября, грейс вышел 10-го. Начатые встречи доживут, чат бот не бросает.</div></div><span class="act">Оплатить</span></div>
+          <div class="seg"><b class="on">Настройки</b><b>Статистика</b><b>Финансы</b><b>Чат</b></div>
+          <div class="subh">Аватар</div>
+          <div class="field">…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:12px"><b>NO_CHAT</b> — полоски нет вовсе: клуб без привязанного чата бесплатен, и напоминать о деньгах ему не за что.</p>
+
+  <!-- ====================== 3. ВОЗВРАТ ИЗ БРАУЗЕРА ====================== -->
+  <h2><span class="num">3</span> Страницы возврата из браузера — <code>/pay/return</code> и <code>/pay/fail</code></h2>
+  <p class="lead">Обычный веб вне Telegram: сюда Robokassa отправляет после оплаты (<code>SuccessUrl2</code> / <code>FailUrl2</code>). JWT здесь нет, к API страницы не ходят — <b>только текст и кнопка обратно в Mini App</b> (<code>t.me/&lt;bot&gt;/&lt;app&gt;?startapp=billing_&lt;clubId&gt;</code>). Статус оплаты по этим страницам не меняется никогда.</p>
+  <div class="row">
+    <div class="web">
+      <div class="bar"><i></i><i></i><i></i><span class="url">clubs…/pay/return?club=7c2e…</span></div>
+      <div class="in">
+        <div class="logo"><i></i> Clubs</div>
+        <div class="big-ic">✅</div>
+        <p class="st-t">Оплата принята</p>
+        <p class="st-d">Возвращайтесь в Telegram — подтверждение придёт в личку от бота, а встречу можно будет создать сразу.</p>
+        <button class="btn p">Открыть Clubs в Telegram</button>
+        <div class="small">Если кнопка не сработала — просто откройте Telegram: бот уже написал вам.</div>
+      </div>
+    </div>
+    <div class="web">
+      <div class="bar"><i></i><i></i><i></i><span class="url">clubs…/pay/fail?club=7c2e…</span></div>
+      <div class="in">
+        <div class="logo"><i></i> Clubs</div>
+        <div class="big-ic">😕</div>
+        <p class="st-t">Оплата не прошла</p>
+        <p class="st-d">Деньги не списаны. Вернитесь в Telegram и попробуйте ещё раз — можно другой картой или по СБП.</p>
+        <button class="btn p">Открыть Clubs в Telegram</button>
+        <div class="small">Списание всё-таки было? Напишите нам через «Сообщить о проблеме» — разберёмся.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== 4. ОДНА СТРОКА ====================== -->
+  <h2><span class="num">4</span> Одна строка в точках входа</h2>
+  <p class="lead">Та же формулировка, что в рекламе, — чтобы обещание не менялось по дороге.</p>
+  <div class="grid3">
+    <div class="entry">
+      <h4>Экран «Выбрать чат» (<code>ConnectChatScreen</code>)</h4>
+      <p>Заголовок «Бот ведёт встречи в вашем чате», под описанием — строка цены. Человек ещё ничего не подключил: цена не должна пугать, но и не должна быть сюрпризом.</p>
+      <div class="line">Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
+    </div>
+    <div class="entry">
+      <h4>Мастер наполнения клуба (<code>ClubSetupWizard</code>)</h4>
+      <p>Последний шаг, перед «Пригласить»: та же строка мелким текстом под кнопкой. Ничего не собираем и не спрашиваем — просто напоминаем правило.</p>
+      <div class="line">Первые 15 дней бесплатно. Дальше 199 ₽ в месяц за клуб.</div>
+    </div>
+    <div class="entry">
+      <h4>Страница управления клубом</h4>
+      <p>Полоска из раздела 2 в состоянии TRIAL — то же обещание, но уже как статус с датой конца.</p>
+      <div class="line">🎁 Бесплатно до 30 сентября</div>
+    </div>
+  </div>
+
+  <!-- ====================== 5. DM ====================== -->
+  <h2><span class="num">5</span> Личные сообщения владельцу (в чат — ничего)</h2>
+  <p class="lead">Бюджет «1 закреп + 2 поста» в чате не тратится. Все деньги — только в личке владельца. Кнопки ведут на страницу клуба, где полоска и шит. DM «завтра спишем» нет (PO 2026-09-07): дата списания названа в DM об оплате.</p>
+  <div class="dms">
+    <div class="bub"><div class="from">Clubs</div><div class="when">оплата прошла (MOTHER)</div>Оплачено до 7 октября: клуб «Бег по средам» ведём дальше. Автопродление включено — 7 октября спишем 199 ₽ с этой же карты. Отключить можно на странице клуба.<div class="btns"><span class="b">Открыть клуб</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">−3 дня, без автосписания</div>Подписка за клуб «Бег по средам» заканчивается 7 октября. Продлить на месяц — 199 ₽.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">−1 день, без автосписания</div>Завтра заканчивается подписка за клуб «Бег по средам». После — 7 дней всё работает, потом новые встречи только после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">дочернее списание прошло</div>Продлено до 6 ноября. Спасибо, что пользуетесь Clubs! Мы делаем приложение так, чтобы в жизни было больше живого общения и встреч офлайн — жизнь, чтобы жить, а не просиживать её в четырёх стенах. Поначалу друзей бывает непросто приучить к этому формату, но со временем втягиваются все :)</div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">списание не прошло (первый фейл)</div>Не удалось списать 199 ₽ за клуб «Бег по средам». Обновите карту или оплатите вручную — 7 дней всё работает как раньше.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">период кончился без оплаты</div>Подписка за клуб «Бег по средам» закончилась. 7 дней всё работает, потом новые встречи — после оплаты.<div class="btns"><span class="b">Оплатить</span></div></div>
+    <div class="bub"><div class="from">Clubs</div><div class="when">грейс исчерпан</div>Новые встречи в клубе «Бег по средам» недоступны до оплаты. Начатое доживёт, бот из чата не уходит.<div class="btns"><span class="b">Оплатить</span></div></div>
+  </div>
+</div>
+</body>
+</html>

@@ -25,6 +25,8 @@ import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { BillingStatusStrip } from '../components/billing/BillingStatusStrip';
+import { BillingSheet } from '../components/billing/BillingSheet';
 import { ClubSetupBanner } from '../components/club/ClubSetupBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
@@ -127,6 +129,8 @@ export const ClubPage: FC = () => {
   const leavePreviewQuery = useLeavePreviewQuery(id, showLeaveModal && !hasActivePaidAccess);
 
   const isOwner = !!club && club.ownerId === user?.id;
+  // Шит оплаты за чат, открытый из полоски биллинга (platform-billing.md § 7).
+  const [billingSheet, setBillingSheet] = useState(false);
   // Менеджер клуба (co-organizers): владелец ИЛИ активный со-организатор — видит таб «Управление»,
   // строку приглашений и организаторский вид ростера. Fail-close: у замороженного/просроченного
   // со-орга роль в membership остаётся, но manager-UI скрывается (бэкенд в этом состоянии отдаёт 403).
@@ -520,6 +524,19 @@ export const ClubPage: FC = () => {
           различать сиблингов (панель рисовалась дважды). */}
       {isManager && !club.setupCompleted && (
         <ClubSetupBanner clubId={club.id} onOpen={() => navigate(`/clubs/${club.id}/setup`)} />
+      )}
+
+      {/* Биллинг за чат — над «О клубе» и на самой посещаемой странице клуба (PO 2026-09-16):
+          на «Управлении» полоску видят не все и не каждый день, а сроки бесплатного периода
+          пропускать нельзя. Видна владельцу и со-организаторам (у них статус тоже читается,
+          `MANAGE_EVENTS`), кнопка ведёт в шит — со-организатору он объяснит, что платит владелец.
+          Ползунка автопродления здесь нет: переключать его — действие управления, и со-организатор
+          всё равно получил бы 403. */}
+      {isManager && club.chatLinked && (
+        <BillingStatusStrip clubId={club.id} withAutopayToggle={false} onPay={() => setBillingSheet(true)} />
+      )}
+      {billingSheet && (
+        <BillingSheet clubId={club.id} reason={null} onClose={() => setBillingSheet(false)} />
       )}
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):

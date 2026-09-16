@@ -7,6 +7,7 @@ package com.clubs.generated.jooq.tables.references
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
+import com.clubs.generated.jooq.tables.ChatTrial
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -19,9 +20,11 @@ import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.Events
+import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.PlatformPayment
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts
@@ -60,6 +63,15 @@ val CHAT_AWARD_TAGS: ChatAwardTags = ChatAwardTags.CHAT_AWARD_TAGS
  * учитываются и не снимаются.
  */
 val CHAT_STRICT_BANS: ChatStrictBans = ChatStrictBans.CHAT_STRICT_BANS
+
+/**
+ * Бесплатный период чата Telegram: строка появляется с первой созданной
+ * встречей и задаёт, до какого момента клуб этого чата живёт без подписки
+ * (billing.trial-days). Переживает отвязку чата, удаление клуба и повторное
+ * подключение того же чата новым клубом — второй бесплатный период по тому же
+ * chat_id не выдаётся.
+ */
+val CHAT_TRIAL: ChatTrial = ChatTrial.CHAT_TRIAL
 
 /**
  * Справочник городов (GeoNames, население от 50 000). Пополняется только новой
@@ -146,6 +158,13 @@ val EVENT_TEMPLATES: EventTemplates = EventTemplates.EVENT_TEMPLATES
 val EVENTS: Events = Events.EVENTS
 
 /**
+ * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
+ * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ */
+val FUNNEL_EVENT: FunnelEvent = FunnelEvent.FUNNEL_EVENT
+
+/**
  * Общий словарь интересов для профилей пользователей. Имена нормализуются на
  * сервере (trim, одиночные пробелы, lowercase, ё -&gt; е), чтобы дубликаты
  * схлопывались; словарь питает префиксный автокомплит.
@@ -166,6 +185,13 @@ val MEMBERSHIP_HISTORY: MembershipHistory = MembershipHistory.MEMBERSHIP_HISTORY
  * внеплатформенного взноса (de-Stars). Одна строка на пару (user, club).
  */
 val MEMBERSHIPS: Memberships = Memberships.MEMBERSHIPS
+
+/**
+ * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
+ * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
+ * дочерние (RECURRING) — автосписания по сохранённой карте.
+ */
+val PLATFORM_PAYMENT: PlatformPayment = PlatformPayment.PLATFORM_PAYMENT
 
 /**
  * Append-only леджер репутационных исходов (источник истины репутации v2). Одна

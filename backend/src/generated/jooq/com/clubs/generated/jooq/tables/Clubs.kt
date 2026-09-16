@@ -28,6 +28,7 @@ import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENT_TEMPLATES__EVENT_TEMPLATES_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
@@ -46,6 +47,7 @@ import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
+import com.clubs.generated.jooq.tables.PlatformPayment.PlatformPaymentPath
 import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
 import com.clubs.generated.jooq.tables.ServiceSubscription.ServiceSubscriptionPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
@@ -524,6 +526,22 @@ open class Clubs(
 
     val memberships: MembershipsPath
         get(): MembershipsPath = memberships()
+
+    private lateinit var _platformPayment: PlatformPaymentPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.platform_payment</code> table
+     */
+    fun platformPayment(): PlatformPaymentPath {
+        if (!this::_platformPayment.isInitialized)
+            _platformPayment = PlatformPaymentPath(this, null, PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY.inverseKey)
+
+        return _platformPayment;
+    }
+
+    val platformPayment: PlatformPaymentPath
+        get(): PlatformPaymentPath = platformPayment()
 
     private lateinit var _reputationLedger: ReputationLedgerPath
 

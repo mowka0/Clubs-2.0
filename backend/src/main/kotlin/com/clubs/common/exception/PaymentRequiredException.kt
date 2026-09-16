@@ -1,14 +1,24 @@
 package com.clubs.common.exception
 
+import java.util.UUID
+
+/** Причина пейволла — фронт по ней выбирает текст шита оплаты за чат. */
+enum class PaywallReason {
+    /** Бесплатный период чата закончился, подписки не было. */
+    TRIAL_ENDED,
+    /** Подписка была, но период и грейс после него истекли. */
+    SUBSCRIPTION_EXPIRED,
+}
+
 /**
- * Бросается, когда действие требует более высокого плана ёмкости, чем сейчас у организатора
- * (например, создание 2-го+ платного клуба на FREE). Маппится в HTTP 402 с payload пейволла,
- * чтобы фронтенд мог отрендерить модалку апгрейда. Планы передаются как литералы, чтобы этот
- * слой не был связан с generated-enum.
+ * Бросается гейтом биллинга, когда создание встречи требует оплаты подписки за чат
+ * (docs/modules/platform-billing.md § 6.4). Маппится в HTTP 402 с payload пейволла, чтобы
+ * фронтенд открыл шит оплаты поверх формы. Цена считается на сервере из subscription_pricing —
+ * клиент её не передаёт.
  */
 class PaymentRequiredException(
-    val currentPlan: String,
-    val requiredPlan: String,
+    val reason: PaywallReason,
+    val clubId: UUID,
     val priceKopecks: Int,
-    message: String = "A subscription is required to create another paid club",
+    message: String = "A chat subscription is required to create another meeting",
 ) : RuntimeException(message)

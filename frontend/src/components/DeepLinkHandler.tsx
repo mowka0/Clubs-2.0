@@ -11,6 +11,7 @@ import { rememberDeepLinkLanding } from '../telegram/chatOrigin';
  *   - `skladchina_<uuid>`   →  /skladchina/<uuid>
  *   - `event_<uuid>`        →  /events/<uuid>
  *   - `club_<uuid>`         →  /clubs/<uuid>
+ *   - `billing_<uuid>`      →  /clubs/<uuid>/manage?billing=done   (возврат после оплаты за чат)
  *   - `invite_<code>`       →  /invite/<code>   (личные приглашения, club-invites)
  *
  * Идемпотентен — срабатывает только на первом монтировании за сессию; дальнейшие рендеры пропускают.
@@ -47,6 +48,13 @@ export const DeepLinkHandler: FC = () => {
     const club = startParam.match(/^club_([0-9a-f-]{36})$/i);
     if (club) {
       land(`/clubs/${club[1]}`);
+      return;
+    }
+    // Возврат из браузера после оплаты за чат: страница управления открывает шит в режиме
+    // «проверяем оплату» (platform-billing.md § 7).
+    const billing = startParam.match(/^billing_([0-9a-f-]{36})$/i);
+    if (billing) {
+      land(`/clubs/${billing[1]}/manage?billing=done`);
       return;
     }
     // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex

@@ -2,6 +2,7 @@ import { lazy, FC } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { HomeRoute } from './components/HomeRoute';
+import { LandingPage } from './pages/LandingPage';
 
 // Страницы основных табов — импортируются сразу, для мгновенного переключения таба
 import { DiscoveryPage } from './pages/DiscoveryPage';
@@ -45,6 +46,9 @@ const OrganizerClubManage = lazy(() =>
 );
 const FeedbackPage = lazy(() =>
   import('./pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
+);
+const PayReturnPage = lazy(() =>
+  import('./pages/PayReturnPage').then((m) => ({ default: m.PayReturnPage })),
 );
 
 // Старый /clubs/:id/interior объединён в единый /clubs/:id.
@@ -155,5 +159,21 @@ export const router = createBrowserRouter([
         element: <FeedbackPage />,
       },
     ],
+  },
+  // Возврат из браузера после оплаты у провайдера — ВНЕ Layout: обычный веб без Telegram,
+  // без авторизации и без API (platform-billing.md § 7).
+  {
+    path: '/pay/return',
+    element: <PayReturnPage kind="success" />,
+  },
+  {
+    path: '/pay/fail',
+    element: <PayReturnPage kind="fail" />,
+  },
+  // Публичная страница сервиса: описание, цена, оферта, продавец. Корень домена показывает её
+  // сам, когда открыт не из Telegram (entry.ts); этот адрес — для прямой ссылки на условия.
+  {
+    path: '/about',
+    element: <LandingPage />,
   },
 ]);

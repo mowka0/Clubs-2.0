@@ -17,53 +17,53 @@ class JooqSubscriptionRepository(
     private val mapper: SubscriptionMapper,
 ) : SubscriptionRepository {
 
-    override fun create(
+    override fun createChatSubscription(
         payerUserId: UUID,
-        payerRole: SubscriptionPayerRole,
-        plan: SubscriptionPlan,
-        subjectClubId: UUID?,
+        clubId: UUID,
         currentPeriodEnd: OffsetDateTime,
         providerToken: String?,
+        autopay: Boolean,
+        autopayPossible: Boolean,
     ): ServiceSubscription {
         val record = dsl.insertInto(SERVICE_SUBSCRIPTION)
             .set(SERVICE_SUBSCRIPTION.ID, UUID.randomUUID())
             .set(SERVICE_SUBSCRIPTION.PAYER_USER_ID, payerUserId)
-            .set(SERVICE_SUBSCRIPTION.PAYER_ROLE, payerRole)
-            .set(SERVICE_SUBSCRIPTION.PLAN, plan)
-            .set(SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID, subjectClubId)
+            .set(SERVICE_SUBSCRIPTION.PAYER_ROLE, SubscriptionPayerRole.ORGANIZER)
+            .set(SERVICE_SUBSCRIPTION.PLAN, SubscriptionPlan.CHAT)
+            .set(SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID, clubId)
             .set(SERVICE_SUBSCRIPTION.STATUS, SubscriptionStatus.ACTIVE)
             .set(SERVICE_SUBSCRIPTION.CURRENT_PERIOD_END, currentPeriodEnd)
             .set(SERVICE_SUBSCRIPTION.PROVIDER_TOKEN, providerToken)
+            .set(SERVICE_SUBSCRIPTION.AUTOPAY, autopay)
+            .set(SERVICE_SUBSCRIPTION.AUTOPAY_POSSIBLE, autopayPossible)
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)
     }
 
-    override fun findActiveOrganizerSubscription(payerUserId: UUID): ServiceSubscription? =
+    override fun findById(id: UUID): ServiceSubscription? =
+        dsl.selectFrom(SERVICE_SUBSCRIPTION).where(SERVICE_SUBSCRIPTION.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
+
+    override fun findLatestByClub(clubId: UUID): ServiceSubscription? =
         dsl.selectFrom(SERVICE_SUBSCRIPTION)
             .where(
-                SERVICE_SUBSCRIPTION.PAYER_USER_ID.eq(payerUserId)
-                    .and(SERVICE_SUBSCRIPTION.PAYER_ROLE.eq(SubscriptionPayerRole.ORGANIZER))
-                    .and(SERVICE_SUBSCRIPTION.STATUS.ne(SubscriptionStatus.ENDED)),
+                SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID.eq(clubId)
+                    .and(SERVICE_SUBSCRIPTION.PAYER_ROLE.eq(SubscriptionPayerRole.ORGANIZER)),
             )
+            .orderBy(SERVICE_SUBSCRIPTION.CURRENT_PERIOD_END.desc())
+            .limit(1)
             .fetchOne()
             ?.let(mapper::toDomain)
 
-    override fun findByProviderToken(providerToken: String): ServiceSubscription? =
+    override fun findLive(): List<ServiceSubscription> =
         dsl.selectFrom(SERVICE_SUBSCRIPTION)
             .where(
-                SERVICE_SUBSCRIPTION.PROVIDER_TOKEN.eq(providerToken)
-                    .and(SERVICE_SUBSCRIPTION.STATUS.ne(SubscriptionStatus.ENDED)),
+                SERVICE_SUBSCRIPTION.PAYER_ROLE.eq(SubscriptionPayerRole.ORGANIZER)
+                    .and(SERVICE_SUBSCRIPTION.STATUS.`in`(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)),
             )
-            .fetchOne()
-            ?.let(mapper::toDomain)
-
-    override fun updatePlan(id: UUID, plan: SubscriptionPlan): Int =
-        dsl.update(SERVICE_SUBSCRIPTION)
-            .set(SERVICE_SUBSCRIPTION.PLAN, plan)
-            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, OffsetDateTime.now())
-            .where(SERVICE_SUBSCRIPTION.ID.eq(id))
-            .execute()
+            .orderBy(SERVICE_SUBSCRIPTION.CURRENT_PERIOD_END.asc())
+            .fetch()
+            .map(mapper::toDomain)
 
     override fun transitionStatus(id: UUID, from: Collection<SubscriptionStatus>, to: SubscriptionStatus): Int =
         dsl.update(SERVICE_SUBSCRIPTION)
@@ -79,14 +79,38 @@ class JooqSubscriptionRepository(
             .where(SERVICE_SUBSCRIPTION.ID.eq(id))
             .execute()
 
-    override fun endElapsedCancelled(now: OffsetDateTime): Int =
+    override fun updateAutopay(id: UUID, autopay: Boolean): Int =
         dsl.update(SERVICE_SUBSCRIPTION)
-            .set(SERVICE_SUBSCRIPTION.STATUS, SubscriptionStatus.ENDED)
-            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, now)
-            .where(
-                SERVICE_SUBSCRIPTION.STATUS.eq(SubscriptionStatus.CANCELLED_PENDING_END)
-                    .and(SERVICE_SUBSCRIPTION.CURRENT_PERIOD_END.le(now)),
-            )
+            .set(SERVICE_SUBSCRIPTION.AUTOPAY, autopay)
+            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, OffsetDateTime.now())
+            .where(SERVICE_SUBSCRIPTION.ID.eq(id))
+            .execute()
+
+    override fun markMotherPaid(id: UUID, providerToken: String, autopay: Boolean, autopayPossible: Boolean): Int =
+        dsl.update(SERVICE_SUBSCRIPTION)
+            .set(SERVICE_SUBSCRIPTION.PROVIDER_TOKEN, providerToken)
+            .set(SERVICE_SUBSCRIPTION.AUTOPAY, autopay)
+            .set(SERVICE_SUBSCRIPTION.AUTOPAY_POSSIBLE, autopayPossible)
+            .set(SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS, 0)
+            .setNull(SERVICE_SUBSCRIPTION.LAST_CHARGE_AT)
+            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, OffsetDateTime.now())
+            .where(SERVICE_SUBSCRIPTION.ID.eq(id))
+            .execute()
+
+    override fun recordChargeAttempt(id: UUID, at: OffsetDateTime): Int =
+        dsl.update(SERVICE_SUBSCRIPTION)
+            .set(SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS, SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS.plus(1))
+            .set(SERVICE_SUBSCRIPTION.LAST_CHARGE_AT, at)
+            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, at)
+            .where(SERVICE_SUBSCRIPTION.ID.eq(id))
+            .execute()
+
+    override fun resetChargeAttempts(id: UUID): Int =
+        dsl.update(SERVICE_SUBSCRIPTION)
+            .set(SERVICE_SUBSCRIPTION.CHARGE_ATTEMPTS, 0)
+            .setNull(SERVICE_SUBSCRIPTION.LAST_CHARGE_AT)
+            .set(SERVICE_SUBSCRIPTION.UPDATED_AT, OffsetDateTime.now())
+            .where(SERVICE_SUBSCRIPTION.ID.eq(id))
             .execute()
 
     override fun recordEventIfNew(subscriptionId: UUID, providerEventId: String, kind: String): Boolean =

@@ -3,9 +3,6 @@ import { useForm } from 'react-hook-form';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useCreateClubMutation } from '../queries/clubs';
-import { useSubscribeMutation } from '../queries/subscription';
-import { paywallFromError, type PaywallInfo } from '../api/subscription';
-import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
 import { ClubInterestsPicker } from './club/ClubInterestsPicker';
 import { CityPicker } from './CityPicker';
@@ -66,7 +63,6 @@ export const CreateClubModal: FC<{
 }> = ({ onClose, onCreated, onLinkChat }) => {
   const haptic = useHaptic();
   const createClubMutation = useCreateClubMutation();
-  const subscribeMutation = useSubscribeMutation();
   const [step, setStep] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   // Темы живут вне react-hook-form: это не поле ввода, а набор, который правится тапами
@@ -75,12 +71,6 @@ export const CreateClubModal: FC<{
   const [error, setError] = useState<string | null>(null);
   // club-invites (кадр E): после успешного создания форма сменяется экраном «Клуб создан 🎉».
   const [created, setCreated] = useState<ClubDetailDto | null>(null);
-  // Состояние пейвола: бэкенд возвращает 402, когда платный клуб превышает потолок плана. Сохраняем
-  // тело клуба в ожидании, показываем лестницу планов и после успешной подписки повторяем создание.
-  const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
-  const [pendingBody, setPendingBody] = useState<CreateClubBody | null>(null);
-  const [paywallError, setPaywallError] = useState<string | null>(null);
-  const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Drawer telegram-ui (vaul) при появлении клавиатуры прописывает СЕБЕ inline-высоту в пикселях,
@@ -203,41 +193,8 @@ export const CreateClubModal: FC<{
         setCreated(club);
       },
       onError: (e) => {
-        const pw = paywallFromError(e);
-        if (pw) {
-          setPendingBody(body);
-          setPaywall(pw);
-          setPaywallError(null);
-          haptic.notify('warning');
-          return;
-        }
         setError(e instanceof Error ? e.message : 'Не удалось создать клуб');
         haptic.notify('error');
-      },
-    });
-  };
-
-  // Пейвол: подписаться на выбранный план, затем повторить отложенное создание.
-  const handleSelectPlan = (plan: string) => {
-    if (!pendingBody) return;
-    setPaywallError(null);
-    setSubmittingPlan(plan);
-    subscribeMutation.mutate(plan, {
-      onSuccess: () => {
-        createClubMutation.mutate(pendingBody, {
-          onSuccess: (club) => {
-            haptic.notify('success');
-            setCreated(club);
-          },
-          onError: (e) => {
-            setSubmittingPlan(null);
-            setPaywallError(e instanceof Error ? e.message : 'Не удалось создать клуб');
-          },
-        });
-      },
-      onError: (e) => {
-        setSubmittingPlan(null);
-        setPaywallError(e instanceof Error ? e.message : 'Не удалось оформить подписку');
       },
     });
   };
@@ -298,23 +255,6 @@ export const CreateClubModal: FC<{
           Позже
         </button>
       </div>
-    );
-  }
-
-  if (paywall) {
-    return (
-      <PaywallModal
-        info={paywall}
-        submittingPlan={submittingPlan}
-        error={paywallError}
-        onSelectPlan={handleSelectPlan}
-        onClose={() => {
-          setPaywall(null);
-          setPendingBody(null);
-          setSubmittingPlan(null);
-          setPaywallError(null);
-        }}
-      />
     );
   }
 

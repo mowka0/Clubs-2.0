@@ -11,6 +11,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
+import com.clubs.subscription.BillingGate
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -30,6 +31,7 @@ class EventService(
     private val userRepository: UserRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository,
+    private val billingGate: BillingGate,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
     // EventMapper. Нужен, чтобы проверить, помещается ли набор с минимумом до начала встречи.
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long,
@@ -65,6 +67,9 @@ class EventService(
                 minParticipants, normalizedRequest.eventDatetime, normalizedRequest.stage2LeadMinutes
             )
         )
+        // Биллинг за чат — после вставки (гейту нужен id события), в той же транзакции:
+        // 402 откатывает событие, а форма на фронте остаётся заполненной (platform-billing.md § 6.4).
+        billingGate.requireBillable(club, event.id, userId)
         log.info(
             "Event created: id={} clubId={} title='{}' userId={} format={}",
             event.id, clubId, event.title, userId, normalizedRequest.format

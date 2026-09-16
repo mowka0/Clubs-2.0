@@ -9,15 +9,16 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import java.util.UUID
 
 data class ErrorResponse(val error: String, val message: String)
 
-/** Тело ответа 402: достаточно данных, чтобы фронтенд отрисовал модалку апгрейда тарифа. */
+/** Тело ответа 402: достаточно данных, чтобы фронтенд открыл шит оплаты за чат поверх формы. */
 data class PaywallResponse(
     val error: String,
     val message: String,
-    val currentPlan: String,
-    val requiredPlan: String,
+    val reason: PaywallReason,
+    val clubId: UUID,
     val priceKopecks: Int,
 )
 
@@ -28,13 +29,13 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(PaymentRequiredException::class)
     fun handlePaymentRequired(ex: PaymentRequiredException): ResponseEntity<PaywallResponse> {
-        logger.info("Payment required: current={} required={} price={}", ex.currentPlan, ex.requiredPlan, ex.priceKopecks)
+        logger.info("Payment required: reason={} clubId={} price={}", ex.reason, ex.clubId, ex.priceKopecks)
         return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(
             PaywallResponse(
                 error = "PAYMENT_REQUIRED",
                 message = ex.message ?: "Subscription required",
-                currentPlan = ex.currentPlan,
-                requiredPlan = ex.requiredPlan,
+                reason = ex.reason,
+                clubId = ex.clubId,
                 priceKopecks = ex.priceKopecks,
             ),
         )

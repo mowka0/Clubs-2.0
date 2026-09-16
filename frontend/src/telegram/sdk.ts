@@ -229,3 +229,16 @@ export function getInitDataRaw(): string {
 
   throw new Error('No initData available. Set VITE_MOCK_INIT_DATA in .env.development for local testing.');
 }
+
+/**
+ * Открыто ли приложение из Telegram. Тот же поиск initData, что у getInitDataRaw, но без
+ * исключения: по нему корень домена решает, показать приложение или публичный лендинг.
+ */
+export function hasTelegramInitData(): boolean {
+  try {
+    getInitDataRaw();
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}

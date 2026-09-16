@@ -23,6 +23,7 @@ class RateLimitFilter : OncePerRequestFilter() {
     private val authBuckets = ConcurrentHashMap<String, Bucket>()
     private val feedbackBuckets = ConcurrentHashMap<String, Bucket>()
     private val geoBuckets = ConcurrentHashMap<String, Bucket>()
+    private val billingBuckets = ConcurrentHashMap<String, Bucket>()
     private val moneyClaimBuckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
@@ -43,12 +44,14 @@ class RateLimitFilter : OncePerRequestFilter() {
         val isAuthEndpoint = path.startsWith("/api/auth/")
         val isFeedbackEndpoint = path == "/api/feedback"
         val isGeoEndpoint = path.startsWith("/api/geo/")
+        val isBillingCheckout = BILLING_CHECKOUT_PATH.matches(path)
         val isMoneyClaimEndpoint = MONEY_CLAIM_PATH.matches(path)
         val key = resolveKey(request)
         val bucket = when {
             isAuthEndpoint -> authBuckets.computeIfAbsent(key) { createAuthBucket() }
             isFeedbackEndpoint -> feedbackBuckets.computeIfAbsent(key) { createFeedbackBucket() }
             isGeoEndpoint -> geoBuckets.computeIfAbsent(key) { createGeoBucket() }
+            isBillingCheckout -> billingBuckets.computeIfAbsent(key) { createBillingBucket() }
             isMoneyClaimEndpoint -> moneyClaimBuckets.computeIfAbsent(key) { createMoneyClaimBucket() }
             else -> apiBuckets.computeIfAbsent(key) { createApiBucket() }
         }
@@ -60,6 +63,7 @@ class RateLimitFilter : OncePerRequestFilter() {
                 isAuthEndpoint -> AUTH_LIMIT_PER_MIN
                 isFeedbackEndpoint -> FEEDBACK_LIMIT_PER_MIN
                 isGeoEndpoint -> GEO_LIMIT_PER_MIN
+                isBillingCheckout -> BILLING_LIMIT_PER_MIN
                 isMoneyClaimEndpoint -> MONEY_CLAIM_LIMIT_PER_MIN
                 else -> API_LIMIT_PER_MIN
             }
@@ -86,6 +90,7 @@ class RateLimitFilter : OncePerRequestFilter() {
         authBuckets.clear()
         feedbackBuckets.clear()
         geoBuckets.clear()
+        billingBuckets.clear()
         moneyClaimBuckets.clear()
     }
 
@@ -95,30 +100,8 @@ class RateLimitFilter : OncePerRequestFilter() {
             val user = auth.principal as AuthenticatedUser
             return "user:${user.userId}"
         }
-        return "ip:${getClientIp(request)}"
-    }
-
-    /**
-     * Адрес клиента из цепочки прокси: Traefik → nginx фронта → бэкенд.
-     *
-     * Каждый прокси дописывает в `X-Forwarded-For` того, от кого получил запрос, поэтому хвост
-     * цепочки выглядит как `…, <клиент>, <traefik>`. Последний элемент — внутренний адрес
-     * Traefik, один на всё окружение: ключ по нему складывал всех пользователей в один бакет
-     * (баг прода 2026-08-19). Берём предпоследний — его дописал доверенный Traefik, подделать
-     * клиент не может. Первые элементы клиентские и ненадёжны: ротацией фейков можно было бы
-     * штамповать свежие ключи `ip:*` и обходить лимит (security-ревью feedback).
-     */
-    private fun getClientIp(request: HttpServletRequest): String {
-        val chain = request.getHeader("X-Forwarded-For")
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?: emptyList()
-        return when {
-            chain.size >= TRUSTED_PROXY_HOPS + 1 -> chain[chain.size - 1 - TRUSTED_PROXY_HOPS]
-            chain.isNotEmpty() -> chain.last()
-            else -> request.remoteAddr
-        }
+        // Адрес за доверенными прокси — общий резолвер с allowlist ResultURL (см. ClientIpResolver).
+        return "ip:${ClientIpResolver.resolve(request)}"
     }
 
     private fun createApiBucket(): Bucket = Bucket.builder()
@@ -157,6 +140,15 @@ class RateLimitFilter : OncePerRequestFilter() {
         )
         .build()
 
+    private fun createBillingBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(BILLING_LIMIT_PER_MIN)
+                .refillGreedy(BILLING_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .build()
+
     private fun createMoneyClaimBucket(): Bucket = Bucket.builder()
         .addLimit(
             Bandwidth.builder()
@@ -167,12 +159,8 @@ class RateLimitFilter : OncePerRequestFilter() {
         .build()
 
     companion object {
-        /**
-         * Сколько прокси между клиентом и бэкендом дописывают себя в `X-Forwarded-For`.
-         * Сейчас один — nginx фронта, дописывающий адрес Traefik (docker-compose.prod.yml).
-         * Меняется вместе с цепочкой прокси, иначе ключ съедет на внутренний адрес.
-         */
-        private const val TRUSTED_PROXY_HOPS = 1
+        // Чекаут подписки за чат: каждый вызов создаёт счёт у провайдера (platform-billing.md § 9).
+        private val BILLING_CHECKOUT_PATH = Regex("/api/clubs/[^/]+/billing/checkout")
 
         /**
          * Общий лимит обычных API-запросов, в минуту на ключ (пользователь или IP). Поднят с 60
@@ -193,6 +181,8 @@ class RateLimitFilter : OncePerRequestFilter() {
         // и ронял бы вместе с подсказками поиск адреса, живущий в проде с 2026-07-11.
         // 12/мин с запасом покрывает живой сценарий «открыл пикер, поискал, выбрал» (3-5 запросов).
         private const val GEO_LIMIT_PER_MIN = 12L
+        // Жёсткий лимит чекаута: счета у провайдера не должны плодиться (security.md § Rate Limiting).
+        private const val BILLING_LIMIT_PER_MIN = 5L
         // Жёсткий лимит на «Отдал» / «Передумал» / «Перевёл» / «Отдал Σ» по долгам — каждое такое
         // действие превращается в DM с кнопками получателю; под общим лимитом 120/мин один человек
         // мог бы заспамить чужую личку серией «Перевёл» / «Отдал Σ» (security-ревью v3).

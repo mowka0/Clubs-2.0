@@ -292,8 +292,11 @@ COPY . .
 # Публичные фронтовые ключи Яндекс.Карт (event-geo): Vite инлайнит VITE_* в бандл на сборке
 ARG VITE_YANDEX_MAPS_API_KEY
 ARG VITE_YANDEX_STATIC_API_KEY
+# Имя бота для кнопок возврата после оплаты (/pay/return живёт вне Telegram, API там недоступен)
+ARG VITE_TELEGRAM_BOT_USERNAME
 ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
-    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
+    VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 # Ключа геокодера здесь НЕТ с 2026-08-05: геокодинг проксирует бэкенд, ключ живёт в его env
 # (YANDEX_GEOCODER_API_KEY), в бандл не попадает. См. docs/modules/event-geo.md.
 RUN npm run build
@@ -379,6 +382,50 @@ networks:
 volumes:
   postgres_data:
 ```
+
+### Биллинг за клуб — env и открытые пути (2026-09-07)
+
+Переменные `BILLING_*` и `ROBOKASSA_*` прокинуты через `docker-compose.prod.yml` (дефолты
+дублируют `application.yml`, секреты — только из env Coolify): `BILLING_PROVIDER` (`stub` |
+`robokassa`), `BILLING_TRIAL_DAYS` (бесплатный период чата в днях, по умолчанию 15 — ручка
+воронки, меняется без релиза), `BILLING_GRACE_DAYS`, `BILLING_PENDING_TIMEOUT_HOURS`, `BILLING_STUB_SETTLE_SECONDS`,
+`BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
+`SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
+`ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`,
+`BILLING_MANUAL_CHARGE_ENABLED` + `PLATFORM_ADMIN_TELEGRAM_IDS` (служебный триггер «списать сейчас»,
+по умолчанию выключен — включается только на время проверки первого боевого автосписания).
+**Домен `clubsapp.ru`** (куплен 2026-09-16 на Timeweb, только регистрация — без хостинга и без их
+SSL). До этого прод жил на `77-42-23-177.sslip.io`: это не домен, а публичный DNS-трюк, в имени
+которого зашит IP сервера — переезд на другой сервер менял бы адрес целиком, вместе с URL Mini App
+в BotFather, адресами в Robokassa и всеми уже разосланными ссылками. DNS остаётся у регистратора:
+`A @ → 77.42.23.177`, `A www → 77.42.23.177` (MX/TXT Timeweb не мешают). Сертификат выпускает
+Coolify/Traefik (Let's Encrypt) после добавления домена приложению; при переезде сервера меняется
+только A-запись. `TELEGRAM_WEBAPP_BASE_URL` = `https://clubsapp.ru` на проде (дефолт в
+`application.yml` и compose), на staging — по-прежнему `https://staging.77-42-23-177.sslip.io`, и
+там переменная **обязана** быть задана в Coolify. Ключи Яндекс.Карт ограничены по Referer — после
+переезда `clubsapp.ru` нужно добавить в белый список обоих ключей в кабинете Яндекса, иначе карта
+на новом домене не загрузится. Корень домена вне Telegram отдаёт публичную страницу сервиса
+(`platform-billing.md` § 7).
+
+**Coolify игнорирует `${VAR:?сообщение}`** (проверено на staging 2026-09-15): вместо падения на
+разборе compose он подставляет пустую строку, и контейнер стартует с пустым значением. Поэтому
+обязательность переменной нельзя обеспечить синтаксисом compose — она обеспечивается на старте
+приложения. Для `BILLING_PROVIDER` это делает `payment/BillingProviderCheck` (`@DependsOn` на
+`BillingService`): пустое или неизвестное значение роняет старт сообщением, называющим переменную,
+а не спринговым «no qualifying bean of type PaymentProvider». Молча включать стаб нельзя — у него
+страница оплаты открыта без авторизации. Родственный случай — `${VAR:-default}` в ключах
+Traefik-лейблов (CLAUDE.md § staging): там подстановки тоже не происходит.
+
+`TELEGRAM_BOT_USERNAME` (дефолт `clubs_v2_bot`) читают оба контейнера: бэкенд — как
+`telegram.bot-username`, фронтенд — как build arg `VITE_TELEGRAM_BOT_USERNAME`, чтобы страницы
+`/pay/return` и `/pay/fail` вели в того же бота (имя бота в адресе страницы не принимается).
+Staging без ключей работает на `stub` (счёт «оплачивается» переходом по ссылке
+`/api/billing/stub/pay`); Robokassa на staging — тестовые пароли и `ROBOKASSA_TEST_MODE=true`.
+
+`SecurityConfig`: `permitAll` для `/api/billing/robokassa/result` (подпись Password#2 + allowlist
+IP 185.59.216.65 / 185.59.217.65 через `ClientIpResolver` — тот же разбор `X-Forwarded-For`, что
+у `RateLimitFilter`) и `/api/billing/stub/**` (бин есть только при `stub`). `RateLimitFilter`:
+бакет `billing` 5/мин на `/api/clubs/*/billing/checkout`. Спека — `platform-billing.md` § 6, § 9.
 
 ### nginx.conf (SPA routing)
 

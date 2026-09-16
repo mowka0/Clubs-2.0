@@ -13,9 +13,11 @@ import com.clubs.generated.jooq.tables.DebtSettlements
 import com.clubs.generated.jooq.tables.Debts
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
+import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.PlatformPayment
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaEnrollments
@@ -59,6 +61,7 @@ val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_even
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
 val IDX_EVENTS_REPUTATION_PENDING: Index = Internal.createIndex(DSL.name("idx_events_reputation_pending"), Events.EVENTS, arrayOf(Events.EVENTS.ID), false)
 val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"), Events.EVENTS, arrayOf(Events.EVENTS.STATUS), false)
+val IDX_FUNNEL_EVENT_KIND_CREATED: Index = Internal.createIndex(DSL.name("idx_funnel_event_kind_created"), FunnelEvent.FUNNEL_EVENT, arrayOf(FunnelEvent.FUNNEL_EVENT.KIND, FunnelEvent.FUNNEL_EVENT.CREATED_AT), false)
 val IDX_INTERESTS_CATEGORY_CLUB_USAGE: Index = Internal.createIndex(DSL.name("idx_interests_category_club_usage"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.CATEGORY, Interests.INTERESTS.CLUB_USAGE_COUNT.desc()), false)
 val IDX_INTERESTS_NAME_PREFIX: Index = Internal.createIndex(DSL.name("idx_interests_name_prefix"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.NAME), false)
 val IDX_MEMBERSHIP_HISTORY_CLUB_OCCURRED: Index = Internal.createIndex(DSL.name("idx_membership_history_club_occurred"), MembershipHistory.MEMBERSHIP_HISTORY, arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.CLUB_ID, MembershipHistory.MEMBERSHIP_HISTORY.OCCURRED_AT), false)
@@ -66,6 +69,8 @@ val IDX_MEMBERSHIP_HISTORY_USER_CLUB: Index = Internal.createIndex(DSL.name("idx
 val IDX_MEMBERSHIPS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_memberships_club_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.CLUB_ID), false)
 val IDX_MEMBERSHIPS_STATUS: Index = Internal.createIndex(DSL.name("idx_memberships_status"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.STATUS), false)
 val IDX_MEMBERSHIPS_USER_ID: Index = Internal.createIndex(DSL.name("idx_memberships_user_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.USER_ID), false)
+val IDX_PLATFORM_PAYMENT_CLUB: Index = Internal.createIndex(DSL.name("idx_platform_payment_club"), PlatformPayment.PLATFORM_PAYMENT, arrayOf(PlatformPayment.PLATFORM_PAYMENT.CLUB_ID, PlatformPayment.PLATFORM_PAYMENT.CREATED_AT.desc()), false)
+val IDX_PLATFORM_PAYMENT_PENDING: Index = Internal.createIndex(DSL.name("idx_platform_payment_pending"), PlatformPayment.PLATFORM_PAYMENT, arrayOf(PlatformPayment.PLATFORM_PAYMENT.CREATED_AT), false)
 val IDX_REPUTATION_LEDGER_SOURCE: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_source"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.SOURCE_TYPE, ReputationLedger.REPUTATION_LEDGER.SOURCE_ID), false)
 val IDX_REPUTATION_LEDGER_USER_CLUB: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_user_club"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.USER_ID, ReputationLedger.REPUTATION_LEDGER.CLUB_ID), false)
 val IDX_SERVICE_SUBSCRIPTION_PAYER: Index = Internal.createIndex(DSL.name("idx_service_subscription_payer"), ServiceSubscription.SERVICE_SUBSCRIPTION, arrayOf(ServiceSubscription.SERVICE_SUBSCRIPTION.PAYER_USER_ID, ServiceSubscription.SERVICE_SUBSCRIPTION.STATUS), false)
@@ -80,6 +85,6 @@ val IDX_TRANSACTIONS_CLUB_ID_CREATED: Index = Internal.createIndex(DSL.name("idx
 val IDX_TRANSACTIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_transactions_user_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.USER_ID), false)
 val IDX_USER_INTERESTS_USER: Index = Internal.createIndex(DSL.name("idx_user_interests_user"), UserInterests.USER_INTERESTS, arrayOf(UserInterests.USER_INTERESTS.USER_ID), false)
 val UQ_SERVICE_SUBSCRIPTION_ACTIVE_MEMBER: Index = Internal.createIndex(DSL.name("uq_service_subscription_active_member"), ServiceSubscription.SERVICE_SUBSCRIPTION, arrayOf(ServiceSubscription.SERVICE_SUBSCRIPTION.PAYER_USER_ID, ServiceSubscription.SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID), true)
-val UQ_SERVICE_SUBSCRIPTION_ACTIVE_ORG: Index = Internal.createIndex(DSL.name("uq_service_subscription_active_org"), ServiceSubscription.SERVICE_SUBSCRIPTION, arrayOf(ServiceSubscription.SERVICE_SUBSCRIPTION.PAYER_USER_ID), true)
+val UQ_SERVICE_SUBSCRIPTION_LIVE_CLUB: Index = Internal.createIndex(DSL.name("uq_service_subscription_live_club"), ServiceSubscription.SERVICE_SUBSCRIPTION, arrayOf(ServiceSubscription.SERVICE_SUBSCRIPTION.SUBJECT_CLUB_ID), true)
 val UQ_SUBSCRIPTION_EVENT_PROVIDER_EVENT_ID: Index = Internal.createIndex(DSL.name("uq_subscription_event_provider_event_id"), SubscriptionEvent.SUBSCRIPTION_EVENT, arrayOf(SubscriptionEvent.SUBSCRIPTION_EVENT.PROVIDER_EVENT_ID), true)
 val UQ_TRANSACTIONS_TELEGRAM_CHARGE_ID: Index = Internal.createIndex(DSL.name("uq_transactions_telegram_charge_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.TELEGRAM_PAYMENT_CHARGE_ID), true)

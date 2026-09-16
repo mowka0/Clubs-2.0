@@ -3598,6 +3598,61 @@
    12px 16px — на странице встречи она раздувала зазор между участниками (PO 2026-09-06). */
 .rd-att-row { padding: 0; gap: 8px; }
 
+/* ---------- Биллинг за чат (platform-billing.md § 7): полоска статуса, шит, возврат из браузера ---------- */
+.rd-billing-strip { display: flex; align-items: flex-start; gap: 11px; border-radius: 14px; padding: 11px 13px; margin: 12px 0 4px; border: 1px solid transparent; }
+.rd-billing-strip .ic { font-size: 18px; line-height: 1.2; flex: none; align-self: center; } /* эмодзи по центру блока (PO 2026-09-07) */
+.rd-billing-strip .tx { flex: 1; min-width: 0; }
+.rd-billing-strip .t { font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--text); }
+.rd-billing-strip .d { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+.rd-billing-strip .d b { color: var(--text); font-weight: 600; }
+.rd-billing-strip .act {
+  flex: none; align-self: center; background: var(--accent-grad); color: var(--on-accent);
+  border: 0; border-radius: 10px; padding: 8px 12px; font-family: inherit; font-size: 12px; font-weight: 700;
+  white-space: nowrap; cursor: pointer;
+}
+.rd-billing-strip.free { background: var(--live-soft); }
+.rd-billing-strip.info { background: var(--surface-2); border-color: var(--hairline); }
+.rd-billing-strip.pay { background: var(--accent-soft); }
+.rd-billing-strip.grace { background: var(--warn-soft); }
+.rd-billing-strip.ended { background: var(--danger-soft); }
+.rd-billing-strip .sub { margin-top: 8px; border-top: 1px solid var(--hairline-2); padding-top: 8px; display: flex; align-items: center; gap: 10px; }
+.rd-billing-strip .sub .fi { flex: 1; min-width: 0; }
+.rd-billing-strip .sub .ft { font-size: 12.5px; font-weight: 600; }
+.rd-billing-strip .sub .fd { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+.rd-billing-strip .sub .rd-cl-tgl { margin-top: 0; }
+.rd-billing-err { font-size: 11.5px; color: var(--danger); margin-top: 6px; }
+
+.rd-billing-for { font-size: 13px; color: var(--text-dim); margin-top: -6px; }
+.rd-billing-for b { color: var(--text); font-weight: 600; }
+.rd-billing-prov { background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 14px; padding: 12px 13px; }
+.rd-billing-prov .cap { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+.rd-billing-prov .l { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-top: 6px; }
+.rd-billing-prov .l .ic { width: 16px; text-align: center; flex: none; }
+.rd-billing-prov .l b { color: var(--text); font-weight: 600; }
+.rd-billing-note { background: var(--danger-soft); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.rd-billing-note b { font-weight: 600; }
+.rd-billing-state { text-align: center; padding: 6px 4px 2px; }
+.rd-billing-state .ic { font-size: 42px; line-height: 1; margin-bottom: 6px; }
+.rd-billing-state .t { font-size: 17px; font-weight: 800; margin: 0; color: var(--text); }
+.rd-billing-state .d { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 0; }
+.rd-billing-spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--hairline-2); border-top-color: var(--accent); margin: 8px auto 10px; animation: rd-billing-spin 0.9s linear infinite; }
+@keyframes rd-billing-spin { to { transform: rotate(360deg); } }
+
+/* Страницы возврата вне Telegram: без Layout, поэтому свой фон и центровка. */
+.rd-pay-return { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--text); font-family: inherit; }
+.rd-pay-return .card { width: 100%; max-width: 420px; background: var(--card-solid); border: 1px solid var(--hairline-2); border-radius: 16px; padding: 38px 26px 30px; text-align: center; }
+.rd-pay-return .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; color: var(--text-dim); margin-bottom: 22px; }
+.rd-pay-return .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); display: inline-block; }
+.rd-pay-return .btn {
+  display: inline-flex; align-items: center; justify-content: center; margin-top: 18px; padding: 13px 22px;
+  border-radius: 14px; background: var(--accent-grad); color: var(--on-accent); font-weight: 700; font-size: 14px;
+  text-decoration: none; box-shadow: 0 4px 10px var(--accent-shadow);
+}
+.rd-pay-return .small { font-size: 12px; color: var(--text-faint); margin-top: 14px; line-height: 1.45; }
+/* Оферта текстом внутри шита (PO 2026-09-07): свёрнута по умолчанию, раскрывается кнопкой. */
+.rd-billing-offer-btn { margin-top: 10px; background: none; border: 0; padding: 0; font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.rd-billing-offer { margin-top: 8px; border-top: 1px solid var(--hairline-2); padding-top: 8px; }
+.rd-billing-offer p { margin: 0 0 8px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 /* ---------- Экран сбора: шапка «встреча + сбор» ---------- */
 /* Сбор по встрече открывается двумя блоками: «за что» (встреча) и «сколько собрали» (сбор).
    Клуб при этом сжат до строки-крошки: он контекст, а не главный объект экрана. */
@@ -3705,3 +3760,29 @@
   display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 999px;
   background: var(--accent); color: #fff; font-size: 12px; text-align: center;
 }
+
+/* ---------- Публичная страница сервиса (/about и корень домена вне Telegram) ---------- */
+.rd-landing { max-width: 640px; margin: 0 auto; padding: 20px 20px 48px; background: var(--bg); color: var(--text); line-height: 1.5; }
+.rd-landing .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 18px; }
+.rd-landing .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; }
+.rd-landing .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); }
+.rd-landing .btn { display: inline-block; background: var(--accent-grad); color: var(--on-accent); text-decoration: none; border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.rd-landing .btn.big { padding: 14px 20px; font-size: 16px; margin-top: 6px; }
+.rd-landing .hero h1 { font-size: 26px; line-height: 1.2; margin: 14px 0 12px; letter-spacing: -0.01em; }
+.rd-landing .hero p { color: var(--text-dim); margin: 0 0 12px; }
+.rd-landing .hero .promise { color: var(--text); font-weight: 600; }
+.rd-landing section { margin-top: 32px; }
+.rd-landing h2 { font-size: 19px; margin: 0 0 12px; }
+.rd-landing .feat, .rd-landing .terms { padding-left: 20px; margin: 0; color: var(--text-dim); }
+.rd-landing .feat li, .rd-landing .terms li { margin-bottom: 8px; }
+.rd-landing .feat b, .rd-landing .terms b { color: var(--text); }
+.rd-landing .price { background: var(--card-solid); border: 1px solid var(--hairline-2); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; }
+.rd-landing .price .p1 { font-size: 20px; font-weight: 800; }
+.rd-landing .price .p2 { color: var(--text-dim); margin-top: 4px; }
+.rd-landing .price .p2 b { color: var(--text); }
+.rd-landing .offer { padding-left: 20px; margin: 0; color: var(--text-dim); font-size: 14px; }
+.rd-landing .offer li { margin-bottom: 10px; }
+.rd-landing .seller p { color: var(--text-dim); margin: 0 0 8px; }
+.rd-landing .seller b { color: var(--text); }
+.rd-landing a:not(.btn) { color: var(--accent); }
+.rd-landing footer { margin-top: 40px; color: var(--text-faint); font-size: 12.5px; }

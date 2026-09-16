@@ -11,12 +11,14 @@ import com.clubs.generated.jooq.enums.SubscriptionStatus
 import com.clubs.generated.jooq.indexes.IDX_SERVICE_SUBSCRIPTION_PAYER
 import com.clubs.generated.jooq.indexes.IDX_SERVICE_SUBSCRIPTION_PERIOD_END
 import com.clubs.generated.jooq.indexes.UQ_SERVICE_SUBSCRIPTION_ACTIVE_MEMBER
-import com.clubs.generated.jooq.indexes.UQ_SERVICE_SUBSCRIPTION_ACTIVE_ORG
+import com.clubs.generated.jooq.indexes.UQ_SERVICE_SUBSCRIPTION_LIVE_CLUB
+import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION_PKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_PAYER_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SUBSCRIPTION_EVENT__SUBSCRIPTION_EVENT_SUBSCRIPTION_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
+import com.clubs.generated.jooq.tables.PlatformPayment.PlatformPaymentPath
 import com.clubs.generated.jooq.tables.SubscriptionEvent.SubscriptionEventPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.ServiceSubscriptionRecord
@@ -27,6 +29,7 @@ import java.util.UUID
 import kotlin.collections.Collection
 import kotlin.collections.List
 
+import org.jooq.Check
 import org.jooq.Condition
 import org.jooq.Field
 import org.jooq.ForeignKey
@@ -123,10 +126,11 @@ open class ServiceSubscription(
 
     /**
      * The column <code>public.service_subscription.subject_club_id</code>.
-     * Клуб-предмет подписки для member-pays (FK clubs.id). NULL = подписка
-     * платформенная (организаторский план ёмкости).
+     * Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с
+     * V97); NULL остался только у завершённых легаси-строк платформенного плана
+     * ёмкости.
      */
-    val SUBJECT_CLUB_ID: TableField<ServiceSubscriptionRecord, UUID?> = createField(DSL.name("subject_club_id"), SQLDataType.UUID, this, "Клуб-предмет подписки для member-pays (FK clubs.id). NULL = подписка платформенная (организаторский план ёмкости).")
+    val SUBJECT_CLUB_ID: TableField<ServiceSubscriptionRecord, UUID?> = createField(DSL.name("subject_club_id"), SQLDataType.UUID, this, "Клуб, за чат которого идёт подписка. У строк ORGANIZER заполнен всегда (с V97); NULL остался только у завершённых легаси-строк платформенного плана ёмкости.")
 
     /**
      * The column <code>public.service_subscription.status</code>. Статус
@@ -146,11 +150,11 @@ open class ServiceSubscription(
     val CURRENT_PERIOD_END: TableField<ServiceSubscriptionRecord, OffsetDateTime?> = createField(DSL.name("current_period_end"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Конец текущего оплаченного периода. Единственный драйвер «выключается в конце периода»: планировщик продлевает или завершает подписку по этой дате.")
 
     /**
-     * The column <code>public.service_subscription.provider_token</code>. Токен
-     * рекуррентного списания у эквайера (сохранённая карта / СБП-подписка).
-     * NULL = токена нет, в т.ч. у стаб-провайдера (деньги не двигаются).
+     * The column <code>public.service_subscription.provider_token</code>. InvId
+     * материнского платежа Robokassa — PreviousInvoiceID для дочерних списаний.
+     * NULL до первой успешной оплаты и у стаб-провайдера.
      */
-    val PROVIDER_TOKEN: TableField<ServiceSubscriptionRecord, String?> = createField(DSL.name("provider_token"), SQLDataType.VARCHAR(255), this, "Токен рекуррентного списания у эквайера (сохранённая карта / СБП-подписка). NULL = токена нет, в т.ч. у стаб-провайдера (деньги не двигаются).")
+    val PROVIDER_TOKEN: TableField<ServiceSubscriptionRecord, String?> = createField(DSL.name("provider_token"), SQLDataType.VARCHAR(255), this, "InvId материнского платежа Robokassa — PreviousInvoiceID для дочерних списаний. NULL до первой успешной оплаты и у стаб-провайдера.")
 
     /**
      * The column <code>public.service_subscription.created_at</code>. Когда
@@ -163,6 +167,36 @@ open class ServiceSubscription(
      * подписка последний раз менялась (статус, продление периода).
      */
     val UPDATED_AT: TableField<ServiceSubscriptionRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда подписка последний раз менялась (статус, продление периода).")
+
+    /**
+     * The column <code>public.service_subscription.autopay</code>. Ползунок
+     * владельца «Продлевать автоматически» (по умолчанию включён). Выключен =
+     * за 3 и 1 день до конца периода приходит DM с кнопкой «Оплатить», списания
+     * нет.
+     */
+    val AUTOPAY: TableField<ServiceSubscriptionRecord, Boolean?> = createField(DSL.name("autopay"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "Ползунок владельца «Продлевать автоматически» (по умолчанию включён). Выключен = за 3 и 1 день до конца периода приходит DM с кнопкой «Оплатить», списания нет.")
+
+    /**
+     * The column <code>public.service_subscription.autopay_possible</code>.
+     * Материнский платёж прошёл банковской картой — Robokassa делает
+     * рекуррентные списания только по картам. false после оплаты СБП: ползунок
+     * недоступен, напоминаем как при выключенном.
+     */
+    val AUTOPAY_POSSIBLE: TableField<ServiceSubscriptionRecord, Boolean?> = createField(DSL.name("autopay_possible"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Материнский платёж прошёл банковской картой — Robokassa делает рекуррентные списания только по картам. false после оплаты СБП: ползунок недоступен, напоминаем как при выключенном.")
+
+    /**
+     * The column <code>public.service_subscription.charge_attempts</code>.
+     * Сколько дочерних списаний сделано за текущий цикл продления (ретраи в
+     * слотах 0/+1/+3 дня от конца периода). Сбрасывается в 0 успешной оплатой.
+     */
+    val CHARGE_ATTEMPTS: TableField<ServiceSubscriptionRecord, Int?> = createField(DSL.name("charge_attempts"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "Сколько дочерних списаний сделано за текущий цикл продления (ретраи в слотах 0/+1/+3 дня от конца периода). Сбрасывается в 0 успешной оплатой.")
+
+    /**
+     * The column <code>public.service_subscription.last_charge_at</code>. Когда
+     * последний раз отправляли дочернее списание (NULL = ещё не пробовали в
+     * этом цикле).
+     */
+    val LAST_CHARGE_AT: TableField<ServiceSubscriptionRecord, OffsetDateTime?> = createField(DSL.name("last_charge_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда последний раз отправляли дочернее списание (NULL = ещё не пробовали в этом цикле).")
 
     private constructor(alias: Name, aliased: Table<ServiceSubscriptionRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ServiceSubscriptionRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -198,7 +232,7 @@ open class ServiceSubscription(
         override fun `as`(alias: Table<*>): ServiceSubscriptionPath = ServiceSubscriptionPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_SERVICE_SUBSCRIPTION_PAYER, IDX_SERVICE_SUBSCRIPTION_PERIOD_END, UQ_SERVICE_SUBSCRIPTION_ACTIVE_MEMBER, UQ_SERVICE_SUBSCRIPTION_ACTIVE_ORG)
+    override fun getIndexes(): List<Index> = listOf(IDX_SERVICE_SUBSCRIPTION_PAYER, IDX_SERVICE_SUBSCRIPTION_PERIOD_END, UQ_SERVICE_SUBSCRIPTION_ACTIVE_MEMBER, UQ_SERVICE_SUBSCRIPTION_LIVE_CLUB)
     override fun getPrimaryKey(): UniqueKey<ServiceSubscriptionRecord> = SERVICE_SUBSCRIPTION_PKEY
     override fun getReferences(): List<ForeignKey<ServiceSubscriptionRecord, *>> = listOf(SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_PAYER_USER_ID_FKEY, SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY)
 
@@ -232,6 +266,22 @@ open class ServiceSubscription(
     val clubs: ClubsPath
         get(): ClubsPath = clubs()
 
+    private lateinit var _platformPayment: PlatformPaymentPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.platform_payment</code> table
+     */
+    fun platformPayment(): PlatformPaymentPath {
+        if (!this::_platformPayment.isInitialized)
+            _platformPayment = PlatformPaymentPath(this, null, PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY.inverseKey)
+
+        return _platformPayment;
+    }
+
+    val platformPayment: PlatformPaymentPath
+        get(): PlatformPaymentPath = platformPayment()
+
     private lateinit var _subscriptionEvent: SubscriptionEventPath
 
     /**
@@ -247,6 +297,9 @@ open class ServiceSubscription(
 
     val subscriptionEvent: SubscriptionEventPath
         get(): SubscriptionEventPath = subscriptionEvent()
+    override fun getChecks(): List<Check<ServiceSubscriptionRecord>> = listOf(
+        Internal.createCheck(this, DSL.name("chk_service_subscription_org_club"), "(((payer_role <> 'ORGANIZER'::subscription_payer_role) OR (subject_club_id IS NOT NULL))) NOT VALID", true)
+    )
     override fun `as`(alias: String): ServiceSubscription = ServiceSubscription(DSL.name(alias), this)
     override fun `as`(alias: Name): ServiceSubscription = ServiceSubscription(alias, this)
     override fun `as`(alias: Table<*>): ServiceSubscription = ServiceSubscription(alias.qualifiedName, this)

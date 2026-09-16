@@ -18,7 +18,8 @@ import org.jooq.Schema
 enum class SubscriptionPlan(@get:JvmName("literal") public val literal: String) : EnumType {
     FREE("FREE"),
     TRIO("TRIO"),
-    UNLIMITED("UNLIMITED");
+    UNLIMITED("UNLIMITED"),
+    CHAT("CHAT");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "subscription_plan"

@@ -45,7 +45,7 @@ class ChatLinkServiceTest {
         skladchinaChatStatusService = mockk(relaxed = true)
         strictModeService = mockk(relaxed = true)
         memberTagService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, botUsername = "clubs_test_bot")
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, mockk(relaxed = true), botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
         // По умолчанию группа никуда не переезжала: relaxed-мок сам по себе отдал бы не-null,
         // и любой тест уходил бы в ветку миграции.

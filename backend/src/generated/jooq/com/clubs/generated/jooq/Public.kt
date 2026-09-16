@@ -4,9 +4,11 @@
 package com.clubs.generated.jooq
 
 
+import com.clubs.generated.jooq.sequences.PLATFORM_PAYMENT_INV_SEQ
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
+import com.clubs.generated.jooq.tables.ChatTrial
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -19,9 +21,11 @@ import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.Events
+import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.PlatformPayment
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts
@@ -39,6 +43,7 @@ import com.clubs.generated.jooq.tables.Users
 import kotlin.collections.List
 
 import org.jooq.Catalog
+import org.jooq.Sequence
 import org.jooq.Table
 import org.jooq.impl.SchemaImpl
 
@@ -79,6 +84,15 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * не учитываются и не снимаются.
      */
     val CHAT_STRICT_BANS: ChatStrictBans get() = ChatStrictBans.CHAT_STRICT_BANS
+
+    /**
+     * Бесплатный период чата Telegram: строка появляется с первой созданной
+     * встречей и задаёт, до какого момента клуб этого чата живёт без подписки
+     * (billing.trial-days). Переживает отвязку чата, удаление клуба и повторное
+     * подключение того же чата новым клубом — второй бесплатный период по тому
+     * же chat_id не выдаётся.
+     */
+    val CHAT_TRIAL: ChatTrial get() = ChatTrial.CHAT_TRIAL
 
     /**
      * Справочник городов (GeoNames, население от 50 000). Пополняется только
@@ -168,6 +182,14 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val EVENTS: Events get() = Events.EVENTS
 
     /**
+     * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
+     * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
+     * привлечения (день 5). Только запись и агрегаты, в логику продукта не
+     * входит.
+     */
+    val FUNNEL_EVENT: FunnelEvent get() = FunnelEvent.FUNNEL_EVENT
+
+    /**
      * Общий словарь интересов для профилей пользователей. Имена нормализуются
      * на сервере (trim, одиночные пробелы, lowercase, ё -&gt; е), чтобы
      * дубликаты схлопывались; словарь питает префиксный автокомплит.
@@ -188,6 +210,13 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * внеплатформенного взноса (de-Stars). Одна строка на пару (user, club).
      */
     val MEMBERSHIPS: Memberships get() = Memberships.MEMBERSHIPS
+
+    /**
+     * Платежи владельцев клубов платформе за чат через провайдера (Robokassa).
+     * Один ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы
+     * оплаты, дочерние (RECURRING) — автосписания по сохранённой карте.
+     */
+    val PLATFORM_PAYMENT: PlatformPayment get() = PlatformPayment.PLATFORM_PAYMENT
 
     /**
      * Append-only леджер репутационных исходов (источник истины репутации v2).
@@ -289,10 +318,15 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getCatalog(): Catalog = DefaultCatalog.DEFAULT_CATALOG
 
+    override fun getSequences(): List<Sequence<*>> = listOf(
+        PLATFORM_PAYMENT_INV_SEQ
+    )
+
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
         ChatAwardTags.CHAT_AWARD_TAGS,
         ChatStrictBans.CHAT_STRICT_BANS,
+        ChatTrial.CHAT_TRIAL,
         Cities.CITIES,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,
@@ -305,9 +339,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         EventResponses.EVENT_RESPONSES,
         EventTemplates.EVENT_TEMPLATES,
         Events.EVENTS,
+        FunnelEvent.FUNNEL_EVENT,
         Interests.INTERESTS,
         MembershipHistory.MEMBERSHIP_HISTORY,
         Memberships.MEMBERSHIPS,
+        PlatformPayment.PLATFORM_PAYMENT,
         ReputationLedger.REPUTATION_LEDGER,
         ServiceSubscription.SERVICE_SUBSCRIPTION,
         SkladchinaChatPosts.SKLADCHINA_CHAT_POSTS,

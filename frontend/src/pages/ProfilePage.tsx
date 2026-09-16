@@ -16,7 +16,6 @@ import {
   ProfileQuestCongrats,
   QUEST_FOLDED_KEY,
 } from '../components/profile/ProfileQuestCard';
-import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 
@@ -366,8 +365,6 @@ export const ProfilePage: FC = () => {
             )}
           </div>
       </>
-
-      <SubscriptionCard />
 
       {!rep && reputationQuery.error ? (
         // Провалившийся запрос репутации не должен маскироваться под онбординг «клубов пока

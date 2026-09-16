@@ -40,8 +40,10 @@ class SecurityConfig(
                 auth
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
-                    // Вебхук провайдера аутентифицируется подписью, а не JWT. Должен идти перед /api/**.
-                    .requestMatchers("/api/subscriptions/webhook").permitAll()
+                    // ResultURL провайдера аутентифицируется подписью и allowlist IP, а не JWT;
+                    // страница «оплаты» стаба открывается во внешнем браузере без токена.
+                    // Должны идти перед /api/**.
+                    .requestMatchers("/api/billing/robokassa/result", "/api/billing/stub/**").permitAll()
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().permitAll()
             }

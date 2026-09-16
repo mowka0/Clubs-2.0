@@ -5,6 +5,8 @@ import { AvatarUpload } from '../AvatarUpload';
 import { LocationPickerSheet } from './LocationPickerSheet';
 import { RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
 import { useCreateEventMutation } from '../../queries/events';
+import { paywallFromError, type PaywallInfo } from '../../api/billing';
+import { BillingSheet } from '../billing/BillingSheet';
 import { useSaveEventTemplateMutation } from '../../queries/eventTemplates';
 import { formatLeadInterval } from '../../utils/formatters';
 import { isoWeekdayOf, localTimeOf, nextOccurrenceLocal } from '../../utils/eventTemplate';
@@ -143,6 +145,8 @@ export const EventForm: FC<EventFormProps> = ({
   // Раскрыта ли шкала выбора интервала (дизайн PO 2026-07-23: свёрнутая строка-факт под датой).
   const [leadEditorOpen, setLeadEditorOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // 402 на создании: шит оплаты за чат поверх формы — заполненные поля не теряются (platform-billing.md § 7).
+  const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
 
   const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
   const activeLeadIdx = Math.max(0, STAGE2_LEAD_PRESETS.findIndex((p) => p.minutes === effectiveStage2Lead));
@@ -262,6 +266,13 @@ export const EventForm: FC<EventFormProps> = ({
         },
       });
     } catch (e) {
+      // Стена биллинга — не ошибка формы: открываем шит оплаты, поля остаются на месте.
+      const pw = paywallFromError(e);
+      if (pw) {
+        haptic.notify('warning');
+        setPaywall(pw);
+        return;
+      }
       console.error('createEvent failed', e);
       haptic.notify('error');
       const msg = e instanceof Error ? e.message : 'Не удалось создать событие';
@@ -665,6 +676,16 @@ export const EventForm: FC<EventFormProps> = ({
           </button>
         </div>
       </div>
+
+      {paywall && (
+        <BillingSheet
+          clubId={clubId}
+          reason={paywall.reason}
+          onClose={() => setPaywall(null)}
+          // После оплаты форма остаётся заполненной — «Создать» снова активна.
+          onPaid={() => setPaywall(null)}
+        />
+      )}
 
       {pickerOpen && (
         <LocationPickerSheet

@@ -35,7 +35,7 @@
 | `club` | `clubs.md`, `club-page-unified.md`, `club-invites.md`, `club-leave.md`, `club-interests.md` |
 | `clubquality` | `club-quality.md` |
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
-| `common/security` (`SecurityConfig`, `RateLimitFilter`) | `auth.md`, `infrastructure.md` |
+| `common/security` (`SecurityConfig`, `RateLimitFilter`, `ClientIpResolver`) | `auth.md`, `infrastructure.md`; permitAll ResultURL, бакет чекаута и allowlist IP — `platform-billing.md` § 6.6, § 9 |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
 | `event` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
@@ -43,11 +43,11 @@
 | `geo` (`SuggestService`, `CityCenterRepository` → подсказки; `GeocoderService` → гео события) | `venue-search.md`, `event-geo.md` |
 | `interest` | `club-interests.md` |
 | `membership` | `membership.md`, `membership-lifecycle.md` |
-| `payment` | `payment.md`, `payment-v2.md` |
+| `payment` | `payment.md`, `platform-billing.md` (сеам `PaymentProvider`, адаптер Robokassa); `payment-v2.md` — superseded |
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
 | `skladchina`, `debt` | `skladchina-v3.md` |
 | `storage` | `infrastructure.md` |
-| `subscription` | `payment-v2.md`, `membership-lifecycle.md` |
+| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи), `membership-lifecycle.md`; `payment-v2.md` — superseded |
 | `user` | `profile.md`, `profile-quest.md` |
 
 **Миграции** `backend/src/main/resources/db/migration/` → спека модуля, чью таблицу трогает,
@@ -58,16 +58,17 @@
 | Страница | Спеки для сверки |
 |---|---|
 | `DiscoveryPage.tsx` | `discovery-card.md`, `discovery-redesign.md` |
-| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md` |
+| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md`; полоска биллинга над «О клубе» — `platform-billing.md` § 7 |
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
-| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md` |
+| `CreateEventPage.tsx` (+ `components/event/EventForm.tsx`, `RosterLimitsFields.tsx`) | `events.md`, `event-formats.md` § 9.2, `event-templates.md`, `event-geo.md`, `venue-search.md`; 402 → шит оплаты — `platform-billing.md` § 7 |
 | `EditEventTemplatePage.tsx` | `event-templates.md` |
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `DebtsPage.tsx`, `DebtPairPage.tsx` (+ `components/debt/DebtRow.tsx`) | `skladchina-v3.md` § 9 |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
-| `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
+| `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7; `hooks/useClubPageUnderneath.ts` (страница клуба под низом истории, чтобы «назад» и свайп работали после оплаты) |
+| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip`, `offerText.ts`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
 | `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
 
@@ -143,7 +144,9 @@
 | Файл | О чём | Правлен |
 |---|---|---|
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
-| `payment-v2.md` | монетизация v2, подписка организатора | 2026-07-07 |
+| `platform-billing-testplan.md` | тест-план staging-прогона биллинга: 21 кейс по блокам (бесплатный период, оплата заглушкой, продление, периферия), переменные staging, что проверяет Dev по БД | 2026-09-16 |
+| `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
+| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-15 |
 
 ### Пользователь и вход
 | Файл | О чём | Правлен |
@@ -186,7 +189,8 @@
 | `sprint-1.0-chat-pivot.md` | **действующий план**: разворот на плагин к чату, гейты, финмодель |
 | `market-analysis-and-product-strategy-2026-07.md` | анализ рынка, конкуренты (в силе) |
 | `strategy-simple-summary-2026-07.md` | краткая версия стратегии (в силе) |
-| `payment-monetization-v2.md` | модель монетизации |
+| `monetization-v3-research-2026-09.md` | **финмодель, действующая** (2026-09-07): исследование 24 моделей + решения PO § 8 — первая встреча бесплатно, дальше 199 ₽/мес за чат, провайдер на самозанятого, ползунок автосписания; заменяет `payment-v2.md` |
+| `payment-monetization-v2.md` | модель монетизации (июнь 2026; юр-факты частично устарели — см. v3 § 2.2) |
 | `telegram-constraints.md` | ограничения платформы Telegram — **читать перед любой чат-фичей** |
 | `stack.md` | технологический стек, справочник |
 

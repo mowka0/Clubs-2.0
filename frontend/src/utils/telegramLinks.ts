@@ -1,4 +1,32 @@
-import { openTelegramLink } from '@telegram-apps/sdk-react';
+import { openLink, openTelegramLink } from '@telegram-apps/sdk-react';
+
+/**
+ * Имя бота для страниц, живущих вне Telegram (лендинг, возврат после оплаты): там нет ни
+ * initData, ни API, поэтому значение берётся из бандла. Задаётся build-аргом
+ * VITE_TELEGRAM_BOT_USERNAME из той же TELEGRAM_BOT_USERNAME, что читает бэкенд; дефолт
+ * совпадает с `telegram.bot-username`. Из адреса страницы имя бота не принимается —
+ * `?bot=<чужой>` давал бы нашу брендированную страницу с кнопкой в чужого бота.
+ */
+export const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'clubs_v2_bot';
+/** Ссылка «Открыть в Telegram» на самого бота. */
+export const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
+
+/**
+ * Открывает внешнюю https-ссылку (страница оплаты провайдера) во внешнем браузере или
+ * in-app browser Telegram. Именно `openLink`, а не `window.open`: в Mini App на iOS
+ * `window.open` ведёт себя иначе и может ничего не открыть. Вне Telegram — новая вкладка.
+ */
+export function openExternalLink(url: string): void {
+  try {
+    if (openLink.isAvailable()) {
+      openLink(url, { tryInstantView: false });
+      return;
+    }
+  } catch (_e) {
+    // Не в среде Telegram — падаем на window.open
+  }
+  window.open(url, '_blank', 'noopener');
+}
 
 /**
  * Открывает t.me-ссылку (deep link бота, invite link чата) внутри Telegram.
