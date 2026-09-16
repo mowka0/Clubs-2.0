@@ -49,3 +49,6 @@ data class StartCheckoutRequest(val autopay: Boolean = true)
 data class CheckoutDto(val paymentUrl: String, val invId: Long)
 
 data class AutopayRequest(val autopay: Boolean)
+
+/** Ответ служебного «списать сейчас»: номер отправленного провайдеру счёта — искать его в логах и в кабинете. */
+data class ManualChargeDto(val invId: Long)

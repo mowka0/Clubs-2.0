@@ -125,6 +125,13 @@ billing:
   stub:
     # Через сколько секунд стаб считает дочернее списание прошедшим (staging-прогон цикла).
     settle-seconds: ${BILLING_STUB_SETTLE_SECONDS:5}
+  manual-charge:
+    # Служебный триггер «списать сейчас» (platform-billing.md § 11): у Robokassa нет тестового
+    # режима для рекуррента, первое боевое дочернее списание проверяется на проде на чате PO.
+    # Выключен по умолчанию; включается на время проверки и выключается обратно.
+    enabled: ${BILLING_MANUAL_CHARGE_ENABLED:false}
+    # Telegram id тех, кому доступен триггер (через запятую). Пусто = никому, даже при включённом флаге.
+    admin-telegram-ids: ${PLATFORM_ADMIN_TELEGRAM_IDS:}
   robokassa:
     merchant-login: ${ROBOKASSA_MERCHANT_LOGIN:}
     # Password#1 подписывает наши запросы, Password#2 — уведомления провайдера. Только env, в логи не попадают.

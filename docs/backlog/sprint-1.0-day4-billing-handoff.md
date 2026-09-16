@@ -199,6 +199,8 @@ FailURL `https://clubsapp.ru/pay/fail` (метод GET у обоих возвр�
 | `ROBOKASSA_TEST_MODE` | `true` | `false` |
 | `SUBSCRIPTION_PERIOD_DAYS` | `1` на время прогона | `30` |
 | `SUBSCRIPTION_LIFECYCLE_CRON` | частый на время прогона | `0 30 9 * * *` |
+| `BILLING_TRIAL_DAYS` | `1` на время прогона | `15` |
+| `BILLING_MANUAL_CHARGE_ENABLED` / `PLATFORM_ADMIN_TELEGRAM_IDS` | не нужны | `true` + Telegram id PO **только на время** проверки первого автосписания (§ 11), потом `false` |
 
 Остальные `BILLING_*` имеют рабочие дефолты в `application.yml` и продублированы в
 `docker-compose.prod.yml` (правило CLAUDE.md о двух дефолтах соблюдено).

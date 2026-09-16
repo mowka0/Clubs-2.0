@@ -115,6 +115,9 @@ services:
       BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
       BILLING_PENDING_TIMEOUT_HOURS: ${BILLING_PENDING_TIMEOUT_HOURS:-6}
       BILLING_STUB_SETTLE_SECONDS: ${BILLING_STUB_SETTLE_SECONDS:-5}
+      # Служебный триггер «списать сейчас» — только на время проверки первого боевого автосписания.
+      BILLING_MANUAL_CHARGE_ENABLED: ${BILLING_MANUAL_CHARGE_ENABLED:-false}
+      PLATFORM_ADMIN_TELEGRAM_IDS: ${PLATFORM_ADMIN_TELEGRAM_IDS:-}
       # ФИО самозанятого-получателя целиком (шит оплаты, оферта).
       BILLING_RECIPIENT_NAME: ${BILLING_RECIPIENT_NAME:-}
       # Период подписки и крон календаря — staging ужимает их для прогона цикла (тест-план § 10).

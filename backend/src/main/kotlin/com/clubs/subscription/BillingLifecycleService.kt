@@ -3,6 +3,8 @@ package com.clubs.subscription
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.common.exception.ConflictException
+import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 import com.clubs.generated.jooq.enums.SubscriptionStatus
 import com.clubs.payment.PaymentProvider
@@ -186,7 +188,32 @@ class BillingLifecycleService(
         if (attempt >= retryDays.size) return
         if (now.isBefore(subscription.currentPeriodEnd.plusDays(retryDays[attempt]))) return
         if (paymentRepository.hasPendingRecurring(subscription.id)) return
+        sendRecurringCharge(subscription, club, now, price)
+    }
 
+    /**
+     * Служебное списание вне календаря (platform-billing.md § 11): у Robokassa нет тестового
+     * режима для рекуррента, и первое боевое дочернее списание проверяется на проде на чате PO,
+     * не дожидаясь конца 30-дневного периода. Деньги уходят раньше, но период всё равно
+     * продлевается от его конца (settleRecurring), так что оплаченное время не теряется.
+     * Доступ — [ManualChargeAccess] в контроллере. Возвращает InvId отправленного счёта.
+     */
+    fun chargeNow(clubId: UUID, now: OffsetDateTime): Long {
+        val subscription = subscriptionRepository.findLatestByClub(clubId)?.takeIf { it.status != SubscriptionStatus.ENDED }
+            ?: throw ConflictException("У клуба нет живой подписки — списывать нечего")
+        if (!subscription.autopayPossible || subscription.providerToken == null) {
+            throw ConflictException("Материнский платёж был не картой — сохранённого способа оплаты нет")
+        }
+        if (paymentRepository.hasPendingRecurring(subscription.id)) {
+            throw ConflictException("Предыдущее списание ещё не подтверждено провайдером")
+        }
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
+        log.warn("MANUAL recurring charge triggered: clubId={} subscriptionId={}", clubId, subscription.id)
+        return sendRecurringCharge(subscription, club, now, price)
+    }
+
+    private fun sendRecurringCharge(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int): Long {
         val previousInvId = subscription.providerToken!!.toLong()
         val payment = paymentRepository.create(
             clubId = club.id, subscriptionId = subscription.id, kind = PaymentKind.RECURRING,
@@ -199,11 +226,15 @@ class BillingLifecycleService(
                 description = "Clubs: продление подписки за чат ${club.name} на $periodDays дней", clubId = club.id,
             ),
         )
-        log.info("Recurring charge sent: subscriptionId={} invId={} attempt={} accepted={}", subscription.id, payment.invId, attempt + 1, accepted.accepted)
+        log.info(
+            "Recurring charge sent: subscriptionId={} invId={} attempt={} accepted={}",
+            subscription.id, payment.invId, subscription.chargeAttempts + 1, accepted.accepted,
+        )
         if (!accepted.accepted) {
             paymentRepository.markFailed(payment.id)
             onChargeFailed(subscription.id, price)
         }
+        return payment.invId
     }
 
     /** Первая неудача: ACTIVE → PAST_DUE и DM; дальнейшие — молча, ретраи по слотам. */

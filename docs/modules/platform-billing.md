@@ -408,6 +408,7 @@ ResultURL) / FAILED (`charge_attempts++`, DM при первом фейле). С
 | GET | `/api/clubs/{id}/billing` | владелец, со-орг с `MANAGE_EVENTS` | `BillingStatusDto` |
 | POST | `/api/clubs/{id}/billing/checkout` | владелец | `{autopay:boolean}` → `{paymentUrl, invId}` |
 | PATCH | `/api/clubs/{id}/billing/autopay` | владелец | `{autopay:boolean}` → `BillingStatusDto` |
+| POST | `/api/clubs/{id}/billing/charge-now` | владелец из `PLATFORM_ADMIN_TELEGRAM_IDS`, только при `BILLING_MANUAL_CHARGE_ENABLED=true` (иначе 404) | служебное списание вне календаря (§ 11) → `202 {invId}`; 409 без сохранённой карты или при незакрытом дочернем счёте |
 | POST | `/api/billing/robokassa/result` | Robokassa (permitAll + IP + подпись) | form-параметры → `OK<InvId>` |
 
 ```kotlin
@@ -571,7 +572,12 @@ DM «завтра спишем» перед автосписанием **нет*
   PO: период там глобальный (30 дней), поэтому нужен служебный триггер «списать сейчас» для одной
   подписки — `POST /api/clubs/{id}/billing/charge-now`, доступный только при
   `BILLING_MANUAL_CHARGE_ENABLED=true` и только владельцу клуба из env-списка
-  `PLATFORM_ADMIN_TELEGRAM_IDS`. После проверки флаг выключается. Записать в тест-план.
+  `PLATFORM_ADMIN_TELEGRAM_IDS`. После проверки флаг выключается. **Реализовано 2026-09-16:**
+  `ManualChargeAccess` (флаг → 404, чужой id → 403) + `BillingLifecycleService.chargeNow` — тот же
+  `sendRecurringCharge`, что у календарного тика, без проверки слота. Деньги уходят раньше срока, но
+  период продлевается от его конца (`settleRecurring`), оплаченное время не теряется. Порядок на
+  проде: включить флаг и id PO в Coolify → `curl -X POST … -H 'Authorization: Bearer <JWT>'` (JWT —
+  из DevTools Mini App) → дождаться ResultURL/опроса → DM «Продлено до …» → выключить флаг.
 - **«По предварительному согласованию»**: рекуррент включает поддержка Robokassa по заявке —
   PO подаёт заявку в день договора, иначе `Recurring=true` молча не сработает.
 - **IP Robokassa за Traefik/nginx**: клиентский IP брать через доверенные прокси, как в

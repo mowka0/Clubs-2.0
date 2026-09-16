@@ -17,6 +17,8 @@ import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
+import com.clubs.common.exception.ConflictException
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -272,5 +274,36 @@ class BillingLifecycleServiceTest {
 
         verify(exactly = 0) { notifier.trialEndingSoon(any(), any(), any(), any()) }
         verify(exactly = 0) { chatTrialRepository.markReminded(any(), any()) }
+    }
+
+    // ---------- служебное «списать сейчас» ----------
+
+    @Test
+    fun `chargeNow sends a recurring charge outside the calendar and returns its invoice`() {
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(20))
+        every { subscriptionRepository.findLatestByClub(club.id) } returns sub
+        val payment = BillingTestFixtures.payment(club).copy(kind = PaymentKind.RECURRING, subscriptionId = sub.id)
+        every { paymentRepository.create(club.id, sub.id, PaymentKind.RECURRING, PRICE, 100001L, true) } returns payment
+        every { paymentProvider.charge(any()) } returns ChargeAccepted(accepted = true)
+
+        val invId = service.chargeNow(club.id, now)
+
+        assertEquals(payment.invId, invId)
+        verify(exactly = 1) { paymentProvider.charge(match { it.previousInvId == 100001L && it.amountKopecks == PRICE }) }
+        verify(exactly = 1) { subscriptionRepository.recordChargeAttempt(sub.id, now) }
+    }
+
+    @Test
+    fun `chargeNow refuses without a saved card or with a charge still pending`() {
+        every { subscriptionRepository.findLatestByClub(club.id) } returns
+            BillingTestFixtures.subscription(club, autopayPossible = false)
+        assertThrows<ConflictException> { service.chargeNow(club.id, now) }
+
+        val sub = BillingTestFixtures.subscription(club)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns sub
+        every { paymentRepository.hasPendingRecurring(sub.id) } returns true
+        assertThrows<ConflictException> { service.chargeNow(club.id, now) }
+
+        verify(exactly = 0) { paymentProvider.charge(any()) }
     }
 }

@@ -391,7 +391,9 @@ volumes:
 воронки, меняется без релиза), `BILLING_GRACE_DAYS`, `BILLING_PENDING_TIMEOUT_HOURS`, `BILLING_STUB_SETTLE_SECONDS`,
 `BILLING_RECIPIENT_NAME` (ФИО самозанятого целиком), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
-`ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`.
+`ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`,
+`BILLING_MANUAL_CHARGE_ENABLED` + `PLATFORM_ADMIN_TELEGRAM_IDS` (служебный триггер «списать сейчас»,
+по умолчанию выключен — включается только на время проверки первого боевого автосписания).
 **Домен `clubsapp.ru`** (куплен 2026-09-16 на Timeweb, только регистрация — без хостинга и без их
 SSL). До этого прод жил на `77-42-23-177.sslip.io`: это не домен, а публичный DNS-трюк, в имени
 которого зашит IP сервера — переезд на другой сервер менял бы адрес целиком, вместе с URL Mini App

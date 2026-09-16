@@ -21,11 +21,14 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
 import org.springframework.web.bind.annotation.RestController
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @RestController
 class BillingController(
     private val billingService: BillingService,
+    private val billingLifecycleService: BillingLifecycleService,
+    private val manualChargeAccess: ManualChargeAccess,
     private val paymentProvider: PaymentProvider,
 ) {
 
@@ -53,6 +56,19 @@ class BillingController(
         @AuthenticationPrincipal user: AuthenticatedUser,
     ): ResponseEntity<BillingStatusDto> =
         ResponseEntity.ok(billingService.setAutopay(id, user.userId, body.autopay))
+
+    /**
+     * Служебное «списать сейчас» (platform-billing.md § 11): проверка первого боевого автосписания
+     * на проде. Флаг billing.manual-charge.enabled выключен по умолчанию — маршрут отвечает 404;
+     * при включённом — только владельцу клуба из списка администраторов платформы.
+     */
+    @RequiresOrganizer
+    @PostMapping("/api/clubs/{id}/billing/charge-now")
+    fun chargeNow(@PathVariable id: UUID, @AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<ManualChargeDto> {
+        manualChargeAccess.require(user)
+        val invId = billingLifecycleService.chargeNow(id, OffsetDateTime.now())
+        return ResponseEntity.accepted().body(ManualChargeDto(invId))
+    }
 
     /**
      * ResultURL Robokassa (permitAll в SecurityConfig): подлинность — allowlist IP + подпись
