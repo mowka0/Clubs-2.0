@@ -3641,7 +3641,8 @@
 /* Страницы возврата вне Telegram: без Layout, поэтому свой фон и центровка. */
 .rd-pay-return { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--text); font-family: inherit; }
 .rd-pay-return .card { width: 100%; max-width: 420px; background: var(--card-solid); border: 1px solid var(--hairline-2); border-radius: 16px; padding: 38px 26px 30px; text-align: center; }
-.rd-pay-return .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; color: var(--text-dim); margin-bottom: 22px; }
+.rd-pay-return .logo { display: inline-flex; align-items: center; margin-bottom: 22px; }
+.rd-pay-return .logo img { height: 36px; width: auto; border-radius: 9px; display: block; }
 .rd-pay-return .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); display: inline-block; }
 .rd-pay-return .btn {
   display: inline-flex; align-items: center; justify-content: center; margin-top: 18px; padding: 13px 22px;
@@ -3761,8 +3762,24 @@
   background: var(--accent); color: #fff; font-size: 12px; text-align: center;
 }
 
-/* ---------- Публичная страница сервиса (/about и корень домена вне Telegram) ---------- */
-.rd-landing { max-width: 640px; margin: 0 auto; padding: 20px 20px 48px; background: var(--bg); color: var(--text); line-height: 1.5; }
+/* ---------- Публичная страница сервиса (/about, /privacy и корень домена вне Telegram) ---------- */
+/* Витрина всегда тёмная, независимо от темы приложения и системы. Причина: корень домена вне
+   Telegram рендерится ВНЕ оболочки приложения (main.tsx), и тема там не применяется вовсе, а
+   `/about` и `/privacy` идут через роутер внутри оболочки и получают тему пользователя — один и
+   тот же сайт выглядел то чёрным, то белым (баг PO 2026-09-17). Плюс логотип нарисован на тёмном
+   фоне, и градиенты бренда рассчитаны на него же. Значения — из тёмной палитры brand-theme.css. */
+.rd-landing, .rd-pay-return {
+  color-scheme: dark;
+  --bg: #0B0B0E;
+  --text: #F4F4F6;
+  --text-dim: rgba(244, 244, 246, 0.6);
+  --text-faint: rgba(244, 244, 246, 0.45);
+  --hairline-2: rgba(255, 255, 255, 0.1);
+  --card-solid: #17171C;
+}
+.rd-landing { min-height: 100vh; max-width: 640px; margin: 0 auto; padding: 20px 20px 48px; background: var(--bg); color: var(--text); line-height: 1.5; }
+/* Поля шире контейнера — тем же фоном, иначе по бокам просвечивает тема приложения. */
+body:has(> #root .rd-landing), body:has(> #root .rd-pay-return) { background: #0B0B0E; }
 .rd-landing .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 18px; }
 /* Логотип — картинка с каллиграфией на собственном тёмном фоне, поэтому живёт в скруглённом
    квадрате как аватар бренда: так он одинаково смотрится и в светлой, и в тёмной теме. */
