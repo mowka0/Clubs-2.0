@@ -11,7 +11,7 @@ import { PRIVACY_TITLE, PRIVACY_UPDATED, privacySections } from './privacyText';
 export const PrivacyPage: FC = () => (
   <div className="rd-landing">
     <header className="hd">
-      <Link className="logo" to="/"><img src="/brand/logo-wordmark.jpg" alt="Clubs" width={40} height={40} /></Link>
+      <Link className="logo" to="/"><img src="/brand/logo-wordmark.jpg" alt="Clubs" height={44} /></Link>
       <a className="btn" href={BOT_LINK}>Открыть в Telegram</a>
     </header>
 

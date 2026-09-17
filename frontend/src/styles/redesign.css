@@ -3767,7 +3767,7 @@
 /* Логотип — картинка с каллиграфией на собственном тёмном фоне, поэтому живёт в скруглённом
    квадрате как аватар бренда: так он одинаково смотрится и в светлой, и в тёмной теме. */
 .rd-landing .logo { display: inline-flex; align-items: center; }
-.rd-landing .logo img { width: 40px; height: 40px; border-radius: 11px; object-fit: cover; display: block; }
+.rd-landing .logo img { height: 44px; width: auto; border-radius: 10px; display: block; }
 .rd-landing .btn { display: inline-block; background: var(--accent-grad); color: var(--on-accent); text-decoration: none; border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; }
 .rd-landing .btn.big { padding: 14px 20px; font-size: 16px; margin-top: 6px; }
 .rd-landing .hero h1 { font-size: 26px; line-height: 1.2; margin: 14px 0 12px; letter-spacing: -0.01em; }
