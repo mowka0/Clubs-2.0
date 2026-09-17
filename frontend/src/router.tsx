@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { HomeRoute } from './components/HomeRoute';
 import { LandingPage } from './pages/LandingPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 
 // Страницы основных табов — импортируются сразу, для мгновенного переключения таба
 import { DiscoveryPage } from './pages/DiscoveryPage';
@@ -175,5 +176,10 @@ export const router = createBrowserRouter([
   {
     path: '/about',
     element: <LandingPage />,
+  },
+  // Политика обработки персональных данных (152-ФЗ + требование модерации провайдера).
+  {
+    path: '/privacy',
+    element: <PrivacyPage />,
   },
 ]);

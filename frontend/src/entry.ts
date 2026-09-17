@@ -2,7 +2,7 @@
  * Адреса, у которых есть смысл вне Telegram: они рендерятся роутером как обычный веб.
  * Всё остальное — приложение, и без initData оно не стартует.
  */
-export const PUBLIC_WEB_PATHS = ['/about', '/pay/return', '/pay/fail'];
+export const PUBLIC_WEB_PATHS = ['/about', '/privacy', '/pay/return', '/pay/fail'];
 
 /**
  * Показать публичный лендинг вместо приложения: пришли не из Telegram и не на публичный адрес.

@@ -15,7 +15,7 @@ const SUPPORT_LINK = `https://t.me/${SUPPORT.telegram}`;
 export const LandingPage: FC = () => (
   <div className="rd-landing">
     <header className="hd">
-      <div className="logo"><i aria-hidden="true" /> Clubs</div>
+      <div className="logo">Clubs<i aria-hidden="true" /></div>
       <a className="btn" href={BOT_LINK}>Открыть в Telegram</a>
     </header>
 
@@ -83,11 +83,16 @@ export const LandingPage: FC = () => (
         доход, НДС не облагается.
       </p>
       <p>
+        Мы обрабатываем персональные данные по <a href="/privacy">политике конфиденциальности</a>.
+      </p>
+      <p>
         Поддержка: <a href={SUPPORT_LINK}>@{SUPPORT.telegram}</a>
         {SUPPORT.email && <> · <a href={`mailto:${SUPPORT.email}`}>{SUPPORT.email}</a></>}
       </p>
     </section>
 
-    <footer>© Clubs, {new Date().getFullYear()}</footer>
+    <footer>
+      <a href="/privacy">Политика обработки персональных данных</a> · © Clubs, {new Date().getFullYear()}
+    </footer>
   </div>
 );

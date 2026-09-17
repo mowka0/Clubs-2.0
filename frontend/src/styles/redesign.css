@@ -3764,8 +3764,12 @@
 /* ---------- Публичная страница сервиса (/about и корень домена вне Telegram) ---------- */
 .rd-landing { max-width: 640px; margin: 0 auto; padding: 20px 20px 48px; background: var(--bg); color: var(--text); line-height: 1.5; }
 .rd-landing .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 18px; }
-.rd-landing .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; }
-.rd-landing .logo i { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-grad); }
+.rd-landing .logo {
+  display: inline-flex; align-items: baseline; font-weight: 800; font-size: 26px; letter-spacing: -0.02em;
+  background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* Точка над «s» — тот же градиент, что и в надписи: маленький фирменный акцент. */
+.rd-landing .logo i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 3px; align-self: flex-end; margin-bottom: 5px; }
 .rd-landing .btn { display: inline-block; background: var(--accent-grad); color: var(--on-accent); text-decoration: none; border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; }
 .rd-landing .btn.big { padding: 14px 20px; font-size: 16px; margin-top: 6px; }
 .rd-landing .hero h1 { font-size: 26px; line-height: 1.2; margin: 14px 0 12px; letter-spacing: -0.01em; }
@@ -3786,3 +3790,5 @@
 .rd-landing .seller b { color: var(--text); }
 .rd-landing a:not(.btn) { color: var(--accent); }
 .rd-landing footer { margin-top: 40px; color: var(--text-faint); font-size: 12.5px; }
+.rd-landing .pp { color: var(--text-dim); margin: 0 0 10px; font-size: 14px; }
+.rd-landing .hd .logo { text-decoration: none; color: var(--text); }

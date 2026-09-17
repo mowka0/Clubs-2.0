@@ -68,7 +68,7 @@
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7; `hooks/useClubPageUnderneath.ts` (страница клуба под низом истории, чтобы «назад» и свайп работали после оплаты) |
-| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip`, `offerText.ts`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
+| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip`, `offerText.ts`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `PrivacyPage.tsx` + `privacyText.ts` (`/privacy`), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
 | `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
 
