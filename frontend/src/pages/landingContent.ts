@@ -15,5 +15,5 @@ export const SUPPORT = {
   /** Аккаунт поддержки без @ — тот же, куда бот шлёт «Сообщить о проблеме». */
   telegram: 'clubs_tech_support',
   /** E-mail для обращений; пусто — строка не показывается. */
-  email: 'cw10bacs@yandex.ru',
+  email: 'clubs.techsupport@gmail.com',
 } as const;

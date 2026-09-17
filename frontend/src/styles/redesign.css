@@ -3786,3 +3786,5 @@
 .rd-landing .seller b { color: var(--text); }
 .rd-landing a:not(.btn) { color: var(--accent); }
 .rd-landing footer { margin-top: 40px; color: var(--text-faint); font-size: 12.5px; }
+.rd-landing .pp { color: var(--text-dim); margin: 0 0 10px; font-size: 14px; }
+.rd-landing .hd .logo { text-decoration: none; color: var(--text); }

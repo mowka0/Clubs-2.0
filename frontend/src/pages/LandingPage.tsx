@@ -83,11 +83,16 @@ export const LandingPage: FC = () => (
         доход, НДС не облагается.
       </p>
       <p>
+        Мы обрабатываем персональные данные по <a href="/privacy">политике конфиденциальности</a>.
+      </p>
+      <p>
         Поддержка: <a href={SUPPORT_LINK}>@{SUPPORT.telegram}</a>
         {SUPPORT.email && <> · <a href={`mailto:${SUPPORT.email}`}>{SUPPORT.email}</a></>}
       </p>
     </section>
 
-    <footer>© Clubs, {new Date().getFullYear()}</footer>
+    <footer>
+      <a href="/privacy">Политика обработки персональных данных</a> · © Clubs, {new Date().getFullYear()}
+    </footer>
   </div>
 );
