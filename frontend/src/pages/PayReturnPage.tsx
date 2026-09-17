@@ -26,7 +26,7 @@ export const PayReturnPage: FC<PayReturnPageProps> = ({ kind }) => {
   return (
     <div className="rd-pay-return">
       <div className="card">
-        <div className="logo"><i aria-hidden="true" /> Clubs</div>
+        <div className="logo"><img src="/brand/logo-wordmark.jpg" alt="Clubs" height={36} /></div>
         <div className="rd-billing-state">
           <div className="ic" aria-hidden="true">{kind === 'success' ? '✅' : '😕'}</div>
           <p className="t">{kind === 'success' ? 'Оплата принята' : 'Оплата не прошла'}</p>
