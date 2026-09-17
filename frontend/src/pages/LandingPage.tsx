@@ -15,7 +15,7 @@ const SUPPORT_LINK = `https://t.me/${SUPPORT.telegram}`;
 export const LandingPage: FC = () => (
   <div className="rd-landing">
     <header className="hd">
-      <div className="logo">Clubs<i aria-hidden="true" /></div>
+      <div className="logo"><img src="/brand/logo-wordmark.jpg" alt="Clubs" height={44} /></div>
       <a className="btn" href={BOT_LINK}>Открыть в Telegram</a>
     </header>
 
