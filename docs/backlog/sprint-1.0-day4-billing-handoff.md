@@ -226,6 +226,9 @@ CAA → A-записи → BotFather**. Reviewer и Security пройдены (�
 недоступен** (SYN-ACK не возвращается) — Mini App переведён на `app.clubsapp.ru` (A-запись напрямую
 на Hetzner, минуя прокси; `TELEGRAM_WEBAPP_BASE_URL` тоже), GeoDNS отложен до появления аудитории
 без VPN (`infrastructure.md` § «Российский reverse proxy перед Hetzner»). CAA у Timeweb нет.
+**18.09, вечер: с телефона через VPN `app.` и корень не открылись — NS Timeweb недоступны с
+фильтруемых VPN-сетей, имя не резолвится вовсе. BotFather возвращён на sslip, DNS-хостинг переезжает в
+Cloudflare (README прокси § 6a); после «Active» — BotFather на `app.clubsapp.ru` снова.**
 
 **Форма фикса — российский reverse proxy перед Hetzner, НЕ переезд стека в РФ**: бэкенд обязан
 ходить в api.telegram.org, из российского ДЦ это может быть заблокировано. Ловушка про

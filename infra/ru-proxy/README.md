@@ -91,13 +91,16 @@ Coolify перезаписывает файл из своей базы.
 ### 2. Поставить nginx на RU VPS
 
 ```bash
-scp -r infra/ru-proxy root@<RU_IP>:/tmp/
+scp -r infra/ru-proxy infra/host root@<RU_IP>:/tmp/
 ssh root@<RU_IP> "cd /tmp/ru-proxy && bash install.sh"
 ```
 
 Скрипт ставит nginx с модулем stream, проверяет достижимость Hetzner, проверяет и кладёт
-`nginx.conf`, выключает парольный SSH, включает файрвол (SSH с лимитом, 80, 443) и
-автообновления. Идемпотентен, повторный запуск безопасен.
+`nginx.conf`, выключает парольный SSH, включает файрвол (SSH с лимитом, 80, 443),
+автообновления и MSS clamping из `infra/host` (прокси сам завершает TCP с клиентами, и PMTU-дыра
+с белыми экранами относится к нему так же, как к Hetzner). Идемпотентен, повторный запуск безопасен.
+С Mac через VPN до RU VPS TCP может не проходить (фильтр VPN-диапазонов) — тогда через Hetzner:
+`ssh -J root@77.42.23.177 root@<RU_IP>` и `scp -o ProxyJump=root@77.42.23.177 …`.
 
 ### 3. Проверка до переключения DNS
 
@@ -147,6 +150,37 @@ TTL A-записей — 600 с (проверено на `ns1.timeweb.ru` 18.09;
 минут разъедется. Проверка: `dig +short clubsapp.ru` = `<RU_IP>`; открыть `https://clubsapp.ru`
 с телефона без VPN.
 
+### 6a. DNS-хостинг: NS Timeweb недоступны с фильтруемых VPN-сетей → Cloudflare (DNS only)
+
+Найдено 18.09 при переключении BotFather на `app.clubsapp.ru`: телефон PO с VPN не открывал ни
+`app.`, ни корень, а `77-42-23-177.sslip.io` (тот же IP!) открывал. Захват пакетов: для имён в
+`clubsapp.ru` до серверов не доходило ничего. Причина — **все четыре NS Timeweb (`ns1/ns2.timeweb.ru`,
+`ns3/ns4.timeweb.org`) стоят в РФ и недоступны с VPN-диапазонов, которые фильтрует российский
+аплинк** (проверено с Mac через VPN: таймаут по UDP и TCP, а NS nip.io для sslip отвечают). Крупные
+публичные резолверы пробиваются, собственные резолверы VPN-провайдеров — нет, и для них любое имя
+в `clubsapp.ru` не существует. Сервер и поддомен тут ни при чём.
+
+Лечение — перенос DNS-хостинга к провайдеру с anycast-серверами по всему миру: **Cloudflare, Free,
+только DNS**. Домен остаётся у Timeweb, меняются NS. Записи зоны на 18.09 (выгружены с
+`ns1.timeweb.ru`):
+
+```
+A    @    147.45.189.189     ; RU-прокси
+A    www  147.45.189.189     ; RU-прокси
+A    app  77.42.23.177       ; Hetzner напрямую — Mini App
+MX   @    10 mx1.timeweb.ru.
+MX   @    20 mx2.timeweb.ru.
+TXT  @    "v=spf1 include:_spf.timeweb.ru ~all"
+```
+
+Порядок: Cloudflare → Add a site → `clubsapp.ru` (Free) → сверить импорт с таблицей выше → у всех
+записей **серое облачко (DNS only)** — оранжевое пустит трафик через сеть Cloudflare, которую в РФ
+душат, и сломает PROXY protocol → добавить CAA `0 issue "letsencrypt.org; accounturi=…"` (шаг 4,
+Cloudflare его умеет) → Timeweb → домен → NS-серверы → два NS Cloudflare вместо четырёх Timeweb →
+дождаться «Active» → проверить `dig NS clubsapp.ru @8.8.8.8` и открыть `app.clubsapp.ru` с телефона
+через VPN. До переезда BotFather держать на `77-42-23-177.sslip.io`. Запасной провайдер с той же
+логикой — Gcore DNS.
+
 ### 6. Mini App на `app.clubsapp.ru` — напрямую на Hetzner, минуя прокси
 
 1. Timeweb DNS: `A app → 77.42.23.177` (на Hetzner, **не** на прокси).
@@ -157,7 +191,8 @@ TTL A-записей — 600 с (проверено на `ns1.timeweb.ru` 18.09;
    возврата после оплаты). Дефолт в коде — тот же.
 4. Кабинет Яндекса: добавить `app.clubsapp.ru` в Referer обоих браузерных ключей (JS API карты и
    Static API), иначе карта в пикере места молча ляжет.
-5. BotFather: Bot Settings → Menu Button URL и Configure Mini App → `https://app.clubsapp.ru`.
+5. BotFather: Bot Settings → Menu Button URL и Configure Mini App → `https://app.clubsapp.ru` —
+   **только после переезда DNS (шаг 6a)**, иначе с фильтруемых VPN имя не резолвится.
 6. Robokassa — модерация магазина по адресу `https://clubsapp.ru` (через прокси, модератор без
    VPN доходит).
 
