@@ -223,8 +223,9 @@ CAA → A-записи → BotFather**. Reviewer и Security пройдены (�
 `X-Forwarded-For` — по нему проверяется, что до бэкенда доходит IP клиента. **Включено 18.09:** RU VPS
 `clubs-ru-proxy` 147.45.189.189 (Timeweb SPB-3), Traefik trustedIPs, A-записи переключены, без VPN
 из РФ сайт открывается. **Но с VPN, чьи диапазоны фильтрует российский аплинк, через прокси сайт
-недоступен** (SYN-ACK не возвращается) — BotFather НЕ переключать, следующий шаг GeoDNS
-(`infrastructure.md` § «Российский reverse proxy перед Hetzner»). CAA у Timeweb нет.
+недоступен** (SYN-ACK не возвращается) — Mini App переведён на `app.clubsapp.ru` (A-запись напрямую
+на Hetzner, минуя прокси; `TELEGRAM_WEBAPP_BASE_URL` тоже), GeoDNS отложен до появления аудитории
+без VPN (`infrastructure.md` § «Российский reverse proxy перед Hetzner»). CAA у Timeweb нет.
 
 **Форма фикса — российский reverse proxy перед Hetzner, НЕ переезд стека в РФ**: бэкенд обязан
 ходить в api.telegram.org, из российского ДЦ это может быть заблокировано. Ловушка про

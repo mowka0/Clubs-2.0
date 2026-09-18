@@ -33,7 +33,7 @@ Telegram Mini App для создания и управления платным
 - Docker Compose для локальной разработки и продакшена
 - Coolify на VPS (Hetzner Cloud, IP: 77.42.23.177) для деплоя
 - GitHub repo: https://github.com/mowka0/Clubs-2.0
-- Прод-домен: `https://clubsapp.ru` (с 2026-09-16; DNS у Timeweb, A-запись на IP VPS, сертификат — Let's Encrypt через Coolify). Staging: `https://staging.77-42-23-177.sslip.io`
+- Прод-домен: `https://clubsapp.ru` (с 2026-09-16; DNS у Timeweb, A-запись на IP VPS, сертификат — Let's Encrypt через Coolify). **Mini App (BotFather, кнопки бота, `TELEGRAM_WEBAPP_BASE_URL`) — `https://app.clubsapp.ru`**, A-запись напрямую на Hetzner, минуя прокси; корень `clubsapp.ru` идёт через российский прокси (Robokassa, публичные страницы). Staging: `https://staging.77-42-23-177.sslip.io`
 - Доступ из РФ: РКН режет подсети Hetzner на домашних и мобильных провайдерах (подтверждено PO 2026-09-18), поэтому перед Hetzner ставится российский VPS-прокси — `infra/ru-proxy/` (nginx stream, TCP passthrough 80/443 + PROXY protocol; A-записи `clubsapp.ru` → прокси → 77.42.23.177). Traefik доверяет строке PROXY только IP прокси (`proxyProtocol.trustedIPs` в Coolify → Proxy → Configuration) — при смене IP прокси править там. Бэкенд прокси не видит, `ClientIpResolver.TRUSTED_PROXY_HOPS` не трогать. Runbook — `infra/ru-proxy/README.md`
 - Auto-deploy: push в `master` → production (Coolify следит за master), push в **любую другую ветку** (`branches-ignore: [master]`) → staging
 - Staging: отдельное приложение в Coolify на другом домене (настраивается один раз, см. ниже)
