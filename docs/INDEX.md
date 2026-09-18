@@ -35,7 +35,7 @@
 | `club` | `clubs.md`, `club-page-unified.md`, `club-invites.md`, `club-leave.md`, `club-interests.md` |
 | `clubquality` | `club-quality.md` |
 | `common/auth` (`ClubRoleGuard`, `RoleCapabilities`, `ClubCapability`) | `club-roles.md`, `co-organizers.md` |
-| `common/security` (`SecurityConfig`, `RateLimitFilter`, `ClientIpResolver`) | `auth.md`, `infrastructure.md`; permitAll ResultURL, бакет чекаута и allowlist IP — `platform-billing.md` § 6.6, § 9 |
+| `common/security` (`SecurityConfig`, `RateLimitFilter`, `ClientIpResolver`) | `auth.md`, `infrastructure.md`; permitAll ResultURL, бакет чекаута и allowlist IP — `platform-billing.md` § 6.6, § 9; цепочка прокси и PROXY protocol — `infrastructure.md` § «Российский reverse proxy перед Hetzner» |
 | `common/util`, `common/dto` | спека модуля-потребителя (см. вызывающий пакет) |
 | `event` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md`, `event-geo.md` |
 | `eventtemplate` | `event-templates.md` |
@@ -90,6 +90,7 @@
 |---|---|
 | `docker-compose*.yml`, `Dockerfile`, `nginx.conf`, `.github/workflows/` | `infrastructure.md` + `CLAUDE.md` § Infrastructure |
 | `application*.yml`, env-переменные | `infrastructure.md` + спека модуля-потребителя |
+| `infra/host/`, `infra/ru-proxy/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner» + README в каталоге |
 
 ---
 
@@ -146,12 +147,12 @@
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
 | `platform-billing-testplan.md` | тест-план staging-прогона биллинга: 21 кейс по блокам (бесплатный период, оплата заглушкой, продление, периферия), переменные staging, что проверяет Dev по БД | 2026-09-16 |
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
-| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-15 |
+| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-18 |
 
 ### Пользователь и вход
 | Файл | О чём | Правлен |
 |---|---|---|
-| `auth.md` | initData, JWT, rate limit | 2026-04-25 |
+| `auth.md` | initData, JWT, rate limit | 2026-09-18 |
 | `profile.md` | глобальный профиль, редактирование | 2026-08-05 |
 | `profile-quest.md` | квест заполнения профиля, 50 XP | 2026-08-01 |
 | `onboarding.md` | онбординг v3, превью экранов | 2026-08-01 |
@@ -175,7 +176,7 @@
 ### Инфраструктура
 | Файл | О чём | Правлен |
 |---|---|---|
-| `infrastructure.md` | Docker, Coolify, CI/CD, nginx | 2026-08-15 |
+| `infrastructure.md` | Docker, Coolify, CI/CD, nginx, российский прокси | 2026-09-18 |
 
 ---
 
