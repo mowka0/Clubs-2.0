@@ -19,6 +19,8 @@ object ClientIpResolver {
      * Сколько прокси между клиентом и бэкендом дописывают себя в `X-Forwarded-For`.
      * Сейчас один — nginx фронта, дописывающий адрес Traefik (docker-compose.prod.yml).
      * Меняется вместе с цепочкой прокси, иначе ключ съедет на внутренний адрес.
+     * Российский прокси перед Traefik (infra/ru-proxy) сюда не входит: он L4 и отдаёт адрес
+     * клиента Traefik по PROXY protocol, в `X-Forwarded-For` себя не дописывает.
      */
     const val TRUSTED_PROXY_HOPS = 1
 

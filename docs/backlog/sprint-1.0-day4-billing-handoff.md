@@ -213,16 +213,20 @@ check-host 18.09: с российских ДЦ-узлов сайт отдаёт 
 **модератор Robokassa открывает сайт обычным браузером — может не открыться → отказ**;
 ResultURL идёт из ДЦ — по данным check-host доходит.
 
-**Диагностика (PO, без VPN):** открыть `https://77-42-23-177.sslip.io` и `http://77.42.23.177`,
-назвать провайдера. Оба не открываются → режут подсеть, нужен фикс; sslip открывается, а
-clubsapp.ru нет → DNS провайдера, фикс не нужен.
+**Диагностика 2026-09-18 (PO, без VPN): не открываются ни `77-42-23-177.sslip.io`, ни
+`http://77.42.23.177`** → режут подсеть, DNS ни при чём, фикс нужен. Фикс подготовлен той же
+сессией (ветка `devops/ru-reverse-proxy`): `infra/ru-proxy/` — nginx `stream` (TCP passthrough
+80/443 + PROXY protocol), `install.sh`, README-runbook с порядком шагов **Traefik
+(`proxyProtocol.trustedIPs` в Coolify) → установка на RU VPS → `curl --resolve` до DNS →
+CAA → A-записи → BotFather**. Reviewer и Security пройдены (блокеров нет). Бэкенд не меняется: `ClientIpResolver` прокси не видит
+(`infrastructure.md` § «Российский reverse proxy перед Hetzner»). Лог фронта переведён на формат с
+`X-Forwarded-For` — по нему проверяется, что до бэкенда доходит IP клиента. Осталось за PO:
+купить VPS в российском ДЦ (~300–500 ₽/мес, Ubuntu 24.04, root по ключу) и пройти README.
 
-**Форма фикса — российский reverse proxy перед Hetzner** (VPS в РФ-ДЦ ~300–500 ₽/мес, nginx,
-A-запись clubsapp.ru → на него), **НЕ переезд стека в РФ**: бэкенд обязан ходить в
-api.telegram.org, из российского ДЦ это может быть заблокировано. **Ловушка:** `ClientIpResolver`
-доверяет только известным прокси — новый прокси добавить в доверенные, иначе IP-allowlist
-ResultURL увидит IP прокси и отвергнет Robokassa (403), а rate limit сольёт всех в один ключ.
-VPS покупает PO; настройка — пара часов.
+**Форма фикса — российский reverse proxy перед Hetzner, НЕ переезд стека в РФ**: бэкенд обязан
+ходить в api.telegram.org, из российского ДЦ это может быть заблокировано. Ловушка про
+`ClientIpResolver` снята выбором L4 + PROXY protocol: Traefik сам видит IP клиента, доверенные
+прокси в бэкенде не меняются; опасен только `proxyProtocol.insecure` (подделка IP) — не ставить.
 
 ### Долги, не блокирующие
 
@@ -373,8 +377,9 @@ VPS покупает PO; настройка — пара часов.
 
 > «продолжи: биллинг за клуб. Хэндофф — `docs/backlog/sprint-1.0-day4-billing-handoff.md`,
 > читать **§ 2d** (состояние на 2026-09-18): всё в проде на `clubsapp.ru`, ждём Robokassa
-> (пароли-заглушки в Coolify), открыта проблема доступности сайта из РФ без VPN — сначала
-> диагностика по § 2d, потом при необходимости российский reverse proxy.»
+> (пароли-заглушки в Coolify); доступ из РФ: диагностика подтвердила блок подсети Hetzner,
+> runbook прокси `infra/ru-proxy/README.md` ждёт VPS от PO.»
 
-Если PO принёс пароли Robokassa — п. 3 раздела «Robokassa — шаги PO». Если принёс результат
-диагностики — раздел «Открытая проблема». Тест-план — `docs/modules/platform-billing-testplan.md`.
+Если PO принёс пароли Robokassa — п. 3 раздела «Robokassa — шаги PO». Если принёс IP
+российского VPS — `infra/ru-proxy/README.md`, шаги 1–4, затем обновить статус в
+`infrastructure.md` § «Российский reverse proxy перед Hetzner» и здесь. Тест-план — `docs/modules/platform-billing-testplan.md`.
