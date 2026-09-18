@@ -220,8 +220,11 @@ ResultURL идёт из ДЦ — по данным check-host доходит.
 (`proxyProtocol.trustedIPs` в Coolify) → установка на RU VPS → `curl --resolve` до DNS →
 CAA → A-записи → BotFather**. Reviewer и Security пройдены (блокеров нет). Бэкенд не меняется: `ClientIpResolver` прокси не видит
 (`infrastructure.md` § «Российский reverse proxy перед Hetzner»). Лог фронта переведён на формат с
-`X-Forwarded-For` — по нему проверяется, что до бэкенда доходит IP клиента. Осталось за PO:
-купить VPS в российском ДЦ (~300–500 ₽/мес, Ubuntu 24.04, root по ключу) и пройти README.
+`X-Forwarded-For` — по нему проверяется, что до бэкенда доходит IP клиента. **Включено 18.09:** RU VPS
+`clubs-ru-proxy` 147.45.189.189 (Timeweb SPB-3), Traefik trustedIPs, A-записи переключены, без VPN
+из РФ сайт открывается. **Но с VPN, чьи диапазоны фильтрует российский аплинк, через прокси сайт
+недоступен** (SYN-ACK не возвращается) — BotFather НЕ переключать, следующий шаг GeoDNS
+(`infrastructure.md` § «Российский reverse proxy перед Hetzner»). CAA у Timeweb нет.
 
 **Форма фикса — российский reverse proxy перед Hetzner, НЕ переезд стека в РФ**: бэкенд обязан
 ходить в api.telegram.org, из российского ДЦ это может быть заблокировано. Ловушка про

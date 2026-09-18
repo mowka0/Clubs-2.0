@@ -18,7 +18,9 @@ CONF_DST=/etc/nginx/nginx.conf
 # Прод на Hetzner. Достижимость проверяется через --resolve: не зависит ни от DNS clubsapp.ru
 # (после переключения он ведёт на этот же VPS), ни от sslip-имени, которое могут убрать из Coolify.
 UPSTREAM_IP=77.42.23.177
-SSHD_DROPIN=/etc/ssh/sshd_config.d/50-clubs.conf
+# 00-, а не 50-: cloud-init провайдера кладёт 50-cloud-init.conf с PasswordAuthentication yes,
+# а sshd берёт первое значение в алфавитном порядке include — наш файл обязан идти раньше.
+SSHD_DROPIN=/etc/ssh/sshd_config.d/00-clubs.conf
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Нужны права root: пакеты, /etc/nginx, sshd и файрвол ставит только он" >&2
@@ -66,6 +68,14 @@ PermitRootLogin prohibit-password
 SSHD
 sshd -t
 systemctl reload ssh
+# Итог проверяем по эффективному конфигу, а не по факту записи файла: другой drop-in может перебить.
+# Без конвейера: grep -q закрыл бы канал на первом совпадении, sshd получил бы SIGPIPE, и pipefail
+# выдал бы ложную ошибку.
+sshd_effective=$(sshd -T 2>/dev/null || true)
+if ! grep -qx 'passwordauthentication no' <<<"$sshd_effective"; then
+    echo "Парольный вход всё ещё включён: в /etc/ssh/sshd_config.d/ есть drop-in раньше $SSHD_DROPIN" >&2
+    exit 1
+fi
 
 # Файрвол: наружу только SSH (limit — не больше 6 подключений за 30 с с одного адреса, против
 # перебора), HTTP и HTTPS. Порт SSH берём из живого конфига: у части провайдеров он нестандартный.
