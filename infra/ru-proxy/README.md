@@ -51,7 +51,7 @@ DNS обратно, 10 минут). Задержка растёт на один 
   не активен (нет `--experimental.http3`, `Alt-Svc` прод не шлёт). PROXY protocol по UDP не
   существует: с пробросом все h3-клиенты схлопнулись бы в IP прокси — общий rate limit на всех.
 
-## Шаги (порядок важен: Traefik → nginx → проверка → CAA → DNS)
+## Шаги (порядок важен: Traefik → nginx → проверка → DNS)
 
 ### 0. Купить VPS
 
@@ -111,20 +111,21 @@ ssh root@77.42.23.177 'docker logs --since 2m $(docker ps --format "{{.Names}}" 
 
 ### 4. CAA: сертификат `clubsapp.ru` выдаётся только ACME-аккаунту Traefik
 
-Timeweb → домен `clubsapp.ru` → DNS → добавить одну запись типа CAA (флаг `0`, тег `issue`):
+**Пока пропущено (18.09): DNS-панель Timeweb не поддерживает тип CAA** (только A, AAAA, MX, CNAME,
+TXT, SRV). Защита остаётся на уровне самого VPS (ключ, файрвол, автообновления) плюс периодическая
+проверка выпусков на `https://crt.sh/?q=clubsapp.ru` — чужой сертификат там виден. Чтобы CAA всё же
+поставить, DNS-хостинг переносится к провайдеру с поддержкой CAA (Yandex Cloud DNS, Selectel и т.п.):
+домен остаётся у Timeweb, меняются только NS-записи. Тогда запись такая (флаг `0`, тег `issue`):
 
 ```
 clubsapp.ru.  CAA  0 issue "letsencrypt.org; accounturi=https://acme-v02.api.letsencrypt.org/acme/acct/3755959236"
 ```
 
 Одной записи достаточно: без отдельной `issuewild` то же ограничение действует и на
-wildcard-сертификаты (RFC 8659).
+wildcard-сертификаты (RFC 8659). `accounturi` — аккаунт Let's Encrypt, которым Traefik на Hetzner
+выпускает и продлевает сертификат (`jq -r '.letsencrypt.Account.Registration.uri'
+/data/coolify/proxy/acme.json`); чужой аккаунт, даже контролируя порт 80, сертификат не получит.
 
-`accounturi` — аккаунт Let's Encrypt, которым Traefik на Hetzner выпускает и продлевает
-сертификат (`jq -r '.letsencrypt.Account.Registration.uri' /data/coolify/proxy/acme.json`).
-Чужой аккаунт, даже контролируя порт 80, сертификат не получит; продления Traefik идут как шли.
-Если панель Timeweb не принимает параметры после `;` — оставить `0 issue "letsencrypt.org"`
-(отсекает другие CA) и раз в месяц смотреть выпуски на `https://crt.sh/?q=clubsapp.ru`.
 **Ловушка:** переустановка Coolify или потеря `acme.json` меняет аккаунт — продление начнёт
 падать, пока `accounturi` не обновлён.
 
