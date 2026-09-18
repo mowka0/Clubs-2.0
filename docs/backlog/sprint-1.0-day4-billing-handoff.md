@@ -226,6 +226,22 @@ CAA → A-записи → BotFather**. Reviewer и Security пройдены (�
 недоступен** (SYN-ACK не возвращается) — Mini App переведён на `app.clubsapp.ru` (A-запись напрямую
 на Hetzner, минуя прокси; `TELEGRAM_WEBAPP_BASE_URL` тоже), GeoDNS отложен до появления аудитории
 без VPN (`infrastructure.md` § «Российский reverse proxy перед Hetzner»). CAA у Timeweb нет.
+**18.09, вечер: с телефона через VPN `app.` и корень не открылись — NS Timeweb недоступны с
+фильтруемых VPN-сетей, имя не резолвится вовсе. BotFather возвращён на sslip, DNS-хостинг переезжает в
+Cloudflare (README прокси § 6a); после «Active» — BotFather на `app.clubsapp.ru` снова.**
+**Итог 18.09 ~17:00 МСК: DNS в Cloudflare переехал (делегирование прошло), но `app.clubsapp.ru` с телефона
+всё равно не открылся — VPN-приложение пускает `.ru` мимо туннеля (лог прокси: домашний ТрансТелеКом).
+Mini App остаётся на sslip (BotFather, env `TELEGRAM_WEBAPP_BASE_URL` — PO вернуть в Coolify + Redeploy,
+дефолт в коде возвращён). Целевое — домен вне `.ru` для Mini App (README прокси § 6б).**
+Устаревшая точка возобновления (16:15): зона в Cloudflare готова, NS в Timeweb заменены на
+`lara`/`rustam.ns.cloudflare.com`, кнопка «I updated my nameservers» нажата; реестр `.ru` ещё отдавал
+NS Timeweb. Следующая сессия: 1) `ssh root@77.42.23.177 "dig @a.dns.ripn.net clubsapp.ru NS +noall
++authority"` — ждать `cloudflare`; Cloudflare → статус зоны «Active»; 2) с Mac через VPN `dig +short
+app.clubsapp.ru` и `curl -sI https://app.clubsapp.ru/`; 3) PO: BotFather (Menu Button + Configure Mini
+App) → `https://app.clubsapp.ru`, открыть бота с телефона через VPN; 4) «готово, запушь» на PR #176;
+5) хвосты PO: Referer `app.clubsapp.ru` в ключах Яндекса, сброс root-пароля RU VPS, опционально CAA в
+Cloudflare. В прод-контейнере фронта временно (до следующего деплоя) включён лог статики и `host=` —
+слетит сам, PR #176 делает `host=` постоянным.
 
 **Форма фикса — российский reverse proxy перед Hetzner, НЕ переезд стека в РФ**: бэкенд обязан
 ходить в api.telegram.org, из российского ДЦ это может быть заблокировано. Ловушка про
