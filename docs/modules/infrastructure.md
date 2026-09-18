@@ -780,8 +780,8 @@ Public Suffix List — общие лимиты Let's Encrypt), тот же пр�
 Timeweb стоят в РФ и недоступны с фильтруемых VPN-диапазонов (таймаут UDP и TCP с Mac через VPN; NS
 nip.io для sslip отвечают). Резолверы VPN-провайдеров не могут разрешить ни одно имя в `clubsapp.ru`,
 поэтому телефон PO открывал только sslip — при том же IP. Лечение — DNS-хостинг в Cloudflare (Free,
-только DNS, серые облачка), домен остаётся у Timeweb, меняются NS; порядок и выгрузка зоны —
-`infra/ru-proxy/README.md` § 6a. До переезда BotFather держится на sslip. На прокси поставлен тот же
+только DNS, серые облачка), домен остаётся у Timeweb, NS зоны — `lara.ns.cloudflare.com` и
+`rustam.ns.cloudflare.com` (с 2026-09-18); порядок и выгрузка зоны — `infra/ru-proxy/README.md` § 6a. До переезда BotFather держится на sslip. На прокси поставлен тот же
 MSS clamping, что на Hetzner (`infra/host`, юнит `clubs-mss-clamp`): прокси сам завершает TCP с
 клиентами. Лог фронта пишет `host=` (формат `clubs` в `frontend/nginx.conf`): три имени на одном
 контейнере иначе неразличимы. Доступ к RU VPS с Mac через VPN не проходит по той же

@@ -181,6 +181,13 @@ Cloudflare его умеет) → Timeweb → домен → NS-серверы �
 через VPN. До переезда BotFather держать на `77-42-23-177.sslip.io`. Запасной провайдер с той же
 логикой — Gcore DNS.
 
+Сделано 18.09: зона в Cloudflare (все шесть записей импортированы, у всех DNS only), NS зоны —
+`lara.ns.cloudflare.com` и `rustam.ns.cloudflare.com`. DNSSEC у домена не был включён (DS-записи в
+`.ru` нет), выключать было нечего. Проверка до переключения: с Mac через VPN оба NS Cloudflare отдали
+правильные адреса, а NS Timeweb с той же сети — таймаут. Из рекомендаций Cloudflare пункт «Only allow
+Cloudflare IP addresses at your origin» **не выполнять** — он для режима с оранжевым облачком и отрезал
+бы всех пользователей.
+
 ### 6. Mini App на `app.clubsapp.ru` — напрямую на Hetzner, минуя прокси
 
 1. Timeweb DNS: `A app → 77.42.23.177` (на Hetzner, **не** на прокси).
