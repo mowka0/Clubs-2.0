@@ -229,7 +229,11 @@ CAA → A-записи → BotFather**. Reviewer и Security пройдены (�
 **18.09, вечер: с телефона через VPN `app.` и корень не открылись — NS Timeweb недоступны с
 фильтруемых VPN-сетей, имя не резолвится вовсе. BotFather возвращён на sslip, DNS-хостинг переезжает в
 Cloudflare (README прокси § 6a); после «Active» — BotFather на `app.clubsapp.ru` снова.**
-**Точка возобновления (18.09 ~16:15 МСК):** зона в Cloudflare готова, NS в Timeweb заменены на
+**Итог 18.09 ~17:00 МСК: DNS в Cloudflare переехал (делегирование прошло), но `app.clubsapp.ru` с телефона
+всё равно не открылся — VPN-приложение пускает `.ru` мимо туннеля (лог прокси: домашний ТрансТелеКом).
+Mini App остаётся на sslip (BotFather, env `TELEGRAM_WEBAPP_BASE_URL` — PO вернуть в Coolify + Redeploy,
+дефолт в коде возвращён). Целевое — домен вне `.ru` для Mini App (README прокси § 6б).**
+Устаревшая точка возобновления (16:15): зона в Cloudflare готова, NS в Timeweb заменены на
 `lara`/`rustam.ns.cloudflare.com`, кнопка «I updated my nameservers» нажата; реестр `.ru` ещё отдавал
 NS Timeweb. Следующая сессия: 1) `ssh root@77.42.23.177 "dig @a.dns.ripn.net clubsapp.ru NS +noall
 +authority"` — ждать `cloudflare`; Cloudflare → статус зоны «Active»; 2) с Mac через VPN `dig +short

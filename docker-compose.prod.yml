@@ -88,9 +88,9 @@ services:
       # чтобы страницы возврата после оплаты вели в того же бота.
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-clubs_v2_bot}
       # Публичный адрес Mini App: WebAppInfo-кнопки бота и страницы возврата после оплаты.
-      # Дефолт — поддомен напрямую на Hetzner, минуя российский прокси (application.yml);
+      # Дефолт — имя вне .ru напрямую на Hetzner (почему не clubsapp.ru — application.yml);
       # у staging переменная задаётся в Coolify (иначе ссылки уведут на прод).
-      TELEGRAM_WEBAPP_BASE_URL: ${TELEGRAM_WEBAPP_BASE_URL:-https://app.clubsapp.ru}
+      TELEGRAM_WEBAPP_BASE_URL: ${TELEGRAM_WEBAPP_BASE_URL:-https://77-42-23-177.sslip.io}
       # Username саппорт-аккаунта (без @) для баг-репортов из формы «Сообщить о проблеме»
       TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
       # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
