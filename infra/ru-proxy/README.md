@@ -111,12 +111,14 @@ ssh root@77.42.23.177 'docker logs --since 2m $(docker ps --format "{{.Names}}" 
 
 ### 4. CAA: сертификат `clubsapp.ru` выдаётся только ACME-аккаунту Traefik
 
-Timeweb → домен `clubsapp.ru` → DNS → добавить записи типа CAA:
+Timeweb → домен `clubsapp.ru` → DNS → добавить одну запись типа CAA (флаг `0`, тег `issue`):
 
 ```
 clubsapp.ru.  CAA  0 issue "letsencrypt.org; accounturi=https://acme-v02.api.letsencrypt.org/acme/acct/3755959236"
-clubsapp.ru.  CAA  0 issuewild ";"
 ```
+
+Одной записи достаточно: без отдельной `issuewild` то же ограничение действует и на
+wildcard-сертификаты (RFC 8659).
 
 `accounturi` — аккаунт Let's Encrypt, которым Traefik на Hetzner выпускает и продлевает
 сертификат (`jq -r '.letsencrypt.Account.Registration.uri' /data/coolify/proxy/acme.json`).
