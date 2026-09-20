@@ -18,9 +18,9 @@ class LegalSheetTest {
     @Test
     fun `стартовое сообщение несёт всё обязательное для продажи в Telegram`() {
         val block = texts().infoBlock()
-        // Требования Robokassa к магазину в Telegram: услуга и цена, реквизиты, контакты, условия.
+        // Robokassa для магазина в Telegram: услуга и цена, реквизиты, контакты; условия — в оферте по кнопке.
         listOf("199 ₽", "15 дней", "Тестов Тест Тестович", "ИНН 000000000000",
-            "@clubs_tech_support", "support@example.com", "возврат", "/terms", "настоящий клуб").forEach {
+            "@clubs_tech_support", "support@example.com", "настоящий клуб").forEach {
             assertTrue(it in block, "нет «$it»")
         }
         assertTrue(block.length <= LegalSheet.TELEGRAM_TEXT_LIMIT)
