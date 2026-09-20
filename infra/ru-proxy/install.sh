@@ -5,7 +5,7 @@
 # равно доверию к Hetzner, отсюда hardening здесь же, а не «потом».
 #
 # Запускать НА РОССИЙСКОМ VPS от root, из каталога с этими файлами:
-#   scp -r infra/ru-proxy root@<RU_IP>:/tmp/
+#   scp -r infra/ru-proxy infra/host root@<RU_IP>:/tmp/
 #   ssh root@<RU_IP> "cd /tmp/ru-proxy && bash install.sh"
 #
 # Идемпотентен: повторный запуск обновляет конфиг и перезагружает nginx.
@@ -86,6 +86,14 @@ ufw limit "${ssh_port:-22}/tcp" >/dev/null
 ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
+
+# MSS clamping — та же «чёрная дыра» PMTU, что лечится на Hetzner (infra/host): прокси сам
+# завершает TCP с клиентами, поэтому без клампинга большие ответы (бандл) виснут у части людей.
+if [ -f ../host/install-mss-clamp.sh ]; then
+    (cd ../host && sh install-mss-clamp.sh)
+else
+    echo "ВНИМАНИЕ: каталог infra/host не скопирован рядом — MSS clamping не поставлен (см. README, шаг 2)" >&2
+fi
 
 echo
 echo "Готово. Проверка с машины без VPN (DNS ещё не переключён, адрес подставляется вручную):"
