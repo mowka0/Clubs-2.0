@@ -226,6 +226,9 @@ Cloudflare IP addresses at your origin» **не выполнять** — он д
 5. BotFather: Menu Button и Configure Mini App → `https://clubsmeet.com`. Проверка с телефона через
    VPN и с Mac через VPN — оба типа VPN должны открыть.
 
+Сделано и проверено 2026-09-20: сертификат выпущен, `TELEGRAM_WEBAPP_BASE_URL` в проде, BotFather
+переключён, Mini App открывается с телефона (VPN с обходом `.ru`) и с Mac (VPN с полным туннелем).
+
 Ниже — история шага 6, оставлена как есть.
 
 ### 6. Mini App на `app.clubsapp.ru` — напрямую на Hetzner, минуя прокси (НЕ СРАБОТАЛО, см. § 6б)

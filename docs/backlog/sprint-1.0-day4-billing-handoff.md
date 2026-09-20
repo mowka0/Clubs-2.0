@@ -231,8 +231,11 @@ CAA → A-записи → BotFather**. Reviewer и Security пройдены (�
 Cloudflare (README прокси § 6a); после «Active» — BotFather на `app.clubsapp.ru` снова.**
 **Итог 18.09 ~17:00 МСК: DNS в Cloudflare переехал (делегирование прошло), но `app.clubsapp.ru` с телефона
 всё равно не открылся — VPN-приложение пускает `.ru` мимо туннеля (лог прокси: домашний ТрансТелеКом).
-Mini App переезжает на `clubsmeet.com` (куплен 20.09 у Timeweb/PDR, DNS в Cloudflare; Coolify domain +
-env, Яндекс-Referer, BotFather — README прокси § 6в; дефолт в коде уже `clubsmeet.com`).**
+Mini App ПЕРЕЕХАЛ на `clubsmeet.com` (куплен 20.09 у Timeweb/PDR, DNS в Cloudflare; Coolify domain + env,
+BotFather — README прокси § 6в; проверено PO с телефона и Mac через VPN 20.09). Robokassa (звонок 19.09):
+магазином можно указать ссылку на бота, лендинг не обязателен — обязательную информацию (услуга и цена,
+ФИО+ИНН, e-mail И ТЕЛЕФОН, оферта, условия, политика ПД) добавить в описание бота и ответ на /start;
+прокси и `clubsapp.ru` стали необязательными (ResultURL на них работает).**
 Устаревшая точка возобновления (16:15): зона в Cloudflare готова, NS в Timeweb заменены на
 `lara`/`rustam.ns.cloudflare.com`, кнопка «I updated my nameservers» нажата; реестр `.ru` ещё отдавал
 NS Timeweb. Следующая сессия: 1) `ssh root@77.42.23.177 "dig @a.dns.ripn.net clubsapp.ru NS +noall
