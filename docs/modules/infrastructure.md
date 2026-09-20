@@ -402,7 +402,7 @@ SSL). До этого прод жил на `77-42-23-177.sslip.io`: это не 
 прокси обе A-записи ведут на него (§ «Российский reverse proxy перед Hetzner»), а `A app →
 77.42.23.177` остаётся напрямую на Hetzner — это адрес Mini App в BotFather (с 2026-09-18). Сертификат выпускает
 Coolify/Traefik (Let's Encrypt) после добавления домена приложению; при переезде сервера меняется
-только A-запись. `TELEGRAM_WEBAPP_BASE_URL` = `https://77-42-23-177.sslip.io` на проде (дефолт в
+только A-запись. `TELEGRAM_WEBAPP_BASE_URL` = `https://clubsmeet.com` на проде (дефолт в
 `application.yml` и compose; имя вне `.ru` напрямую на Hetzner — § «Российский reverse proxy перед Hetzner»), на staging — по-прежнему `https://staging.77-42-23-177.sslip.io`, и
 там переменная **обязана** быть задана в Coolify. Ключи Яндекс.Карт ограничены по Referer — после
 переезда `clubsapp.ru` нужно добавить в белый список обоих ключей в кабинете Яндекса, иначе карта
@@ -780,9 +780,11 @@ Public Suffix List — общие лимиты Let's Encrypt), тот же пр�
 домены `.ru` мимо туннеля (соединения на `clubsapp.ru` пришли на прокси с домашнего ТрансТелеКома при
 выходе VPN в Болгарии), поэтому `app.clubsapp.ru` летит на Hetzner через российского провайдера — в
 блокировку. Одно `.ru`-имя не покрывает оба типа VPN (обход `.ru` ↔ полный туннель с фильтруемым
-выходом). Mini App живёт на имени **вне `.ru`** напрямую на Hetzner: пока `77-42-23-177.sslip.io`
-(BotFather, `TELEGRAM_WEBAPP_BASE_URL` и дефолт в коде), целевое — свой домен вне `.ru` с DNS в
-Cloudflare. Подробно — `infra/ru-proxy/README.md` § 6б.
+выходом). Mini App живёт на имени **вне `.ru`** напрямую на Hetzner — с 2026-09-20 это **`clubsmeet.com`**
+(куплен у Timeweb, регистратор PDR — NS меняются в панели PDR; DNS в Cloudflare `lara`/`rustam`, одна
+запись `A → 77.42.23.177`; BotFather, `TELEGRAM_WEBAPP_BASE_URL` и дефолт в коде). Зона `.com`
+выбрана как не российская и с чистой репутацией у фильтров. `77-42-23-177.sslip.io` остаётся в
+Coolify для разосланных кнопок. Подробно — `infra/ru-proxy/README.md` § 6б–6в.
 
 **Второй слой той же проблемы — DNS (18.09, при переключении BotFather на `app.`):** все четыре NS
 Timeweb стоят в РФ и недоступны с фильтруемых VPN-диапазонов (таймаут UDP и TCP с Mac через VPN; NS

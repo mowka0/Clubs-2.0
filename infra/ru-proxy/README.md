@@ -200,11 +200,33 @@ Cloudflare IP addresses at your origin» **не выполнять** — он д
 работает. Одно `.ru`-имя не покрывает оба типа. Имя **вне `.ru`, ведущее прямо на Hetzner**, у обоих
 уходит в туннель и работает — ровно поэтому sslip открывался везде.
 
-Решение: Mini App живёт на имени вне `.ru` напрямую на Hetzner. Пока — `77-42-23-177.sslip.io`
-(BotFather и `TELEGRAM_WEBAPP_BASE_URL` возвращены на него, дефолт в коде тот же). Целевое — свой
-домен вне `.ru` (например `.app`/`.io`/`.com`): DNS в Cloudflare, `A → 77.42.23.177`, домен в Coolify,
-затем BotFather + переменная. `clubsapp.ru` остаётся для Robokassa и публичных страниц через прокси;
-`app.clubsapp.ru` не нужен. Ниже — история шага 6, оставлена как есть.
+Решение: Mini App живёт на имени вне `.ru` напрямую на Hetzner — свой домен `clubsmeet.com` (§ 6в).
+`clubsapp.ru` остаётся для Robokassa и публичных страниц через прокси; `app.clubsapp.ru` не нужен.
+
+### 6в. Mini App на `clubsmeet.com` (2026-09-20)
+
+Выбор зоны: `.com` — не российская (`.su`, `.com.ru`, `.москва` VPN выпускают из туннеля так же, как
+`.ru`) и с чистой репутацией (дешёвые `.site`/`.online`/`.top`/`.fun` режут фильтры и «защита от угроз»
+в VPN-приложениях). Свободные имена проверялись через RDAP реестра:
+`curl -s -o /dev/null -w '%{http_code}' https://rdap.verisign.com/com/v1/domain/<имя>.com` (404 —
+свободен, 200 — занят); whois с VPN не отвечает.
+
+1. Куплен у Timeweb (1 560 ₽/год). **Ловушка:** `.com` Timeweb перепродаёт от регистратора PDR, и в
+   панели Timeweb «Управление NS-серверами недоступно». NS меняются в панели PDR:
+   `https://timeweb.myorderbox.com/` → Forgot password → тип Customer → e-mail регистрации домена →
+   письмо с восстановлением доступа → домен → Name Servers. DNS-записи домена в Timeweb не трогать —
+   после смены NS они мёртвые.
+2. Cloudflare → Add a site → `clubsmeet.com` → Free → из импортированных заглушек Timeweb
+   (`A 92.53.96.223` — парковка, `AAAA`, `MX`, `TXT`, всё для `www`) оставить **одну** запись
+   `A @ → 77.42.23.177`, DNS only. NS зоны — те же `lara`/`rustam.ns.cloudflare.com`.
+3. Coolify → прод → сервис `frontend` → Domains: добавить `https://clubsmeet.com`; Environment:
+   `TELEGRAM_WEBAPP_BASE_URL=https://clubsmeet.com` → Redeploy. Сертификат выпустится сам (DNS ведёт
+   прямо на Hetzner). `77-42-23-177.sslip.io` оставить — старые кнопки в чатах ведут на него.
+4. Кабинет Яндекса: `clubsmeet.com` в Referer обоих браузерных ключей (JS API карты, Static API).
+5. BotFather: Menu Button и Configure Mini App → `https://clubsmeet.com`. Проверка с телефона через
+   VPN и с Mac через VPN — оба типа VPN должны открыть.
+
+Ниже — история шага 6, оставлена как есть.
 
 ### 6. Mini App на `app.clubsapp.ru` — напрямую на Hetzner, минуя прокси (НЕ СРАБОТАЛО, см. § 6б)
 
