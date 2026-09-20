@@ -20,7 +20,7 @@ class LegalSheetTest {
         val block = texts().infoBlock()
         // Требования Robokassa к магазину в Telegram: услуга и цена, реквизиты, контакты, условия.
         listOf("199 ₽", "15 дней", "Тестов Тест Тестович", "ИНН 000000000000",
-            "@clubs_tech_support", "support@example.com", "возврат", "/terms", "не нужно запоминать").forEach {
+            "@clubs_tech_support", "support@example.com", "возврат", "/terms", "настоящий клуб").forEach {
             assertTrue(it in block, "нет «$it»")
         }
         assertTrue(block.length <= LegalSheet.TELEGRAM_TEXT_LIMIT)
