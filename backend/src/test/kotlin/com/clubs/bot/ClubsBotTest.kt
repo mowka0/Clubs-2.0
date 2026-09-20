@@ -13,6 +13,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery
+import org.telegram.telegrambots.meta.api.objects.message.MaybeInaccessibleMessage
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
@@ -29,6 +35,7 @@ class ClubsBotTest {
     private lateinit var eventRepository: EventRepository
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var chatLinkBotService: ChatLinkBotService
+    private lateinit var legalSheet: LegalSheet
     private lateinit var bot: ClubsBot
 
     @BeforeEach
@@ -37,6 +44,11 @@ class ClubsBotTest {
         eventRepository = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         chatLinkBotService = mockk(relaxed = true)
+        legalSheet = LegalSheet(
+            recipientName = "Тестов Тест Тестович", recipientInn = "000000000000", billingProvider = "stub",
+            supportUsername = "clubs_tech_support", supportEmail = "support@example.com",
+            webAppBaseUrl = "https://app.test", trialDays = 15, subscriptionRepository = mockk { every { currentPriceKopecks(any()) } returns 19900 },
+        )
         bot = ClubsBot(
             botToken = "dummy-token",
             telegramClient = telegramClient,
@@ -45,7 +57,8 @@ class ClubsBotTest {
             chatLinkBotService = chatLinkBotService,
             chatDoorService = mockk(relaxed = true),
             rosterCallbackService = mockk(relaxed = true),
-            skladchinaCallbackService = mockk(relaxed = true)
+            skladchinaCallbackService = mockk(relaxed = true),
+            legalSheet = legalSheet
         )
     }
 
@@ -97,6 +110,131 @@ class ClubsBotTest {
         // Should NOT throw — a bot failure here would propagate up the long-polling loop
         // and kill update handling for every subsequent update.
         bot.handlePreCheckoutQuery(query)
+    }
+
+    // ---- «/start», «/terms» и «шторка» оферты/политики (Robokassa: магазин = бот, 2026-09-20) ----
+
+    private fun textUpdate(text: String, chatType: String, chatId: Long = 42L): Update {
+        val message: Message = mockk(relaxed = true) {
+            every { hasText() } returns true
+            every { this@mockk.text } returns text
+            every { this@mockk.chatId } returns chatId
+            every { migrateToChatId } returns null
+            every { hasSuccessfulPayment() } returns false
+            every { chat } returns mockk(relaxed = true) { every { type } returns chatType }
+        }
+        return mockk(relaxed = true) {
+            every { hasMessage() } returns true
+            every { this@mockk.message } returns message
+        }
+    }
+
+    private fun callbackUpdate(data: String, messageChatId: Long = 42L): Update {
+        val query: CallbackQuery = mockk(relaxed = true) {
+            every { this@mockk.data } returns data
+            every { id } returns "cb-1"
+            every { from } returns mockk(relaxed = true) { every { id } returns 42L }
+            every { message } returns mockk<MaybeInaccessibleMessage>(relaxed = true) {
+                every { chatId } returns messageChatId
+                every { messageId } returns 7
+            }
+        }
+        return mockk(relaxed = true) {
+            every { hasCallbackQuery() } returns true
+            every { callbackQuery } returns query
+        }
+    }
+
+    private fun InlineKeyboardMarkup.buttons() = keyboard.flatten()
+
+    @Test
+    fun `start в личке отдаёт обязательную информацию и кнопки оферты, политики, поддержки, Mini App`() {
+        val sent = slot<SendMessage>()
+        every { telegramClient.execute(capture(sent)) } returns mockk(relaxed = true)
+
+        bot.consume(textUpdate("/start", "private"))
+
+        assertEquals(legalSheet.infoBlock(), sent.captured.text)
+        val buttons = (sent.captured.replyMarkup as InlineKeyboardMarkup).buttons()
+        // Mini App — по базовому URL окружения, как у всех WebApp-кнопок; t.me/<бот>/app на staging не работал.
+        assertEquals("https://app.test", buttons.first { it.webApp != null }.webApp.url)
+        assertEquals(setOf("legal:offer", "legal:privacy:0"), buttons.mapNotNull { it.callbackData }.toSet())
+        assertEquals("https://t.me/clubs_tech_support", buttons.first { it.url != null }.url)
+    }
+
+    @Test
+    fun `terms повторяет стартовое сообщение в личке и молчит в группе`() {
+        val sent = mutableListOf<SendMessage>()
+        every { telegramClient.execute(capture(sent)) } returns mockk(relaxed = true)
+
+        bot.consume(textUpdate("/terms", "private"))
+        bot.consume(textUpdate("/terms", "supergroup"))
+
+        assertEquals(1, sent.size)
+        assertEquals(legalSheet.infoBlock(), sent.single().text)
+    }
+
+    @Test
+    fun `кнопка оферты правит то же сообщение и гасит спиннер без алерта`() {
+        val edited = slot<EditMessageText>()
+        val answered = slot<AnswerCallbackQuery>()
+        every { telegramClient.execute(capture(edited)) } returns mockk(relaxed = true)
+        every { telegramClient.execute(capture(answered)) } returns mockk(relaxed = true)
+
+        bot.consume(callbackUpdate("legal:offer"))
+
+        assertEquals("42", edited.captured.chatId)
+        assertEquals(7, edited.captured.messageId)
+        assertEquals(legalSheet.offer(), edited.captured.text)
+        assertEquals(listOf("legal:info"), (edited.captured.replyMarkup as InlineKeyboardMarkup).buttons().map { it.callbackData })
+        assertEquals("cb-1", answered.captured.callbackQueryId)
+        assertEquals(null, answered.captured.text)
+    }
+
+    @Test
+    fun `номер страницы политики за пределами диапазона прижимается к последней, назад возвращает старт`() {
+        val edited = mutableListOf<EditMessageText>()
+        every { telegramClient.execute(capture(edited)) } returns mockk(relaxed = true)
+        every { telegramClient.execute(ofType<AnswerCallbackQuery>()) } returns mockk(relaxed = true)
+
+        bot.consume(callbackUpdate("legal:privacy:99"))
+        bot.consume(callbackUpdate("legal:info"))
+
+        assertEquals(legalSheet.privacyPages().last(), edited[0].text)
+        assertEquals(legalSheet.infoBlock(), edited[1].text)
+    }
+
+    @Test
+    fun `callback с сообщения бота в группе не правит его (закреп нельзя переписать офертой)`() {
+        every { telegramClient.execute(ofType<AnswerCallbackQuery>()) } returns mockk(relaxed = true)
+
+        bot.consume(callbackUpdate("legal:offer", messageChatId = -100123L))
+
+        verify(exactly = 0) { telegramClient.execute(ofType<EditMessageText>()) }
+        verify(exactly = 1) { telegramClient.execute(ofType<AnswerCallbackQuery>()) }
+    }
+
+    @Test
+    fun `повторное нажатие той же кнопки — не сбой, спиннер гасится без алерта`() {
+        val answered = slot<AnswerCallbackQuery>()
+        every { telegramClient.execute(ofType<EditMessageText>()) } throws TelegramApiRequestException("Bad Request: message is not modified")
+        every { telegramClient.execute(capture(answered)) } returns mockk(relaxed = true)
+
+        bot.consume(callbackUpdate("legal:offer"))
+
+        assertEquals(null, answered.captured.text)
+    }
+
+    @Test
+    fun `сообщение нельзя поправить (переслано, flood-wait) — человеку алерт с подсказкой про terms`() {
+        val answered = slot<AnswerCallbackQuery>()
+        every { telegramClient.execute(ofType<EditMessageText>()) } throws TelegramApiRequestException("Bad Request: message can't be edited")
+        every { telegramClient.execute(capture(answered)) } returns mockk(relaxed = true)
+
+        bot.consume(callbackUpdate("legal:offer"))
+
+        assertEquals(LegalSheet.EDIT_FAILED_ALERT, answered.captured.text)
+        assertEquals(true, answered.captured.showAlert)
     }
 
     // ---- «/кто_идет»: скоуп по привязанному чату (bugfix 2026-09-15) ----

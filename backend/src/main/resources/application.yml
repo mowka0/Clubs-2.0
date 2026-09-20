@@ -88,6 +88,8 @@ telegram:
   # без резолва по users: канал не перехватывается сменой/освобождением username.
   # Пусто = резолв по support-username.
   support-chat-id: ${TELEGRAM_SUPPORT_CHAT_ID:}
+  # E-mail поддержки — второй канал связи в реквизитах продавца (стартовое сообщение бота).
+  support-email: ${TELEGRAM_SUPPORT_EMAIL:clubs.techsupport@gmail.com}
 
 # Хранилище загрузок (MinIO/S3): имя бакета и публичный базовый URL для ссылок на файлы.
 s3:
@@ -125,6 +127,9 @@ billing:
   reconcile-cron: ${BILLING_RECONCILE_CRON:0 15 * * * *}
   # ФИО самозанятого-получателя целиком — показывается в шите оплаты и в оферте (PO 2026-09-07).
   recipient-name: ${BILLING_RECIPIENT_NAME:}
+  # ИНН самозанятого — реквизит продавца в стартовом сообщении бота: обязательная информация для
+  # продажи в Telegram по требованиям Robokassa (bot/LegalSheet). Тот же, что в landingContent.ts.
+  recipient-inn: ${BILLING_RECIPIENT_INN:}
   # Куда провайдер возвращает человека из браузера: обычные веб-страницы фронта вне Mini App.
   success-url: ${BILLING_SUCCESS_URL:${telegram.webapp-base-url}/pay/return}
   fail-url: ${BILLING_FAIL_URL:${telegram.webapp-base-url}/pay/fail}

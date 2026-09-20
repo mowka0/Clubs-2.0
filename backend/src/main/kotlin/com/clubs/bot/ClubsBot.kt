@@ -14,6 +14,7 @@ import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
@@ -22,7 +23,7 @@ import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
-import org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -43,6 +44,7 @@ class ClubsBot(
     private val chatDoorService: ChatDoorService,
     private val rosterCallbackService: RosterCallbackService,
     private val skladchinaCallbackService: SkladchinaCallbackService,
+    private val legalSheet: LegalSheet,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -131,6 +133,9 @@ class ClubsBot(
                 // /start в личке — прежний welcome.
                 text.startsWith("/start") ->
                     if (isGroupChat(update.message)) handleGroupStart(update.message) else handleStart(chatId)
+                // Обязательная информация для покупки (оферта, политика, реквизиты) — тем, кто давно
+                // нажал «Старт» и приветствия уже не видит. Только в личке: в группе это шум.
+                text.startsWith("/terms") -> if (!isGroupChat(update.message)) handleStart(chatId)
                 text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(update.message)
             }
         } catch (e: Exception) {
@@ -220,7 +225,8 @@ class ClubsBot(
 
     /**
      * Ответ на inline-кнопку. Форматы data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService),
-     * «roster:proceed:<uuid>» и «roster:remind:<uuid>» (см. RosterCallbackService). Права на
+     * «roster:proceed:<uuid>» и «roster:remind:<uuid>» (см. RosterCallbackService),
+     * «legal:info|offer|privacy:<n>» (см. LegalSheet — публичные тексты, прав не требует). Права на
      * действие проверяет сервис по `query.from.id` — сам факт нажатия кнопки прав не даёт.
      */
     private fun handleCallbackQuery(query: CallbackQuery) {
@@ -272,6 +278,7 @@ class ClubsBot(
                 parseCallbackId(data, SkladchinaCallbackService.CLOSE_PREFIX)
                     ?.let { skladchinaCallbackService.handleClose(query.from.id, it) }
                     ?: RosterCallbackService.INVALID_REQUEST
+            data.startsWith(LegalSheet.CALLBACK_PREFIX) -> handleLegalCallback(query, data)
             else -> {
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null
@@ -317,23 +324,41 @@ class ClubsBot(
         }
     }
 
+    /** Стартовое сообщение = обязательная информация для продажи в Telegram плюс кнопки (LegalSheet). */
     private fun handleStart(chatId: String) {
-        val button = InlineKeyboardButton
-            .builder()
-            .text("\uD83C\uDFE0 Открыть Clubs")
-            .webApp(WebAppInfo("https://t.me/clubs_v2_bot/app"))
-            .build()
+        val screen = legalSheet.startScreen()
+        telegramClient.execute(
+            SendMessage.builder().chatId(chatId).text(screen.text).replyMarkup(screen.markup).build()
+        )
+    }
 
-        val markup = InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
-
-        val msg = SendMessage
-            .builder()
-            .chatId(chatId)
-            .text("\uD83D\uDC4B Привет! Clubs — платформа для офлайн-сообществ.\nОткрой приложение, чтобы найти клуб или создать свой:")
-            .replyMarkup(markup)
-            .build()
-
-        telegramClient.execute(msg)
+    /**
+     * Оферта/политика/назад правят то же сообщение — «шторка» средствами бота: Robokassa требует эти
+     * тексты на ресурсе продажи, а сайт из РФ без VPN может не открыться. Успех — без алерта (null).
+     */
+    private fun handleLegalCallback(query: CallbackQuery, data: String): String? {
+        val message = query.message ?: return null
+        // Только личка с ботом (там chat id = user id). Клиент может «нажать» кнопку на любом сообщении
+        // бота, а в группах бот держит закрепы и ростеры — их нельзя дать переписать офертой.
+        if (message.chatId != query.from.id) return null
+        val screen = legalSheet.render(data.removePrefix(LegalSheet.CALLBACK_PREFIX))
+        return try {
+            telegramClient.execute(
+                EditMessageText.builder()
+                    .chatId(message.chatId.toString())
+                    .messageId(message.messageId)
+                    .text(screen.text)
+                    .replyMarkup(screen.markup)
+                    .build()
+            )
+            null
+        } catch (e: TelegramApiException) {
+            // Повторное нажатие той же кнопки: Telegram отвечает «message is not modified» — не сбой.
+            if (e.message?.contains("message is not modified") == true) return null
+            // Пересланное или недоступное сообщение, flood-wait: человеку — подсказка, в лог — warn.
+            log.warn("Legal view edit failed: chatId={} messageId={} error={}", message.chatId, message.messageId, e.message)
+            LegalSheet.EDIT_FAILED_ALERT
+        }
     }
 
     /**
