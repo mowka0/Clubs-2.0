@@ -20,7 +20,7 @@ class LegalSheetTest {
         val block = texts().infoBlock()
         // Требования Robokassa к магазину в Telegram: услуга и цена, реквизиты, контакты, условия.
         listOf("199 ₽", "15 дней", "Тестов Тест Тестович", "ИНН 000000000000",
-            "@clubs_tech_support", "support@example.com", "возврат", "/terms").forEach {
+            "@clubs_tech_support", "support@example.com", "возврат", "/terms", "не нужно запоминать").forEach {
             assertTrue(it in block, "нет «$it»")
         }
         assertTrue(block.length <= LegalSheet.TELEGRAM_TEXT_LIMIT)
@@ -70,7 +70,8 @@ class LegalSheetTest {
         val screen = texts().startScreen()
         val buttons = screen.markup.keyboard.flatten()
         assertEquals("https://app.test", buttons.first { it.webApp != null }.webApp.url)
-        assertEquals(listOf(listOf(null), listOf("legal:offer", "legal:privacy:0"), listOf(null)), callbacks(screen))
+        // Большая кнопка приложения сверху, три документные — одним рядом снизу.
+        assertEquals(listOf(listOf(null), listOf("legal:offer", "legal:privacy:0", null)), callbacks(screen))
         assertEquals("https://t.me/clubs_tech_support", buttons.first { it.url != null }.url)
     }
 
