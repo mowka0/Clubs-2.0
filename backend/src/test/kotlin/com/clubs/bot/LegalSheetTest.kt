@@ -95,4 +95,17 @@ class LegalSheetTest {
         assertEquals(texts().privacyPages().single(), screen.text)
         assertEquals(texts().infoBlock(), texts().render("что-угодно").text)
     }
+
+    @Test
+    fun `бесплатный период склоняется — 1 день, 2 дня, 15 дней, 21 день`() {
+        fun block(days: Int) = LegalSheet(
+            recipientName = "Т", recipientInn = "", billingProvider = "stub", supportUsername = "s", supportEmail = "",
+            webAppBaseUrl = "https://app.test", trialDays = days,
+            subscriptionRepository = mockk { every { currentPriceKopecks(any()) } returns 19900 },
+        ).infoBlock()
+        assertTrue("Первые 1 день " in block(1))
+        assertTrue("Первые 2 дня " in block(2))
+        assertTrue("Первые 15 дней " in block(15))
+        assertTrue("Первые 21 день " in block(21))
+    }
 }
