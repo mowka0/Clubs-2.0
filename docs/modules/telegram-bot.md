@@ -38,7 +38,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendAttendanceReminder(event, organizerTelegramId)` — poll-напоминание «отметь явку» (через 24ч), зовётся из `EventReminderScheduler` (Блок 1; детали и дедуп-флаг — `docs/modules/events.md` § «Напоминания событий»). Напоминание «подтверди участие» за 2ч (`sendConfirmReminder`) удалено PO 2026-07-08 (V51 — лишний пинг, nudge остаётся один: DM при старте Этапа 2)
   - `sendAttendanceDisputed(event, organizerTelegramId, disputerName)` — DM организатору при споре отметки (`AttendanceDisputedListener`, Блок 1, см. `events.md` § ATT-3)
   - `sendAttendanceDisputeResolved(event, participantTelegramId, attended)` — DM спорщику об исходе спора: «присутствие подтверждено» / «отметка осталась в силе» (`AttendanceDisputedListener` ← `AttendanceService.resolveDispute`, фидбек PO 2026-07-08)
-- Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`. Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
+- Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo` на `telegram.webapp-base-url` (`NotificationService`). Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
 
 ### НЕ входит (в текущем состоянии кода)
 
@@ -53,11 +53,17 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 ## User Stories
 
-### US-1: Стартовое сообщение
+### US-1: Стартовое сообщение = витрина для покупки внутри Telegram
 
-**Как** новый пользователь, нашедший бота
-**Я хочу** при первом `/start` получить кнопку открытия приложения
-**Чтобы** не искать вручную URL Mini App
+**Как** новый пользователь или модератор платёжного провайдера, открывший бота
+**Я хочу** при `/start` получить кнопку приложения и всю обязательную информацию о продавце,
+цене, условиях, оферте и политике, не покидая Telegram
+**Чтобы** купить доступ (а модератор — убедиться, что магазин соответствует требованиям)
+
+> Robokassa (звонок PO 2026-09-19) принимает магазином ссылку на бота вместо сайта, но требует
+> описание услуги с ценой, реквизиты и контакты продавца, условия получения/возврата, оферту и
+> политику на том же ресурсе, где идёт продажа. Сайт из РФ без VPN может не открыться, поэтому
+> всё живёт в сообщениях бота (`bot/LegalSheet`).
 
 ### US-2: Быстрый просмотр ближайшего события
 
@@ -106,13 +112,52 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ### `/start`
 
 **Триггер:** message text начинается с `/start` в ЛИЧНОМ чате (в группах `/start` — вход в привязку чата, см. `docs/modules/club-chat-link.md`).
-**Response (через `telegramClient.execute(SendMessage)`):**
+**Response (через `telegramClient.execute(SendMessage)`), текст — `LegalSheet.infoBlock()`:**
 ```
-👋 Привет! Clubs — платформа для офлайн-сообществ.
-Открой приложение, чтобы найти клуб или создать свой:
-[📱 Открыть Clubs]  (inline-кнопка с WebAppInfo)
+👋 Привет! Clubs — бот и приложение для офлайн-сообществ: …
+💳 Стоимость: первые <trial-days> дней после первой встречи — бесплатно, дальше <цена из subscription_pricing> за 30 дней …
+📄 Условия: доступ открывается сразу после подтверждения оплаты. Отказ от продления — … Вопросы по возврату — в поддержку …
+👤 Продавец: самозанятый <billing.recipient-name>, ИНН <billing.recipient-inn>. НПД, без НДС.
+✉️ Связь: @<telegram.support-username>, <telegram.support-email>
+Оферта и политика … по кнопкам прямо здесь … Команда /terms покажет это сообщение снова.
+[🏠 Открыть Clubs]            (WebAppInfo <telegram.webapp-base-url> — как у всех WebApp-кнопок бота)
+[📄 Оферта] [🔒 Политика данных]   (callback legal:offer / legal:privacy:0)
+[💬 Поддержка]                (url https://t.me/<telegram.support-username>)
 ```
-**Источник текста:** `ClubsBot.handleStart` (строка 123).
+**Источник:** `ClubsBot.handleStart`, тексты — `bot/LegalSheet` (оферта и политика дублируют
+`frontend/.../offerText.ts` и `privacyText.ts`: Docker-контексты фронта и бэка изолированы, общий
+файл невозможен; в обоих местах перекрёстные комментарии — правишь слова, правь оба).
+
+### `/terms`
+
+**Триггер:** `/terms` в ЛИЧНОМ чате — тот же ответ, что у `/start` (для тех, кто давно нажал «Старт»
+и приветствия не видит). В группе — молчание: реквизиты в чужом чате — шум.
+
+### Callback `legal:*` — «шторка» оферты и политики
+
+`legal:offer` → `LegalSheet.offer()`; `legal:privacy:<n>` → страница n из `LegalSheet.privacyPages()`
+(режется под лимит Bot API 4096 знаков, сейчас страница одна; номер прижимается к диапазону,
+мусор → страница 0); `legal:info` → стартовый текст. Бот правит **то же сообщение**
+(`EditMessageText`) — тексты не покидают Telegram, кнопка «← Назад» возвращает старт. Callback
+принимается только из лички с ботом (`message.chatId == from.id`): клиент может «нажать» кнопку на
+любом сообщении бота, а закрепы и ростеры в группах переписывать офертой нельзя. Повторное нажатие
+той же кнопки даёт «message is not modified» — не ошибка, без алерта; прочие ошибки правки
+(пересланное сообщение, flood-wait) — `warn` в лог и алерт «отправь /terms». При
+`billing.provider=robokassa` без ФИО/ИНН бот при старте пишет `warn`.
+
+### BotFather — что выставить PO (в коде не живёт)
+
+- **Description** (видно до «Старт», ≤ 512 знаков): «Clubs — бот и приложение для офлайн-сообществ:
+  клуб привязывается к чату, бот ведёт встречи, опросы «кто идёт», напоминания и итог явки. Первые
+  15 дней после первой встречи бесплатно, дальше 199 ₽ за 30 дней для одного клуба; оплата картой
+  или СБП через Robokassa, чек автоматически. Продавец: самозанятый Варламов Иван Михайлович, ИНН
+  370211562724. Связь: @clubs_tech_support, clubs.techsupport@gmail.com. Оферта и политика данных —
+  по команде /start.»
+- **About** (≤ 120): «Клубы по интересам в Telegram: встречи, «кто идёт», напоминания. 15 дней
+  бесплатно, далее 199 ₽/мес за клуб.»
+- **Commands**: `start - Начать и открыть приложение`, `terms - Условия, оферта и политика данных`,
+  `kto_idet - Ближайшая встреча клуба (в чате)`.
+- В кабинете Robokassa адрес магазина — `https://t.me/clubs_v2_bot`.
 
 ### `/кто_идет` (alias `/kto_idet`)
 
@@ -357,14 +402,27 @@ DM «завтра спишем» перед автосписанием **нет*
 
 ## Acceptance Criteria
 
-### AC-1: `/start` отдаёт кнопку Mini App
+### AC-1: `/start` отдаёт обязательную информацию и кнопки
 
 ```
-GIVEN пользователь впервые открыл @clubs_admin_bot
-WHEN отправляет /start
-THEN получает текст-приветствие
-AND видит inline-кнопку «📱 Открыть Clubs»
-AND нажатие открывает Mini App https://t.me/clubs_v2_bot/app
+GIVEN пользователь открыл бота в личке
+WHEN отправляет /start (или /terms)
+THEN получает текст с описанием услуги, ценой из subscription_pricing и trial-days,
+     реквизитами продавца (ФИО, ИНН), контактами (@support, e-mail), условиями получения и отказа
+AND видит кнопки «🏠 Открыть Clubs» (WebApp <telegram.webapp-base-url>), «📄 Оферта»,
+    «🔒 Политика данных», «💬 Поддержка»
+AND /terms в группе ничего не отправляет
+```
+
+### AC-1а: оферта и политика открываются в том же сообщении
+
+```
+GIVEN стартовое сообщение с кнопками
+WHEN нажата «📄 Оферта» / «🔒 Политика данных»
+THEN бот правит это же сообщение: полный текст оферты / страница политики ≤ 4096 знаков
+AND под текстом «← Назад» (и «Стр. N ›» / «‹ Стр. N», если страниц больше одной)
+AND «← Назад» возвращает стартовый текст с исходными кнопками
+AND повторное нажатие той же кнопки не роняет обработку апдейтов
 ```
 
 ### AC-2: `/кто_идет` отвечает только в привязанном чате и только про его клуб
@@ -476,7 +534,9 @@ AND отказ Telegram API не откатывает переход в stage_2 
 - **Telegram Bot API** (через `TelegramClient` из `BotConfig`):
   - `SendMessage` (команды, DM).
   - `AnswerPreCheckoutQuery` (Stars).
-  - `WebAppInfo` URL: `https://t.me/clubs_v2_bot/app` (hardcoded в обоих файлах — кандидат на вынос в env при появлении staging-бота, см. `docs/backlog/bot-event-dm-not-delivering.md`).
+  - `WebAppInfo` URL: везде `telegram.webapp-base-url` (`NotificationService`, с 2026-09-20 и `/start`
+    через `LegalSheet`; до этого в `/start` был хардкод `t.me/clubs_v2_bot/app` — формат, требующий
+    регистрации short name через /newapp и дававший на staging «Bot App Not Found»).
 
 ## Риски и открытые вопросы
 

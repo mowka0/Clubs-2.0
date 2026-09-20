@@ -95,6 +95,8 @@ services:
       TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
       # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
       TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
+      # E-mail поддержки в реквизитах продавца (стартовое сообщение бота)
+      TELEGRAM_SUPPORT_EMAIL: ${TELEGRAM_SUPPORT_EMAIL:-clubs.techsupport@gmail.com}
       # Ключ Яндекс-Геокодера теперь серверный: фронтенд в Яндекс не ходит, ключ не публикуется
       # в бандле, а ограничение по Referer перестало зависеть от клиента (см. GeocoderService).
       YANDEX_GEOCODER_API_KEY: ${YANDEX_GEOCODER_API_KEY:-}
@@ -121,6 +123,8 @@ services:
       PLATFORM_ADMIN_TELEGRAM_IDS: ${PLATFORM_ADMIN_TELEGRAM_IDS:-}
       # ФИО самозанятого-получателя целиком (шит оплаты, оферта).
       BILLING_RECIPIENT_NAME: ${BILLING_RECIPIENT_NAME:-}
+      # ИНН самозанятого — реквизит продавца в стартовом сообщении бота (требование Robokassa).
+      BILLING_RECIPIENT_INN: ${BILLING_RECIPIENT_INN:-}
       # Период подписки и крон календаря — staging ужимает их для прогона цикла (тест-план § 10).
       SUBSCRIPTION_PERIOD_DAYS: ${SUBSCRIPTION_PERIOD_DAYS:-30}
       SUBSCRIPTION_LIFECYCLE_CRON: ${SUBSCRIPTION_LIFECYCLE_CRON:-0 30 9 * * *}

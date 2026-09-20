@@ -236,6 +236,10 @@ BotFather — README прокси § 6в; проверено PO с телефо�
 магазином можно указать ссылку на бота, лендинг не обязателен — обязательную информацию (услуга и цена,
 ФИО+ИНН, e-mail И ТЕЛЕФОН, оферта, условия, политика ПД) добавить в описание бота и ответ на /start;
 прокси и `clubsapp.ru` стали необязательными (ResultURL на них работает).**
+**20.09: обязательная информация для Robokassa встроена в бота** — `/start` и `/terms` (`bot/LegalSheet`),
+оферта и политика по кнопкам в том же сообщении; env `BILLING_RECIPIENT_INN=370211562724`,
+`TELEGRAM_SUPPORT_EMAIL` (дефолт есть) — PO выставить в Coolify; тексты для BotFather —
+`telegram-bot.md` § «BotFather». Ветка `feature/bot-legal-info`.
 Устаревшая точка возобновления (16:15): зона в Cloudflare готова, NS в Timeweb заменены на
 `lara`/`rustam.ns.cloudflare.com`, кнопка «I updated my nameservers» нажата; реестр `.ru` ещё отдавал
 NS Timeweb. Следующая сессия: 1) `ssh root@77.42.23.177 "dig @a.dns.ripn.net clubsapp.ru NS +noall
