@@ -27,11 +27,21 @@ class LegalSheetTest {
     }
 
     @Test
-    fun `оферта влезает в одно сообщение и подставляет продавца с ценой`() {
-        val offer = texts().offer()
-        assertTrue(offer.length <= LegalSheet.TELEGRAM_TEXT_LIMIT)
-        assertTrue("самозанятый Тестов Тест Тестович, ИНН 000000000000" in offer)
-        assertTrue("199 ₽ за 30 дней" in offer)
+    fun `оферта постранично под лимит — продавец, цена, бесплатный период и все 11 разделов шаблона`() {
+        val sheet = texts()
+        val pages = sheet.offerPages()
+        assertTrue(pages.size >= 3, "шаблон Robokassa не влезает в одно сообщение — ожидались страницы")
+        pages.forEach { assertTrue(it.length <= LegalSheet.TELEGRAM_TEXT_LIMIT, "страница длиннее лимита: ${it.length}") }
+        val all = pages.joinToString("\n")
+        assertTrue("Исполнитель — самозанятый Тестов Тест Тестович, ИНН 000000000000" in all)
+        assertTrue(pages.first().startsWith("📄 Публичная оферта") && "Редакция от " in pages.first())
+        assertTrue("@clubs_tech_support" in all && "support@example.com" in all)
+        assertTrue("199 ₽ за 30 дней" in all)
+        assertTrue("первых 15 дней" in all)
+        (1..11).forEach { n -> assertTrue("\n$n. " in all, "потерян раздел $n") }
+        // Старые кнопки шлют «offer» без номера — это первая страница с навигацией вперёд.
+        assertEquals(listOf(listOf("legal:offer:1"), listOf("legal:info")), callbacks(sheet.render("offer")))
+        assertEquals(pages.last(), sheet.render("offer:99").text)
     }
 
     @Test

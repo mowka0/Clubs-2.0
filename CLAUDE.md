@@ -79,6 +79,9 @@ Telegram Mini App для создания и управления платным
 - Сборка: `npm run build` (`tsc && vite build` — падает на ошибках типов)
 - Dev-сервер: `npm run dev`
 
+### Оферта (из корня)
+- Канон — `docs/legal/oferta.md`; после правки: `python3 scripts/gen-oferta.py` — перегенерирует копии для фронта (`offerSections.generated.ts`) и бота (`bot/OfferSections.kt`). Генерённые файлы руками не править.
+
 ### Backend (из `backend/`)
 - Тесты: `./gradlew test`
 - jOOQ codegen: `./gradlew generateJooq` (после изменения схемы/миграций; НЕ `generateMainJooqSchemaSource`)

@@ -14,8 +14,10 @@ describe('LandingPage', () => {
     expect(screen.getByRole('heading', { name: 'Возврат' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /публичная оферта/ })).toBeInTheDocument();
     // Оферта на странице — тот же текст, что в шите оплаты, с ФИО продавца.
-    expect(screen.getByText(new RegExp(`Исполнитель \\(самозанятый ${SELLER.name}\\)`))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`ИНН ${SELLER.inn}`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Исполнитель — самозанятый ${SELLER.name}, ИНН`))).toBeInTheDocument();
+    // ИНН теперь и в оферте (преамбула, реквизиты), и в блоке продавца.
+    expect(screen.getAllByText(new RegExp(`ИНН ${SELLER.inn}`)).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('heading', { name: '11. Реквизиты Исполнителя' })).toBeInTheDocument();
     // Обе кнопки ведут в бота из бандла, не из адреса страницы.
     const links = screen.getAllByRole('link', { name: /Telegram|Подключить/ });
     expect(links.length).toBeGreaterThanOrEqual(2);

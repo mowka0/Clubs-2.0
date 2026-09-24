@@ -21,11 +21,10 @@ import org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo
  * Экраны «шторки»: стартовый блок, оферта, политика постранично — и клавиатуры к ним. Бот только
  * шлёт и правит сообщения (транспорт), как с ростером и сборами.
  *
- * Оферта и политика дублируют `frontend/src/components/billing/offerText.ts` и
- * `frontend/src/pages/privacyText.ts`: сборки фронта и бэка изолированы (разные Docker-контексты),
- * общий файл невозможен. Правишь слова — правь в обоих местах. Намеренные отличия от фронта:
- * в п. 5 оферты добавлены контакты поддержки (в боте нет кнопки «Сообщить о проблеме»); в п. 4 и
- * п. 10 политики упомянут этот бот и команда /terms; контакты разделены запятой, не «или».
+ * Оферта генерируется из `docs/legal/oferta.md` (`OfferSections.kt`, см. `scripts/gen-oferta.py`) и
+ * совпадает с фронтом. Политика дублирует `frontend/src/pages/privacyText.ts` руками: сборки фронта
+ * и бэка изолированы (разные Docker-контексты). Намеренные отличия политики от фронта: в п. 4 и
+ * п. 10 упомянут этот бот и команда /terms; контакты разделены запятой, не «или».
  */
 @Component
 class LegalSheet(
@@ -39,7 +38,7 @@ class LegalSheet(
     private val subscriptionRepository: SubscriptionRepository,
 ) {
     companion object {
-        /** Лимит Bot API на текст одного сообщения; политика режется на страницы под него. */
+        /** Лимит Bot API на текст одного сообщения; оферта и политика режутся на страницы под него. */
         const val TELEGRAM_TEXT_LIMIT = 4096
 
         /** Запас под подпись «Страница N из M», которая дописывается к странице после разбиения. */
@@ -48,7 +47,7 @@ class LegalSheet(
         /** Дата редакции политики — та же, что на сайте (`privacyText.ts`). */
         const val PRIVACY_UPDATED = "17 сентября 2026 года"
 
-        /** Префикс callback-кнопок: `legal:info` | `legal:offer` | `legal:privacy:<страница>`. */
+        /** Префикс callback-кнопок: `legal:info` | `legal:offer:<страница>` | `legal:privacy:<страница>`. */
         const val CALLBACK_PREFIX = "legal:"
 
         /** Алерт, когда сообщение не удалось поправить (переслано, недоступно, flood-wait). */
@@ -75,17 +74,20 @@ class LegalSheet(
     fun startScreen(): Screen = Screen(infoBlock(), infoKeyboard())
 
     /**
-     * Экран по действию кнопки без префикса: `offer`, `privacy:<n>`, иначе стартовый. Номер
+     * Экран по действию кнопки без префикса: `offer:<n>` (голое `offer` — старые кнопки), `privacy:<n>`,
+     * иначе стартовый. Номер
      * страницы из callback — пользовательский ввод: мусор и выход за диапазон прижимаются к валидному.
      */
     fun render(action: String, limit: Int = TELEGRAM_TEXT_LIMIT): Screen = when {
-        action == "offer" -> Screen(offer(), InlineKeyboardMarkup(listOf(backRow())))
-        action.startsWith("privacy:") -> {
-            val pages = privacyPages(limit)
-            val page = action.removePrefix("privacy:").toIntOrNull()?.coerceIn(0, pages.size - 1) ?: 0
-            Screen(pages[page], privacyKeyboard(page, pages.size))
-        }
+        // «offer» без номера — кнопки в уже отправленных сообщениях (до постраничной оферты).
+        action == "offer" || action.startsWith("offer:") -> paged("offer", action.substringAfter(':', ""), offerPages(limit))
+        action.startsWith("privacy:") -> paged("privacy", action.removePrefix("privacy:"), privacyPages(limit))
         else -> startScreen()
+    }
+
+    private fun paged(kind: String, pageText: String, pages: List<String>): Screen {
+        val page = pageText.toIntOrNull()?.coerceIn(0, pages.size - 1) ?: 0
+        return Screen(pages[page], pagesKeyboard(kind, page, pages.size))
     }
 
     private fun callback(text: String, action: String) =
@@ -107,10 +109,10 @@ class LegalSheet(
         ),
     ))
 
-    private fun privacyKeyboard(page: Int, pages: Int): InlineKeyboardMarkup {
+    private fun pagesKeyboard(kind: String, page: Int, pages: Int): InlineKeyboardMarkup {
         val nav = mutableListOf<InlineKeyboardButton>()
-        if (page > 0) nav += callback("‹ Стр. $page", "privacy:${page - 1}")
-        if (page < pages - 1) nav += callback("Стр. ${page + 2} ›", "privacy:${page + 1}")
+        if (page > 0) nav += callback("‹ Стр. $page", "$kind:${page - 1}")
+        if (page < pages - 1) nav += callback("Стр. ${page + 2} ›", "$kind:${page + 1}")
         // Пустой ряд кнопок Bot API отвергает, поэтому навигация добавляется только когда есть куда.
         return InlineKeyboardMarkup(listOfNotNull(nav.takeIf { it.isNotEmpty() }?.let { InlineKeyboardRow(it) }, backRow()))
     }
@@ -161,22 +163,26 @@ class LegalSheet(
         return "$n $form"
     }
 
-    /** Публичная оферта — тот же текст, что в шите оплаты Mini App (`offerText.ts`). */
-    fun offer(): String = listOf(
-        "📄 Условия (публичная оферта)",
-        "1. Исполнитель ($seller) предоставляет владельцу клуба доступ к функциям сервиса Clubs для клуба, " +
-            "привязанного к чату Telegram: ведение встреч ботом, опросы, сбор ответов, напоминания и итог явки.",
-        "2. Стоимость доступа — ${priceLabel()} за 30 дней с момента подтверждения оплаты. Оплата проходит через " +
-            "платёжный сервис Robokassa. Исполнитель применяет налог на профессиональный доход, НДС не облагается; " +
-            "чек формируется автоматически и приходит на e-mail или в Telegram.",
-        "3. При включённом автопродлении в день окончания оплаченного периода списывается та же сумма с " +
-            "сохранённой карты. Отключить автопродление можно в любой момент на странице клуба — доступ " +
-            "сохраняется до конца оплаченного периода.",
-        "4. Если оплата не поступила, в течение 7 дней после окончания периода сервис работает без ограничений; " +
-            "затем становится недоступным создание новых встреч, уже начатые встречи и данные клуба сохраняются.",
-        "5. Оплата означает принятие этих условий. Вопросы по оплате, чекам и возвратам — через «Сообщить о " +
-            "проблеме» в приложении или $contacts; ответ в течение 3 рабочих дней.",
-    ).joinToString("\n\n")
+    /**
+     * Публичная оферта постранично. Текст — из `OfferSections.kt`, который генерирует
+     * `scripts/gen-oferta.py` из `docs/legal/oferta.md` (та же генерация даёт копию фронту).
+     * Преамбула (исполнитель, сайт) — первый раздел без номера; дата редакции — в шапке каждой страницы.
+     */
+    fun offerPages(limit: Int = TELEGRAM_TEXT_LIMIT): List<String> {
+        val sections = offerSections(
+            recipientName = recipientName.ifBlank { "исполнитель" },
+            inn = recipientInn.ifBlank { "не указан" },
+            priceLabel = priceLabel(),
+            trialDaysLabel = days(trialDays),
+            supportTelegram = "@$supportUsername",
+            supportEmail = supportEmail.ifBlank { "—" },
+        )
+        val (docTitle, preamble) = sections.first()
+        val header = "📄 $docTitle\nРедакция от $OFFER_UPDATED"
+        val body = listOf(preamble.joinToString("\n")) +
+            sections.drop(1).map { (title, paragraphs) -> (listOf(title) + paragraphs).joinToString("\n") }
+        return paginate(header, body, limit)
+    }
 
     /**
      * Политика обработки персональных данных постранично: каждая страница влезает в одно сообщение.
@@ -184,12 +190,19 @@ class LegalSheet(
      */
     fun privacyPages(limit: Int = TELEGRAM_TEXT_LIMIT): List<String> {
         val header = "🔒 Политика обработки персональных данных\nРедакция от $PRIVACY_UPDATED"
-        val sections = privacySections().map { (title, paragraphs) ->
-            (listOf(title) + paragraphs).joinToString("\n")
-        }
+        val sections = privacySections(seller, contacts).map { (title, paragraphs) -> (listOf(title) + paragraphs).joinToString("\n") }
+        return paginate(header, sections, limit)
+    }
+
+    /** Режет разделы на страницы под лимит сообщения, не разрывая раздел; подпись «Страница N из M». */
+    private fun paginate(header: String, sections: List<String>, limit: Int): List<String> {
         val pages = mutableListOf<String>()
         var current = header
         for (section in sections) {
+            // Раздел, не влезающий в страницу, Telegram отверг бы целиком — лучше упасть в тесте.
+            check(section.length <= limit - PAGE_FOOTER_RESERVE - header.length - 16) {
+                "раздел длиннее страницы: ${section.take(40)}…"
+            }
             val candidate = "$current\n\n$section"
             if (candidate.length > limit - PAGE_FOOTER_RESERVE) {
                 pages += current
@@ -202,71 +215,4 @@ class LegalSheet(
         return pages.mapIndexed { i, page -> "$page\n\nСтраница ${i + 1} из ${pages.size}" }
     }
 
-    private fun privacySections(): List<Pair<String, List<String>>> = listOf(
-        "1. Оператор" to listOf(
-            "Оператором персональных данных является $seller (далее — «мы»). Сервис Clubs работает как " +
-                "приложение и бот внутри Telegram и помогает сообществам проводить офлайн-встречи.",
-            "Вопросы об обработке данных, отзыв согласия и запросы на удаление — $contacts. Ответ в течение " +
-                "трёх рабочих дней.",
-        ),
-        "2. Какие данные мы обрабатываем" to listOf(
-            "Из Telegram при первом входе: идентификатор аккаунта, имя и фамилия, имя пользователя, язык " +
-                "интерфейса и фотография профиля, если она открыта. Телефон и переписку мы не получаем.",
-            "То, что вы вводите сами: город, описание клуба, темы, названия и адреса встреч, комментарии, " +
-                "фотографии, которые вы загружаете.",
-            "То, что возникает при пользовании: участие во встречах и отметки явки, репутация и уровень, " +
-                "членство в клубах, суммы сборов и отметки об оплате взносов между участниками.",
-            "Технические данные: IP-адрес и время запроса в журналах сервера — они нужны для защиты от " +
-                "перебора и разбора сбоев.",
-            "Платёжные данные мы не получаем и не храним: реквизиты карты вводятся на стороне платёжного " +
-                "сервиса Robokassa. Нам возвращается только факт оплаты, её сумма, способ (карта или СБП) и " +
-                "номер счёта.",
-        ),
-        "3. Зачем мы их обрабатываем" to listOf(
-            "Чтобы предоставить сам сервис: опознать вас при входе, показать клубы и встречи, собрать «кто " +
-                "идёт», прислать напоминания, посчитать явку и репутацию, вести сборы.",
-            "Чтобы принимать оплату подписки за клуб и формировать чек — этого требует закон о налоге на " +
-                "профессиональный доход.",
-            "Чтобы отвечать на обращения в поддержку и разбирать сбои.",
-        ),
-        "4. На каком основании" to listOf(
-            "Обработка нужна для исполнения договора с вами — публичной оферты, условия которой доступны в " +
-                "этом боте и на сайте, — и для соблюдения требований закона в части чеков и налогов. Начиная " +
-                "пользоваться сервисом, вы даёте согласие на обработку перечисленных данных.",
-        ),
-        "5. Кому передаём" to listOf(
-            "Telegram — как площадке, внутри которой работает сервис: сообщения бота, кнопки и приложение " +
-                "доставляются через неё.",
-            "Robokassa — как платёжному сервису: при оплате передаются сумма, номер счёта и назначение " +
-                "платежа. Оператор фискальных данных формирует чек по требованиям закона.",
-            "Другим участникам вашего клуба видны имя, фотография профиля, участие во встречах, репутация и " +
-                "долги по сборам внутри этого клуба — в этом и состоит работа сервиса.",
-            "Мы не продаём персональные данные и не передаём их третьим лицам для рекламы.",
-        ),
-        "6. Где хранятся данные" to listOf(
-            "Данные хранятся и обрабатываются на серверах, расположенных на территории Российской Федерации. " +
-                "Доступ к ним есть только у оператора.",
-        ),
-        "7. Сколько храним и как удалить" to listOf(
-            "Данные хранятся, пока вы пользуетесь сервисом. Вы можете выйти из клубов, а владелец — удалить " +
-                "клуб; при удалении клуба удаляются его встречи, сборы и участия.",
-            "Чтобы удалить профиль целиком, напишите нам: $contacts. Мы удалим данные в течение 30 дней, кроме " +
-                "сведений, которые обязаны хранить по закону — например, сведений о состоявшихся платежах и чеках.",
-        ),
-        "8. Ваши права" to listOf(
-            "Вы вправе узнать, какие ваши данные мы обрабатываем, потребовать их исправления или удаления, " +
-                "отозвать согласие. Отзыв согласия означает прекращение пользования сервисом: без " +
-                "идентификатора Telegram приложение работать не может.",
-            "Для любого из этих обращений напишите $contacts.",
-        ),
-        "9. Cookie и аналитика" to listOf(
-            "Рекламных и аналитических систем слежения на сайте и в приложении нет. Браузер и Telegram " +
-                "сохраняют на вашем устройстве технические значения — например, выбранную тему оформления и " +
-                "признак входа; они не передаются третьим лицам.",
-        ),
-        "10. Изменения" to listOf(
-            "Мы можем обновлять эту политику. Действующая редакция всегда доступна по команде /terms в этом " +
-                "боте и по адресу clubsapp.ru/privacy; дата последнего изменения указана в начале текста.",
-        ),
-    )
 }

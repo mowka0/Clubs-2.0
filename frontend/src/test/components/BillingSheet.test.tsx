@@ -82,7 +82,8 @@ describe('BillingSheet', () => {
 
     // Оферта — текстом внутри шита, по кнопке.
     await userEvent.click(screen.getByRole('button', { name: /Условия \(публичная оферта\)/ }));
-    expect(screen.getByText(/Исполнитель \(самозанятый Варламов Иван Иванович\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Исполнитель — самозанятый Варламов Иван Иванович, ИНН/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '3. Услуга, стоимость и порядок оказания' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('switch', { name: 'Продлевать автоматически' }));
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить 199 ₽' }));

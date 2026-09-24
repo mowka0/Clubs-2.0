@@ -1,0 +1,29 @@
+name: Oferta sync
+
+# Оферта живёт в docs/legal/oferta.md, а фронт и бот получают её сгенерированными копиями
+# (scripts/gen-oferta.py). Правка md без перегенерации — ровно тот drift, ради которого копии
+# и генерируются, поэтому проверяем, что закоммиченное совпадает с тем, что даёт генератор.
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches:
+      - master
+      - 'bugfix/**'
+      - 'feature/**'
+      - 'devops/**'
+
+permissions:
+  contents: read
+
+jobs:
+  oferta:
+    name: Oferta copies in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate and diff
+        run: |
+          python3 scripts/gen-oferta.py
+          git diff --exit-code -- frontend/src/components/billing/offerSections.generated.ts backend/src/main/kotlin/com/clubs/bot/OfferSections.kt
