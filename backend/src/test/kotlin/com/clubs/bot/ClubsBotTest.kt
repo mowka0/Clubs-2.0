@@ -185,8 +185,8 @@ class ClubsBotTest {
 
         assertEquals("42", edited.captured.chatId)
         assertEquals(7, edited.captured.messageId)
-        assertEquals(legalSheet.offer(), edited.captured.text)
-        assertEquals(listOf("legal:info"), (edited.captured.replyMarkup as InlineKeyboardMarkup).buttons().map { it.callbackData })
+        assertEquals(legalSheet.offerPages().first(), edited.captured.text)
+        assertEquals(listOf("legal:offer:1", "legal:info"), (edited.captured.replyMarkup as InlineKeyboardMarkup).buttons().map { it.callbackData })
         assertEquals("cb-1", answered.captured.callbackQueryId)
         assertEquals(null, answered.captured.text)
     }

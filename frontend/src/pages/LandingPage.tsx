@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { CHAT_PRICE_LABEL, CHAT_PRICE_LINE, TRIAL_DAYS_DEFAULT } from '../api/billing';
-import { OFFER_TITLE, offerParagraphs } from '../components/billing/offerText';
+import { OFFER_TITLE, OFFER_UPDATED, offer } from '../components/billing/offerText';
 import { BOT_LINK } from '../utils/telegramLinks';
 import { SELLER, SUPPORT } from './landingContent';
 
@@ -59,21 +59,29 @@ export const LandingPage: FC = () => (
 
     <section>
       <h2>Возврат</h2>
+      {/* Слово в слово с § 3.7 оферты ниже: страницу читает модератор, противоречия недопустимы. */}
       <p>
-        Если оплаченный доступ не был предоставлен по вине сервиса, деньги за неиспользованные дни
-        возвращаются тем же способом, которым была оплата. Напишите в поддержку — ответим в течение
-        трёх рабочих дней. Отключить автопродление можно без обращения: ползунок на странице клуба.
+        Отказаться от доступа можно в любое время. Если оплаченный период ещё не закончился, вернём
+        стоимость неиспользованных полных дней тем же способом, которым была оплата, в течение десяти
+        рабочих дней с обращения. Напишите в поддержку — ответим в течение трёх рабочих дней.
+        Отключить автопродление можно без обращения: ползунок на странице клуба.
       </p>
     </section>
 
     <section id="offer">
       <h2>{OFFER_TITLE}</h2>
-      <ol className="offer">
-        {offerParagraphs(SELLER.name, CHAT_PRICE_LABEL).map((paragraph) => (
-          // Нумерация уже внутри текста оферты — список только ради отступов.
-          <li key={paragraph.slice(0, 16)}>{paragraph.replace(/^\d+\.\s*/, '')}</li>
+      <div className="offer">
+        <p className="muted">Редакция от {OFFER_UPDATED}</p>
+        {offer({
+          recipientName: SELLER.name, inn: SELLER.inn, priceLabel: CHAT_PRICE_LABEL, trialDays: TRIAL_DAYS_DEFAULT,
+          supportTelegram: SUPPORT.telegram, supportEmail: SUPPORT.email,
+        }).map((s) => (
+          <div key={s.title}>
+            <h3>{s.title}</h3>
+            {s.paragraphs.map((p) => <p key={p.slice(0, 24)}>{p}</p>)}
+          </div>
         ))}
-      </ol>
+      </div>
     </section>
 
     <section className="seller">

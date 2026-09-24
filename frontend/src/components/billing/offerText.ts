@@ -1,26 +1,39 @@
+import { pluralRu } from '../../utils/formatters';
+import { OFFER_UPDATED, offerSections, type OfferSection } from './offerSections.generated';
+
 /**
- * Публичная оферта на доступ к сервису — показывается текстом внутри шита оплаты (PO 2026-09-07:
- * «оферта — текст внутри шита»). Живёт отдельным файлом, чтобы юрист правил слова, не трогая
- * компонент. Получатель подставляется из настроек сервера (billing.recipient-name).
- * Копия текста живёт в боте (`backend/.../bot/LegalSheet.kt`): Robokassa требует оферту на том же
- * ресурсе, где идёт продажа, а сборки фронта и бэка файл разделить не могут. Правишь здесь — правь там.
+ * Публичная оферта — показывается разделами внутри шита оплаты и на `/about`. Канонический
+ * текст — `docs/legal/oferta.md` (шаблон Robokassa «Оказание услуг» + наши разделы 3 и 11);
+ * `offerSections.generated.ts` генерирует `scripts/gen-oferta.py`, руками его не правят, CI
+ * сверяет синхронность. Та же генерация даёт копию боту (`backend/.../bot/OfferSections.kt`).
  */
 export const OFFER_TITLE = 'Условия (публичная оферта)';
 
-export function offerParagraphs(recipientName: string, priceLabel: string): string[] {
-  const recipient = recipientName ? `самозанятый ${recipientName}` : 'самозанятый исполнитель';
-  return [
-    `1. Исполнитель (${recipient}) предоставляет владельцу клуба доступ к функциям сервиса Clubs ` +
-      'для клуба, привязанного к чату Telegram: ведение встреч ботом, опросы, сбор ответов, напоминания и итог явки.',
-    `2. Стоимость доступа — ${priceLabel} за 30 дней с момента подтверждения оплаты. Оплата проходит через ` +
-      'платёжный сервис Robokassa. Исполнитель применяет налог на профессиональный доход, НДС не облагается; ' +
-      'чек формируется автоматически и приходит на e-mail или в Telegram.',
-    '3. При включённом автопродлении в день окончания оплаченного периода списывается та же сумма с сохранённой ' +
-      'карты. Отключить автопродление можно в любой момент на странице клуба — доступ сохраняется до конца ' +
-      'оплаченного периода.',
-    '4. Если оплата не поступила, в течение 7 дней после окончания периода сервис работает без ограничений; ' +
-      'затем становится недоступным создание новых встреч, уже начатые встречи и данные клуба сохраняются.',
-    '5. Оплата означает принятие этих условий. Вопросы по оплате, чекам и возвратам — через «Сообщить о проблеме» ' +
-      'в приложении; ответ в течение 3 рабочих дней.',
-  ];
+export { OFFER_UPDATED, type OfferSection };
+
+export interface OfferInput {
+  recipientName: string;
+  inn: string;
+  priceLabel: string;
+  /** Число дней бесплатного периода — из настроек сервера или константы бандла. */
+  trialDays: number;
+  /** Без @ — как в SUPPORT.telegram. */
+  supportTelegram: string;
+  supportEmail: string;
+}
+
+/** «1 день», «2 дня», «15 дней». */
+export function trialDaysLabel(days: number): string {
+  return `${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+}
+
+export function offer(input: OfferInput): OfferSection[] {
+  return offerSections({
+    recipientName: input.recipientName || 'исполнитель',
+    inn: input.inn,
+    priceLabel: input.priceLabel,
+    trialDaysLabel: trialDaysLabel(input.trialDays),
+    supportTelegram: `@${input.supportTelegram}`,
+    supportEmail: input.supportEmail,
+  });
 }

@@ -603,6 +603,12 @@ Coolify сам следит за веткой `master` через встроен
 **Важно:** в Coolify staging-приложении опция "Auto Deploy" должна быть **отключена**,
 иначе будет двойной деплой (PATCH тоже триггерит деплой).
 
+### oferta-sync.yml
+
+Оферта генерируется из `docs/legal/oferta.md` в две копии (`scripts/gen-oferta.py`). Workflow на тех
+же ветках, что и secret-scan: перегенерирует и делает `git diff --exit-code` по двум сгенерированным
+файлам — правка md без перегенерации не пройдёт PR. В branch protection не обязателен.
+
 ### secret-scan.yml
 
 Триггер: `pull_request` в `master` + `push` в `master` / `bugfix/**` / `feature/**` / `devops/**`.

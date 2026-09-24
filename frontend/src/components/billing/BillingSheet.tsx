@@ -6,8 +6,11 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { openExternalLink } from '../../utils/telegramLinks';
 import { pluralRu } from '../../utils/formatters';
-import { formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason } from '../../api/billing';
-import { OFFER_TITLE, offerParagraphs } from './offerText';
+import {
+  CHAT_PRICE_LABEL, SELLER, SUPPORT, TRIAL_DAYS_DEFAULT,
+  formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason,
+} from '../../api/billing';
+import { OFFER_TITLE, OFFER_UPDATED, offer } from './offerText';
 
 /** Опрос статуса после ухода на оплату: ResultURL провайдера может отставать от возврата. */
 const POLL_INTERVAL_MS = 3000;
@@ -178,7 +181,17 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
         </button>
         {offerOpen && (
           <div className="rd-billing-offer">
-            {offerParagraphs(data?.recipientName ?? '', price ?? '199 ₽').map((p) => <p key={p.slice(0, 12)}>{p}</p>)}
+            <p className="rd-billing-offer-meta">Редакция от {OFFER_UPDATED}</p>
+            {/* ИНН — константа бандла (та же, что на /about): в DTO биллинга его нет, а оферте он нужен. */}
+            {offer({
+              recipientName: data?.recipientName ?? '', inn: SELLER.inn, priceLabel: price ?? CHAT_PRICE_LABEL,
+              trialDays: data?.trialDays ?? TRIAL_DAYS_DEFAULT, supportTelegram: SUPPORT.telegram, supportEmail: SUPPORT.email,
+            }).map((s) => (
+              <div key={s.title}>
+                <h3>{s.title}</h3>
+                {s.paragraphs.map((p) => <p key={p.slice(0, 24)}>{p}</p>)}
+              </div>
+            ))}
           </div>
         )}
       </div>

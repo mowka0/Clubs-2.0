@@ -55,6 +55,26 @@ export const TRIAL_DAYS_DEFAULT = 15;
 export const CHAT_PRICE_LABEL = '199 ₽';
 export const CHAT_PRICE_LINE = `Первые ${TRIAL_DAYS_DEFAULT} дней бесплатно. Дальше ${CHAT_PRICE_LABEL} в месяц за клуб.`;
 
+/**
+ * Реквизиты продавца и контакты для публичных текстов (оферта, `/about`, `/privacy`). Живут в бандле:
+ * публичные страницы работают без API. ФИО должно совпадать с BILLING_RECIPIENT_NAME бэкенда — его же
+ * человек видит в шите оплаты. Значения даны PO 2026-09-16; e-mail можно сменить в любой момент.
+ * ИНН в DTO биллинга пока нет — константа здесь единственный источник для шита (backlog).
+ */
+export const SELLER = {
+  /** ФИО самозанятого целиком — как в «Мой налог». */
+  name: 'Варламов Иван Михайлович',
+  /** ИНН самозанятого — обязателен на странице продавца и в оферте. */
+  inn: '370211562724',
+} as const;
+
+export const SUPPORT = {
+  /** Аккаунт поддержки без @ — тот же, куда бот шлёт «Сообщить о проблеме». */
+  telegram: 'clubs_tech_support',
+  /** E-mail для обращений; пусто — строка не показывается. */
+  email: 'clubs.techsupport@gmail.com',
+} as const;
+
 export function getBilling(clubId: string): Promise<BillingStatusDto> {
   return apiClient.get<BillingStatusDto>(`/api/clubs/${clubId}/billing`);
 }

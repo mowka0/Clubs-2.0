@@ -239,7 +239,9 @@ BotFather — README прокси § 6в; проверено PO с телефо�
 **20.09: обязательная информация для Robokassa встроена в бота** — `/start` и `/terms` (`bot/LegalSheet`),
 оферта и политика по кнопкам в том же сообщении; env `BILLING_RECIPIENT_INN=370211562724`,
 `TELEGRAM_SUPPORT_EMAIL` (дефолт есть) — PO выставить в Coolify; тексты для BotFather —
-`telegram-bot.md` § «BotFather». Ветка `feature/bot-legal-info`.
+`telegram-bot.md` § «BotFather». Ветка `feature/bot-legal-info` (в проде, PR #177).
+**24.09: оферта переведена на шаблон Robokassa «Оказание услуг»** — канон `docs/legal/oferta.md`,
+генератор `scripts/gen-oferta.py`, в боте постранично (ветка `feature/oferta-robokassa-template`).
 Устаревшая точка возобновления (16:15): зона в Cloudflare готова, NS в Timeweb заменены на
 `lara`/`rustam.ns.cloudflare.com`, кнопка «I updated my nameservers» нажата; реестр `.ru` ещё отдавал
 NS Timeweb. Следующая сессия: 1) `ssh root@77.42.23.177 "dig @a.dns.ripn.net clubsapp.ru NS +noall
