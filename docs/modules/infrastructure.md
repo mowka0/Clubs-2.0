@@ -394,7 +394,10 @@ volumes:
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`,
 `BILLING_MANUAL_CHARGE_ENABLED` + `PLATFORM_ADMIN_TELEGRAM_IDS` (служебный триггер «списать сейчас»,
-по умолчанию выключен — включается только на время проверки первого боевого автосписания).
+по умолчанию выключен — включается только на время проверки первого боевого автосписания; тот же
+список id — получатели недельного DM-отчёта воронки, без него отчёт не строится),
+`FUNNEL_REPORT_CRON` (крон отчёта, по умолчанию понедельник 09:00 МСК; на staging для прогона —
+`0 */5 * * * *`, потом вернуть — `docs/modules/funnel.md` § 4, § 6).
 **Домен `clubsapp.ru`** (куплен 2026-09-16 на Timeweb, только регистрация — без хостинга и без их
 SSL). До этого прод жил на `77-42-23-177.sslip.io`: это не домен, а публичный DNS-трюк, в имени
 которого зашит IP сервера — переезд на другой сервер менял бы адрес целиком, вместе с URL Mini App

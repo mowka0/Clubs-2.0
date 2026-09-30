@@ -223,7 +223,8 @@ CREATE TABLE chat_free_meeting (
     released_at  TIMESTAMPTZ                    -- встреча отменена до старта → бесплатная возвращена
 );
 
--- События воронки (День 4,5 переиспользует таблицу; campaign заполняет парсер /start ad_<…>).
+-- События воронки. Шаги привлечения (bot_started, chat_connected, chat_disconnected), колонка
+-- telegram_id (V100) и недельный отчёт — docs/modules/funnel.md (День 4,5, 2026-09-30).
 CREATE TABLE funnel_event (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID REFERENCES users(id),
@@ -617,7 +618,9 @@ DM «завтра спишем» перед автосписанием **нет*
   подписки — `POST /api/clubs/{id}/billing/charge-now`, доступный только при
   `BILLING_MANUAL_CHARGE_ENABLED=true` и только владельцу клуба из env-списка
   `PLATFORM_ADMIN_TELEGRAM_IDS`. После проверки флаг выключается. **Реализовано 2026-09-16:**
-  `ManualChargeAccess` (флаг → 404, чужой id → 403) + `BillingLifecycleService.chargeNow` — тот же
+  `ManualChargeAccess` (флаг → 404, чужой id → 403; список администраторов с 2026-09-30 живёт в
+  общем `common/config/PlatformAdmins`, ключ yaml `platform.admin-telegram-ids`, env тот же — его
+  же читает недельный отчёт воронки, `funnel.md`) + `BillingLifecycleService.chargeNow` — тот же
   `sendRecurringCharge`, что у календарного тика, без проверки слота. Деньги уходят раньше срока, но
   период продлевается от его конца (`settleRecurring`), оплаченное время не теряется. Порядок на
   проде: включить флаг и id PO в Coolify → `curl -X POST … -H 'Authorization: Bearer <JWT>'` (JWT —

@@ -70,7 +70,11 @@ CREATE TABLE club_chat_links (
    - **осиротевшая строка** (за строкой стоит удалённый клуб) чат НЕ занимает и освобождается
      на месте — см. § «Перехват чата с осиротевшей привязкой»;
    - `GetChatMember(chat, botId)` → фиксируем `bot_status`, `can_pin_messages`, `can_invite_users`;
-   - INSERT в `club_chat_links`;
+   - INSERT в `club_chat_links` → Spring-событие `ChatLinkedEvent(clubId, ownerUserId,
+     ownerTelegramId)` — воронка пишет по нему `chat_connected` (`docs/modules/funnel.md` § 3.1);
+     публикуется из `linkChatToClub`, общей точки всех входов привязки (`?startgroup=new`,
+     `?startgroup=<club_id>`, привязка по намерению), повторный `/start` в привязанном чате
+     события не даёт;
    - **invite-ссылка (`creates_join_request`) создаётся сразу при привязке** (если есть право
      приглашать; иначе — как только право появится) — по ней работает кнопка «Чат клуба»,
      не дожидаясь тумблера двери.
@@ -176,7 +180,10 @@ CREATE TABLE club_chat_links (
 ### Health-мониторинг (`my_chat_member`)
 Обновление статуса самого бота в привязанном чате (приходит из коробки, проверено в notes.md):
 - `left`/`kicked` → `bot_status` обновляется, фичи гаснут (UI — состояние C). Привязка НЕ удаляется
-  (вернут бота — всё оживёт после «Проверить ещё раз»/refresh).
+  (вернут бота — всё оживёт после «Проверить ещё раз»/refresh). На переходе «в чате → не в чате»
+  публикуется `ChatDisconnectedEvent(clubId, linkedByUserId)` — воронка считает чат потерянным
+  (`chat_disconnected`, `docs/modules/funnel.md`); повторный кик из «не в чате» и возврат бота
+  событий не дают.
 - `administrator`/`member` → обновляем `bot_status` и флаги прав.
 - **Пересоздание invite-ссылки**: Telegram отзывает ссылки удалённого админа, поэтому на переходе
   «бот снова может приглашать» (вернулся в чат / вернули право) старая ссылка отзывается и
@@ -283,7 +290,9 @@ chat was upgraded to a supergroup chat` + `parameters.migrate_to_chat_id`
 5. снять теги наград (`memberTagService.disableForClub`);
 6. отозвать door-invite-ссылку;
 7. `LeaveChat` — **только** если вход этого требует (таблица выше);
-8. удалить строку `club_chat_links`.
+8. удалить строку `club_chat_links`;
+9. опубликовать `ChatDisconnectedEvent(clubId, linkedByUserId)` — для воронки клуб потерял чат
+   независимо от входа (`chat_disconnected`, `docs/modules/funnel.md` § 3.1).
 
 Telegram-шаги best-effort: строка удаляется в любом случае, иначе мёртвая привязка блокировала
 бы повторную. Лог: `Chat link released: clubId={} chatId={} botLeftChat={}`.

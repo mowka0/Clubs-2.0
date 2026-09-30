@@ -10,9 +10,11 @@ import java.util.UUID
 
 
 /**
- * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
- * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
+ * chat_disconnected и шаги биллинга trial_started, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended. Только запись и
+ * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
+ * входит.
  */
 @Suppress("UNCHECKED_CAST")
 data class FunnelEvent(
@@ -21,7 +23,8 @@ data class FunnelEvent(
     var clubId: UUID? = null,
     var kind: String,
     var campaign: String? = null,
-    var createdAt: OffsetDateTime? = null
+    var createdAt: OffsetDateTime? = null,
+    var telegramId: Long? = null
 ): Serializable {
 
 
@@ -65,6 +68,12 @@ data class FunnelEvent(
         }
         else if (this.createdAt != o.createdAt)
             return false
+        if (this.telegramId == null) {
+            if (o.telegramId != null)
+                return false
+        }
+        else if (this.telegramId != o.telegramId)
+            return false
         return true
     }
 
@@ -77,6 +86,7 @@ data class FunnelEvent(
         result = prime * result + this.kind.hashCode()
         result = prime * result + (if (this.campaign == null) 0 else this.campaign.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
+        result = prime * result + (if (this.telegramId == null) 0 else this.telegramId.hashCode())
         return result
     }
 
@@ -89,6 +99,7 @@ data class FunnelEvent(
         sb.append(", ").append(kind)
         sb.append(", ").append(campaign)
         sb.append(", ").append(createdAt)
+        sb.append(", ").append(telegramId)
 
         sb.append(")")
         return sb.toString()

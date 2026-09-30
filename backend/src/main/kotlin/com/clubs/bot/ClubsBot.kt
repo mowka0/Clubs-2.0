@@ -6,6 +6,7 @@ import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.locationDisplay
+import com.clubs.subscription.FunnelTracker
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -34,6 +35,9 @@ import java.util.UUID
 private val OUTSIDE_CHAT_STATUSES = setOf("left", "kicked")
 private val INSIDE_CHAT_STATUSES = setOf("member", "administrator", "creator")
 
+// Сколько знаков команды попадает в лог ошибки диспатча (имя команды с @бот-суффиксом влезает целиком).
+private const val COMMAND_LOG_LENGTH = 40
+
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -45,6 +49,7 @@ class ClubsBot(
     private val rosterCallbackService: RosterCallbackService,
     private val skladchinaCallbackService: SkladchinaCallbackService,
     private val legalSheet: LegalSheet,
+    private val funnelTracker: FunnelTracker,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -132,14 +137,17 @@ class ClubsBot(
                 // (клиент Telegram шлёт «/start <payload>» в группу после добавления бота).
                 // /start в личке — прежний welcome.
                 text.startsWith("/start") ->
-                    if (isGroupChat(update.message)) handleGroupStart(update.message) else handleStart(chatId)
+                    if (isGroupChat(update.message)) handleGroupStart(update.message) else handlePrivateStart(update.message)
                 // Обязательная информация для покупки (оферта, политика, реквизиты) — тем, кто давно
                 // нажал «Старт» и приветствия уже не видит. Только в личке: в группе это шум.
-                text.startsWith("/terms") -> if (!isGroupChat(update.message)) handleStart(chatId)
+                // Шаг воронки не пишет: это не вход, а повтор приветствия.
+                text.startsWith("/terms") -> if (!isGroupChat(update.message)) sendStartScreen(chatId)
                 text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(update.message)
             }
         } catch (e: Exception) {
-            log.error("Error handling command '{}' from chat {}: {}", text, chatId, e.message, e)
+            // В лог — только имя команды: хвост сообщения (payload /start, произвольный текст) —
+            // пользовательский ввод до 4096 знаков с переводами строк, ему в логе не место.
+            log.error("Error handling command '{}' from chat {}: {}", text.substringBefore(' ').take(COMMAND_LOG_LENGTH), chatId, e.message, e)
         }
     }
 
@@ -325,7 +333,18 @@ class ClubsBot(
     }
 
     /** Стартовое сообщение = обязательная информация для продажи в Telegram плюс кнопки (LegalSheet). */
-    private fun handleStart(chatId: String) {
+    /**
+     * «/start [payload]» в личке: приветствие как раньше плюс шаг воронки bot_started с меткой
+     * кампании из payload'а (funnel.md § 3.1). Сначала ответ человеку, потом учёт — сбой учёта
+     * не должен оставить его без приветствия.
+     */
+    private fun handlePrivateStart(message: Message) {
+        sendStartScreen(message.chatId.toString())
+        val from = message.from ?: return
+        funnelTracker.botStarted(from.id, message.text)
+    }
+
+    private fun sendStartScreen(chatId: String) {
         val screen = legalSheet.startScreen()
         telegramClient.execute(
             SendMessage.builder().chatId(chatId).text(screen.text).replyMarkup(screen.markup).build()

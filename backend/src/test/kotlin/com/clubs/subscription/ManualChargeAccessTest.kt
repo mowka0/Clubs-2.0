@@ -1,5 +1,6 @@
 package com.clubs.subscription
 
+import com.clubs.common.config.PlatformAdmins
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.security.AuthenticatedUser
@@ -15,20 +16,20 @@ class ManualChargeAccessTest {
 
     @Test
     fun `disabled flag hides the route even from admins`() {
-        val access = ManualChargeAccess(enabled = false, adminTelegramIds = "111")
+        val access = ManualChargeAccess(enabled = false, admins = PlatformAdmins("111"))
         assertThrows<NotFoundException> { access.require(admin) }
     }
 
     @Test
     fun `enabled flag lets listed admins through and refuses everyone else`() {
-        val access = ManualChargeAccess(enabled = true, adminTelegramIds = " 111, 333 ")
+        val access = ManualChargeAccess(enabled = true, admins = PlatformAdmins(" 111, 333 "))
         access.require(admin)
         assertThrows<ForbiddenException> { access.require(stranger) }
     }
 
     @Test
     fun `empty admin list refuses everyone even when enabled`() {
-        val access = ManualChargeAccess(enabled = true, adminTelegramIds = "")
+        val access = ManualChargeAccess(enabled = true, admins = PlatformAdmins(""))
         assertThrows<ForbiddenException> { access.require(admin) }
     }
 }

@@ -158,9 +158,11 @@ val EVENT_TEMPLATES: EventTemplates = EventTemplates.EVENT_TEMPLATES
 val EVENTS: Events = Events.EVENTS
 
 /**
- * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
- * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
+ * chat_disconnected и шаги биллинга trial_started, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended. Только запись и
+ * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
+ * входит.
  */
 val FUNNEL_EVENT: FunnelEvent = FunnelEvent.FUNNEL_EVENT
 

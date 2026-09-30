@@ -5,6 +5,7 @@ import com.clubs.event.Event
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.subscription.FunnelTracker
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -32,6 +33,7 @@ import kotlin.test.assertTrue
 class ClubsBotTest {
 
     private lateinit var telegramClient: TelegramClient
+    private lateinit var funnelTracker: FunnelTracker
     private lateinit var eventRepository: EventRepository
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var chatLinkBotService: ChatLinkBotService
@@ -44,6 +46,7 @@ class ClubsBotTest {
         eventRepository = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         chatLinkBotService = mockk(relaxed = true)
+        funnelTracker = mockk(relaxed = true)
         legalSheet = LegalSheet(
             recipientName = "Тестов Тест Тестович", recipientInn = "000000000000", billingProvider = "stub",
             supportUsername = "clubs_tech_support", supportEmail = "support@example.com",
@@ -58,7 +61,8 @@ class ClubsBotTest {
             chatDoorService = mockk(relaxed = true),
             rosterCallbackService = mockk(relaxed = true),
             skladchinaCallbackService = mockk(relaxed = true),
-            legalSheet = legalSheet
+            legalSheet = legalSheet,
+            funnelTracker = funnelTracker
         )
     }
 
@@ -114,11 +118,12 @@ class ClubsBotTest {
 
     // ---- «/start», «/terms» и «шторка» оферты/политики (Robokassa: магазин = бот, 2026-09-20) ----
 
-    private fun textUpdate(text: String, chatType: String, chatId: Long = 42L): Update {
+    private fun textUpdate(text: String, chatType: String, chatId: Long = 42L, fromId: Long = chatId): Update {
         val message: Message = mockk(relaxed = true) {
             every { hasText() } returns true
             every { this@mockk.text } returns text
             every { this@mockk.chatId } returns chatId
+            every { from } returns mockk(relaxed = true) { every { id } returns fromId }
             every { migrateToChatId } returns null
             every { hasSuccessfulPayment() } returns false
             every { chat } returns mockk(relaxed = true) { every { type } returns chatType }
@@ -172,6 +177,36 @@ class ClubsBotTest {
 
         assertEquals(1, sent.size)
         assertEquals(legalSheet.infoBlock(), sent.single().text)
+    }
+
+    @Test
+    fun `start в личке пишет шаг воронки - telegram id отправителя и текст команды с меткой`() {
+        every { telegramClient.execute(any<SendMessage>()) } returns mockk(relaxed = true)
+
+        bot.consume(textUpdate("/start ad_vk1", "private", fromId = 777L))
+
+        verify { funnelTracker.botStarted(777L, "/start ad_vk1") }
+    }
+
+    @Test
+    fun `terms в личке и start в группе шаг воронки не пишут`() {
+        every { telegramClient.execute(any<SendMessage>()) } returns mockk(relaxed = true)
+
+        bot.consume(textUpdate("/terms", "private"))
+        bot.consume(textUpdate("/start new", "supergroup"))
+
+        verify(exactly = 0) { funnelTracker.botStarted(any(), any()) }
+    }
+
+    @Test
+    fun `сбой учёта воронки не лишает человека приветствия`() {
+        val sent = slot<SendMessage>()
+        every { telegramClient.execute(capture(sent)) } returns mockk(relaxed = true)
+        every { funnelTracker.botStarted(any(), any()) } throws IllegalStateException("db down")
+
+        bot.consume(textUpdate("/start", "private"))
+
+        assertEquals(legalSheet.infoBlock(), sent.captured.text)
     }
 
     @Test
