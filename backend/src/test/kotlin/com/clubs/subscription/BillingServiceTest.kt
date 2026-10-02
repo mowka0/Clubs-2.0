@@ -60,7 +60,28 @@ class BillingServiceTest {
         every { subscriptionRepository.findLatestByClub(club.id) } returns null
         every { paymentRepository.findPendingMother(club.id, any()) } returns null
         every { paymentProvider.id } returns "robokassa"
+        every { paymentProvider.recurringAvailable } returns true
         every { paymentProvider.createCheckout(any()) } answers { CheckoutUrl("https://rk.example/pay?inv=${firstArg<CheckoutRequest>().invId}") }
+    }
+
+    @Test
+    fun `provider without recurring - checkout asks no Recurring and a card payment leaves autopay impossible`() {
+        every { paymentProvider.recurringAvailable } returns false
+        val payment = BillingTestFixtures.payment(club, autopayRequested = true)
+        every { paymentRepository.create(club.id, null, PaymentKind.MOTHER, PRICE, null, true) } returns payment
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+        val created = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(30), autopay = true)
+        every { subscriptionRepository.createChatSubscription(club.ownerId, club.id, any(), "100001", true, false) } returns created
+
+        service.checkout(club.id, club.ownerId, autopay = true)
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        val request = slot<CheckoutRequest>()
+        verify { paymentProvider.createCheckout(capture(request)) }
+        assertFalse(request.captured.recurring, "без услуги рекуррента Recurring не просим — иначе ошибка 34 на любую оплату")
+        verify { subscriptionRepository.createChatSubscription(club.ownerId, club.id, any(), "100001", autopay = true, autopayPossible = false) }
+        verify { notifier.paid(club, created.currentPeriodEnd, autopayOn = false, priceKopecks = PRICE) }
     }
 
     private fun assertClose(expected: OffsetDateTime, actual: OffsetDateTime) {

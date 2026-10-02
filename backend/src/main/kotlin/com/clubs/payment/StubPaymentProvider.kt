@@ -31,6 +31,7 @@ class StubPaymentProvider(
     private val log = LoggerFactory.getLogger(StubPaymentProvider::class.java)
 
     override val id = "stub"
+    override val recurringAvailable = true
 
     /** Принятые дочерние списания: InvId → момент приёма (материнские подтверждаются ссылкой). */
     private val acceptedCharges = ConcurrentHashMap<Long, Instant>()

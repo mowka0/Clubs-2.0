@@ -152,6 +152,11 @@ billing:
     test-mode: ${ROBOKASSA_TEST_MODE:true}
     # Алгоритм подписи — должен совпадать с настройками магазина в кабинете Robokassa.
     hash: ${ROBOKASSA_HASH:SHA256}
+    # Разрешён ли магазину рекуррент: услугу включает менеджер Robokassa отдельной заявкой, до того
+    # платёжная страница отвечает ошибкой 34 на любой Recurring=true и не проходит ни одна оплата.
+    # false = материнский платёж без сохранения карты: оплата идёт, автопродление недоступно,
+    # напоминаем в личке. Включить обратно, как только Robokassa подтвердит услугу.
+    recurring-enabled: ${ROBOKASSA_RECURRING_ENABLED:true}
     # Адреса, с которых Robokassa шлёт ResultURL (docs.robokassa.ru, «Уведомления»).
     allowed-ips: ${ROBOKASSA_ALLOWED_IPS:185.59.216.65,185.59.217.65}
 

@@ -35,6 +35,9 @@ class RobokassaPaymentProvider(
     @Value("\${billing.robokassa.test-mode:true}") private val testMode: Boolean,
     // Должен совпадать с алгоритмом в настройках магазина Robokassa.
     @Value("\${billing.robokassa.hash:SHA256}") hashAlgorithm: String,
+    // Рекуррент магазину разрешает менеджер Robokassa отдельно; до того любой Recurring=true даёт
+    // ошибку 34 на платёжной странице — и ни одна оплата не проходит. false = платим без сохранения карты.
+    @Value("\${billing.robokassa.recurring-enabled:true}") override val recurringAvailable: Boolean,
     // Адреса, с которых Robokassa шлёт ResultURL; пусто = отвергать всё (fail-close).
     @Value("\${billing.robokassa.allowed-ips:185.59.216.65,185.59.217.65}") allowedIps: String,
     @Value("\${billing.robokassa.base-url:https://auth.robokassa.ru}") private val baseUrl: String,
@@ -54,7 +57,7 @@ class RobokassaPaymentProvider(
         require(merchantLogin.isNotBlank() && password1.isNotBlank() && password2.isNotBlank()) {
             "billing.provider=robokassa requires ROBOKASSA_MERCHANT_LOGIN, ROBOKASSA_PASSWORD_1 and ROBOKASSA_PASSWORD_2"
         }
-        log.info("Robokassa provider active: merchantLogin={} testMode={} hash={}", merchantLogin, testMode, hashAlgorithm)
+        log.info("Robokassa provider active: merchantLogin={} testMode={} hash={} recurring={}", merchantLogin, testMode, hashAlgorithm, recurringAvailable)
     }
 
     override fun createCheckout(request: CheckoutRequest): CheckoutUrl {

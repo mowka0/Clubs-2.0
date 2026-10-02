@@ -55,7 +55,8 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   const billing = useBillingQuery(clubId, { refetchInterval: mode === 'waiting' ? POLL_INTERVAL_MS : false });
   const data = billing.data;
   const hasSubscription = data?.state === 'ACTIVE' || data?.state === 'GRACE' || data?.state === 'ENDED';
-  // Оплата по СБП карту не сохраняет — ползунок недоступен до следующей оплаты картой.
+  // Карта не сохранена (оплата по СБП или провайдер ещё без рекуррента) — ползунок недоступен
+  // до следующей оплаты, которая карту сохранит.
   const autopayLocked = !!data && hasSubscription && !data.autopayPossible;
   const effectiveAutopay = autopayLocked ? false : autopay;
 
@@ -155,7 +156,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           <div className="ft">Продлевать автоматически</div>
           <div className="fd">
             {autopayLocked
-              ? 'Прошлая оплата была по СБП — автопродление работает только для карт. Оплатите картой, и ползунок станет доступен.'
+              ? 'Карта с прошлой оплаты не сохранена — автопродление пока недоступно, напомним за 3 дня и за день до конца периода.'
               : effectiveAutopay
                 ? `Спишем ${price ?? ''} с этой же карты ${chargeDate ? chargeDate : 'в день окончания оплаченного периода'}. Отключить можно в любой момент на странице клуба.`
                 : 'Напомним за 3 дня и за день до конца периода — оплатите вручную.'}

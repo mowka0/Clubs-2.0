@@ -194,6 +194,14 @@ PO: `clubsapp.ru` в Referer обоих ключей Яндекс.Карт — �
 4. Аппрув → боевые пароли, `ROBOKASSA_TEST_MODE=false`, первый живой платёж на чате PO, потом
    `charge-now` под флагом (`BILLING_MANUAL_CHARGE_ENABLED=true` + `PLATFORM_ADMIN_TELEGRAM_IDS`)
    один раз, флаг выключить.
+5. **2026-10-02, магазин активирован, первый боевой платёж:** идентификатор в кабинете —
+   `ClubsApp` (в проде стояло `clubs`, Robokassa уводит такой логин на `.kz`), хеш в кабинете был
+   MD5 → SHA256, Result URL method GET → POST. Затем **ошибка 34**: рекуррент магазину не
+   разрешён, а `Recurring=true` шёл на каждом материнском платеже → не проходила ни одна оплата.
+   Фикс — ветка `feature/robokassa-go-live`: `PaymentProvider.recurringAvailable` +
+   `ROBOKASSA_RECURRING_ENABLED` (в проде `false` до подтверждения услуги). Заявка на рекуррент —
+   через менеджера/поддержку Robokassa в ЛК; после включения вернуть `true` и проверить
+   `charge-now` на платеже, сделанном уже с `Recurring`.
 
 ### Банк для выплат (исследование 17.09, сайты банков с машины недоступны — данные из обзоров)
 

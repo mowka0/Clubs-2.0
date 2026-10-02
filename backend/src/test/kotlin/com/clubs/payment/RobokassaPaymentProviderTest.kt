@@ -25,6 +25,7 @@ class RobokassaPaymentProviderTest {
         password2 = "pass-two",
         testMode = true,
         hashAlgorithm = "MD5",
+        recurringAvailable = true,
         allowedIps = "185.59.216.65, 185.59.217.65",
         baseUrl = "https://rk.example",
     )

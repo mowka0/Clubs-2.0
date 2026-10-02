@@ -100,14 +100,15 @@ class BillingService(
                 log.info("Billing checkout: clubId={} invId={} amountKopecks={} autopay={}", clubId, it.invId, price, autopay)
             }
 
-        // Recurring всегда: карта сохраняется у провайдера, и ползунок можно включить позже
-        // без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута.
+        // Recurring — всегда, когда провайдер его умеет: карта сохраняется, и ползунок можно включить
+        // позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута. Пока услуга
+        // магазину не разрешена (Robokassa, ошибка 34), платим без неё — иначе не проходит ничего.
         val url = paymentProvider.createCheckout(
             CheckoutRequest(
                 invId = payment.invId,
                 amountKopecks = payment.amountKopecks,
                 description = describe(club, link),
-                recurring = true,
+                recurring = paymentProvider.recurringAvailable,
                 clubId = clubId,
                 successUrl = "$successUrl?club=$clubId",
                 failUrl = "$failUrl?club=$clubId",
@@ -188,7 +189,9 @@ class BillingService(
     }
 
     private fun settleMother(payment: PlatformPayment, club: Club, notification: ResultNotification, now: OffsetDateTime): ServiceSubscription {
-        val autopayPossible = isCard(notification.paymentMethod)
+        // Карта сохранена только если мы просили Recurring (провайдер его умеет) и платили картой:
+        // иначе шедулер пошёл бы списывать по несуществующему токену.
+        val autopayPossible = paymentProvider.recurringAvailable && isCard(notification.paymentMethod)
         val live = payment.subscriptionId?.let(subscriptionRepository::findById)?.takeIf { it.status != SubscriptionStatus.ENDED }
             ?: liveSubscription(club.id)
         val subscription = if (live == null) {
