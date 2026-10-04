@@ -139,10 +139,9 @@ billing:
   manual-charge:
     # Служебный триггер «списать сейчас» (platform-billing.md § 11): у Robokassa нет тестового
     # режима для рекуррента, первое боевое дочернее списание проверяется на проде на чате PO.
-    # Выключен по умолчанию; включается на время проверки и выключается обратно.
+    # Выключен по умолчанию; включается на время проверки и выключается обратно. Кому доступен —
+    # platform.admin-telegram-ids ниже.
     enabled: ${BILLING_MANUAL_CHARGE_ENABLED:false}
-    # Telegram id тех, кому доступен триггер (через запятую). Пусто = никому, даже при включённом флаге.
-    admin-telegram-ids: ${PLATFORM_ADMIN_TELEGRAM_IDS:}
   robokassa:
     merchant-login: ${ROBOKASSA_MERCHANT_LOGIN:}
     # Password#1 подписывает наши запросы, Password#2 — уведомления провайдера. Только env, в логи не попадают.
@@ -159,6 +158,17 @@ billing:
     recurring-enabled: ${ROBOKASSA_RECURRING_ENABLED:true}
     # Адреса, с которых Robokassa шлёт ResultURL (docs.robokassa.ru, «Уведомления»).
     allowed-ips: ${ROBOKASSA_ALLOWED_IPS:185.59.216.65,185.59.217.65}
+
+platform:
+  # Telegram id администраторов платформы (через запятую): допуск к служебному списанию
+  # (billing.manual-charge) и получатели недельного отчёта воронки. Пусто = никому и никого.
+  admin-telegram-ids: ${PLATFORM_ADMIN_TELEGRAM_IDS:}
+
+funnel:
+  # Крон недельного отчёта себе в DM (FunnelReportScheduler), зона Europe/Moscow. По умолчанию
+  # понедельник 09:00 за прошедшую ISO-неделю. На staging для прогона — 0 */5 * * * * (окно
+  # тогда — текущая неделя, funnel.md § 3.3); после прогона вернуть, иначе DM каждые 5 минут.
+  report-cron: ${FUNNEL_REPORT_CRON:0 0 9 * * MON}
 
 subscription:
   # Оплаченный период за одно списание (стаб-провайдер). В днях, чтобы staging мог

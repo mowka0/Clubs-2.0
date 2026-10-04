@@ -106,7 +106,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 7. `update.message.hasSuccessfulPayment()` → залоггировать stray-платёж (Stars упразднён) → return (важно: проверяется **до** `hasText()`, потому что `successful_payment` приходит как message без `text`)
 8. `update.message.hasText()` == false → return
 9. Диспатч по `text.startsWith(...)`:
-   - `/start` в личке → `handleStart(chatId)`; `/start <club_id>` в группе/супергруппе → привязка чата (`ChatLinkBotService.handleGroupStart`, гейт «отправитель = владелец клуба»); `/start` в группе без валидного UUID-payload — молчаливый no-op
+   - `/start [payload]` в личке → `handlePrivateStart(message)`: приветствие (`sendStartScreen`) и **потом** шаг воронки `bot_started` с меткой кампании из `ad_<slug>` (`FunnelTracker.botStarted`, `docs/modules/funnel.md` § 3.1); `/start <club_id>` в группе/супергруппе → привязка чата (`ChatLinkBotService.handleGroupStart`, гейт «отправитель = владелец клуба»); `/start` в группе без валидного UUID-payload — молчаливый no-op
+   - `/terms` в личке → `sendStartScreen(chatId)` — то же приветствие, шаг воронки не пишется
    - `/кто_идет` или `/kto_idet` → `handleWhoIsGoing(update.message)` (нужен тип чата: команда живёт только в группе)
 
 Любое исключение во время диспатча команды ловится `catch (e: Exception)` на уровне `consume` и логируется `ERROR`. Long-polling loop при этом не падает.
@@ -125,7 +126,12 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 [🏠 Открыть Clubs]                        (WebAppInfo <telegram.webapp-base-url> — как у всех WebApp-кнопок бота)
 [📄 Оферта] [🔒 Политика] [💬 Поддержка]   (callback legal:offer / legal:privacy:0 / url https://t.me/<support-username>)
 ```
-**Источник:** `ClubsBot.handleStart`, тексты — `bot/LegalSheet` (оферта и политика дублируют
+**Воронка (2026-09-30):** после отправки приветствия пишется `funnel_event(bot_started)` с
+`telegram_id` отправителя и `campaign` из payload'а рекламной ссылки `t.me/<бот>?start=ad_<slug>`
+(маска `ad_[a-z0-9_-]{1,64}` без учёта регистра; иначе NULL = органика). Сначала ответ, потом
+учёт: сбой записи не лишает человека приветствия. Определения и отчёт — `docs/modules/funnel.md`.
+
+**Источник:** `ClubsBot.handlePrivateStart` / `sendStartScreen`, тексты — `bot/LegalSheet` (оферта и политика дублируют
 `frontend/.../offerText.ts` и `privacyText.ts`: Docker-контексты фронта и бэка изолированы, общий
 файл невозможен; в обоих местах перекрёстные комментарии — правишь слова, правь оба).
 
@@ -560,5 +566,5 @@ AND отказ Telegram API не откатывает переход в stage_2 
 
 - **Long-polling vs webhook**: см. `docs/backlog/bot-event-dm-not-delivering.md` — отдельный вопрос staging vs prod-бота.
 - **Privacy `/кто_идет`**: команда обходит membership-check. Pre-existing. Эскалировано отдельно.
-- **`WebAppInfo` URL hardcoded** в двух местах (`ClubsBot.handleStart`, `NotificationService.sendDm`) — при переезде на staging-бот сломается. Кандидат на `@Value` config.
+- **`WebAppInfo` URL hardcoded** в двух местах (`ClubsBot.sendStartScreen`, `NotificationService.sendDm`) — при переезде на staging-бот сломается. Кандидат на `@Value` config.
 - **Rate-limit massовых DM**: при подключении orphan-методов в клубах с большим числом участников надо вводить батчинг / Redis-очередь (ARCHITECTURE.md §4 планирует `notification/` модуль с `NotificationConsumer` через Redis — пока aspirational, не реализован).

@@ -7,6 +7,7 @@ import com.clubs.club.ClubService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -28,6 +29,7 @@ class ChatLinkBotService(
     private val chatLinkService: ChatLinkService,
     private val intentStore: ChatLinkIntentStore,
     private val gateway: ChatTelegramGateway,
+    private val eventPublisher: ApplicationEventPublisher,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
@@ -372,6 +374,8 @@ class ChatLinkBotService(
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
+        // Шаг воронки chat_connected пишет слушатель в subscription (funnel.md § 3.1).
+        eventPublisher.publishEvent(ChatLinkedEvent(clubId, club.ownerId, fromTelegramId))
 
         // Invite-ссылка создаётся сразу при привязке (реестр багов №4): по ней работает кнопка
         // «Чат клуба» у участников — не дожидаясь включения тумблера «Вход через заявки».
@@ -412,6 +416,11 @@ class ChatLinkBotService(
             "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
             link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags
         )
+        // Бота выгнали или он вышел: для воронки чат потерян (funnel.md § 3.1), хотя привязка
+        // остаётся ради оживления. Возврат бота обратно шагом не считается — привязка та же.
+        if (link.botStatus.isInChat && !status.isInChat) {
+            eventPublisher.publishEvent(ChatDisconnectedEvent(link.clubId, link.linkedByUserId))
+        }
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }
 

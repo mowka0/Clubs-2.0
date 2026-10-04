@@ -474,6 +474,8 @@ class ChatLinkService(
         if (leaveChat) gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)
         log.info("Chat link released: clubId={} chatId={} botLeftChat={}", link.clubId, link.chatId, leaveChat)
+        // Для воронки клуб потерял чат независимо от причины (funnel.md § 3.1).
+        eventPublisher.publishEvent(ChatDisconnectedEvent(link.clubId, link.linkedByUserId))
     }
 
     /**

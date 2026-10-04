@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -29,6 +30,7 @@ class ChatLinkServiceTest {
     private lateinit var skladchinaChatStatusService: SkladchinaChatStatusService
     private lateinit var strictModeService: StrictModeService
     private lateinit var memberTagService: MemberTagService
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -45,7 +47,8 @@ class ChatLinkServiceTest {
         skladchinaChatStatusService = mockk(relaxed = true)
         strictModeService = mockk(relaxed = true)
         memberTagService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, mockk(relaxed = true), botUsername = "clubs_test_bot")
+        eventPublisher = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, eventPublisher, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
         // По умолчанию группа никуда не переезжала: relaxed-мок сам по себе отдал бы не-null,
         // и любой тест уходил бы в ветку миграции.
@@ -274,6 +277,8 @@ class ChatLinkServiceTest {
         // Живые закрепы снимаются ДО выхода из чата — иначе flush редактировал бы сообщения
         // в чате, где бота больше нет
         verify { livePinService.disableForClub(link) }
+        // Воронка узнаёт о потере чата событием (funnel.md § 3.1)
+        verify { eventPublisher.publishEvent(ChatDisconnectedEvent(clubId, link.linkedByUserId)) }
     }
 
     @Test

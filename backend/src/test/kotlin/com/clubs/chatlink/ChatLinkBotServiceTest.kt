@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import java.util.UUID
 
 class ChatLinkBotServiceTest {
@@ -25,6 +26,7 @@ class ChatLinkBotServiceTest {
     private lateinit var chatLinkService: ChatLinkService
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var intentStore: ChatLinkIntentStore
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var service: ChatLinkBotService
 
     private val clubId = UUID.randomUUID()
@@ -42,7 +44,8 @@ class ChatLinkBotServiceTest {
         chatLinkService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
         intentStore = mockk(relaxed = true)
-        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, intentStore, gateway, botUsername = "clubs_test_bot")
+        eventPublisher = mockk(relaxed = true)
+        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, intentStore, gateway, eventPublisher, botUsername = "clubs_test_bot")
 
         every { clubRepository.findById(clubId) } returns club
         val owner = mockk<UsersRecord>(relaxed = true) {
@@ -255,6 +258,8 @@ class ChatLinkBotServiceTest {
         assertEquals(BotChatStatus.ADMINISTRATOR, inserted.captured.botStatus)
         assertTrue(inserted.captured.canPinMessages)
         assertEquals(ownerId, inserted.captured.linkedByUserId)
+        // Воронка: шаг chat_connected пишет слушатель по событию с данными владельца (funnel.md § 3.1)
+        verify { eventPublisher.publishEvent(ChatLinkedEvent(clubId, ownerId, ownerTelegramId)) }
         // Реестр багов №4: ссылка создаётся при привязке, не дожидаясь тумблера двери
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
         // В чат — ровно ОДНО сообщение: закреплённая ссылка на клуб с зовом вступить
@@ -307,6 +312,8 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
+        // И ни одного лишнего шага воронки: подключение было один раз, при первой привязке.
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType<ChatLinkedEvent>()) }
         // Ни одного сообщения: ни подтверждения в личку, ни чего-либо в группу.
         verify(exactly = 0) { gateway.sendDmWithWebAppAndCallbackButton(any(), any(), any(), any(), any(), any()) }
         // В сам чат при повторном /start не летит ничего: закреп со ссылкой там уже висит
@@ -350,12 +357,23 @@ class ChatLinkBotServiceTest {
 
     @Test
     fun `my_chat_member kick - статус обновлён, привязка живёт`() {
-        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, linkedByUserId = ownerId)
 
         service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
 
         verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.KICKED, false, false, false, false) }
         verify(exactly = 0) { chatLinkRepository.delete(any()) }
+        // Для воронки чат потерян, хотя строка привязки остаётся (funnel.md § 3.1)
+        verify { eventPublisher.publishEvent(ChatDisconnectedEvent(clubId, ownerId)) }
+    }
+
+    @Test
+    fun `my_chat_member kicked после left - потеря чата не считается второй раз`() {
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, botStatus = BotChatStatus.LEFT)
+
+        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType<ChatDisconnectedEvent>()) }
     }
 
     @Test
@@ -371,6 +389,11 @@ class ChatLinkBotServiceTest {
 
         verify { gateway.revokeInviteLink(chatId, "https://t.me/+dead") }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
+        // Возврат бота — не новое подключение и не потеря чата: привязка та же (funnel.md § 3.1).
+        // Матчер по типу: голый any() ушёл бы в перегрузку publishEvent(ApplicationEvent), которую
+        // data-классы событий не трогают, и проверка была бы пустой.
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType<ChatLinkedEvent>()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(ofType<ChatDisconnectedEvent>()) }
     }
 
     @Test

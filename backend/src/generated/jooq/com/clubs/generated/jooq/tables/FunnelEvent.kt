@@ -42,9 +42,11 @@ import org.jooq.impl.TableImpl
 
 
 /**
- * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
- * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
+ * chat_disconnected и шаги биллинга trial_started, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended. Только запись и
+ * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
+ * входит.
  */
 @Suppress("UNCHECKED_CAST")
 open class FunnelEvent(
@@ -63,7 +65,7 @@ open class FunnelEvent(
     parentPath,
     aliased,
     parameters,
-    DSL.comment("Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen, checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги привлечения (день 5). Только запись и агрегаты, в логику продукта не входит."),
+    DSL.comment("Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected, chat_disconnected и шаги биллинга trial_started, paywall_seen, checkout_started, payment_succeeded, subscription_ended. Только запись и агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не входит."),
     TableOptions.table(),
     where,
 ) {
@@ -101,24 +103,35 @@ open class FunnelEvent(
 
     /**
      * The column <code>public.funnel_event.kind</code>. Шаг воронки строкой:
-     * free_meeting_used, paywall_seen, checkout_started, payment_succeeded,
-     * subscription_ended и шаги привлечения дня 5. Без enum — набор шагов
-     * меняется чаще, чем схема.
+     * bot_started (/start в личке), chat_connected (чат привязан к клубу),
+     * chat_disconnected (отвязка или бота выгнали), trial_started (первая
+     * встреча чата), paywall_seen, checkout_started, payment_succeeded,
+     * subscription_ended. Без enum — набор шагов меняется чаще, чем схема.
      */
-    val KIND: TableField<FunnelEventRecord, String?> = createField(DSL.name("kind"), SQLDataType.VARCHAR(48).nullable(false), this, "Шаг воронки строкой: free_meeting_used, paywall_seen, checkout_started, payment_succeeded, subscription_ended и шаги привлечения дня 5. Без enum — набор шагов меняется чаще, чем схема.")
+    val KIND: TableField<FunnelEventRecord, String?> = createField(DSL.name("kind"), SQLDataType.VARCHAR(48).nullable(false), this, "Шаг воронки строкой: bot_started (/start в личке), chat_connected (чат привязан к клубу), chat_disconnected (отвязка или бота выгнали), trial_started (первая встреча чата), paywall_seen, checkout_started, payment_succeeded, subscription_ended. Без enum — набор шагов меняется чаще, чем схема.")
 
     /**
      * The column <code>public.funnel_event.campaign</code>. Метка рекламной
-     * кампании из /start ad_&lt;campaign&gt; (NULL = органика или шаг без
-     * атрибуции).
+     * кампании: slug из /start ad_&lt;slug&gt; (латиница, цифры, «_» и «-», до
+     * 64 знаков, приводится к строчным), только у bot_started. NULL = органика
+     * или шаг без атрибуции.
      */
-    val CAMPAIGN: TableField<FunnelEventRecord, String?> = createField(DSL.name("campaign"), SQLDataType.VARCHAR(64), this, "Метка рекламной кампании из /start ad_<campaign> (NULL = органика или шаг без атрибуции).")
+    val CAMPAIGN: TableField<FunnelEventRecord, String?> = createField(DSL.name("campaign"), SQLDataType.VARCHAR(64), this, "Метка рекламной кампании: slug из /start ad_<slug> (латиница, цифры, «_» и «-», до 64 знаков, приводится к строчным), только у bot_started. NULL = органика или шаг без атрибуции.")
 
     /**
      * The column <code>public.funnel_event.created_at</code>. Когда шаг
      * случился.
      */
     val CREATED_AT: TableField<FunnelEventRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда шаг случился.")
+
+    /**
+     * The column <code>public.funnel_event.telegram_id</code>. Telegram id
+     * того, кто совершил шаг. Заполняется у шагов привлечения (bot_started,
+     * chat_connected), где пользователя в users может ещё не быть; у шагов
+     * биллинга NULL. Кампания из /start ad_&lt;slug&gt; атрибутируется к
+     * подключениям и оплатам по этому id.
+     */
+    val TELEGRAM_ID: TableField<FunnelEventRecord, Long?> = createField(DSL.name("telegram_id"), SQLDataType.BIGINT, this, "Telegram id того, кто совершил шаг. Заполняется у шагов привлечения (bot_started, chat_connected), где пользователя в users может ещё не быть; у шагов биллинга NULL. Кампания из /start ad_<slug> атрибутируется к подключениям и оплатам по этому id.")
 
     private constructor(alias: Name, aliased: Table<FunnelEventRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<FunnelEventRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

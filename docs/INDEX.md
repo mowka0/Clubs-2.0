@@ -90,6 +90,7 @@
 |---|---|
 | `docker-compose*.yml`, `Dockerfile`, `nginx.conf`, `.github/workflows/` | `infrastructure.md` + `CLAUDE.md` § Infrastructure |
 | `application*.yml`, env-переменные | `infrastructure.md` + спека модуля-потребителя |
+| `subscription/Funnel*` (шаги, `FunnelTracker`, отчёт, `FunnelReportScheduler`), `/start` в личке в `bot/ClubsBot`, `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`, `common/config/PlatformAdmins`, миграция V100 | `funnel.md` |
 | `infra/host/`, `infra/ru-proxy/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner» + README в каталоге |
 
 ---
@@ -148,6 +149,7 @@
 | `platform-billing-testplan.md` | тест-план staging-прогона биллинга: 21 кейс по блокам (бесплатный период, оплата заглушкой, продление, периферия), переменные staging, что проверяет Dev по БД | 2026-09-16 |
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
 | `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-20 |
+| `funnel.md` | **воронка привлечения и недельный отчёт себе (День 4,5)**: `/start ad_<slug>` → `bot_started`, события привязки → `chat_connected`/`chat_disconnected`, V100 `telegram_id`, DM-отчёт админам платформы в понедельник 09:00 МСК (`FUNNEL_REPORT_CRON`, `PLATFORM_ADMIN_TELEGRAM_IDS`) с определениями всех метрик; состав согласован с PO 2026-09-30 | 2026-09-30 |
 
 ### Пользователь и вход
 | Файл | О чём | Правлен |

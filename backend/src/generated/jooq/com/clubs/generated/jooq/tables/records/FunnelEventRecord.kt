@@ -14,9 +14,11 @@ import org.jooq.impl.UpdatableRecordImpl
 
 
 /**
- * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
- * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
+ * chat_disconnected и шаги биллинга trial_started, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended. Только запись и
+ * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
+ * входит.
  */
 @Suppress("UNCHECKED_CAST")
 open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelEventRecord>(FunnelEvent.FUNNEL_EVENT) {
@@ -45,6 +47,10 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
         set(value): Unit = set(5, value)
         get(): OffsetDateTime? = get(5) as OffsetDateTime?
 
+    open var telegramId: Long?
+        set(value): Unit = set(6, value)
+        get(): Long? = get(6) as Long?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -54,13 +60,14 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
     /**
      * Create a detached, initialised FunnelEventRecord
      */
-    constructor(id: UUID? = null, userId: UUID? = null, clubId: UUID? = null, kind: String, campaign: String? = null, createdAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, userId: UUID? = null, clubId: UUID? = null, kind: String, campaign: String? = null, createdAt: OffsetDateTime? = null, telegramId: Long? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
         this.kind = kind
         this.campaign = campaign
         this.createdAt = createdAt
+        this.telegramId = telegramId
         resetChangedOnNotNull()
     }
 
@@ -75,6 +82,7 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
             this.kind = value.kind
             this.campaign = value.campaign
             this.createdAt = value.createdAt
+            this.telegramId = value.telegramId
             resetChangedOnNotNull()
         }
     }

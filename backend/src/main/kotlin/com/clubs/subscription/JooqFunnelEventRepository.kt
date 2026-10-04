@@ -10,12 +10,13 @@ import java.util.UUID
 @Repository
 class JooqFunnelEventRepository(private val dsl: DSLContext) : FunnelEventRepository {
 
-    override fun record(step: FunnelStep, userId: UUID?, clubId: UUID?, campaign: String?) {
+    override fun record(step: FunnelStep, userId: UUID?, clubId: UUID?, campaign: String?, telegramId: Long?) {
         dsl.insertInto(FUNNEL_EVENT)
             .set(FUNNEL_EVENT.USER_ID, userId)
             .set(FUNNEL_EVENT.CLUB_ID, clubId)
             .set(FUNNEL_EVENT.KIND, step.kind)
             .set(FUNNEL_EVENT.CAMPAIGN, campaign)
+            .set(FUNNEL_EVENT.TELEGRAM_ID, telegramId)
             .execute()
     }
 

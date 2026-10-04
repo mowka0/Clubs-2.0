@@ -17,9 +17,11 @@ import org.jooq.impl.DAOImpl
 
 
 /**
- * Факты воронки для прогона спринта 1.0: free_meeting_used, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended (биллинг) и шаги
- * привлечения (день 5). Только запись и агрегаты, в логику продукта не входит.
+ * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
+ * chat_disconnected и шаги биллинга trial_started, paywall_seen,
+ * checkout_started, payment_succeeded, subscription_ended. Только запись и
+ * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
+ * входит.
  */
 @Suppress("UNCHECKED_CAST")
 open class FunnelEventDao(configuration: Configuration?) : DAOImpl<FunnelEventRecord, com.clubs.generated.jooq.tables.pojos.FunnelEvent, UUID>(FunnelEvent.FUNNEL_EVENT, com.clubs.generated.jooq.tables.pojos.FunnelEvent::class.java, configuration) {
@@ -101,4 +103,15 @@ open class FunnelEventDao(configuration: Configuration?) : DAOImpl<FunnelEventRe
      * Fetch records that have <code>created_at IN (values)</code>
      */
     fun fetchByCreatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.FunnelEvent> = fetch(FunnelEvent.FUNNEL_EVENT.CREATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>telegram_id BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfTelegramId(lowerInclusive: Long?, upperInclusive: Long?): List<com.clubs.generated.jooq.tables.pojos.FunnelEvent> = fetchRange(FunnelEvent.FUNNEL_EVENT.TELEGRAM_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>telegram_id IN (values)</code>
+     */
+    fun fetchByTelegramId(vararg values: Long): List<com.clubs.generated.jooq.tables.pojos.FunnelEvent> = fetch(FunnelEvent.FUNNEL_EVENT.TELEGRAM_ID, *values.toTypedArray())
 }
