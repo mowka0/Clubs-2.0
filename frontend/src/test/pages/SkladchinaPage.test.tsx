@@ -500,19 +500,21 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     expect(document.querySelector('.rd-when-until')).toBeNull();
   });
 
-  it('обложка появляется только с фото: с ним заголовок в обложке и зум, без него — заголовок текстом', async () => {
+  it('фото сбора — целиком карточкой с зумом, без обложки; без фото карточки нет', async () => {
     mockDetail(buildDetail({ photoUrl: null }));
     const { unmount } = renderPage();
-    expect(await screen.findByText('Ужин после игры')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /открыть фото сбора/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ужин после игры' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть фото сбора' })).not.toBeInTheDocument();
     unmount();
 
     mockDetail(buildDetail({ photoUrl: 'https://cdn.example/check.jpg' }));
     const { user } = renderPage();
-    const cover = await screen.findByRole('button', { name: 'Ужин после игры — открыть фото сбора' });
-    expect(cover).toHaveTextContent('Ужин после игры');
-    // Фото сбора — обычно чек: обложка его обрезает, поэтому тап открывает полный размер.
-    await user.click(cover);
+    // Название остаётся заголовком, а не надписью на обложке: обложка резала чек (PO 2026-10-04).
+    expect(await screen.findByRole('heading', { name: 'Ужин после игры' })).toBeInTheDocument();
+    expect(document.querySelector('.rd-hero')).toBeNull();
+    const photo = screen.getByRole('button', { name: 'Открыть фото сбора' });
+    expect(photo.querySelector('img')).toHaveAttribute('src', 'https://cdn.example/check.jpg');
+    await user.click(photo);
     expect(screen.getByAltText('Фото сбора')).toBeInTheDocument();
   });
 });
