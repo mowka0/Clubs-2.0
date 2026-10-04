@@ -36,6 +36,11 @@
   (env-список), `telegram-bot.md` (`/start`), `club-chat-link.md` (события). PRD не трогали:
   проход по PRD — одним заходом в конце спринта (решение PO 2026-08-16).
 
+> **2026-10-04:** master с биллингом Robokassa (PR #179 оплата без рекуррента, PR #180 чек `Receipt`)
+> влит в ветку без конфликтов, staging пересобран. Тест по § 6 **всё ещё не проводился** — сессия
+> ушла на боевое включение Robokassa (`sprint-1.0-day4-billing-handoff.md` § 2d п. 5–7). Сервер:
+> две сборки разом кладут VPS — после мержа в master ветку не пушить, пока прод не поднялся.
+
 ## Что PO проверяет на staging (`docs/modules/funnel.md` § 6)
 
 1. Coolify staging → env: `PLATFORM_ADMIN_TELEGRAM_IDS=<свой telegram id>`,
