@@ -57,11 +57,29 @@ class RobokassaPaymentProviderTest {
         assertEquals(clubId.toString(), q["Shp_club"])
         // Кавычки-«ёлочки» — спецсимволы для провайдера, вычищены.
         assertEquals("Clubs: подписка за чат Бег на 30 дней", q["Description"])
-        // MerchantLogin:OutSum:InvId:SuccessUrl2:SuccessUrl2Method:FailUrl2:FailUrl2Method:Пароль#1:Shp_club=…
+        // Receipt в адресе закодирован дважды: после одного декодирования остаётся URL-кодированный JSON —
+        // ровно та строка, что стоит в подписи первым модификатором (документация, «Фискализация»).
+        val receipt = q.getValue("Receipt")
+        assertEquals(
+            """{"items":[{"name":"Clubs: подписка за чат Бег на 30 дней","quantity":1,"sum":199.00,"payment_method":"full_payment","payment_object":"service","tax":"none"}]}""",
+            URLDecoder.decode(receipt, Charsets.UTF_8),
+        )
+        // MerchantLogin:OutSum:InvId:Receipt:SuccessUrl2:SuccessUrl2Method:FailUrl2:FailUrl2Method:Пароль#1:Shp_club=…
         val expected = md5.hash(
-            "demo:199.00:100001:https://app.example/pay/return?club=$clubId:GET:https://app.example/pay/fail?club=$clubId:GET:pass-one:Shp_club=$clubId",
+            "demo:199.00:100001:$receipt:https://app.example/pay/return?club=$clubId:GET:https://app.example/pay/fail?club=$clubId:GET:pass-one:Shp_club=$clubId",
         )
         assertEquals(expected, q["SignatureValue"])
+    }
+
+    @Test
+    fun `receipt is one service item for the full amount, URL-encoded for the signature`() {
+        val param = provider.receiptParam("Clubs: подписка за чат «Бег» на 30 дней", 19900)
+
+        assertTrue(param.startsWith("%7B%22items%22"), "в подпись и в запрос идёт URL-кодированный JSON")
+        val json = URLDecoder.decode(param, Charsets.UTF_8)
+        assertTrue(json.contains("\"sum\":199.00"), "сумма позиции равна сумме операции, два знака")
+        assertTrue(json.contains("\"tax\":\"none\""), "самозанятый — без НДС")
+        assertTrue(json.contains("\"name\":\"Clubs: подписка за чат Бег на 30 дней\""))
     }
 
     @Test
