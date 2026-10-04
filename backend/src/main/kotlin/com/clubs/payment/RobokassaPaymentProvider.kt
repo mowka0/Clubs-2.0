@@ -1,6 +1,7 @@
 package com.clubs.payment
 
 import com.clubs.common.exception.ForbiddenException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -22,7 +23,9 @@ import javax.xml.parsers.DocumentBuilderFactory
  * чекаут — страница `Merchant/Index.aspx` с `Recurring=true`; дочернее списание —
  * `POST Merchant/Recurring` (PreviousInvoiceID **не входит** в подпись); ResultURL — подпись
  * `OutSum:InvId:Password#2:Shp_club=…` и allowlist IP; опрос — XML `OpStateExt`.
- * Чек НПД формирует «Робочеки СМЗ» на стороне провайдера, поэтому `Receipt` не передаём.
+ * Чек НПД формирует «Робочеки СМЗ» на стороне провайдера, но только по составу чека из `Receipt`:
+ * без него Robokassa доход в «Мой налог» не регистрирует и просит пробить чек руками (первый боевой
+ * платёж 2026-10-04). Одна позиция — услуга на всю сумму, без НДС.
  * Пароли живут только в env и в логи не попадают.
  */
 @Component
@@ -35,6 +38,9 @@ class RobokassaPaymentProvider(
     @Value("\${billing.robokassa.test-mode:true}") private val testMode: Boolean,
     // Должен совпадать с алгоритмом в настройках магазина Robokassa.
     @Value("\${billing.robokassa.hash:SHA256}") hashAlgorithm: String,
+    // Рекуррент магазину разрешает менеджер Robokassa отдельно; до того любой Recurring=true даёт
+    // ошибку 34 на платёжной странице — и ни одна оплата не проходит. false = платим без сохранения карты.
+    @Value("\${billing.robokassa.recurring-enabled:true}") override val recurringAvailable: Boolean,
     // Адреса, с которых Robokassa шлёт ResultURL; пусто = отвергать всё (fail-close).
     @Value("\${billing.robokassa.allowed-ips:185.59.216.65,185.59.217.65}") allowedIps: String,
     @Value("\${billing.robokassa.base-url:https://auth.robokassa.ru}") private val baseUrl: String,
@@ -42,6 +48,7 @@ class RobokassaPaymentProvider(
 
     private val log = LoggerFactory.getLogger(RobokassaPaymentProvider::class.java)
     private val signature = RobokassaSignature(hashAlgorithm)
+    private val json = jacksonObjectMapper()
     private val allowedIps: Set<String> = allowedIps.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     private val http: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
@@ -54,16 +61,17 @@ class RobokassaPaymentProvider(
         require(merchantLogin.isNotBlank() && password1.isNotBlank() && password2.isNotBlank()) {
             "billing.provider=robokassa requires ROBOKASSA_MERCHANT_LOGIN, ROBOKASSA_PASSWORD_1 and ROBOKASSA_PASSWORD_2"
         }
-        log.info("Robokassa provider active: merchantLogin={} testMode={} hash={}", merchantLogin, testMode, hashAlgorithm)
+        log.info("Robokassa provider active: merchantLogin={} testMode={} hash={} recurring={}", merchantLogin, testMode, hashAlgorithm, recurringAvailable)
     }
 
     override fun createCheckout(request: CheckoutRequest): CheckoutUrl {
         val outSum = formatOutSum(request.amountKopecks)
         val shp = "Shp_club=${request.clubId}"
-        // Модификаторы — в порядке документации; из них у нас только SuccessUrl2/FailUrl2 с методами.
+        val receipt = receiptParam(request.description, request.amountKopecks)
+        // Модификаторы — в порядке документации: Receipt первым, затем SuccessUrl2/FailUrl2 с методами.
         val signed = signature.hash(
             listOf(
-                merchantLogin, outSum, request.invId.toString(),
+                merchantLogin, outSum, request.invId.toString(), receipt,
                 request.successUrl, REDIRECT_METHOD, request.failUrl, REDIRECT_METHOD,
                 password1, shp,
             ).joinToString(":"),
@@ -73,6 +81,7 @@ class RobokassaPaymentProvider(
             add("OutSum" to outSum)
             add("InvId" to request.invId.toString())
             add("Description" to sanitizeDescription(request.description))
+            add("Receipt" to receipt)
             add("Culture" to "ru")
             if (request.recurring) add("Recurring" to "true")
             add("SuccessUrl2" to request.successUrl)
@@ -87,21 +96,7 @@ class RobokassaPaymentProvider(
     }
 
     override fun charge(request: RecurringChargeRequest): ChargeAccepted {
-        val outSum = formatOutSum(request.amountKopecks)
-        val shp = "Shp_club=${request.clubId}"
-        // PreviousInvoiceID в подпись не входит (документация Robokassa, раздел «Периодические платежи»).
-        val signed = signature.hash(listOf(merchantLogin, outSum, request.invId.toString(), password1, shp).joinToString(":"))
-        val form = encode(
-            listOf(
-                "MerchantLogin" to merchantLogin,
-                "InvoiceID" to request.invId.toString(),
-                "PreviousInvoiceID" to request.previousInvId.toString(),
-                "OutSum" to outSum,
-                "Description" to sanitizeDescription(request.description),
-                "Shp_club" to request.clubId.toString(),
-                "SignatureValue" to signed,
-            ),
-        )
+        val form = encode(recurringForm(request))
         val httpRequest = HttpRequest.newBuilder(URI.create("$baseUrl/Merchant/Recurring"))
             .timeout(Duration.ofSeconds(20))
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -120,6 +115,28 @@ class RobokassaPaymentProvider(
             Thread.currentThread().interrupt()
             ChargeAccepted(accepted = false, providerMessage = "interrupted")
         }
+    }
+
+    /**
+     * Поля дочернего списания. PreviousInvoiceID в подпись не входит (документация, «Периодические
+     * платежи»), Receipt — входит, как у материнского («Фискализация»). Вынесено из [charge], чтобы
+     * подпись проверялась тестом без сети.
+     */
+    internal fun recurringForm(request: RecurringChargeRequest): List<Pair<String, String>> {
+        val outSum = formatOutSum(request.amountKopecks)
+        val shp = "Shp_club=${request.clubId}"
+        val receipt = receiptParam(request.description, request.amountKopecks)
+        val signed = signature.hash(listOf(merchantLogin, outSum, request.invId.toString(), receipt, password1, shp).joinToString(":"))
+        return listOf(
+            "MerchantLogin" to merchantLogin,
+            "InvoiceID" to request.invId.toString(),
+            "PreviousInvoiceID" to request.previousInvId.toString(),
+            "OutSum" to outSum,
+            "Description" to sanitizeDescription(request.description),
+            "Receipt" to receipt,
+            "Shp_club" to request.clubId.toString(),
+            "SignatureValue" to signed,
+        )
     }
 
     override fun trustsResultSource(clientIp: String): Boolean = clientIp in allowedIps
@@ -203,8 +220,35 @@ class RobokassaPaymentProvider(
     private fun encode(params: List<Pair<String, String>>): String =
         params.joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, Charsets.UTF_8)}" }
 
+    /**
+     * Состав чека для «Робочеков СМЗ»: одна позиция — услуга на всю сумму. Возвращает JSON уже в
+     * URL-кодированном виде: именно эта строка входит в подпись, и она же уходит значением `Receipt`
+     * (общий энкодер кодирует её второй раз — ровно как в примере документации Robokassa).
+     */
+    internal fun receiptParam(description: String, amountKopecks: Int): String {
+        val receipt = mapOf(
+            "items" to listOf(
+                mapOf(
+                    "name" to sanitizeDescription(description),
+                    "quantity" to 1,
+                    "sum" to BigDecimal(amountKopecks).movePointLeft(2),
+                    "payment_method" to RECEIPT_PAYMENT_METHOD,
+                    "payment_object" to RECEIPT_PAYMENT_OBJECT,
+                    "tax" to RECEIPT_TAX,
+                ),
+            ),
+        )
+        // Пробел — как %20, а не «+»: подпись сходится в обоих случаях, но при разборе JSON перед
+        // чеком «+» может остаться плюсом в названии позиции, а %20 любой декодер читает как пробел.
+        return URLEncoder.encode(json.writeValueAsString(receipt), Charsets.UTF_8).replace("+", "%20")
+    }
+
     companion object {
         private const val REDIRECT_METHOD = "GET"
+        // Позиция чека: полный расчёт за услугу, продавец — самозанятый, НДС нет («none» в справочнике Robokassa).
+        private const val RECEIPT_PAYMENT_METHOD = "full_payment"
+        private const val RECEIPT_PAYMENT_OBJECT = "service"
+        private const val RECEIPT_TAX = "none"
         // Коды состояния операции OpStateExt (docs.robokassa.ru, «XML интерфейсы»).
         private const val STATE_COMPLETED = 100
         private const val STATE_CANCELLED = 10

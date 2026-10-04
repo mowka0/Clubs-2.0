@@ -100,14 +100,15 @@ class BillingService(
                 log.info("Billing checkout: clubId={} invId={} amountKopecks={} autopay={}", clubId, it.invId, price, autopay)
             }
 
-        // Recurring всегда: карта сохраняется у провайдера, и ползунок можно включить позже
-        // без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута.
+        // Recurring — всегда, когда провайдер его умеет: карта сохраняется, и ползунок можно включить
+        // позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута. Пока услуга
+        // магазину не разрешена (Robokassa, ошибка 34), платим без неё — иначе не проходит ничего.
         val url = paymentProvider.createCheckout(
             CheckoutRequest(
                 invId = payment.invId,
                 amountKopecks = payment.amountKopecks,
                 description = describe(club, link),
-                recurring = true,
+                recurring = paymentProvider.recurringAvailable,
                 clubId = clubId,
                 successUrl = "$successUrl?club=$clubId",
                 failUrl = "$failUrl?club=$clubId",
@@ -180,7 +181,7 @@ class BillingService(
         val subscription = liveSubscription(clubId)
             ?: throw ConflictException("Подписки ещё нет — оплатите первый месяц, ползунок появится")
         if (autopay && !subscription.autopayPossible) {
-            throw ConflictException("Автопродление работает только для карт — оплатите следующий месяц картой")
+            throw ConflictException("Автопродление недоступно: карта для списания не сохранена — оплатите следующий месяц картой")
         }
         subscriptionRepository.updateAutopay(subscription.id, autopay)
         log.info("Billing autopay set: clubId={} subscriptionId={} autopay={}", clubId, subscription.id, autopay)
@@ -188,7 +189,9 @@ class BillingService(
     }
 
     private fun settleMother(payment: PlatformPayment, club: Club, notification: ResultNotification, now: OffsetDateTime): ServiceSubscription {
-        val autopayPossible = isCard(notification.paymentMethod)
+        // Карта сохранена только если мы просили Recurring (провайдер его умеет) и платили картой:
+        // иначе шедулер пошёл бы списывать по несуществующему токену.
+        val autopayPossible = paymentProvider.recurringAvailable && isCard(notification.paymentMethod)
         val live = payment.subscriptionId?.let(subscriptionRepository::findById)?.takeIf { it.status != SubscriptionStatus.ENDED }
             ?: liveSubscription(club.id)
         val subscription = if (live == null) {
@@ -274,13 +277,18 @@ class BillingService(
         subscriptionRepository.findLatestByClub(clubId)?.takeIf { it.status != SubscriptionStatus.ENDED }
 
     // На странице оплаты провайдера человек читает «за клуб» (PO 2026-09-07), хотя единица счёта — чат.
+    // Название обрезается: оно дважды попадает в GET-ссылку (Description и Receipt, кириллица до
+    // 10 байт на знак), и длинное имя чата вывело бы ссылку за лимит сервера Robokassa.
     private fun describe(club: Club, link: ChatLink): String =
-        "Clubs: подписка за клуб ${link.chatTitle ?: club.name} на $periodDays дней"
+        "Clubs: подписка за клуб ${(link.chatTitle ?: club.name).take(TITLE_IN_DESCRIPTION_MAX)} на $periodDays дней"
 
     private fun mapper() = SubscriptionMapper()
 
     companion object {
         /** Robokassa делает дочерние списания только по банковским картам. */
         fun isCard(paymentMethod: String?): Boolean = paymentMethod?.contains("card", ignoreCase = true) == true
+
+        // Сколько знаков названия чата входит в описание платежа (см. describe); хвост « на 30 дней» при этом сохраняется.
+        private const val TITLE_IN_DESCRIPTION_MAX = 40
     }
 }
