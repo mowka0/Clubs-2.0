@@ -36,6 +36,7 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     graceUntil: null,
     autopay: true,
     autopayPossible: false,
+    autopayAvailable: true,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
     canPay: true,
@@ -131,6 +132,15 @@ describe('BillingStatusStrip', () => {
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
     expect(await screen.findByRole('switch')).toBeDisabled();
     expect(screen.getByText(/Карта для автосписания не сохранена/)).toBeInTheDocument();
+  });
+
+  it('рекуррент магазину не разрешён — ползунок недоступен даже с сохранённой картой', async () => {
+    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: true, autopayAvailable: false }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
+    const toggle = await screen.findByRole('switch');
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Автопродление пока недоступно/)).toBeInTheDocument();
   });
 
   it('грейс и стена — сроки и кнопка продления', async () => {

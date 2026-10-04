@@ -97,6 +97,9 @@ staging-прогона по § 10. Трек **L**: миграции, деньг�
   «первый день был бесплатным»: «первые 1 день» не читается ни при каком склонении) ·
   свёрнутый блок «Условия (публичная оферта)» с текстом (`components/billing/offerText.ts`, слова
    правит юрист) · кнопка «Оплатить 199 ₽» · подпись «Оплачивая, вы принимаете условия оферты».
+   **Ползунок доступен только при `autopayAvailable = true`** (2026-10-04): пока рекуррент магазину
+   не разрешён (§ 11), он выключен и заблокирован с текстом «Автопродление пока недоступно: карта на
+   этой оплате не сохранится…», чекаут уходит с `autopay=false` — шит не обещает списания, которого не будет.
 3. Кнопка → `POST /api/clubs/{id}/billing/checkout {autopay}` → сервер создаёт `platform_payment`
    (PENDING, новый `InvId`), считает подпись, возвращает URL оплаты → фронт открывает его через
    `openLink` (внешний браузер / in-app browser Telegram).
@@ -149,7 +152,9 @@ staging-прогона по § 10. Трек **L**: миграции, деньг�
 - Выключить: `PATCH /api/clubs/{id}/billing/autopay {autopay:false}` — подписка остаётся ACTIVE до
   конца периода; никаких «отмен» и звонков.
 - Включить: тот же вызов с `true`; если `!autopay_possible` → `409` с текстом «Автопродление
-  работает только для карт — оплатите следующий месяц картой».
+  работает только для карт — оплатите следующий месяц картой». Если рекуррент магазину не разрешён
+  (`autopayAvailable = false`) — тоже `409`: «Автопродление сейчас недоступно — напомним о продлении
+  в личке» (фронт в этом состоянии ползунок и так блокирует).
 
 ### 4.6 Неоплата и «начатое доживает»
 - Гейт только на `createEvent` (R4). Отмена, перенос, Этап 2, отметка явки, закреп, складчина,
@@ -451,6 +456,7 @@ data class BillingStatusDto(
     val graceUntil: OffsetDateTime?,
     val autopay: Boolean,
     val autopayPossible: Boolean,
+    val autopayAvailable: Boolean, // рекуррент разрешён магазину (paymentProvider.recurringAvailable); false → ползунок недоступен ещё до первой оплаты
     val pendingCheckout: Boolean, // есть PENDING MOTHER < 30 мин
     val recipientName: String,    // ФИО самозанятого целиком (billing.recipient-name), для шита и оферты
     val canPay: Boolean,          // смотрящий — владелец клуба; со-организатору шит показывает «платит владелец»
@@ -483,6 +489,7 @@ billing:
   fail-url: ${BILLING_FAIL_URL:${telegram.webapp-base-url}/pay/fail}
   stub:
     settle-seconds: ${BILLING_STUB_SETTLE_SECONDS:5}           # стаб: дочернее списание «прошло» через N с
+    recurring-enabled: ${BILLING_STUB_RECURRING_ENABLED:true}  # стаб: false на staging — увидеть шит и полоску без автопродления
   robokassa:
     merchant-login: ${ROBOKASSA_MERCHANT_LOGIN:}
     password1: ${ROBOKASSA_PASSWORD_1:}
@@ -620,6 +627,10 @@ DM «завтра спишем» перед автосписанием **нет*
 9. Ползунок вкл. + материнский платёж картой → `autopay_possible=true`; тик шедулера создаёт
    `platform_payment(RECURRING)` и вызывает `charge` (со стабом — SUCCEEDED через N секунд → продление).
    Материнский по СБП → `autopay_possible=false`, ползунок заблокирован с пояснением.
+9a. Рекуррент магазину не разрешён (staging: `BILLING_STUB_RECURRING_ENABLED=false`, прод:
+    `ROBOKASSA_RECURRING_ENABLED=false`): в шите первой оплаты ползунок выключен и заблокирован, текста
+    «спишем с этой же карты» нет, чекаут уходит с `autopay=false`; после оплаты картой полоска
+    «Автопродление пока недоступно», `PATCH autopay:true` → 409.
 10. Повторный ResultURL с тем же `InvId` — без второго продления; неверная подпись или чужой IP — 403.
     Клуб без чата: гейт не срабатывает, `state=NO_CHAT`. Со-организатор видит «Оплачивает владелец клуба».
 10a. **Бота выгнали из чата** (руками в Telegram): полоска «подписка на паузе», встречи создаются
@@ -657,11 +668,10 @@ DM «завтра спишем» перед автосписанием **нет*
   `SELECT count(*) FROM platform_payment WHERE kind = 'MOTHER' AND status = 'PENDING'` даёт 0
   (или спустя 24 ч после последнего чекаута — брошенные счета закрываются сами). Шедулер и
   `charge-now` при `false` списаний не делают (подписка с сохранённой картой идёт по
-  напоминаниям; `charge-now` отвечает 409 с причиной). **Известный компромисс:** фронт о флаге
-  не знает — на первом платеже шит показывает включённый ползунок и «спишем с этой же карты»,
-  хотя при `false` карта не сохранится, владелец узнаёт из DM «автопродление выключено». Поле
-  `autopayAvailable` в `BillingStatusDto` + disabled-ползунок — сделать до запуска рекламы, если
-  услуга к тому времени не включена.
+  напоминаниям; `charge-now` отвечает 409 с причиной). **Закрыто 2026-10-04 (`autopayAvailable`):** статус отдаёт
+  `autopayAvailable = paymentProvider.recurringAvailable`; шит первой оплаты и полоска показывают
+  заблокированный ползунок с честным текстом, чекаут уходит с `autopay=false`, `PATCH autopay:true`
+  отвечает 409. На staging проверяется стабом через `BILLING_STUB_RECURRING_ENABLED=false`.
 - **IP Robokassa за Traefik/nginx**: клиентский IP брать через доверенные прокси, как в
   `RateLimitFilter`, иначе allowlist отвергнет всё. Российский прокси перед Hetzner (`infra/ru-proxy/`)
   в цепочку не входит: он L4 и отдаёт адрес клиента Traefik по PROXY protocol.

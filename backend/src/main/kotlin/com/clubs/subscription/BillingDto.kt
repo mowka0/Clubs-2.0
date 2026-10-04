@@ -36,6 +36,11 @@ data class BillingStatusDto(
     val graceUntil: OffsetDateTime?,
     val autopay: Boolean,
     val autopayPossible: Boolean,
+    /**
+     * Провайдер сейчас умеет сохранять карту (рекуррент разрешён магазину, `PaymentProvider.recurringAvailable`).
+     * false → ползунок недоступен ещё до первой оплаты: обещать «спишем с этой же карты» нельзя, карта не сохранится.
+     */
+    val autopayAvailable: Boolean,
     /** Есть свежий неоплаченный материнский счёт — фронт показывает «проверяем оплату». */
     val pendingCheckout: Boolean,
     /** ФИО самозанятого-получателя целиком — показывается в шите и в оферте (PO 2026-09-07). Пусто = не настроено. */

@@ -26,12 +26,14 @@ class StubPaymentProvider(
     @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
     // Через сколько секунд после приёма дочернее списание считается прошедшим.
     @Value("\${billing.stub.settle-seconds:5}") private val settleSeconds: Long,
+    // Ручка для staging: false повторяет прод без рекуррента (ошибка 34 у Robokassa) — шит первой
+    // оплаты и полоска показывают «автопродление недоступно», а не обещание списания.
+    @Value("\${billing.stub.recurring-enabled:true}") override val recurringAvailable: Boolean,
 ) : PaymentProvider {
 
     private val log = LoggerFactory.getLogger(StubPaymentProvider::class.java)
 
     override val id = "stub"
-    override val recurringAvailable = true
 
     /** Принятые дочерние списания: InvId → момент приёма (материнские подтверждаются ссылкой). */
     private val acceptedCharges = ConcurrentHashMap<Long, Instant>()

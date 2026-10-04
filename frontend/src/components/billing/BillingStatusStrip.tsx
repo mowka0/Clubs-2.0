@@ -46,6 +46,11 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
     );
   };
 
+  // Ползунок живёт только при сохранённой карте И разрешённом магазину рекурренте: без второго
+  // шедулер карту не списывает (шлёт напоминания), и включённый ползунок обещал бы лишнее.
+  const autopayLocked = !data.autopayPossible || !data.autopayAvailable;
+  const autopayOn = data.autopay && !autopayLocked;
+
   switch (data.state) {
     case 'BOT_REMOVED':
       return (
@@ -103,24 +108,27 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
               <div className="fi">
                 <div className="ft">Продлевать автоматически</div>
                 <div className="fd">
-                  {!data.autopayPossible
-                    // Карта не сохранена: оплата по СБП или провайдер ещё без рекуррента — причина
-                    // в тексте не называется, чтобы не обещать «оплатите картой», когда это не поможет.
-                    ? 'Карта для автосписания не сохранена — напомним в личке за 3 дня и за день до конца периода.'
-                    : data.autopay
-                      // Списание — в день окончания оплаченного периода (PO 2026-09-07).
-                      ? `${periodEnd} спишем ${price} с сохранённой карты.`
-                      : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
+                  {!data.autopayAvailable
+                    // Рекуррент магазину не разрешён: даже сохранённую карту шедулер не списывает, шлёт напоминания.
+                    ? 'Автопродление пока недоступно — напомним в личке за 3 дня и за день до конца периода.'
+                    : !data.autopayPossible
+                      // Карта не сохранена: оплата по СБП или оплата в период без рекуррента — причина в
+                      // тексте не называется, чтобы не обещать «оплатите картой», когда это не поможет.
+                      ? 'Карта для автосписания не сохранена — напомним в личке за 3 дня и за день до конца периода.'
+                      : data.autopay
+                        // Списание — в день окончания оплаченного периода (PO 2026-09-07).
+                        ? `${periodEnd} спишем ${price} с сохранённой карты.`
+                        : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
                 </div>
                 {autopayError && <div className="rd-billing-err">{autopayError}</div>}
               </div>
               <button
                 type="button"
-                className={`rd-cl-tgl${data.autopay && data.autopayPossible ? ' on' : ''}`}
+                className={`rd-cl-tgl${autopayOn ? ' on' : ''}`}
                 role="switch"
-                aria-checked={data.autopay && data.autopayPossible}
+                aria-checked={autopayOn}
                 aria-label="Продлевать автоматически"
-                disabled={!data.autopayPossible || setAutopay.isPending}
+                disabled={autopayLocked || setAutopay.isPending}
                 onClick={toggleAutopay}
               />
             </div>}

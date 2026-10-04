@@ -314,6 +314,15 @@ class BillingServiceTest {
         verify { subscriptionRepository.updateAutopay(live.id, false) }
     }
 
+    @Test
+    fun `autopay cannot be enabled while the provider has no recurring, even with a saved card`() {
+        every { paymentProvider.recurringAvailable } returns false
+        every { subscriptionRepository.findLatestByClub(club.id) } returns BillingTestFixtures.subscription(club, autopayPossible = true)
+
+        assertThrows<ConflictException> { service.setAutopay(club.id, club.ownerId, autopay = true) }
+        verify(exactly = 0) { subscriptionRepository.updateAutopay(any(), any()) }
+    }
+
     // ---------- status ----------
 
     @Test
@@ -382,5 +391,19 @@ class BillingServiceTest {
 
         assertTrue(service.status(club.id, club.ownerId).canPay)
         assertFalse(service.status(club.id, coOrganizer).canPay, "чекаут ответил бы со-организатору 403")
+    }
+
+    @Test
+    fun `status tells the sheet whether autopay is available at all`() {
+        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
+        every { chatLinkRepository.findByClubId(club.id) } returns link
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
+
+        assertTrue(service.status(club.id, club.ownerId).autopayAvailable)
+
+        every { paymentProvider.recurringAvailable } returns false
+        assertFalse(service.status(club.id, club.ownerId).autopayAvailable, "рекуррент магазину не разрешён — шит не обещает списания")
+        every { chatLinkRepository.findByClubId(club.id) } returns null
+        assertFalse(service.status(club.id, club.ownerId).autopayAvailable, "флаг отдаётся и клубу без чата")
     }
 }

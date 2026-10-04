@@ -25,6 +25,8 @@ export interface BillingStatusDto {
   graceUntil: string | null;
   autopay: boolean;
   autopayPossible: boolean;
+  /** Рекуррент разрешён магазину: false → карта на оплате не сохранится, ползунок недоступен ещё до первой оплаты. */
+  autopayAvailable: boolean;
   /** Есть свежий неоплаченный счёт — «проверяем оплату». */
   pendingCheckout: boolean;
   /** ФИО самозанятого-получателя целиком; пусто = не настроено на сервере. */

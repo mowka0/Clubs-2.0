@@ -44,6 +44,7 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     graceUntil: null,
     autopay: true,
     autopayPossible: false,
+    autopayAvailable: true,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
     canPay: true,
@@ -122,6 +123,29 @@ describe('BillingSheet', () => {
     expect(await screen.findByText(/закончилась 3 сентября/)).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Продлевать автоматически' })).toBeDisabled();
     expect(screen.getByText(/Карта с прошлой оплаты не сохранена/)).toBeInTheDocument();
+  });
+
+  it('рекуррент магазину не разрешён — на первой оплате ползунок недоступен, списание не обещаем, чекаут уходит без автопродления', async () => {
+    mockBilling(status({ autopayAvailable: false }));
+    const checkoutBodies: unknown[] = [];
+    server.use(
+      http.post(`*/api/clubs/${CLUB_ID}/billing/checkout`, async ({ request }) => {
+        checkoutBodies.push(await request.json());
+        return HttpResponse.json({ paymentUrl: 'https://rk.example/pay?inv=100002', invId: 100002 });
+      }),
+    );
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
+
+    // Ждём данные: до них шит ещё не знает про флаг и рисует ползунок как обычно.
+    expect(await screen.findByText('199 ₽')).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: 'Продлевать автоматически' });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Автопродление пока недоступно/)).toBeInTheDocument();
+    expect(screen.queryByText(/с этой же карты/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить 199 ₽' }));
+    await waitFor(() => expect(checkoutBodies).toEqual([{ autopay: false }]));
   });
 
   it('возврат из браузера с неоплаченным счётом не выдаёт «оплачено» за старый период', async () => {

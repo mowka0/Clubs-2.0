@@ -55,9 +55,12 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   const billing = useBillingQuery(clubId, { refetchInterval: mode === 'waiting' ? POLL_INTERVAL_MS : false });
   const data = billing.data;
   const hasSubscription = data?.state === 'ACTIVE' || data?.state === 'GRACE' || data?.state === 'ENDED';
-  // Карта не сохранена (оплата по СБП или провайдер ещё без рекуррента) — ползунок недоступен
-  // до следующей оплаты, которая карту сохранит.
-  const autopayLocked = !!data && hasSubscription && !data.autopayPossible;
+  // Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false): карта на этой оплате не
+  // сохранится, обещать «спишем с этой же карты» нельзя — ползунок недоступен ещё до первой оплаты.
+  const autopayUnavailable = !!data && !data.autopayAvailable;
+  // Карта с прошлой оплаты не сохранена (СБП) — ползунок недоступен до следующей оплаты картой.
+  const cardNotSaved = !!data && hasSubscription && !data.autopayPossible;
+  const autopayLocked = autopayUnavailable || cardNotSaved;
   const effectiveAutopay = autopayLocked ? false : autopay;
 
   useEffect(() => {
@@ -155,11 +158,13 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
         <div className="fi">
           <div className="ft">Продлевать автоматически</div>
           <div className="fd">
-            {autopayLocked
-              ? 'Карта с прошлой оплаты не сохранена — автопродление пока недоступно, напомним за 3 дня и за день до конца периода.'
-              : effectiveAutopay
-                ? `Спишем ${price ?? ''} с этой же карты ${chargeDate ? chargeDate : 'в день окончания оплаченного периода'}. Отключить можно в любой момент на странице клуба.`
-                : 'Напомним за 3 дня и за день до конца периода — оплатите вручную.'}
+            {autopayUnavailable
+              ? 'Автопродление пока недоступно: карта на этой оплате не сохранится. Напомним за 3 дня и за день до конца периода — следующий месяц оплатите вручную.'
+              : cardNotSaved
+                ? 'Карта с прошлой оплаты не сохранена — автопродление пока недоступно, напомним за 3 дня и за день до конца периода.'
+                : effectiveAutopay
+                  ? `Спишем ${price ?? ''} с этой же карты ${chargeDate ? chargeDate : 'в день окончания оплаченного периода'}. Отключить можно в любой момент на странице клуба.`
+                  : 'Напомним за 3 дня и за день до конца периода — оплатите вручную.'}
           </div>
         </div>
         <button
@@ -250,7 +255,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       <div className="ic" aria-hidden="true">✅</div>
       <p className="t">Оплачено{data?.currentPeriodEnd ? ` до ${formatBillingDate(data.currentPeriodEnd)}` : ''}</p>
       <p className="d">
-        {data?.autopay && data.autopayPossible
+        {data?.autopay && data.autopayPossible && data.autopayAvailable
           ? `Автопродление включено: ${chargeDate ?? 'в день окончания периода'} спишем ${price ?? ''} с этой же карты. Отключить можно на странице клуба.`
           : 'Автопродление выключено: напомним за 3 дня и за день до конца периода.'}
       </p>

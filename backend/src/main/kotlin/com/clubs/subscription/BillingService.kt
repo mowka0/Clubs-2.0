@@ -180,6 +180,11 @@ class BillingService(
         val club = requireOwner(clubId, userId)
         val subscription = liveSubscription(clubId)
             ?: throw ConflictException("Подписки ещё нет — оплатите первый месяц, ползунок появится")
+        // Рекуррент магазину не разрешён: сохранённую карту шедулер всё равно не списывает (шлёт
+        // напоминания), и включённый ползунок обещал бы автопродление, которого не будет.
+        if (autopay && !paymentProvider.recurringAvailable) {
+            throw ConflictException("Автопродление сейчас недоступно — напомним о продлении в личке")
+        }
         if (autopay && !subscription.autopayPossible) {
             throw ConflictException("Автопродление недоступно: карта для списания не сохранена — оплатите следующий месяц картой")
         }
@@ -238,11 +243,13 @@ class BillingService(
         // Платит владелец (R1); со-организатору шит показывает «попросите владельца».
         val canPay = club.ownerId == userId
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
+        // Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false) — фронт прячет обещание списания.
+        val autopayAvailable = paymentProvider.recurringAvailable
         val link = chatLinkRepository.findByClubId(club.id)
             ?: return mapper().toStatusDto(
                 BillingState.NO_CHAT, price, trialUntil = null, trialDays = trialDays.toInt(),
                 subscription = null, graceUntil = null, pendingCheckout = false,
-                recipientName = recipientName, canPay = canPay,
+                recipientName = recipientName, canPay = canPay, autopayAvailable = autopayAvailable,
             )
         val pending = paymentRepository.hasPendingMother(club.id)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
@@ -263,7 +270,7 @@ class BillingService(
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
         return mapper().toStatusDto(
             state, price, trialUntil?.takeIf { state == BillingState.TRIAL }, trialDays.toInt(),
-            subscription, graceUntil, pending, recipientName, canPay,
+            subscription, graceUntil, pending, recipientName, canPay, autopayAvailable,
         )
     }
 
