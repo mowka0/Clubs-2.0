@@ -96,24 +96,7 @@ class RobokassaPaymentProvider(
     }
 
     override fun charge(request: RecurringChargeRequest): ChargeAccepted {
-        val outSum = formatOutSum(request.amountKopecks)
-        val shp = "Shp_club=${request.clubId}"
-        val receipt = receiptParam(request.description, request.amountKopecks)
-        // PreviousInvoiceID в подпись не входит (документация Robokassa, раздел «Периодические платежи»);
-        // Receipt — входит, как у материнского платежа (раздел «Фискализация»).
-        val signed = signature.hash(listOf(merchantLogin, outSum, request.invId.toString(), receipt, password1, shp).joinToString(":"))
-        val form = encode(
-            listOf(
-                "MerchantLogin" to merchantLogin,
-                "InvoiceID" to request.invId.toString(),
-                "PreviousInvoiceID" to request.previousInvId.toString(),
-                "OutSum" to outSum,
-                "Description" to sanitizeDescription(request.description),
-                "Receipt" to receipt,
-                "Shp_club" to request.clubId.toString(),
-                "SignatureValue" to signed,
-            ),
-        )
+        val form = encode(recurringForm(request))
         val httpRequest = HttpRequest.newBuilder(URI.create("$baseUrl/Merchant/Recurring"))
             .timeout(Duration.ofSeconds(20))
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -132,6 +115,28 @@ class RobokassaPaymentProvider(
             Thread.currentThread().interrupt()
             ChargeAccepted(accepted = false, providerMessage = "interrupted")
         }
+    }
+
+    /**
+     * Поля дочернего списания. PreviousInvoiceID в подпись не входит (документация, «Периодические
+     * платежи»), Receipt — входит, как у материнского («Фискализация»). Вынесено из [charge], чтобы
+     * подпись проверялась тестом без сети.
+     */
+    internal fun recurringForm(request: RecurringChargeRequest): List<Pair<String, String>> {
+        val outSum = formatOutSum(request.amountKopecks)
+        val shp = "Shp_club=${request.clubId}"
+        val receipt = receiptParam(request.description, request.amountKopecks)
+        val signed = signature.hash(listOf(merchantLogin, outSum, request.invId.toString(), receipt, password1, shp).joinToString(":"))
+        return listOf(
+            "MerchantLogin" to merchantLogin,
+            "InvoiceID" to request.invId.toString(),
+            "PreviousInvoiceID" to request.previousInvId.toString(),
+            "OutSum" to outSum,
+            "Description" to sanitizeDescription(request.description),
+            "Receipt" to receipt,
+            "Shp_club" to request.clubId.toString(),
+            "SignatureValue" to signed,
+        )
     }
 
     override fun trustsResultSource(clientIp: String): Boolean = clientIp in allowedIps
@@ -227,18 +232,22 @@ class RobokassaPaymentProvider(
                     "name" to sanitizeDescription(description),
                     "quantity" to 1,
                     "sum" to BigDecimal(amountKopecks).movePointLeft(2),
-                    "payment_method" to "full_payment",
-                    "payment_object" to "service",
+                    "payment_method" to RECEIPT_PAYMENT_METHOD,
+                    "payment_object" to RECEIPT_PAYMENT_OBJECT,
                     "tax" to RECEIPT_TAX,
                 ),
             ),
         )
-        return URLEncoder.encode(json.writeValueAsString(receipt), Charsets.UTF_8)
+        // Пробел — как %20, а не «+»: подпись сходится в обоих случаях, но при разборе JSON перед
+        // чеком «+» может остаться плюсом в названии позиции, а %20 любой декодер читает как пробел.
+        return URLEncoder.encode(json.writeValueAsString(receipt), Charsets.UTF_8).replace("+", "%20")
     }
 
     companion object {
         private const val REDIRECT_METHOD = "GET"
-        // Ставка в позиции чека: продавец — самозанятый, НДС нет («none» в справочнике Robokassa).
+        // Позиция чека: полный расчёт за услугу, продавец — самозанятый, НДС нет («none» в справочнике Robokassa).
+        private const val RECEIPT_PAYMENT_METHOD = "full_payment"
+        private const val RECEIPT_PAYMENT_OBJECT = "service"
         private const val RECEIPT_TAX = "none"
         // Коды состояния операции OpStateExt (docs.robokassa.ru, «XML интерфейсы»).
         private const val STATE_COMPLETED = 100

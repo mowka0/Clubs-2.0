@@ -76,10 +76,26 @@ class RobokassaPaymentProviderTest {
         val param = provider.receiptParam("Clubs: подписка за чат «Бег» на 30 дней", 19900)
 
         assertTrue(param.startsWith("%7B%22items%22"), "в подпись и в запрос идёт URL-кодированный JSON")
+        assertTrue(!param.contains("+"), "пробел — %20, а не «+»: иначе в чеке у покупателя могут остаться плюсы")
         val json = URLDecoder.decode(param, Charsets.UTF_8)
         assertTrue(json.contains("\"sum\":199.00"), "сумма позиции равна сумме операции, два знака")
         assertTrue(json.contains("\"tax\":\"none\""), "самозанятый — без НДС")
         assertTrue(json.contains("\"name\":\"Clubs: подписка за чат Бег на 30 дней\""))
+        // Копеечный край: сумма позиции обязана побайтно совпадать с OutSum.
+        assertTrue(URLDecoder.decode(provider.receiptParam("x", 19999), Charsets.UTF_8).contains("\"sum\":199.99"))
+    }
+
+    @Test
+    fun `recurring charge form signs Receipt but not PreviousInvoiceID`() {
+        val form = provider.recurringForm(
+            RecurringChargeRequest(invId = 100500, previousInvId = 100001, amountKopecks = 19900, description = "Clubs: продление за чат «Бег»", clubId = clubId),
+        ).toMap()
+
+        assertEquals("100500", form["InvoiceID"])
+        assertEquals("100001", form["PreviousInvoiceID"])
+        val receipt = form.getValue("Receipt")
+        // MerchantLogin:OutSum:InvoiceID:Receipt:Пароль#1:Shp_club=… — без PreviousInvoiceID (документация, «Периодические платежи»)
+        assertEquals(md5.hash("demo:199.00:100500:$receipt:pass-one:Shp_club=$clubId"), form["SignatureValue"])
     }
 
     @Test

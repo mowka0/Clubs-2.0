@@ -309,7 +309,9 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
 ### 6.2 `RobokassaPaymentProvider` (`@Component`, `@ConditionalOnProperty("billing.provider=robokassa")`)
 По документации docs.robokassa.ru (проверено 2026-09-07):
 - **Чекаут:** `https://auth.robokassa.ru/Merchant/Index.aspx` с `MerchantLogin`, `OutSum` (`199.00`),
-  `InvId`, `Description` (≤100 символов, «Clubs: подписка за чат „…“ на 30 дней»), `Culture=ru`,
+  `InvId`, `Description` (≤100 символов, «Clubs: подписка за клуб „…“ на 30 дней» — «за клуб» по
+  решению PO 2026-09-07; название чата обрезается до 40 знаков, иначе GET-ссылка с `Receipt`
+  вылезала бы за лимит сервера Robokassa), `Culture=ru`,
   `Email` (если есть), `Recurring=true` при `recurring`, `SuccessUrl2`/`FailUrl2` (+`…Method=GET`),
   `IsTest=1` на staging, `Shp_club=<clubId>`, **`Receipt`** — состав чека одной позицией (услуга на
   всю сумму: `name` = Description, `quantity` 1, `sum` = OutSum, `payment_method` full_payment,

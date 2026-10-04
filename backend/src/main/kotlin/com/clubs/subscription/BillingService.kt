@@ -277,13 +277,18 @@ class BillingService(
         subscriptionRepository.findLatestByClub(clubId)?.takeIf { it.status != SubscriptionStatus.ENDED }
 
     // На странице оплаты провайдера человек читает «за клуб» (PO 2026-09-07), хотя единица счёта — чат.
+    // Название обрезается: оно дважды попадает в GET-ссылку (Description и Receipt, кириллица до
+    // 10 байт на знак), и длинное имя чата вывело бы ссылку за лимит сервера Robokassa.
     private fun describe(club: Club, link: ChatLink): String =
-        "Clubs: подписка за клуб ${link.chatTitle ?: club.name} на $periodDays дней"
+        "Clubs: подписка за клуб ${(link.chatTitle ?: club.name).take(TITLE_IN_DESCRIPTION_MAX)} на $periodDays дней"
 
     private fun mapper() = SubscriptionMapper()
 
     companion object {
         /** Robokassa делает дочерние списания только по банковским картам. */
         fun isCard(paymentMethod: String?): Boolean = paymentMethod?.contains("card", ignoreCase = true) == true
+
+        // Сколько знаков названия чата входит в описание платежа (см. describe); хвост « на 30 дней» при этом сохраняется.
+        private const val TITLE_IN_DESCRIPTION_MAX = 40
     }
 }
