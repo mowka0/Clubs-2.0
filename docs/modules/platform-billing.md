@@ -309,11 +309,18 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
 ### 6.2 `RobokassaPaymentProvider` (`@Component`, `@ConditionalOnProperty("billing.provider=robokassa")`)
 По документации docs.robokassa.ru (проверено 2026-09-07):
 - **Чекаут:** `https://auth.robokassa.ru/Merchant/Index.aspx` с `MerchantLogin`, `OutSum` (`199.00`),
-  `InvId`, `Description` (≤100 символов, «Clubs: подписка за чат „…“ на 30 дней»), `Culture=ru`,
+  `InvId`, `Description` (≤100 символов, «Clubs: подписка за клуб „…“ на 30 дней» — «за клуб» по
+  решению PO 2026-09-07; название чата обрезается до 40 знаков, иначе GET-ссылка с `Receipt`
+  вылезала бы за лимит сервера Robokassa), `Culture=ru`,
   `Email` (если есть), `Recurring=true` при `recurring`, `SuccessUrl2`/`FailUrl2` (+`…Method=GET`),
-  `IsTest=1` на staging, `Shp_club=<clubId>`. **`Receipt` не передаём** — чек НПД формирует
-  «Робочеки СМЗ» автоматически.
-- **Подпись запроса:** `MerchantLogin:OutSum:InvId[:SuccessUrl2:SuccessUrl2Method:FailUrl2:FailUrl2Method]:Password#1:Shp_club=<clubId>`
+  `IsTest=1` на staging, `Shp_club=<clubId>`, **`Receipt`** — состав чека одной позицией (услуга на
+  всю сумму: `name` = Description, `quantity` 1, `sum` = OutSum, `payment_method` full_payment,
+  `payment_object` service, `tax` none). Чек НПД формирует «Робочеки СМЗ» на стороне Robokassa, но
+  только по этому составу: без `Receipt` доход в «Мой налог» не регистрируется, и Robokassa просит
+  пробить чек руками (первый боевой платёж 2026-10-04; до этого спека ошибочно считала, что
+  `Receipt` самозанятому не нужен). JSON URL-кодируется один раз для подписи, в запросе кодируется
+  второй раз общим энкодером — как в примере документации.
+- **Подпись запроса:** `MerchantLogin:OutSum:InvId:Receipt[:SuccessUrl2:SuccessUrl2Method:FailUrl2:FailUrl2Method]:Password#1:Shp_club=<clubId>`
   — модификаторы в порядке из документации (Receipt, StepByStep, ResultUrl2, SuccessUrl2,
   SuccessUrl2Method, FailUrl2, FailUrl2Method, Token), только присутствующие; `Shp_*` по алфавиту.
   Алгоритм — **SHA256** (выставить в настройках магазина; MD5 по умолчанию не использовать).
@@ -323,9 +330,9 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
   доверенные прокси, что в `RateLimitFilter`), `OutSum == amount_kopecks/100` платежа. Ответ —
   `text/plain` `OK<InvId>`; при ошибке подписи — 403 и WARN в лог **без** значений паролей.
 - **Дочернее списание:** `POST https://auth.robokassa.ru/Merchant/Recurring` с `MerchantLogin`,
-  `InvoiceID` (новый), `PreviousInvoiceID` (материнский), `OutSum`, `Description`, `SignatureValue`
-  = `hash("MerchantLogin:OutSum:InvoiceID:Password#1:Shp_club=…")` — **`PreviousInvoiceID` в подпись
-  не входит**. Ответ `OK<InvoiceID>` = принято. Результат — ResultURL или `queryState`.
+  `InvoiceID` (новый), `PreviousInvoiceID` (материнский), `OutSum`, `Description`, `Receipt` (как у
+  материнского), `SignatureValue` = `hash("MerchantLogin:OutSum:InvoiceID:Receipt:Password#1:Shp_club=…")`
+  — **`PreviousInvoiceID` в подпись не входит**, `Receipt` входит. Ответ `OK<InvoiceID>` = принято. Результат — ResultURL или `queryState`.
 - **`queryState`:** XML-интерфейс `OpStateExt` (`MerchantLogin`, `InvoiceID`, подпись
   `MerchantLogin:InvoiceID:Password#2`) — точные URL и коды состояний взять из OpenAPI-спеки
   docs.robokassa.ru при реализации; маппинг: «оплачено/зачислено» → SUCCEEDED, «отменено/ошибка» →
@@ -655,6 +662,10 @@ DM «завтра спишем» перед автосписанием **нет*
 - **IP Robokassa за Traefik/nginx**: клиентский IP брать через доверенные прокси, как в
   `RateLimitFilter`, иначе allowlist отвергнет всё. Российский прокси перед Hetzner (`infra/ru-proxy/`)
   в цепочку не входит: он L4 и отдаёт адрес клиента Traefik по PROXY protocol.
+- **Чек самозанятого не «сам собой».** Партнёр Robokassa в «Моём налоге» подключён и право
+  «Отражение дохода от моего имени» выдано, но без `Receipt` в платеже операция в кабинете висит с
+  «Вы не передали номенклатуру товаров в чеке», доход не регистрируется (2026-10-04, счёт 100004 —
+  199 ₽ PO зарегистрировал в «Моём налоге» руками). Платежи без `Receipt` — только этот один.
 - **SuccessURL ≠ подтверждение.** Никогда не активировать по возврату в приложение.
 - **`Description` ≤ 100 символов** — обрезать название чата.
 - **Хэш-алгоритм** задаётся в настройках магазина Robokassa — SHA256 должен совпадать с
