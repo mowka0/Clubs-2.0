@@ -121,7 +121,7 @@ describe('BillingSheet', () => {
 
     expect(await screen.findByText(/закончилась 3 сентября/)).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Продлевать автоматически' })).toBeDisabled();
-    expect(screen.getByText(/автопродление работает только для карт/)).toBeInTheDocument();
+    expect(screen.getByText(/Карта с прошлой оплаты не сохранена/)).toBeInTheDocument();
   });
 
   it('возврат из браузера с неоплаченным счётом не выдаёт «оплачено» за старый период', async () => {

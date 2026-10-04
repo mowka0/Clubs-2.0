@@ -130,7 +130,7 @@ describe('BillingStatusStrip', () => {
     mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: false }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
     expect(await screen.findByRole('switch')).toBeDisabled();
-    expect(screen.getByText(/Недоступно для СБП/)).toBeInTheDocument();
+    expect(screen.getByText(/Карта для автосписания не сохранена/)).toBeInTheDocument();
   });
 
   it('грейс и стена — сроки и кнопка продления', async () => {

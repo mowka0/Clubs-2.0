@@ -112,7 +112,10 @@ class BillingLifecycleService(
         }
         if (!hasChat || club == null) return
 
-        val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null
+        // Без рекуррента у провайдера (услугу отозвали или ещё не включили) сохранённая карта
+        // бесполезна: не списываем, а напоминаем — иначе отказ провайдера уронил бы подписку в PAST_DUE.
+        val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null &&
+            paymentProvider.recurringAvailable
         if (now.isBefore(periodEnd)) {
             // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
             if (!autoCharge) remindBeforeEnd(subscription, club, now, price)
@@ -201,6 +204,9 @@ class BillingLifecycleService(
      * Доступ — [ManualChargeAccess] в контроллере. Возвращает InvId отправленного счёта.
      */
     fun chargeNow(clubId: UUID, now: OffsetDateTime): Long {
+        if (!paymentProvider.recurringAvailable) {
+            throw ConflictException("Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false) — списывать нечем")
+        }
         val subscription = subscriptionRepository.findLatestByClub(clubId)?.takeIf { it.status != SubscriptionStatus.ENDED }
             ?: throw ConflictException("У клуба нет живой подписки — списывать нечего")
         if (!subscription.autopayPossible || subscription.providerToken == null) {

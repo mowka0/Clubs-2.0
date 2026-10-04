@@ -53,6 +53,8 @@ class BillingLifecycleServiceTest {
         every { subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT) } returns PRICE
         every { subscriptionRepository.recordEventIfNew(any(), any(), any()) } returns true
         every { paymentRepository.hasPendingRecurring(any()) } returns false
+        // relaxed-мок вернул бы false, и все тесты автосписания молча ушли бы в ветку напоминаний.
+        every { paymentProvider.recurringAvailable } returns true
     }
 
     private fun live(vararg subscriptions: ServiceSubscription) {
@@ -292,7 +294,28 @@ class BillingLifecycleServiceTest {
         assertThrows<ConflictException> { service.chargeNow(club.id, now) }
     }
 
+    @Test
+    fun `provider without recurring - saved card is not charged at period end, subscription goes to grace`() {
+        every { paymentProvider.recurringAvailable } returns false
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1), providerToken = "100001")
+        live(sub)
+
+        service.runDaily(now)
+
+        verify(exactly = 0) { paymentProvider.charge(any()) }
+        verify { subscriptionRepository.transitionStatus(sub.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE) }
+    }
+
     // ---------- служебное «списать сейчас» ----------
+
+    @Test
+    fun `chargeNow refuses while the provider has no recurring`() {
+        every { paymentProvider.recurringAvailable } returns false
+        every { subscriptionRepository.findLatestByClub(club.id) } returns BillingTestFixtures.subscription(club, periodEnd = now.plusDays(20))
+
+        assertThrows<ConflictException> { service.chargeNow(club.id, now) }
+        verify(exactly = 0) { paymentProvider.charge(any()) }
+    }
 
     @Test
     fun `chargeNow sends a recurring charge outside the calendar and returns its invoice`() {
