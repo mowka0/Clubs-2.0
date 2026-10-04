@@ -6,6 +6,9 @@
 > себе» вместо дашборда до ~50 чатов). Код: `subscription/Funnel*` (шаги, трекер, отчёт, шедулер),
 > `bot/ClubsBot` (`/start` в личке), `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`
 > (события привязки), `common/config/PlatformAdmins` (получатели).
+>
+> **Статус:** протестировано PO на staging 2026-10-04 по § 6, влито в master PR #181 → прод.
+> В проде отчёт приходит только при заданном `PLATFORM_ADMIN_TELEGRAM_IDS`.
 
 ## 1. Зачем
 
