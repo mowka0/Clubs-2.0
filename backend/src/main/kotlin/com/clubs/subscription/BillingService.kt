@@ -181,7 +181,7 @@ class BillingService(
         val subscription = liveSubscription(clubId)
             ?: throw ConflictException("Подписки ещё нет — оплатите первый месяц, ползунок появится")
         if (autopay && !subscription.autopayPossible) {
-            throw ConflictException("Автопродление работает только для карт — оплатите следующий месяц картой")
+            throw ConflictException("Автопродление недоступно: карта для списания не сохранена — оплатите следующий месяц картой")
         }
         subscriptionRepository.updateAutopay(subscription.id, autopay)
         log.info("Billing autopay set: clubId={} subscriptionId={} autopay={}", clubId, subscription.id, autopay)

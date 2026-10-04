@@ -84,6 +84,22 @@ class BillingServiceTest {
         verify { notifier.paid(club, created.currentPeriodEnd, autopayOn = false, priceKopecks = PRICE) }
     }
 
+    @Test
+    fun `provider without recurring - renewal by a new mother payment drops the saved card flag`() {
+        every { paymentProvider.recurringAvailable } returns false
+        val live = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(3))
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        every { subscriptionRepository.findById(live.id) } returns live
+        val payment = BillingTestFixtures.payment(club, subscriptionId = live.id, invId = 100778, autopayRequested = true)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        // Карта с прошлой подписки больше не считается сохранённой: токен указывает на платёж без Recurring.
+        verify { subscriptionRepository.markMotherPaid(live.id, "100778", true, false) }
+    }
+
     private fun assertClose(expected: OffsetDateTime, actual: OffsetDateTime) {
         assertTrue(Duration.between(expected, actual).abs() < Duration.ofMinutes(1), "expected ≈ $expected, got $actual")
     }

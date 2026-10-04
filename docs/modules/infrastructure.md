@@ -393,8 +393,10 @@ volumes:
 продавца в стартовом сообщении бота, 2026-09-20), `TELEGRAM_SUPPORT_EMAIL` (e-mail поддержки там же), `SUBSCRIPTION_PERIOD_DAYS`,
 `SUBSCRIPTION_LIFECYCLE_CRON`, `BILLING_RECONCILE_CRON`, `ROBOKASSA_MERCHANT_LOGIN`,
 `ROBOKASSA_PASSWORD_1`, `ROBOKASSA_PASSWORD_2`, `ROBOKASSA_TEST_MODE`, `ROBOKASSA_HASH`,
-`ROBOKASSA_RECURRING_ENABLED` (`false`, пока менеджер Robokassa не включил магазину рекуррент —
-иначе ошибка 34 на любую оплату; `platform-billing.md` § 11),
+`ROBOKASSA_RECURRING_ENABLED` (дефолт прод-compose **`false`** — намеренно не как `true` в
+`application.yml`: пока менеджер Robokassa не включил магазину рекуррент, `true` роняет любую
+оплату ошибкой 34; после подтверждения услуги выставить `true` в Coolify по предохранителю
+`platform-billing.md` § 11),
 `BILLING_MANUAL_CHARGE_ENABLED` + `PLATFORM_ADMIN_TELEGRAM_IDS` (служебный триггер «списать сейчас»,
 по умолчанию выключен — включается только на время проверки первого боевого автосписания).
 **Домен `clubsapp.ru`** (куплен 2026-09-16 на Timeweb, только регистрация — без хостинга и без их
