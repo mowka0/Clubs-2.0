@@ -47,7 +47,7 @@
 | `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
 | `skladchina`, `debt` | `skladchina-v3.md` |
 | `storage` | `infrastructure.md` |
-| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи), `membership-lifecycle.md`; `payment-v2.md` — superseded |
+| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи; история согласий на автосписание `autopay_consent` — § 5.1b), `membership-lifecycle.md`; `payment-v2.md` — superseded |
 | `user` | `profile.md`, `profile-quest.md` |
 
 **Миграции** `backend/src/main/resources/db/migration/` → спека модуля, чью таблицу трогает,
@@ -148,7 +148,7 @@
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
 | `platform-billing-testplan.md` | тест-план staging-прогона биллинга: 21 кейс по блокам (бесплатный период, оплата заглушкой, продление, периферия), переменные staging, что проверяет Dev по БД | 2026-09-16 |
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
-| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, ползунок автосписания; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-09-20 |
+| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, отметка согласия на автосписание (по умолчанию снята — требование Robokassa) и история согласий (V102), ползунок на странице клуба; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-10-05 |
 | `funnel.md` | **воронка привлечения и недельный отчёт себе (День 4,5)**: `/start ad_<slug>` → `bot_started`, события привязки → `chat_connected`/`chat_disconnected`, V100 `telegram_id`, DM-отчёт админам платформы в понедельник 09:00 МСК (`FUNNEL_REPORT_CRON`, `PLATFORM_ADMIN_TELEGRAM_IDS`) с определениями всех метрик; состав согласован с PO 2026-09-30 | 2026-09-30 |
 
 ### Пользователь и вход

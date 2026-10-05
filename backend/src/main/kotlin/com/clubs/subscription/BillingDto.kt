@@ -53,8 +53,11 @@ data class BillingStatusDto(
     val canPay: Boolean,
 )
 
-/** Ползунок «Продлевать автоматически» на момент чекаута; переносится на подписку при оплате. */
-data class StartCheckoutRequest(val autopay: Boolean = true)
+/**
+ * Отметка «Я согласен на автоматические списания…» на момент чекаута; переносится на подписку при
+ * оплате. По умолчанию снята — требование Robokassa к форме (2026-10-05), без тела запроса согласия нет.
+ */
+data class StartCheckoutRequest(val autopay: Boolean = false)
 
 data class CheckoutDto(val paymentUrl: String, val invId: Long)
 

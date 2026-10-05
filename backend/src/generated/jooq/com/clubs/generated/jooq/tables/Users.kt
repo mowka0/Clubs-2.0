@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.tables
 
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.AUTOPAY_CONSENT__AUTOPAY_CONSENT_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_AWARDED_BY_FKEY
 import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_USER_ID_FKEY
@@ -35,6 +36,7 @@ import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_ONBOARDING_TOURS__USER_ONBOARDING_TOURS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.AutopayConsent.AutopayConsentPath
 import com.clubs.generated.jooq.tables.Cities.CitiesPath
 import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
@@ -288,6 +290,22 @@ open class Users(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _autopayConsent: AutopayConsentPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autopay_consent</code> table
+     */
+    fun autopayConsent(): AutopayConsentPath {
+        if (!this::_autopayConsent.isInitialized)
+            _autopayConsent = AutopayConsentPath(this, null, AUTOPAY_CONSENT__AUTOPAY_CONSENT_USER_ID_FKEY.inverseKey)
+
+        return _autopayConsent;
+    }
+
+    val autopayConsent: AutopayConsentPath
+        get(): AutopayConsentPath = autopayConsent()
 
     private lateinit var _clubAwardsAwardedByFkey: ClubAwardsPath
 

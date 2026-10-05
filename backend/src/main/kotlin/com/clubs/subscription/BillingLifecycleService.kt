@@ -212,6 +212,10 @@ class BillingLifecycleService(
         if (!subscription.autopayPossible || subscription.providerToken == null) {
             throw ConflictException("Материнский платёж был не картой — сохранённого способа оплаты нет")
         }
+        // Выключенный ползунок = отозванное согласие (autopay_consent): служебный триггер его тоже уважает.
+        if (!subscription.autopay) {
+            throw ConflictException("Автопродление выключено владельцем — списывать нельзя")
+        }
         if (chatLinkRepository.findByClubId(clubId)?.botStatus?.isInChat != true) {
             throw ConflictException("Бота нет в чате клуба — списывать не за что")
         }

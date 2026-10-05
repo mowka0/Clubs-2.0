@@ -59,7 +59,8 @@ class SubscriptionMapper {
         trialDays = trialDays,
         currentPeriodEnd = subscription?.currentPeriodEnd,
         graceUntil = graceUntil,
-        autopay = subscription?.autopay ?: true,
+        // До подписки ползунка нет; согласие на списания — только явной отметкой (V102).
+        autopay = subscription?.autopay ?: false,
         autopayPossible = subscription?.autopayPossible ?: false,
         autopayAvailable = autopayAvailable,
         pendingCheckout = pendingCheckout,

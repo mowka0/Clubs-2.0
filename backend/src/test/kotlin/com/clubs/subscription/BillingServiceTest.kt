@@ -38,12 +38,13 @@ class BillingServiceTest {
     private val clubRoleGuard = mockk<ClubRoleGuard>()
     private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
     private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
+    private val consentRepository = mockk<AutopayConsentRepository>(relaxed = true)
     private val paymentProvider = mockk<PaymentProvider>()
     private val notifier = mockk<BillingNotifier>(relaxed = true)
 
     private val service = BillingService(
         subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, clubRoleGuard,
-        chatTrialRepository, funnelEventRepository, paymentProvider, notifier,
+        chatTrialRepository, funnelEventRepository, consentRepository, paymentProvider, notifier,
         graceDays = 7, trialDays = 15, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
         recipientName = "Варламов Иван Иванович",
@@ -116,6 +117,10 @@ class BillingServiceTest {
         assertEquals(created.invId, result.invId)
         assertEquals("https://rk.example/pay?inv=${created.invId}", result.paymentUrl)
         verify(exactly = 1) { funnelEventRepository.record(FunnelStep.CHECKOUT_STARTED, club.ownerId, club.id) }
+        // История согласий: снятая отметка тоже записывается — видно, что выбрали на этой оплате.
+        verify(exactly = 1) {
+            consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.CHECKOUT, granted = false, paymentId = created.id, subscriptionId = null))
+        }
         val request = slot<CheckoutRequest>()
         verify { paymentProvider.createCheckout(capture(request)) }
         assertTrue(request.captured.recurring, "карта сохраняется всегда — ползунок решает, списывать ли")
@@ -135,6 +140,10 @@ class BillingServiceTest {
         assertEquals(pending.invId, result.invId)
         verify(exactly = 0) { paymentRepository.create(any(), any(), any(), any(), any(), any()) }
         verify(exactly = 0) { funnelEventRepository.record(any(), any(), any(), any()) }
+        // Согласие по отметке пишется на тот же счёт — каждый чекаут оставляет след.
+        verify(exactly = 1) {
+            consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.CHECKOUT, granted = true, paymentId = pending.id, subscriptionId = null))
+        }
     }
 
     @Test
@@ -277,6 +286,22 @@ class BillingServiceTest {
     }
 
     @Test
+    fun `renewal without the consent mark switches autopay off even if it was on`() {
+        // Отметка снята по умолчанию и на продлении: согласие даётся на каждой оплате заново.
+        val live = BillingTestFixtures.subscription(club, autopay = true)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        every { subscriptionRepository.findById(live.id) } returns live
+        val payment = BillingTestFixtures.payment(club, subscriptionId = live.id, invId = 100779, autopayRequested = false)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify { subscriptionRepository.markMotherPaid(live.id, "100779", false, true) }
+        verify { notifier.paid(club, any(), autopayOn = false, priceKopecks = PRICE) }
+    }
+
+    @Test
     fun `recurring payment extends from the current period end and resets retries`() {
         val live = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(1), chargeAttempts = 1)
         every { subscriptionRepository.findById(live.id) } returns live
@@ -302,16 +327,21 @@ class BillingServiceTest {
 
         assertThrows<ConflictException> { service.setAutopay(club.id, club.ownerId, autopay = true) }
         verify(exactly = 0) { subscriptionRepository.updateAutopay(any(), any()) }
+        verify(exactly = 0) { consentRepository.record(any()) }
     }
 
     @Test
-    fun `autopay toggle updates the live subscription`() {
+    fun `autopay toggle updates the live subscription and records the consent change`() {
         val live = BillingTestFixtures.subscription(club)
         every { subscriptionRepository.findLatestByClub(club.id) } returns live
 
         service.setAutopay(club.id, club.ownerId, autopay = false)
+        service.setAutopay(club.id, club.ownerId, autopay = true)
 
         verify { subscriptionRepository.updateAutopay(live.id, false) }
+        // Выключил = отзыв согласия, включил = согласие: обе записи в истории.
+        verify { consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.TOGGLE, granted = false, subscriptionId = live.id)) }
+        verify { consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.TOGGLE, granted = true, subscriptionId = live.id)) }
     }
 
     @Test

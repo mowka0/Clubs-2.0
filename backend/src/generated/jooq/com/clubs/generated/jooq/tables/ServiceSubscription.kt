@@ -12,11 +12,13 @@ import com.clubs.generated.jooq.indexes.IDX_SERVICE_SUBSCRIPTION_PAYER
 import com.clubs.generated.jooq.indexes.IDX_SERVICE_SUBSCRIPTION_PERIOD_END
 import com.clubs.generated.jooq.indexes.UQ_SERVICE_SUBSCRIPTION_ACTIVE_MEMBER
 import com.clubs.generated.jooq.indexes.UQ_SERVICE_SUBSCRIPTION_LIVE_CLUB
+import com.clubs.generated.jooq.keys.AUTOPAY_CONSENT__AUTOPAY_CONSENT_SUBSCRIPTION_ID_FKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION_PKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_PAYER_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SUBSCRIPTION_EVENT__SUBSCRIPTION_EVENT_SUBSCRIPTION_ID_FKEY
+import com.clubs.generated.jooq.tables.AutopayConsent.AutopayConsentPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.PlatformPayment.PlatformPaymentPath
 import com.clubs.generated.jooq.tables.SubscriptionEvent.SubscriptionEventPath
@@ -170,11 +172,13 @@ open class ServiceSubscription(
 
     /**
      * The column <code>public.service_subscription.autopay</code>. Ползунок
-     * владельца «Продлевать автоматически» (по умолчанию включён). Выключен =
-     * за 3 и 1 день до конца периода приходит DM с кнопкой «Оплатить», списания
-     * нет.
+     * владельца «Продлевать автоматически». Включается только явным согласием:
+     * отметкой на форме оплаты (по умолчанию снята — требование Robokassa,
+     * V102) или ползунком на странице клуба; история согласий —
+     * autopay_consent. Выключен = за 3 и 1 день до конца периода приходит DM с
+     * кнопкой «Оплатить», списания нет.
      */
-    val AUTOPAY: TableField<ServiceSubscriptionRecord, Boolean?> = createField(DSL.name("autopay"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "Ползунок владельца «Продлевать автоматически» (по умолчанию включён). Выключен = за 3 и 1 день до конца периода приходит DM с кнопкой «Оплатить», списания нет.")
+    val AUTOPAY: TableField<ServiceSubscriptionRecord, Boolean?> = createField(DSL.name("autopay"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Ползунок владельца «Продлевать автоматически». Включается только явным согласием: отметкой на форме оплаты (по умолчанию снята — требование Robokassa, V102) или ползунком на странице клуба; история согласий — autopay_consent. Выключен = за 3 и 1 день до конца периода приходит DM с кнопкой «Оплатить», списания нет.")
 
     /**
      * The column <code>public.service_subscription.autopay_possible</code>.
@@ -265,6 +269,22 @@ open class ServiceSubscription(
 
     val clubs: ClubsPath
         get(): ClubsPath = clubs()
+
+    private lateinit var _autopayConsent: AutopayConsentPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autopay_consent</code> table
+     */
+    fun autopayConsent(): AutopayConsentPath {
+        if (!this::_autopayConsent.isInitialized)
+            _autopayConsent = AutopayConsentPath(this, null, AUTOPAY_CONSENT__AUTOPAY_CONSENT_SUBSCRIPTION_ID_FKEY.inverseKey)
+
+        return _autopayConsent;
+    }
+
+    val autopayConsent: AutopayConsentPath
+        get(): AutopayConsentPath = autopayConsent()
 
     private lateinit var _platformPayment: PlatformPaymentPath
 

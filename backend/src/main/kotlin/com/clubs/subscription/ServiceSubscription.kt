@@ -24,8 +24,8 @@ data class ServiceSubscription(
     val providerToken: String?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
-    /** Ползунок владельца «Продлевать автоматически» (R9). */
-    val autopay: Boolean = true,
+    /** Ползунок владельца «Продлевать автоматически» (R9); включается только явным согласием (V102). */
+    val autopay: Boolean = false,
     /** Материнский платёж прошёл картой — дочерние списания возможны (Robokassa: рекуррент только по картам). */
     val autopayPossible: Boolean = false,
     /** Дочерних списаний в текущем цикле продления (ретраи в слотах 0/+1/+3 дня от конца периода). */

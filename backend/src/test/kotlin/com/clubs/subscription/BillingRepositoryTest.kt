@@ -57,6 +57,7 @@ class BillingRepositoryTest {
 
     @Autowired lateinit var payments: PlatformPaymentRepository
     @Autowired lateinit var subscriptions: SubscriptionRepository
+    @Autowired lateinit var consents: AutopayConsentRepository
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -100,6 +101,21 @@ class BillingRepositoryTest {
         assertEquals("BankCard", settled.paymentMethod)
         assertEquals(0, BigDecimal("6.77").compareTo(settled.providerFee))
         assertNotNull(settled.paidAt)
+    }
+
+    @Test
+    fun `consent history keeps every checkout mark and toggle flip with the wording and offer edition`() {
+        val payment = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
+
+        consents.record(AutopayConsent(clubId, ownerId, ConsentSource.CHECKOUT, granted = true, paymentId = payment.id))
+        consents.record(AutopayConsent(clubId, ownerId, ConsentSource.TOGGLE, granted = false))
+
+        val rows = dsl.fetch("SELECT source, granted, wording, offer_edition, payment_id FROM autopay_consent WHERE club_id = ? ORDER BY created_at", clubId)
+        assertEquals(listOf("CHECKOUT", "TOGGLE"), rows.getValues("source", String::class.java))
+        assertEquals(listOf(true, false), rows.getValues("granted", Boolean::class.java))
+        assertEquals("Я согласен на автоматические списания согласно условиям оферты", rows[0].get("wording", String::class.java), "текст отметки — дословно как требует Robokassa")
+        assertEquals(payment.id, rows[0].get("payment_id", UUID::class.java))
+        assertTrue(rows.getValues("offer_edition", String::class.java).all { it.isNotBlank() }, "редакция оферты — из генерации OfferSections")
     }
 
     @Test

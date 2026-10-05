@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.references
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.AutopayConsent
 import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ChatTrial
@@ -47,6 +48,15 @@ import com.clubs.generated.jooq.tables.Users
  * могут повторяться при повторных подачах.
  */
 val APPLICATIONS: Applications = Applications.APPLICATIONS
+
+/**
+ * История согласий владельцев клубов на автоматические списания (рекуррент
+ * Robokassa). Только запись: строка на каждый чекаут и на каждое переключение
+ * ползунка автопродления; ничего не обновляется и не удаляется. В логику
+ * продукта не входит — ползунок живёт на service_subscription.autopay, отметка
+ * чекаута — на platform_payment.autopay_requested.
+ */
+val AUTOPAY_CONSENT: AutopayConsent = AutopayConsent.AUTOPAY_CONSENT
 
 /**
  * Теги наград, выставленные ботом в клубном чате (слайс 4): кому бот поставил
