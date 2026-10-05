@@ -118,7 +118,75 @@ class SkladchinaChatStatusServiceTest {
 
         assertEquals(chatId, service.onSkladchinaCreated(clubId, s.id))
         verify { gateway.pinChatMessage(chatId, 777L, notify = true) }
-        verify { postRepository.insertIfAbsent(match { it.skladchinaId == s.id && it.messageId == 777L }) }
+        verify { postRepository.insertIfAbsent(match { it.skladchinaId == s.id && it.messageId == 777L && !it.hasPhoto }) }
+    }
+
+    @Test
+    fun `created with a photo posts the status as a picture with caption and remembers it`() {
+        val s = skladchina().copy(photoUrl = "/uploads/check.jpg")
+        every { skladchinaRepository.findById(s.id) } returns s
+        every { postRepository.findBySkladchinaId(s.id) } returns null
+        every { gateway.sendGroupPhotoWithUrlButton(chatId, "/uploads/check.jpg", match { it.contains("Ужин после игры") }, any(), any(), PARSE_MODE_HTML) } returns 778L
+        every { postRepository.insertIfAbsent(any()) } returns true
+
+        assertEquals(chatId, service.onSkladchinaCreated(clubId, s.id))
+
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any()) }
+        verify { postRepository.insertIfAbsent(match { it.messageId == 778L && it.hasPhoto }) }
+        verify { gateway.pinChatMessage(chatId, 778L, notify = true) }
+    }
+
+    @Test
+    fun `photo the chat rejects degrades to a text post`() {
+        val s = skladchina().copy(photoUrl = "/uploads/check.jpg")
+        every { skladchinaRepository.findById(s.id) } returns s
+        every { postRepository.findBySkladchinaId(s.id) } returns null
+        every { gateway.sendGroupPhotoWithUrlButton(any(), any(), any(), any(), any(), any()) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), PARSE_MODE_HTML) } returns 777L
+        every { postRepository.insertIfAbsent(any()) } returns true
+
+        assertEquals(chatId, service.onSkladchinaCreated(clubId, s.id))
+
+        verify { postRepository.insertIfAbsent(match { it.skladchinaId == s.id && it.messageId == 777L && !it.hasPhoto }) }
+    }
+
+    @Test
+    fun `status longer than the caption limit goes as text without even trying the photo`() {
+        // Подпись Telegram — 1024 символа: длинный статус уходит текстом сразу, содержание важнее картинки.
+        val s = skladchina().copy(photoUrl = "/uploads/check.jpg", title = "Ужин после игры ".repeat(70))
+        every { skladchinaRepository.findById(s.id) } returns s
+        every { postRepository.findBySkladchinaId(s.id) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), PARSE_MODE_HTML) } returns 777L
+        every { postRepository.insertIfAbsent(any()) } returns true
+
+        assertEquals(chatId, service.onSkladchinaCreated(clubId, s.id))
+
+        verify(exactly = 0) { gateway.sendGroupPhotoWithUrlButton(any(), any(), any(), any(), any(), any()) }
+        verify { postRepository.insertIfAbsent(match { it.skladchinaId == s.id && !it.hasPhoto }) }
+    }
+
+    @Test
+    fun `photo post is redrawn and closed through the caption, not the text`() {
+        val active = skladchina()
+        every { skladchinaRepository.findById(active.id) } returns active
+        every { postRepository.findBySkladchinaId(active.id) } returns SkladchinaChatPost(active.id, chatId, 9L, null, hasPhoto = true)
+        every { postRepository.findOpenPostsOfInactiveSkladchinas() } returns emptyList()
+
+        service.markDirty(active.id)
+        service.flush()
+
+        verify(exactly = 1) { gateway.editGroupMessageCaption(chatId, 9L, match { it.contains("Ужин после игры") }, any(), any(), PARSE_MODE_HTML) }
+        verify(exactly = 0) { gateway.editGroupMessage(any(), any(), any(), any(), any(), any()) }
+
+        val cancelled = skladchina(status = SkladchinaStatus.cancelled)
+        every { skladchinaRepository.findById(cancelled.id) } returns cancelled
+        every { postRepository.findBySkladchinaId(cancelled.id) } returns SkladchinaChatPost(cancelled.id, chatId, 10L, null, hasPhoto = true)
+
+        service.closeNow(cancelled.id)
+
+        verify { gateway.editGroupMessageCaption(chatId, 10L, match { it.contains("Сбор отменён") }, null, null, PARSE_MODE_HTML) }
+        verify { gateway.unpinChatMessage(chatId, 10L) }
+        verify { postRepository.markClosed(cancelled.id) }
     }
 
     @Test

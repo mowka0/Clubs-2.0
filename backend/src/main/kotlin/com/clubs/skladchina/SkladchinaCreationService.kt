@@ -123,6 +123,7 @@ class SkladchinaCreationService(
                 kind = kind,
                 title = created.title,
                 description = created.description,
+                photoUrl = created.photoUrl,
                 paymentLink = created.paymentLink,
                 paymentMethodNote = created.paymentMethodNote,
                 amountKopecks = created.amountKopecks,

@@ -23,7 +23,8 @@ data class SkladchinaChatPosts(
     var messageId: Long,
     var closedAt: OffsetDateTime? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var hasPhoto: Boolean? = null
 ): Serializable {
 
 
@@ -59,6 +60,12 @@ data class SkladchinaChatPosts(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.hasPhoto == null) {
+            if (o.hasPhoto != null)
+                return false
+        }
+        else if (this.hasPhoto != o.hasPhoto)
+            return false
         return true
     }
 
@@ -71,6 +78,7 @@ data class SkladchinaChatPosts(
         result = prime * result + (if (this.closedAt == null) 0 else this.closedAt.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.hasPhoto == null) 0 else this.hasPhoto.hashCode())
         return result
     }
 
@@ -83,6 +91,7 @@ data class SkladchinaChatPosts(
         sb.append(", ").append(closedAt)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(hasPhoto)
 
         sb.append(")")
         return sb.toString()

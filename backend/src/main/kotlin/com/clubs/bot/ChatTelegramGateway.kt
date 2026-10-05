@@ -587,18 +587,10 @@ class ChatTelegramGateway(
      * (например «Получил / Не получил» в одной строке и «Открыть сбор» под ними). Best-effort.
      */
     fun sendDmWithButtons(telegramId: Long, text: String, rows: List<List<DmButton>>): Boolean = try {
-        val keyboard = InlineKeyboardMarkup(rows.map { row ->
-            InlineKeyboardRow(row.map { button ->
-                val builder = InlineKeyboardButton.builder().text(button.text)
-                if (button.callbackData != null) builder.callbackData(button.callbackData)
-                else builder.webApp(WebAppInfo(webAppBaseUrl + (button.webAppPath ?: "")))
-                builder.build()
-            })
-        })
         val msg = SendMessage.builder()
             .chatId(telegramId.toString())
             .text(text)
-            .replyMarkup(keyboard)
+            .replyMarkup(buildDmKeyboard(rows))
             .build()
         telegramClient.execute(msg)
         true
@@ -606,6 +598,34 @@ class ChatTelegramGateway(
         log.warn("sendDmWithButtons failed: telegramId={} error={}", telegramId, e.message)
         false
     }
+
+    /**
+     * То же, что [sendDmWithButtons], но картинкой с подписью — фото сбора (обычно чек) в DM при
+     * создании (PO 2026-10-05). Подпись должна укладываться в [TELEGRAM_CAPTION_LIMIT], это забота
+     * вызывающего; FALSE = не ушло, вызывающий деградирует до текстового DM.
+     */
+    fun sendDmPhotoWithButtons(telegramId: Long, photoUrl: String, caption: String, rows: List<List<DmButton>>): Boolean = try {
+        val msg = SendPhoto.builder()
+            .chatId(telegramId.toString())
+            .photo(InputFile(absolutePhotoUrl(photoUrl, webAppBaseUrl)))
+            .caption(caption)
+            .replyMarkup(buildDmKeyboard(rows))
+            .build()
+        telegramClient.execute(msg)
+        true
+    } catch (e: Exception) {
+        log.warn("sendDmPhotoWithButtons failed: telegramId={} error={}", telegramId, e.message)
+        false
+    }
+
+    private fun buildDmKeyboard(rows: List<List<DmButton>>) = InlineKeyboardMarkup(rows.map { row ->
+        InlineKeyboardRow(row.map { button ->
+            val builder = InlineKeyboardButton.builder().text(button.text)
+            if (button.callbackData != null) builder.callbackData(button.callbackData)
+            else builder.webApp(WebAppInfo(webAppBaseUrl + (button.webAppPath ?: "")))
+            builder.build()
+        })
+    })
 
     /** DM с WebApp-кнопкой на страницу Mini App (path вида /clubs/{id}). Best-effort. */
     fun sendDmWithWebApp(telegramId: Long, text: String, buttonText: String, webAppPath: String): Boolean = try {

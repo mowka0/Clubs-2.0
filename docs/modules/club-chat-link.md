@@ -1020,7 +1020,8 @@ CREATE TABLE skladchina_chat_posts (
     message_id    BIGINT NOT NULL,      -- id сообщения-статуса (строка создаётся только после успешного поста)
     closed_at     TIMESTAMPTZ,          -- NULL = живой (редактируется); NOT NULL = закрыт
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    has_photo     BOOLEAN NOT NULL DEFAULT FALSE  -- V101 (2026-10-05): пост вышел картинкой сбора → правки через editMessageCaption, как event_chat_pins.has_photo
 );
 ```
 
@@ -1048,7 +1049,7 @@ CREATE TABLE skladchina_chat_posts (
 
 | Триггер | Действие |
 |---|---|
-| `SkladchinaCreatedEvent` (AFTER_COMMIT, существующее) | тумблер включён + бот жив → пост-статус + pin **с уведомлением** (best-effort) + строка в `skladchina_chat_posts`. DM при создании **маршрутизируется** (решение PO 2026-07-08): пост вышел → личку получают только участники, которых нет в чате; платёжная ссылка для остальных — через кнопку «Открыть сбор» |
+| `SkladchinaCreatedEvent` (AFTER_COMMIT, существующее) | тумблер включён + бот жив → пост-статус + pin **с уведомлением** (best-effort) + строка в `skladchina_chat_posts`. У сбора с фото (обычно чек) пост уходит **картинкой с подписью** (`has_photo`, V101, PO 2026-10-05), при подписи длиннее 1024 или сбое — текстом. DM при создании — **каждому адресату независимо от чата** (PO 2026-09-13 отменил маршрутизацию 2026-07-08: долг личный, реквизиты и кнопка должны лежать в личке), с тем же фото картинкой — `skladchina-v3.md` § 6 |
 | Изменение прогресса (v3): «Отдал» / «Получил» / «Не получил» по долгу и по сальдо пары, «В деле», «Беру», «Заказываю», прощение, добавление/замена должника (до V90 — mark-paid / decline / орг-отметки) | новое доменное событие `SkladchinaProgressChangedEvent(skladchinaId)` → **dirty-флаг** в памяти |
 | Выход участника из клуба / кик организатором | каскад `removeEnrollmentsForUserInClub` (v3: снимаются только отметки «В деле», долги остаются) возвращает id затронутых сборов → то же `SkladchinaProgressChangedEvent` по каждой (ушедший — и особенно кикнутый — не должен висеть в «Ждём:») |
 | Flush-планировщик (`chatlink.skladchina-status-flush-ms`, дефолт 30 000) | dirty-складчины перерисовываются из БД одним edit; ошибка «message is not modified» глотается |

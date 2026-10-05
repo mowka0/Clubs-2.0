@@ -121,6 +121,14 @@ open class SkladchinaChatPosts(
      */
     val UPDATED_AT: TableField<SkladchinaChatPostsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда строка обновлялась в последний раз (закрытие статуса).")
 
+    /**
+     * The column <code>public.skladchina_chat_posts.has_photo</code>. TRUE =
+     * статус вышел картинкой сбора с подписью, правки через editMessageCaption;
+     * FALSE = текстовый пост (нет фото, подпись длиннее лимита Telegram, сбой
+     * отправки картинки или пост до V101).
+     */
+    val HAS_PHOTO: TableField<SkladchinaChatPostsRecord, Boolean?> = createField(DSL.name("has_photo"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = статус вышел картинкой сбора с подписью, правки через editMessageCaption; FALSE = текстовый пост (нет фото, подпись длиннее лимита Telegram, сбой отправки картинки или пост до V101).")
+
     private constructor(alias: Name, aliased: Table<SkladchinaChatPostsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinaChatPostsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinaChatPostsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

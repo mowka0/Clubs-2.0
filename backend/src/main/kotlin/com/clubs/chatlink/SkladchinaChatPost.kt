@@ -15,7 +15,13 @@ data class SkladchinaChatPost(
     /** Id сообщения-статуса. Не-null: строка создаётся только после успешной отправки поста. */
     val messageId: Long,
     /** NULL = статус живой (редактируется); NOT NULL = закрыт (складчина закрыта/тумблер выключен). */
-    val closedAt: OffsetDateTime?
+    val closedAt: OffsetDateTime?,
+    /**
+     * TRUE = статус вышел картинкой сбора (обычно чек) с подписью, и правки идут через
+     * editMessageCaption — у фото-сообщения нет текста. FALSE = текстовый пост: фото нет, подпись
+     * длиннее лимита Telegram, картинка не отправилась или пост создан до V101.
+     */
+    val hasPhoto: Boolean = false
 )
 
 interface SkladchinaChatPostRepository {

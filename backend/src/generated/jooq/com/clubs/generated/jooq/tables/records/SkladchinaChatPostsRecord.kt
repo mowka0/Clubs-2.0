@@ -47,6 +47,10 @@ open class SkladchinaChatPostsRecord private constructor() : UpdatableRecordImpl
         set(value): Unit = set(5, value)
         get(): OffsetDateTime? = get(5) as OffsetDateTime?
 
+    open var hasPhoto: Boolean?
+        set(value): Unit = set(6, value)
+        get(): Boolean? = get(6) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -56,13 +60,14 @@ open class SkladchinaChatPostsRecord private constructor() : UpdatableRecordImpl
     /**
      * Create a detached, initialised SkladchinaChatPostsRecord
      */
-    constructor(skladchinaId: UUID, chatId: Long, messageId: Long, closedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(skladchinaId: UUID, chatId: Long, messageId: Long, closedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, hasPhoto: Boolean? = null): this() {
         this.skladchinaId = skladchinaId
         this.chatId = chatId
         this.messageId = messageId
         this.closedAt = closedAt
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.hasPhoto = hasPhoto
         resetChangedOnNotNull()
     }
 
@@ -77,6 +82,7 @@ open class SkladchinaChatPostsRecord private constructor() : UpdatableRecordImpl
             this.closedAt = value.closedAt
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.hasPhoto = value.hasPhoto
             resetChangedOnNotNull()
         }
     }
