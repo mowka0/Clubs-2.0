@@ -59,11 +59,16 @@ class SkladchinaBotNotifier(
                 event.kind == SkladchinaKind.per_head -> DmButton("🎫 Беру", callbackData = SkladchinaCallbackService.TAKE_PREFIX + event.skladchinaId)
                 else -> null
             }
+            val openButton = DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}")
+            val rows = if (quickButton != null) listOf(listOf(quickButton), listOf(openButton)) else listOf(listOf(openButton))
+            // Фото сбора (обычно чек) — картинкой с подписью, как DM о встрече (PO 2026-10-05). Подпись
+            // Telegram ограничена: длинный текст и любой сбой отправки уходят прежним текстовым DM.
+            val sentWithPhoto = event.photoUrl
+                ?.takeIf { text.length <= TELEGRAM_CAPTION_LIMIT }
+                ?.let { gateway.sendDmPhotoWithButtons(user.telegramId, it, text, rows) } ?: false
+            if (sentWithPhoto) return@forEach
             if (quickButton != null) {
-                gateway.sendDmWithButtons(
-                    user.telegramId, text,
-                    listOf(listOf(quickButton), listOf(DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}")))
-                )
+                gateway.sendDmWithButtons(user.telegramId, text, rows)
             } else {
                 notificationService.sendDirectMessageWithDeepLink(user.telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
             }

@@ -1272,16 +1272,13 @@
 /* Нижняя строка не отсчёт, а констатация (дата закрытия, «без срока») — акцент был бы ложной срочностью. */
 .rd-when-muted { color: var(--text-dim); font-weight: 600; }
 
-/* Обложка сбора кликабельна (открывает фото целиком), поэтому это <button> — снимаем с неё
-   кнопочные умолчания; заголовок внутри лежит в <span> (флоу-теги в button невалидны).
-   Имя `rd-hero-btn` уже занято круглыми кнопками действий в углу обложки — отсюда `rd-hero-tap`. */
-.rd-hero-tap {
-  /* width: auto у <button> — это shrink-to-fit, обложка схлопнулась бы по ширине надписи;
-     +32px компенсируют боковые отступы .rd-page, из-под которых обложка выходит margin'ом. */
-  display: block; width: calc(100% + 32px);
-  padding: 0; border: none; background: none; cursor: pointer; font-family: inherit; text-align: left;
+/* Фото сбора целиком (PO 2026-10-04): чаще всего это чек, его читают — обложка с обрезкой его
+   портила. Кнопка-карточка на всю ширину без кнопочных умолчаний; тап открывает лайтбокс. */
+.rd-sklad-photo {
+  display: block; width: 100%; margin-bottom: 14px; padding: 0; overflow: hidden;
+  cursor: pointer; font-family: inherit;
 }
-.rd-hero-tap .rd-hero-ttl { display: block; }
+.rd-sklad-photo img { display: block; width: 100%; }
 
 /* «Организуют»: клуб и автор встречи — одна кнопка, ведёт в клуб. */
 .rd-host-panel {

@@ -24,6 +24,8 @@ data class SkladchinaCreatedEvent(
     val kind: SkladchinaKind,
     val title: String,
     val description: String?,
+    // Фото сбора (обычно чек): DM при создании уходит картинкой с подписью, как у встречи.
+    val photoUrl: String?,
     val paymentLink: String,
     val paymentMethodNote: String?,
     val amountKopecks: Long?,

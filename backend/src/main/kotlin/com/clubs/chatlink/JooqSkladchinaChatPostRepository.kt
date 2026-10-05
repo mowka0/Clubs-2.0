@@ -26,6 +26,7 @@ class JooqSkladchinaChatPostRepository(
             .set(SKLADCHINA_CHAT_POSTS.CHAT_ID, post.chatId)
             .set(SKLADCHINA_CHAT_POSTS.MESSAGE_ID, post.messageId)
             .set(SKLADCHINA_CHAT_POSTS.CLOSED_AT, post.closedAt)
+            .set(SKLADCHINA_CHAT_POSTS.HAS_PHOTO, post.hasPhoto)
             .onConflict(SKLADCHINA_CHAT_POSTS.SKLADCHINA_ID)
             .doNothing()
             .execute() > 0
@@ -68,6 +69,7 @@ class JooqSkladchinaChatPostRepository(
         skladchinaId = record.skladchinaId!!,
         chatId = record.chatId!!,
         messageId = record.messageId!!,
-        closedAt = record.closedAt
+        closedAt = record.closedAt,
+        hasPhoto = record.hasPhoto!!
     )
 }

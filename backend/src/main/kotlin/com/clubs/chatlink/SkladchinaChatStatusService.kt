@@ -2,6 +2,7 @@ package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.bot.PARSE_MODE_HTML
+import com.clubs.bot.TELEGRAM_CAPTION_LIMIT
 import com.clubs.bot.UserChatState
 import com.clubs.debt.DebtRepository
 import com.clubs.generated.jooq.enums.DebtStatus
@@ -50,9 +51,9 @@ class SkladchinaChatStatusService(
 
     /**
      * Создание сбора: пост-статус, если тумблер включён и сбор не тихий. Возвращает chatId, когда
-     * живой пост фактически существует, — маршрутизатор ([com.clubs.bot.ChatAwareBroadcast])
-     * подавит DM участникам этого чата. Вызывается синхронно из @Async-оркестратора
-     * SkladchinaBotNotifier (возврат значения из @Async-метода терялся бы).
+     * живой пост фактически существует (DM при этом уходят всем адресатам — PO 2026-09-13, подавления
+     * по чату у сборов нет). Вызывается синхронно из @Async-оркестратора SkladchinaBotNotifier
+     * (возврат значения из @Async-метода терялся бы).
      */
     @Transactional
     fun onSkladchinaCreated(clubId: UUID, skladchinaId: UUID): Long? {
@@ -142,9 +143,25 @@ class SkladchinaChatStatusService(
     private fun createPost(link: ChatLink, skladchina: Skladchina): Boolean {
         if (!skladchina.isActive || skladchina.hiddenFromUserId != null) return false
         if (postRepository.findBySkladchinaId(skladchina.id) != null) return true
-        val messageId = gateway.sendGroupMessageWithUrlButton(
+        val text = renderer.statusText(buildView(skladchina))
+        // Фото сбора в чате (PO 2026-10-05): обычно это чек — пост уходит картинкой с подписью, как
+        // живой закреп встречи. Подпись Telegram ограничена — длинный статус уходит текстом.
+        val photoMessageId = skladchina.photoUrl
+            ?.takeIf { text.length <= TELEGRAM_CAPTION_LIMIT }
+            ?.let { photoUrl ->
+                gateway.sendGroupPhotoWithUrlButton(
+                    chatId = link.chatId,
+                    photoUrl = photoUrl,
+                    caption = text,
+                    buttonText = renderer.buttonText(skladchina),
+                    url = renderer.skladchinaUrl(skladchina.id),
+                    parseMode = PARSE_MODE_HTML
+                )
+            }
+        // Картинка не ушла (нет фото, длинная подпись, сбой Telegram) — обычный текстовый пост.
+        val messageId = photoMessageId ?: gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
-            text = renderer.statusText(buildView(skladchina)),
+            text = text,
             buttonText = renderer.buttonText(skladchina),
             url = renderer.skladchinaUrl(skladchina.id),
             parseMode = PARSE_MODE_HTML
@@ -156,7 +173,7 @@ class SkladchinaChatStatusService(
         }
         // Гонка backfill × onSkladchinaCreated: проигравший не роняет транзакцию на PK-конфликте,
         // а просто не закрепляет (его сообщение останется в чате дублем — редкое окно, best-effort).
-        if (!postRepository.insertIfAbsent(SkladchinaChatPost(skladchina.id, link.chatId, messageId, closedAt = null))) {
+        if (!postRepository.insertIfAbsent(SkladchinaChatPost(skladchina.id, link.chatId, messageId, closedAt = null, hasPhoto = photoMessageId != null))) {
             log.info("Skladchina chat status already posted by concurrent path: skladchinaId={}", skladchina.id)
             return true
         }
@@ -173,21 +190,22 @@ class SkladchinaChatStatusService(
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
         // Не-активный закроет close-проход (или уже закрыл closeNow) — здесь не трогаем.
         if (!skladchina.isActive) return
-        gateway.editGroupMessage(
-            chatId = post.chatId,
-            messageId = post.messageId,
-            text = renderer.statusText(buildView(skladchina)),
-            buttonText = renderer.buttonText(skladchina),
-            url = renderer.skladchinaUrl(skladchina.id),
-            parseMode = PARSE_MODE_HTML
-        )
+        editPost(post, renderer.statusText(buildView(skladchina)), renderer.buttonText(skladchina), renderer.skladchinaUrl(skladchina.id))
     }
+
+    /**
+     * Правка поста тем методом, которым он вышел: у фото-сообщения текста нет, и editMessageText
+     * вернул бы «there is no text in the message to edit» — статус замер бы (как у закрепа встречи).
+     */
+    private fun editPost(post: SkladchinaChatPost, text: String, buttonText: String? = null, url: String? = null): Boolean =
+        if (post.hasPhoto) gateway.editGroupMessageCaption(post.chatId, post.messageId, text, buttonText, url, PARSE_MODE_HTML)
+        else gateway.editGroupMessage(post.chatId, post.messageId, text, buttonText, url, PARSE_MODE_HTML)
 
     /** Финальный edit + unpin по состоянию из БД; строка закрывается даже при сбое, иначе мёртвый пост ретраился бы вечно. */
     private fun closePost(post: SkladchinaChatPost) {
         val skladchina = skladchinaRepository.findById(post.skladchinaId)
         if (skladchina != null) {
-            gateway.editGroupMessage(post.chatId, post.messageId, renderer.closedText(buildView(skladchina)), null, null, PARSE_MODE_HTML)
+            editPost(post, renderer.closedText(buildView(skladchina)))
             gateway.unpinChatMessage(post.chatId, post.messageId)
         }
         postRepository.markClosed(post.skladchinaId)

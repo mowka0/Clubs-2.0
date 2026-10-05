@@ -217,28 +217,10 @@ export const SkladchinaPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Обложка — только когда организатор приложил фото (PO 2026-09-15): у сбора без фото
-          градиент во весь экран ничего не сообщал бы. Тап открывает полный размер — на фото
-          сбора обычно чек, и его читают, а обрезанный под обложку он нечитаем. */}
-      {s.photoUrl ? (
-        <button
-          type="button"
-          className="rd-hero rd-compact rd-hero-event rd-hero-tap"
-          aria-label={`${s.title} — открыть фото сбора`}
-          onClick={() => { haptic.impact('light'); setPhotoZoomed(true); }}
-        >
-          <span className="rd-hero-bg" style={{ backgroundImage: `url(${s.photoUrl})` }} />
-          <span className="rd-hero-meta">
-            <span className="rd-hero-type-badge">{kindBadge.toUpperCase()}</span>
-            <span className="rd-hero-ttl">{s.title}</span>
-          </span>
-        </button>
-      ) : (
-        <>
-          <div className="rd-ft-eyebrow">{kindBadge}</div>
-          <h1 className="rd-page-h" style={{ marginBottom: 14 }}>{s.title}</h1>
-        </>
-      )}
+      {/* Название и вид — всегда текстом: обложки у сбора нет (PO 2026-10-04). Фото показывается
+          целиком карточкой ниже — чаще всего это чек, и его читают, а обложка его обрезала. */}
+      <div className="rd-ft-eyebrow">{kindBadge}</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 14 }}>{s.title}</h1>
       <ImageLightbox src={photoZoomed ? s.photoUrl : null} alt="Фото сбора" onClose={() => setPhotoZoomed(false)} />
 
       {/* Две плашки в ряд, как на встрече (PO 2026-09-15): слева срок, справа кто собирает.
@@ -290,6 +272,18 @@ export const SkladchinaPage: FC = () => {
             <div className="rd-ttl">{s.eventTitle}</div>
           </div>
           <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
+        </button>
+      )}
+
+      {/* Фото сбора целиком, без обрезки (PO 2026-10-04): обложка из PR #165 резала чек. Тап — на весь экран. */}
+      {s.photoUrl && (
+        <button
+          type="button"
+          className="rd-glass rd-sklad-photo"
+          aria-label="Открыть фото сбора"
+          onClick={() => { haptic.impact('light'); setPhotoZoomed(true); }}
+        >
+          <img src={s.photoUrl} alt="" />
         </button>
       )}
 
