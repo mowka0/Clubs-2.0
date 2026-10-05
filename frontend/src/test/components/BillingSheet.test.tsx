@@ -81,9 +81,10 @@ describe('BillingSheet', () => {
     // Отметка согласия на автосписание — дословно по Robokassa и по умолчанию снята.
     const consent = screen.getByRole('checkbox', { name: 'Я согласен на автоматические списания согласно условиям оферты' });
     expect(consent).not.toBeChecked();
-    expect(screen.getByText(/Без отметки списаний не будет/)).toBeInTheDocument();
+    // Периодичность и способ отмены видны рядом с отметкой и без неё (требование Robokassa).
+    expect(screen.getByText(/199 ₽ каждые 30 дней с этой же карты\. Отключить можно на странице клуба/)).toBeInTheDocument();
 
-    // Ссылка из отметки раскрывает оферту текстом внутри шита.
+    // Ссылка из отметки раскрывает оферту текстом внутри шита (вторая ссылка — под кнопкой оплаты).
     await userEvent.click(screen.getByRole('button', { name: 'условиям оферты' }));
     expect(screen.getByText(/Исполнитель — самозанятый Варламов Иван Иванович, ИНН/)).toBeInTheDocument();
     // Оферта цитирует формулировку отметки дословно — текст на экране и текст в договоре не разъезжаются.
@@ -92,7 +93,6 @@ describe('BillingSheet', () => {
 
     await userEvent.click(consent);
     expect(consent).toBeChecked();
-    expect(screen.getByText(/199 ₽ каждые 30 дней с этой же карты/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить 199 ₽' }));
 
     await waitFor(() => expect(openLinkMock).toHaveBeenCalledWith('https://rk.example/pay?inv=100001', { tryInstantView: false }));

@@ -10,7 +10,7 @@ import {
   AUTOPAY_CONSENT_LABEL, CHAT_PRICE_LABEL, SELLER, SUPPORT, TRIAL_DAYS_DEFAULT,
   formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason,
 } from '../../api/billing';
-import { OFFER_TITLE, OFFER_UPDATED, offer } from './offerText';
+import { OFFER_UPDATED, offer } from './offerText';
 
 /** Опрос статуса после ухода на оплату: ResultURL провайдера может отставать от возврата. */
 const POLL_INTERVAL_MS = 3000;
@@ -166,38 +166,45 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           </div>
         )
         : (
-          <div className="rd-billing-consent">
-            {/* Ссылка вне <label>: вложенная кнопка получила бы имя от label и перестала бы быть «ссылкой на оферту». */}
-            <div className="rd-check">
-              <input
-                type="checkbox"
-                id="billing-autopay-consent"
-                aria-label={`${AUTOPAY_CONSENT_LABEL.lead} ${AUTOPAY_CONSENT_LABEL.link}`}
-                checked={autopay}
-                onChange={(e) => { haptic.select(); setAutopay(e.target.checked); }}
-              />
-              <span>
+          // Карточка-опция, как выбор режима сбора: тап по тексту ставит отметку, ссылка — вне <label>
+          // (вложенная кнопка получила бы имя от label и перестала бы быть «ссылкой на оферту»).
+          <div className={`rd-mode-option rd-billing-consent${autopay ? ' rd-active' : ''}`}>
+            <input
+              type="checkbox"
+              id="billing-autopay-consent"
+              aria-label={`${AUTOPAY_CONSENT_LABEL.lead} ${AUTOPAY_CONSENT_LABEL.link}`}
+              checked={autopay}
+              onChange={(e) => { haptic.select(); setAutopay(e.target.checked); }}
+            />
+            <div>
+              <div className="rd-mo-title">
                 <label htmlFor="billing-autopay-consent">{AUTOPAY_CONSENT_LABEL.lead}</label>{' '}
                 <button type="button" className="rd-billing-offer-link" onClick={showOffer}>{AUTOPAY_CONSENT_LABEL.link}</button>
-              </span>
-            </div>
-            <div className="fd">
-              {autopay
-                ? `${price ?? ''} каждые 30 дней с этой же карты, первое списание — ${chargeDate ?? 'в день окончания оплаченного периода'}. Отключить можно в любой момент на странице клуба.`
-                : `Без отметки списаний не будет: напомним за 3 дня и за день до конца периода — оплатите вручную. С отметкой — ${price ?? ''} каждые 30 дней с этой же карты.`}
+              </div>
+              <label htmlFor="billing-autopay-consent" className="rd-mo-desc">
+                {price ?? ''} каждые 30 дней с этой же карты{chargeDate ? `, первое списание — ${chargeDate}` : ''}. Отключить можно на странице клуба.
+              </label>
             </div>
           </div>
         )}
 
       <div className="rd-billing-prov">
-        <div className="cap">Как проходит оплата</div>
         <div className="l"><span className="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП. Реквизиты карты мы не видим.</span></div>
         <div className="l"><span className="ic">🧾</span><span>Получатель — <b>{recipient}</b>, чек придёт на e-mail или в Telegram.</span></div>
-        <button type="button" className="rd-billing-offer-btn" aria-expanded={offerOpen} onClick={() => setOfferOpen((v) => !v)}>
-          {OFFER_TITLE} {offerOpen ? '▴' : '▾'}
-        </button>
-        {offerOpen && (
-          <div className="rd-billing-offer" ref={offerRef}>
+      </div>
+
+      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
+
+      <button type="button" className="rd-btn-primary" disabled={!data || checkout.isPending} onClick={handlePay}>
+        {checkout.isPending ? 'Выставляем счёт…' : hasSubscription ? `Продлить на месяц — ${price ?? ''}` : `Оплатить ${price ?? ''}`}
+      </button>
+      <div className="rd-cta-hint">
+        Оплачивая, вы принимаете{' '}
+        <button type="button" className="rd-billing-offer-link" aria-expanded={offerOpen} onClick={() => setOfferOpen((v) => !v)}>условия оферты</button>.
+        {' '}Страница оплаты откроется в браузере — после оплаты вернитесь в Telegram.
+      </div>
+      {offerOpen && (
+        <div className="rd-billing-offer" ref={offerRef}>
             <p className="rd-billing-offer-meta">Редакция от {OFFER_UPDATED}</p>
             {/* ИНН — константа бандла (та же, что на /about): в DTO биллинга его нет, а оферте он нужен. */}
             {offer({
@@ -210,15 +217,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
-
-      <button type="button" className="rd-btn-primary" disabled={!data || checkout.isPending} onClick={handlePay}>
-        {checkout.isPending ? 'Выставляем счёт…' : hasSubscription ? `Продлить на месяц — ${price ?? ''}` : `Оплатить ${price ?? ''}`}
-      </button>
-      <div className="rd-cta-hint">Оплачивая, вы принимаете условия оферты. Откроется страница оплаты в браузере; после оплаты вернитесь в Telegram — кнопка будет на странице.</div>
+      )}
     </>
   );
 
