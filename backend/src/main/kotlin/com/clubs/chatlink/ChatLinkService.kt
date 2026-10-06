@@ -180,6 +180,7 @@ class ChatLinkService(
                 }
             }
         }
+        enableFeaturesForGrantedRights(clubId, before = link)
         log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, chatId, state.statusLiteral)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
@@ -208,13 +209,9 @@ class ChatLinkService(
             if (!link.canInviteUsers) {
                 throw ConflictException("Боту нужно право «Приглашение участников» в настройках группы")
             }
-            // Ссылка обычно уже создана при привязке; создаём только если её ещё нет
-            // (например, право приглашать выдали позже и переход не был пойман).
-            val inviteLink = link.doorInviteLink
-                ?: gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)
-                ?: throw ConflictException("Не удалось создать ссылку-приглашение — проверьте права бота и попробуйте позже")
-            chatLinkRepository.updateDoor(clubId, doorEnabled = true, doorInviteLink = inviteLink)
-            log.info("Chat door enabled: clubId={} chatId={}", clubId, link.chatId)
+            if (!enableDoor(link)) {
+                throw ConflictException("Не удалось создать ссылку-приглашение — проверьте права бота и попробуйте позже")
+            }
         } else {
             chatLinkRepository.updateDoor(clubId, doorEnabled = false, doorInviteLink = link.doorInviteLink)
             log.info("Chat door disabled (invite link kept alive): clubId={} chatId={}", clubId, link.chatId)
@@ -245,9 +242,7 @@ class ChatLinkService(
             if (!link.canPinMessages) {
                 throw ConflictException("Боту нужно право «Закрепление сообщений» в настройках группы")
             }
-            chatLinkRepository.updateLivePin(clubId, livePinEnabled = true)
-            livePinService.backfillForClub(clubId)
-            log.info("Live pin enabled: clubId={} chatId={}", clubId, link.chatId)
+            enableLivePin(link)
         } else {
             chatLinkRepository.updateLivePin(clubId, livePinEnabled = false)
             livePinService.disableForClub(link)
@@ -276,9 +271,7 @@ class ChatLinkService(
             if (!link.botStatus.isInChat) {
                 throw ConflictException("Бот удалён из чата — верните его в группу и проверьте права")
             }
-            chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true)
-            skladchinaChatStatusService.backfillForClub(clubId)
-            log.info("Skladchina chat status enabled: clubId={} chatId={}", clubId, link.chatId)
+            enableSkladchinaStatus(link)
         } else {
             chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = false)
             skladchinaChatStatusService.disableForClub(link)
@@ -345,15 +338,93 @@ class ChatLinkService(
             if (!link.canManageTags) {
                 throw ConflictException("Боту нужно право «Управление тегами» в настройках группы")
             }
-            chatLinkRepository.updateAwardTags(clubId, awardTagsEnabled = true)
-            memberTagService.backfillForClub(link)
-            log.info("Award tags enabled: clubId={} chatId={}", clubId, link.chatId)
+            enableAwardTags(link)
         } else {
             chatLinkRepository.updateAwardTags(clubId, awardTagsEnabled = false)
             memberTagService.disableForClub(link)
             log.info("Award tags disabled: clubId={} chatId={}", clubId, link.chatId)
         }
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
+    /**
+     * Автовключение функций чата по выданным правам (решение PO 2026-10-06): владельцу не нужно
+     * идти в «Управление → Чат» и щёлкать тумблеры, которые и так можно включить.
+     *
+     * Включается то, на что право ПОЯВИЛОСЬ: `before == null` — первая привязка, включаем всё
+     * доступное; иначе — только функции, чьё право выдали сейчас. Поэтому выключенное владельцем
+     * руками не включается обратно при каждом пересчёте прав, пока само право не менялось.
+     *
+     * Что пишет в чат (живой закреп, статус сборов), включается, только когда клуб уже показан
+     * в чате — есть закреп со ссылкой на клуб. Клуб из чата до «Показать клуб в чате» молчит
+     * (PO 2026-10-06), и эти функции включает сам показ — [pinClubLink].
+     *
+     * Сами не включаются никогда: вход через заявки (меняет, что видят стучащиеся в группу, —
+     * решает владелец) и строгий режим (мьют должников и бан ушедших).
+     */
+    @Transactional
+    fun enableFeaturesForGrantedRights(clubId: UUID, before: ChatLink?) {
+        val link = chatLinkRepository.findByClubId(clubId) ?: return
+        if (!link.botStatus.isInChat) return
+        // Строка удалённого клуба (легаси) ждёт перехвата — оживлять её функции незачем.
+        if (clubRepository.findById(clubId) == null) return
+        val isFirstLink = before == null
+        val isPresented = link.clubPinMessageId != null
+        fun granted(now: Boolean, was: Boolean?) = now && (isFirstLink || was != true)
+
+        val enabled = buildList {
+            if (isPresented && !link.livePinEnabled && granted(link.canPinMessages, before?.canPinMessages)) {
+                enableLivePin(link); add("livePin")
+            }
+            if (isPresented && isFirstLink && !link.skladchinaStatusEnabled) {
+                enableSkladchinaStatus(link); add("skladchinaStatus")
+            }
+            if (!link.awardTagsEnabled && granted(link.canManageTags, before?.canManageTags)) {
+                enableAwardTags(link); add("awardTags")
+            }
+        }
+        if (enabled.isNotEmpty()) {
+            log.info("Chat features auto-enabled by bot rights: clubId={} chatId={} features={}", clubId, link.chatId, enabled)
+        }
+    }
+
+    /**
+     * Первый показ клуба в чате: включаем то, что пишет в чат, — до показа оно ждало, чтобы
+     * клуб из чата не выдал себя раньше времени (PO 2026-10-06).
+     */
+    private fun enableFeaturesOnFirstPresentation(link: ChatLink) {
+        if (!link.livePinEnabled && link.canPinMessages) enableLivePin(link)
+        if (!link.skladchinaStatusEnabled) enableSkladchinaStatus(link)
+        log.info("Chat features enabled on first presentation: clubId={} chatId={}", link.clubId, link.chatId)
+    }
+
+    /** Дверь: ссылка обычно создана при привязке; false — Telegram не дал её создать. */
+    private fun enableDoor(link: ChatLink): Boolean {
+        // Создаём, только если её ещё нет (например, право приглашать выдали позже и переход не был пойман).
+        val inviteLink = link.doorInviteLink
+            ?: gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)
+            ?: return false
+        chatLinkRepository.updateDoor(link.clubId, doorEnabled = true, doorInviteLink = inviteLink)
+        log.info("Chat door enabled: clubId={} chatId={}", link.clubId, link.chatId)
+        return true
+    }
+
+    private fun enableLivePin(link: ChatLink) {
+        chatLinkRepository.updateLivePin(link.clubId, livePinEnabled = true)
+        livePinService.backfillForClub(link.clubId)
+        log.info("Live pin enabled: clubId={} chatId={}", link.clubId, link.chatId)
+    }
+
+    private fun enableSkladchinaStatus(link: ChatLink) {
+        chatLinkRepository.updateSkladchinaStatus(link.clubId, skladchinaStatusEnabled = true)
+        skladchinaChatStatusService.backfillForClub(link.clubId)
+        log.info("Skladchina chat status enabled: clubId={} chatId={}", link.clubId, link.chatId)
+    }
+
+    private fun enableAwardTags(link: ChatLink) {
+        chatLinkRepository.updateAwardTags(link.clubId, awardTagsEnabled = true)
+        memberTagService.backfillForClub(link)
+        log.info("Award tags enabled: clubId={} chatId={}", link.clubId, link.chatId)
     }
 
     /**
@@ -377,6 +448,8 @@ class ChatLinkService(
             ?: throw ConflictException("Не удалось отправить сообщение в чат — попробуйте позже")
         chatLinkRepository.updateClubPinMessageId(clubId, messageId)
         log.info("Club link pinned: clubId={} chatId={} messageId={}", clubId, link.chatId, messageId)
+        // Повторный закреп ссылки — не показ: выключенное владельцем после показа не трогаем.
+        if (link.clubPinMessageId == null) enableFeaturesOnFirstPresentation(link)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
@@ -486,7 +559,7 @@ class ChatLinkService(
      * группы служебную команду `/start@bot`, которую клиент Telegram кладёт туда сам.
      */
     fun startGroupUrl(clubId: UUID): String =
-        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+        "https://t.me/$botUsername?startgroup=$clubId&admin=$ADMIN_RIGHTS_PARAM"
 
     /**
      * Ссылка «подключить чат, клуба ещё нет»: payload `new` вместо UUID (см. ClubsBot).
@@ -495,7 +568,7 @@ class ChatLinkService(
      */
     fun newClubStartGroupUrl(): String =
         "https://t.me/$botUsername?startgroup=${ChatLinkBotService.NEW_CLUB_START_PAYLOAD}" +
-            "&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+            "&admin=$ADMIN_RIGHTS_PARAM"
 
     /**
      * Тот же владельческий гейт, что и у остальных методов таба «Чат», но снаружи: им
@@ -518,5 +591,13 @@ class ChatLinkService(
          * от того, сколько прошло времени с переезда, признание двойника не зависит.
          */
         private val CLUB_BIRTH_GAP: Duration = Duration.ofMinutes(1)
+
+        /**
+         * Права, которые ссылка привязки просит у группы (`?admin=…`), одним списком на обе ссылки.
+         * Без `manage_tags` (решение PO 2026-10-06): с ним клиент iOS после выдачи прав бесконечно
+         * крутил кнопку экрана «Добавление бота», хотя сервер всё сделал за секунду; галочку тегов
+         * клиент и так не показывал. Право тегов выдаётся руками — подсказка в мастере и табе «Чат».
+         */
+        private const val ADMIN_RIGHTS_PARAM = "pin_messages+invite_users+restrict_members+delete_messages"
     }
 }

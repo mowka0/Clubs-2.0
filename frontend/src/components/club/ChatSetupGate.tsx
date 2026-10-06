@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useClubContextStore } from '../../store/useClubContextStore';
 import { forgetChatLinking, readPendingChatLinkClubId } from '../../utils/chatLinkPending';
 import { ChatSetupModal } from './ChatSetupModal';
-import type { ChatLinkStatusDto } from '../../types/api';
+import { hasAllBotRights } from '../../utils/botRights';
 
 /**
  * Один раз за запуск приложения: сколько бы клубов человек ни открыл, напоминание про права
@@ -17,11 +17,6 @@ let rightsReminderShown = false;
 /** Только для тестов: «заход в приложение» начинается заново между прогонами. */
 export function resetRightsReminderForTests(): void {
   rightsReminderShown = false;
-}
-
-/** Все ли права выданы. Пока хоть одного нет, часть функций чата молчит. */
-function hasEveryRight(status: ChatLinkStatusDto): boolean {
-  return status.canPinMessages && status.canInviteUsers && status.canRestrictMembers && status.canManageTags;
 }
 
 /**
@@ -66,7 +61,8 @@ export const ChatSetupGate: FC = () => {
   const [remindAboutRights, setRemindAboutRights] = useState(false);
   useEffect(() => {
     if (isReturningFromLinking || !status?.linked) return;
-    if (rightsReminderShown || hasEveryRight(status)) return;
+    // Теги не в счёт: по ссылке Telegram их не выдаёт, и напоминание висело бы у всех (PO 2026-10-06).
+    if (rightsReminderShown || hasAllBotRights(status)) return;
     rightsReminderShown = true;
     setRemindAboutRights(true);
   }, [isReturningFromLinking, status]);

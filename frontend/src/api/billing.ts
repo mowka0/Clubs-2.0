@@ -55,7 +55,7 @@ export interface PaywallInfo {
  */
 export const TRIAL_DAYS_DEFAULT = 15;
 export const CHAT_PRICE_LABEL = '199 ₽';
-export const CHAT_PRICE_LINE = `Первые ${TRIAL_DAYS_DEFAULT} дней бесплатно. Дальше ${CHAT_PRICE_LABEL} в месяц за клуб.`;
+export const CHAT_PRICE_LINE = `Первые ${TRIAL_DAYS_DEFAULT} дней после первой встречи — бесплатно, дальше ${CHAT_PRICE_LABEL} в месяц за клуб.`;
 
 /**
  * Отметка согласия на автосписание в шите — дословно по требованию Robokassa (2026-10-05), по

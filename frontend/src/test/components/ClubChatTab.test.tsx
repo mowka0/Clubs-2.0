@@ -35,7 +35,7 @@ afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); localStorage.clear
 afterAll(() => server.close());
 
 const CLUB_ID = 'club-1';
-const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users+restrict_members+manage_tags`;
+const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users+restrict_members+delete_messages`;
 
 function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
   return {

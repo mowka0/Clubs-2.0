@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { Button, Modal, Spinner, Text } from '@telegram-apps/telegram-ui';
 import { useRefreshChatLinkMutation } from '../../queries/chatLink';
 import type { ChatLinkStatusDto } from '../../types/api';
+import { OPTIONAL_BOT_RIGHT, type BotRightKey } from '../../utils/botRights';
 
 /**
  * Окно «чат подключён» со статусом прав бота. Всплывает сразу после привязки (`ChatSetupGate`).
@@ -16,29 +17,29 @@ import type { ChatLinkStatusDto } from '../../types/api';
  * Telegram, чтобы организатор искал глазами то же слово, что видит на экране.
  */
 const BOT_RIGHTS: readonly {
+  key: BotRightKey;
   title: string;
   why: string;
-  granted: (s: ChatLinkStatusDto) => boolean;
 }[] = [
   {
+    key: 'canPinMessages',
     title: 'Закрепление сообщений',
     why: 'живой закреп встреч и ссылка на клуб',
-    granted: (s) => s.canPinMessages,
   },
   {
+    key: 'canInviteUsers',
     title: 'Приглашение участников',
     why: 'вход в чат через заявки',
-    granted: (s) => s.canInviteUsers,
   },
   {
+    key: 'canRestrictMembers',
     title: 'Блокировка пользователей',
     why: 'строгий режим: должники читают, но не пишут',
-    granted: (s) => s.canRestrictMembers,
   },
   {
+    key: 'canManageTags',
     title: 'Управление тегами',
-    why: 'теги наград рядом с именами',
-    granted: (s) => s.canManageTags,
+    why: 'теги наград рядом с именами — по желанию, включается руками в настройках группы',
   },
 ];
 
@@ -63,7 +64,8 @@ interface ChatSetupModalProps {
 
 export const ChatSetupModal: FC<ChatSetupModalProps> = ({ clubId, clubName, status, onClose }) => {
   const refreshMutation = useRefreshChatLinkMutation(clubId);
-  const missing = BOT_RIGHTS.filter((right) => !right.granted(status));
+  // Необязательное право (теги) окно не просит: Telegram его по ссылке не выдаёт (PO 2026-10-06).
+  const missing = BOT_RIGHTS.filter((right) => right.key !== OPTIONAL_BOT_RIGHT.key && !status[right.key]);
   const botUsername = botUsernameFromStartUrl(status.startGroupUrl);
 
   return (
@@ -75,13 +77,13 @@ export const ChatSetupModal: FC<ChatSetupModalProps> = ({ clubId, clubName, stat
         </Text>
         <Text>
           {missing.length === 0
-            ? 'Бот в чате и получил все права. Осталось включить нужные функции в «Управлении → Чат».'
-            : 'Осталось выдать боту права: Telegram добавляет его с выключенными ползунками, и пока они выключены, функции чата не включатся.'}
+            ? 'Бот в чате и получил нужные права. Закреп встреч и статус сборов включатся сами, как только клуб показан в чате; остальное — в «Управлении → Чат».'
+            : 'Осталось выдать боту права: Telegram добавляет его с выключенными ползунками, и без них не заработают закреп встреч и вход по заявкам.'}
         </Text>
 
         <div className="rd-cl-rights">
           {BOT_RIGHTS.map((right) => {
-            const granted = right.granted(status);
+            const granted = status[right.key];
             return (
               <div key={right.title} className={`rd-cl-right${granted ? ' ok' : ''}`}>
                 <span className="rr-mark" aria-hidden="true">{granted ? '✓' : '○'}</span>

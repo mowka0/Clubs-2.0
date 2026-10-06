@@ -175,7 +175,7 @@ const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
       </>
     ),
     factTone: 'wait',
-    ctaLabel: 'Посмотреть другие клубы',
+    ctaLabel: 'Посмотреть мои клубы',
   },
 };
 

@@ -1,4 +1,4 @@
-import { FC, useEffect, useRef, useState } from 'react';
+import { FC, ReactNode, useEffect, useRef, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
 import foxCafeArt from '../../assets/mascot/fox-cafe.png';
 import foxCatalogArt from '../../assets/mascot/fox-catalog.png';
@@ -25,7 +25,8 @@ interface FoxEmptyProps {
   /** error → role="alert": сцена та же, но семантика ошибки для скринридеров. */
   variant?: 'empty' | 'error';
   title: string;
-  description: string;
+  /** Строка или разметка — например, абзацы с эмодзи на экране подключения чата. */
+  description: ReactNode;
   /** Акцентная кнопка действия. */
   primary?: FoxEmptyCta;
   /** Вторая, ghost-кнопка (например «Сменить город»). */

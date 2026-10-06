@@ -245,9 +245,11 @@ class ChatTelegramGateway(
     }
 
     /** Право бота «Управление тегами» (can_manage_tags, Bot API 9.5). */
-    fun fetchCanManageTags(chatId: Long): Boolean {
-        val self = botId() ?: return false
+    /** null — Telegram не ответил: право неизвестно, вызывающий держит прежнее значение. */
+    fun fetchCanManageTags(chatId: Long): Boolean? {
+        val self = botId() ?: return null
         return when (val member = getChatMember(chatId, self)) {
+            null -> null
             // Владелец чата (creator) может всё; у админа смотрим само право.
             is ChatMemberOwner -> true
             is ChatMemberAdministrator -> member.canManageTags ?: false
