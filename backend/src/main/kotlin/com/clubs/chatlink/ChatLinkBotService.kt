@@ -400,7 +400,9 @@ class ChatLinkBotService(
         // отдельным постом В ЧАТЕ) и петля безопасности «это были вы?», из-за которой
         // фишинг-привязка мгновенно видна и обратима.
         val botHasAdminRights = link.botStatus == BotChatStatus.ADMINISTRATOR
-        sendLinkedDm(fromTelegramId, linkedMessage(chatTitle, club.name, botHasAdminRights, isNewClub), clubId)
+        // Клубу из чата кнопка открывает шторку «Клуб создан» поверх страницы клуба (PO 2026-10-06).
+        val webAppPath = if (isNewClub) "/clubs/$clubId?created=1" else "/clubs/$clubId"
+        sendLinkedDm(fromTelegramId, linkedMessage(chatTitle, club.name, botHasAdminRights, isNewClub), webAppPath, clubId)
     }
 
     /**
@@ -521,8 +523,10 @@ class ChatLinkBotService(
         // Клуб из чата — экран успеха (PO 2026-10-06): после выдачи прав Telegram оставляет
         // человека в группе, и это сообщение — его дорога в клуб кнопкой «Перейти в клуб».
         val headline = if (isNewClub) {
-            "🎉 Клуб «$clubName» создан из чата «${chatTitle ?: "без названия"}»!\n" +
-                "Дальше заполните описание и создайте первую встречу — бот сам позовёт чат."
+            "🎉 Клуб «$clubName» создан из чата «${chatTitle ?: "без названия"}»!\n\n" +
+                "В чат бот пока ничего не писал — пусть участники сразу увидят готовый клуб. " +
+                "Сначала наполните его: город, описание, обложка. Потом покажите клуб в чате: " +
+                "«Пригласить в клуб» → «Показать клуб в чате», бот закрепит сообщение со ссылкой."
         } else {
             "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
                 "Управление — в приложении Clubs, вкладка «Чат»."
@@ -534,12 +538,12 @@ class ChatLinkBotService(
      * Подтверждение привязки в личку владельцу: сверху вход в клуб, снизу петля безопасности
      * «это были вы?». Текст собирает [linkedMessage]: у клуба из чата он звучит как «клуб создан».
      */
-    private fun sendLinkedDm(telegramId: Long, text: String, clubId: UUID) {
+    private fun sendLinkedDm(telegramId: Long, text: String, webAppPath: String, clubId: UUID) {
         gateway.sendDmWithWebAppAndCallbackButton(
             telegramId = telegramId,
             text = text,
             webAppButtonText = "Перейти в клуб",
-            webAppPath = "/clubs/$clubId",
+            webAppPath = webAppPath,
             callbackButtonText = "Отвязать чат",
             callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
         )

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FC } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -110,17 +110,18 @@ const NavToOtherClub: FC = () => {
   );
 };
 
-function renderClubPage(clubId: string = CLUB_ID, queryClient?: QueryClient) {
+function renderClubPage(clubId: string = CLUB_ID, queryClient?: QueryClient, search = '') {
   const user = userEvent.setup();
   const result = renderWithProviders(
     <>
       <Routes>
         <Route path="/clubs/:id" element={<ClubPage />} />
         <Route path="/clubs/:id/manage" element={<ManageProbe />} />
+        <Route path="/clubs/:id/setup" element={<div>мастер наполнения</div>} />
       </Routes>
       <NavToOtherClub />
     </>,
-    { routerEntries: [`/clubs/${clubId}`], queryClient },
+    { routerEntries: [`/clubs/${clubId}${search}`], queryClient },
   );
   return { ...result, user };
 }
@@ -351,5 +352,52 @@ describe('ClubPage · баннер «Клуб ещё не заполнен»', (
 
     expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
     expect(screen.queryByText('Клуб ещё не заполнен')).not.toBeInTheDocument();
+  });
+});
+
+describe('ClubPage · шторка «Клуб создан» для клуба из чата (?created=1)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    server.resetHandlers();
+  });
+
+  it('владелец видит поздравление и кнопку «Заполнить клуб», она ведёт в мастер', async () => {
+    setViewer(OWNER_ID);
+    mockClub({ chatLinked: true, setupCompleted: false });
+    const { user } = renderClubPage(CLUB_ID, undefined, '?created=1');
+
+    const title = await screen.findByText(`Клуб «${mockClubDetail.name}» создан`);
+    expect(screen.getByText(/участникам пока ничего не написал/)).toBeInTheDocument();
+    // Кнопка с тем же текстом есть и в баннере «Клуб ещё не заполнен» — берём из поздравления.
+    const scene = title.parentElement as HTMLElement;
+    await user.click(within(scene).getByRole('button', { name: 'Заполнить клуб' }));
+    expect(await screen.findByText('мастер наполнения')).toBeInTheDocument();
+  });
+
+  it('клуб уже наполнен — главная кнопка «Показать клуб в чате»', async () => {
+    setViewer(OWNER_ID);
+    mockClub({ chatLinked: true, setupCompleted: true });
+    renderClubPage(CLUB_ID, undefined, '?created=1');
+
+    expect(await screen.findByRole('button', { name: 'Показать клуб в чате' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Заполнить клуб' })).not.toBeInTheDocument();
+  });
+
+  it('«Позже» закрывает шторку', async () => {
+    setViewer(OWNER_ID);
+    mockClub({ chatLinked: true, setupCompleted: false });
+    const { user } = renderClubPage(CLUB_ID, undefined, '?created=1');
+
+    await user.click(await screen.findByRole('button', { name: 'Позже' }));
+    await waitFor(() => expect(screen.queryByText(`Клуб «${mockClubDetail.name}» создан`)).not.toBeInTheDocument());
+  });
+
+  it('не владельцу шторка не показывается, даже по пересланной ссылке', async () => {
+    setViewer('someone-else');
+    mockClub({ chatLinked: true }, [membership({ userId: 'someone-else' })]);
+    renderClubPage(CLUB_ID, undefined, '?created=1');
+
+    expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
+    expect(screen.queryByText(`Клуб «${mockClubDetail.name}» создан`)).not.toBeInTheDocument();
   });
 });

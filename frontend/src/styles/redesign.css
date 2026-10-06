@@ -3817,3 +3817,19 @@ body:has(> #root .rd-landing), body:has(> #root .rd-pay-return) { background: #0
 .rd-connect-line + .rd-connect-line { margin-top: 8px; }
 /* Четыре абзаца в 270px — слишком узкая колонка; шире только здесь (без :has — прежняя ширина). */
 .rd-foxcafe-sub:has(.rd-connect-line) { max-width: 320px; }
+
+/* Шторка «Клуб создан» (клуб из чата): два шага по порядку — сначала наполнить, потом показать
+   в чате. Нумерация кружками, пройденный шаг зачёркнут, чтобы следующий читался сразу. */
+.rd-created-steps {
+  list-style: none; counter-reset: rd-created; padding: 0; margin: -8px 0 20px; text-align: left;
+  font-size: 13px; line-height: 1.5; color: var(--text);
+}
+.rd-created-steps li { counter-increment: rd-created; position: relative; padding-left: 30px; }
+.rd-created-steps li + li { margin-top: 10px; }
+.rd-created-steps li::before {
+  content: counter(rd-created); position: absolute; left: 0; top: 0;
+  width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2);
+  font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.rd-created-steps li.is-done { color: var(--text-dim); text-decoration: line-through; }
+.rd-created-steps li.is-done::before { content: '✓'; }

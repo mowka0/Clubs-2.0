@@ -35,6 +35,7 @@ import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
+import { ClubCreatedSheet } from '../components/club/ClubCreatedSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 import { ClubChatPill } from '../components/club/ClubChatPill';
@@ -171,6 +172,12 @@ export const ClubPage: FC = () => {
     searchParams, setSearchParams, myClubsQuery.isPending,
     isFrozenMember, isExpiredMember, membership?.duesClaimedAt,
   ]);
+
+  // `?created=1` — кнопка из лички бота сразу после создания клуба из чата: шторка «Клуб создан»
+  // поверх своей же страницы (PO 2026-10-06). Только владельцу: ссылку могли переслать.
+  const showCreatedSheet = isOwner && searchParams.get('created') === '1';
+  // Параметр гасим, иначе «назад» из мастера снова открыл бы шторку.
+  const closeCreatedSheet = () => setSearchParams({}, { replace: true });
 
   if (clubQuery.isPending) {
     return (
@@ -708,6 +715,25 @@ export const ClubPage: FC = () => {
         <InviteSheet clubId={id} onClose={() => setShowInviteSheet(false)} />
       )}
 
+      {showCreatedSheet && club && (
+        <ClubCreatedSheet
+          clubName={club.name}
+          setupCompleted={club.setupCompleted}
+          onFillClub={() => {
+            haptic.impact('medium');
+            closeCreatedSheet();
+            navigate(`/clubs/${club.id}/setup`);
+          }}
+          onShowInChat={() => {
+            haptic.impact('medium');
+            closeCreatedSheet();
+            setActiveTab('members');
+            setShowInviteSheet(true);
+          }}
+          onClose={() => { haptic.impact('light'); closeCreatedSheet(); }}
+        />
+      )}
+
       {/* Модалка заявки (флоу гостя: закрытый клуб или «Попроситься» в полный) */}
       {showApplyModal && (
         <Modal open onOpenChange={(open) => !open && setShowApplyModal(false)}>
@@ -783,8 +809,8 @@ export const ClubPage: FC = () => {
       {/* Тур клуба. Владельцу — свой, более подробный (те же блоки плюс вход в настройки):
           он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
           Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
-          Пока висит велком-сцена, подсказки не лезут: она перекрывает страницу целиком. */}
-      <ScreenPreview screen={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome} />
+          Пока висит велком-сцена или шторка «Клуб создан», подсказки не лезут. */}
+      <ScreenPreview screen={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome && !showCreatedSheet} />
     </div>
   );
 };
