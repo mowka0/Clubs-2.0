@@ -486,7 +486,7 @@ class ChatLinkService(
      * группы служебную команду `/start@bot`, которую клиент Telegram кладёт туда сам.
      */
     fun startGroupUrl(clubId: UUID): String =
-        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+        "https://t.me/$botUsername?startgroup=$clubId&admin=$ADMIN_RIGHTS_PARAM"
 
     /**
      * Ссылка «подключить чат, клуба ещё нет»: payload `new` вместо UUID (см. ClubsBot).
@@ -495,7 +495,7 @@ class ChatLinkService(
      */
     fun newClubStartGroupUrl(): String =
         "https://t.me/$botUsername?startgroup=${ChatLinkBotService.NEW_CLUB_START_PAYLOAD}" +
-            "&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+            "&admin=$ADMIN_RIGHTS_PARAM"
 
     /**
      * Тот же владельческий гейт, что и у остальных методов таба «Чат», но снаружи: им
@@ -518,5 +518,13 @@ class ChatLinkService(
          * от того, сколько прошло времени с переезда, признание двойника не зависит.
          */
         private val CLUB_BIRTH_GAP: Duration = Duration.ofMinutes(1)
+
+        /**
+         * Права, которые ссылка привязки просит у группы (`?admin=…`), одним списком на обе ссылки.
+         * Без `manage_tags` (решение PO 2026-10-06): с ним клиент iOS после выдачи прав бесконечно
+         * крутил кнопку экрана «Добавление бота», хотя сервер всё сделал за секунду; галочку тегов
+         * клиент и так не показывал. Право тегов выдаётся руками — подсказка в мастере и табе «Чат».
+         */
+        private const val ADMIN_RIGHTS_PARAM = "pin_messages+invite_users+restrict_members+delete_messages"
     }
 }
