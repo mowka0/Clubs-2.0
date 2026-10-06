@@ -177,7 +177,7 @@ export const Layout: FC = () => {
       <AppDock />
       {askingClose && (
         <ConfirmSheet
-          text="Назад идти некуда. Закрыть приложение?"
+          text="🤷 Назад идти некуда. Закрыть приложение?"
           confirmLabel="Закрыть"
           onConfirm={() => { settleClose(); closeMiniApp(); }}
           onCancel={settleClose}
