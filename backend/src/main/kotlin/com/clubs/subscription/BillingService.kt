@@ -51,6 +51,7 @@ class BillingService(
     private val clubRoleGuard: ClubRoleGuard,
     private val chatTrialRepository: ChatTrialRepository,
     private val funnelEventRepository: FunnelEventRepository,
+    private val consentRepository: AutopayConsentRepository,
     private val paymentProvider: PaymentProvider,
     private val notifier: BillingNotifier,
     // Грейс после конца оплаченного периода (R10).
@@ -99,6 +100,10 @@ class BillingService(
                 funnelEventRepository.record(FunnelStep.CHECKOUT_STARTED, userId, clubId)
                 log.info("Billing checkout: clubId={} invId={} amountKopecks={} autopay={}", clubId, it.invId, price, autopay)
             }
+        // История согласий (V102, требование Robokassa): строка на каждый чекаут — и с отметкой, и без.
+        consentRepository.record(
+            AutopayConsent(clubId, userId, ConsentSource.CHECKOUT, granted = autopay, paymentId = payment.id, subscriptionId = payment.subscriptionId),
+        )
 
         // Recurring — всегда, когда провайдер его умеет: карта сохраняется, и ползунок можно включить
         // позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута. Пока услуга
@@ -180,10 +185,17 @@ class BillingService(
         val club = requireOwner(clubId, userId)
         val subscription = liveSubscription(clubId)
             ?: throw ConflictException("Подписки ещё нет — оплатите первый месяц, ползунок появится")
+        // Рекуррент магазину не разрешён: сохранённую карту шедулер всё равно не списывает (шлёт
+        // напоминания), и включённый ползунок обещал бы автопродление, которого не будет.
+        if (autopay && !paymentProvider.recurringAvailable) {
+            throw ConflictException("Автопродление сейчас недоступно — напомним о продлении в личке")
+        }
         if (autopay && !subscription.autopayPossible) {
             throw ConflictException("Автопродление недоступно: карта для списания не сохранена — оплатите следующий месяц картой")
         }
         subscriptionRepository.updateAutopay(subscription.id, autopay)
+        // Включил = согласие, выключил = отзыв — обе записи нужны для разбора спора о списании.
+        consentRepository.record(AutopayConsent(clubId, userId, ConsentSource.TOGGLE, granted = autopay, subscriptionId = subscription.id))
         log.info("Billing autopay set: clubId={} subscriptionId={} autopay={}", clubId, subscription.id, autopay)
         return buildStatus(club, userId, OffsetDateTime.now())
     }
@@ -238,11 +250,13 @@ class BillingService(
         // Платит владелец (R1); со-организатору шит показывает «попросите владельца».
         val canPay = club.ownerId == userId
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
+        // Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false) — фронт прячет обещание списания.
+        val autopayAvailable = paymentProvider.recurringAvailable
         val link = chatLinkRepository.findByClubId(club.id)
             ?: return mapper().toStatusDto(
                 BillingState.NO_CHAT, price, trialUntil = null, trialDays = trialDays.toInt(),
                 subscription = null, graceUntil = null, pendingCheckout = false,
-                recipientName = recipientName, canPay = canPay,
+                recipientName = recipientName, canPay = canPay, autopayAvailable = autopayAvailable,
             )
         val pending = paymentRepository.hasPendingMother(club.id)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
@@ -263,7 +277,7 @@ class BillingService(
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
         return mapper().toStatusDto(
             state, price, trialUntil?.takeIf { state == BillingState.TRIAL }, trialDays.toInt(),
-            subscription, graceUntil, pending, recipientName, canPay,
+            subscription, graceUntil, pending, recipientName, canPay, autopayAvailable,
         )
     }
 

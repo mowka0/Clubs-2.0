@@ -25,6 +25,8 @@ export interface BillingStatusDto {
   graceUntil: string | null;
   autopay: boolean;
   autopayPossible: boolean;
+  /** Рекуррент разрешён магазину: false → карта на оплате не сохранится, ползунок недоступен ещё до первой оплаты. */
+  autopayAvailable: boolean;
   /** Есть свежий неоплаченный счёт — «проверяем оплату». */
   pendingCheckout: boolean;
   /** ФИО самозанятого-получателя целиком; пусто = не настроено на сервере. */
@@ -54,6 +56,13 @@ export interface PaywallInfo {
 export const TRIAL_DAYS_DEFAULT = 15;
 export const CHAT_PRICE_LABEL = '199 ₽';
 export const CHAT_PRICE_LINE = `Первые ${TRIAL_DAYS_DEFAULT} дней бесплатно. Дальше ${CHAT_PRICE_LABEL} в месяц за клуб.`;
+
+/**
+ * Отметка согласия на автосписание в шите — дословно по требованию Robokassa (2026-10-05), по
+ * умолчанию снята; ту же формулировку бэкенд пишет в историю согласий (`ConsentSource.CHECKOUT`).
+ * Хвост — ссылка на оферту, поэтому строка разрезана.
+ */
+export const AUTOPAY_CONSENT_LABEL = { lead: 'Я согласен на автоматические списания согласно', link: 'условиям оферты' } as const;
 
 /**
  * Реквизиты продавца и контакты для публичных текстов (оферта, `/about`, `/privacy`). Живут в бандле:

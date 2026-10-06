@@ -136,6 +136,9 @@ billing:
   stub:
     # Через сколько секунд стаб считает дочернее списание прошедшим (staging-прогон цикла).
     settle-seconds: ${BILLING_STUB_SETTLE_SECONDS:5}
+    # Умеет ли стаб «сохранять карту». false на staging повторяет прод без рекуррента
+    # (ROBOKASSA_RECURRING_ENABLED=false): шит и полоска показывают «автопродление недоступно».
+    recurring-enabled: ${BILLING_STUB_RECURRING_ENABLED:true}
   manual-charge:
     # Служебный триггер «списать сейчас» (platform-billing.md § 11): у Robokassa нет тестового
     # режима для рекуррента, первое боевое дочернее списание проверяется на проде на чате PO.

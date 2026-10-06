@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.subscription.ConsentSource
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Test
@@ -7,6 +8,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class LegalSheetTest {
+
+    /** Формулировка чекбокса живёт в коде, оферта — в md: тест не даёт им разъехаться (история согласий ссылается на обе). */
+    @Test
+    fun `offer quotes the autopay consent wording word for word`() {
+        val paragraphs = offerSections("И", "1", "199 ₽", "15 дней", "@s", "e").flatMap { it.second }
+        assertTrue(paragraphs.any { it.contains("«${ConsentSource.CHECKOUT.wording}»") }, "п. 3.4 оферты и ConsentSource.CHECKOUT.wording разошлись")
+    }
 
     // Синтетические реквизиты: репозиторий публичный, настоящие живут в env и на сайте.
     private fun texts(inn: String = "000000000000", email: String = "support@example.com") = LegalSheet(

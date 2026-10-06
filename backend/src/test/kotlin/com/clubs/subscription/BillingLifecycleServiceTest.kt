@@ -333,9 +333,13 @@ class BillingLifecycleServiceTest {
     }
 
     @Test
-    fun `chargeNow refuses without a saved card or with a charge still pending`() {
+    fun `chargeNow refuses without a saved card, with autopay switched off or with a charge still pending`() {
         every { subscriptionRepository.findLatestByClub(club.id) } returns
             BillingTestFixtures.subscription(club, autopayPossible = false)
+        assertThrows<ConflictException> { service.chargeNow(club.id, now) }
+
+        // Выключенный ползунок — отозванное согласие: даже служебное списание его уважает.
+        every { subscriptionRepository.findLatestByClub(club.id) } returns BillingTestFixtures.subscription(club, autopay = false)
         assertThrows<ConflictException> { service.chargeNow(club.id, now) }
 
         val sub = BillingTestFixtures.subscription(club)

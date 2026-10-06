@@ -20,10 +20,9 @@
 - **Robokassa боевая без рекуррента** (PR #179/#180, проверено с VPS: `ClubsApp`, SHA256, `TEST_MODE=false`,
   `RECURRING_ENABLED=false`). Рекуррент — ждём ответ Robokassa («скоро подключат», PO). Порядок включения —
   billing-handoff § 2d п. 7 и `platform-billing.md` § 11 (только при нуле `PENDING` материнских счетов).
-- **Запарковано локально, НЕ пушить:** ветка `feature/billing-autopay-available` (коммит `2f178870` от
-  `aa4f0865`): поле `autopayAvailable` в `BillingStatusDto` + заблокированный ползунок + ручка стаба
-  `BILLING_STUB_RECURRING_ENABLED`, бэк/фронт зелёные. PO 2026-10-04: «пока не трогай, скоро подключат рекуррент».
-  Если рекуррент включат — ветку удалить; если застрянет — пушить на staging.
+- Ветка `feature/billing-autopay-available` (коммит `2f178870`) **подхвачена cherry-pick'ом** в
+  `feature/robokassa-recurring-consent` (2026-10-05, ответ Robokassa — billing-handoff § 2d п. 8);
+  после мержа локальную ветку удалить.
 
 ## 2. Инцидент дня: домен Mini App `clubsmeet.com` был приостановлен регистратором
 

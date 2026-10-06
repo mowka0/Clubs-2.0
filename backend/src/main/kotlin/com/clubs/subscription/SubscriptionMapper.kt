@@ -51,6 +51,7 @@ class SubscriptionMapper {
         pendingCheckout: Boolean,
         recipientName: String,
         canPay: Boolean,
+        autopayAvailable: Boolean,
     ): BillingStatusDto = BillingStatusDto(
         state = state,
         priceKopecks = priceKopecks,
@@ -58,8 +59,10 @@ class SubscriptionMapper {
         trialDays = trialDays,
         currentPeriodEnd = subscription?.currentPeriodEnd,
         graceUntil = graceUntil,
-        autopay = subscription?.autopay ?: true,
+        // До подписки ползунка нет; согласие на списания — только явной отметкой (V102).
+        autopay = subscription?.autopay ?: false,
         autopayPossible = subscription?.autopayPossible ?: false,
+        autopayAvailable = autopayAvailable,
         pendingCheckout = pendingCheckout,
         recipientName = recipientName,
         canPay = canPay,

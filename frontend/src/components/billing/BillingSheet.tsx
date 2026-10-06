@@ -7,10 +7,10 @@ import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { openExternalLink } from '../../utils/telegramLinks';
 import { pluralRu } from '../../utils/formatters';
 import {
-  CHAT_PRICE_LABEL, SELLER, SUPPORT, TRIAL_DAYS_DEFAULT,
+  AUTOPAY_CONSENT_LABEL, CHAT_PRICE_LABEL, SELLER, SUPPORT, TRIAL_DAYS_DEFAULT,
   formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason,
 } from '../../api/billing';
-import { OFFER_TITLE, OFFER_UPDATED, offer } from './offerText';
+import { OFFER_UPDATED, offer } from './offerText';
 
 /** Опрос статуса после ухода на оплату: ResultURL провайдера может отставать от возврата. */
 const POLL_INTERVAL_MS = 3000;
@@ -43,9 +43,11 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   const clubName = useClubQuery(clubId).data?.name ?? '';
   const { sheetRef, dragHandlers } = useSheetDrag(onClose);
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [autopay, setAutopay] = useState(true);
-  const [autopayTouched, setAutopayTouched] = useState(false);
+  // Отметка согласия на автосписание — по умолчанию снята (требование Robokassa к форме, 2026-10-05),
+  // и на продлении тоже: согласие даётся на каждой оплате заново, положение ползунка не копируется.
+  const [autopay, setAutopay] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
+  const offerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // Снимок конца периода на момент ухода на оплату: «оплачено» = период сдвинулся, а не
   // «подписка и так была активна» (продление раньше срока).
@@ -55,21 +57,17 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   const billing = useBillingQuery(clubId, { refetchInterval: mode === 'waiting' ? POLL_INTERVAL_MS : false });
   const data = billing.data;
   const hasSubscription = data?.state === 'ACTIVE' || data?.state === 'GRACE' || data?.state === 'ENDED';
-  // Карта не сохранена (оплата по СБП или провайдер ещё без рекуррента) — ползунок недоступен
-  // до следующей оплаты, которая карту сохранит.
-  const autopayLocked = !!data && hasSubscription && !data.autopayPossible;
-  const effectiveAutopay = autopayLocked ? false : autopay;
+  // Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false): карта на этой оплате не
+  // сохранится, согласие на списания принимать нельзя — отметки нет, чекаут уходит с autopay=false.
+  // Прошлая оплата по СБП отметке не мешает: эта оплата картой карту сохранит.
+  const autopayUnavailable = !!data && !data.autopayAvailable;
+  const effectiveAutopay = autopayUnavailable ? false : autopay;
 
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, []);
-
-  // Ползунок повторяет текущее положение на подписке, пока человек его не тронул.
-  useEffect(() => {
-    if (data && hasSubscription && !autopayTouched) setAutopay(data.autopay);
-  }, [data, hasSubscription, autopayTouched]);
 
   // Ожидание: подтверждение видно по сдвигу периода и погашенному счёту.
   useEffect(() => {
@@ -94,6 +92,13 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
     const timer = window.setTimeout(() => setMode((m) => (m === 'waiting' ? 'timeout' : m)), POLL_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [mode]);
+
+  // Ссылка из отметки согласия раскрывает оферту здесь же и подводит к ней: переход на сайт увёл бы
+  // из формы оплаты, а из РФ сайт может и не открыться.
+  const showOffer = () => {
+    setOfferOpen(true);
+    requestAnimationFrame(() => offerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+  };
 
   const handlePay = () => {
     if (checkout.isPending) return;
@@ -151,37 +156,55 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           && ` · ${trialPassedLabel(data.trialDays, (n) => pluralRu(n, ['день', 'дня', 'дней']))}`}
       </div>
 
-      <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
-        <div className="fi">
-          <div className="ft">Продлевать автоматически</div>
-          <div className="fd">
-            {autopayLocked
-              ? 'Карта с прошлой оплаты не сохранена — автопродление пока недоступно, напомним за 3 дня и за день до конца периода.'
-              : effectiveAutopay
-                ? `Спишем ${price ?? ''} с этой же карты ${chargeDate ? chargeDate : 'в день окончания оплаченного периода'}. Отключить можно в любой момент на странице клуба.`
-                : 'Напомним за 3 дня и за день до конца периода — оплатите вручную.'}
+      {autopayUnavailable
+        ? (
+          <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
+            <div className="fi">
+              <div className="ft">Продлевать автоматически</div>
+              <div className="fd">Автопродление пока недоступно: карта на этой оплате не сохранится. Напомним за 3 дня и за день до конца периода — следующий месяц оплатите вручную.</div>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          className={`rd-cl-tgl${effectiveAutopay ? ' on' : ''}`}
-          role="switch"
-          aria-checked={effectiveAutopay}
-          aria-label="Продлевать автоматически"
-          disabled={autopayLocked}
-          onClick={() => { haptic.select(); setAutopayTouched(true); setAutopay((v) => !v); }}
-        />
-      </div>
+        )
+        : (
+          // Карточка-опция, как выбор режима сбора: тап по тексту ставит отметку, ссылка — вне <label>
+          // (вложенная кнопка получила бы имя от label и перестала бы быть «ссылкой на оферту»).
+          <div className={`rd-mode-option rd-billing-consent${autopay ? ' rd-active' : ''}`}>
+            <input
+              type="checkbox"
+              id="billing-autopay-consent"
+              aria-label={`${AUTOPAY_CONSENT_LABEL.lead} ${AUTOPAY_CONSENT_LABEL.link}`}
+              checked={autopay}
+              onChange={(e) => { haptic.select(); setAutopay(e.target.checked); }}
+            />
+            <div>
+              <div className="rd-mo-title">
+                <label htmlFor="billing-autopay-consent">{AUTOPAY_CONSENT_LABEL.lead}</label>{' '}
+                <button type="button" className="rd-billing-offer-link" onClick={showOffer}>{AUTOPAY_CONSENT_LABEL.link}</button>
+              </div>
+              <label htmlFor="billing-autopay-consent" className="rd-mo-desc">
+                {price ?? ''} каждые 30 дней с этой же карты{chargeDate ? `, первое списание — ${chargeDate}` : ''}. Отключить можно на странице клуба.
+              </label>
+            </div>
+          </div>
+        )}
 
       <div className="rd-billing-prov">
-        <div className="cap">Как проходит оплата</div>
         <div className="l"><span className="ic">🔒</span><span>Страница оплаты <b>Robokassa</b>: карта или СБП. Реквизиты карты мы не видим.</span></div>
         <div className="l"><span className="ic">🧾</span><span>Получатель — <b>{recipient}</b>, чек придёт на e-mail или в Telegram.</span></div>
-        <button type="button" className="rd-billing-offer-btn" aria-expanded={offerOpen} onClick={() => setOfferOpen((v) => !v)}>
-          {OFFER_TITLE} {offerOpen ? '▴' : '▾'}
-        </button>
-        {offerOpen && (
-          <div className="rd-billing-offer">
+      </div>
+
+      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
+
+      <button type="button" className="rd-btn-primary" disabled={!data || checkout.isPending} onClick={handlePay}>
+        {checkout.isPending ? 'Выставляем счёт…' : hasSubscription ? `Продлить на месяц — ${price ?? ''}` : `Оплатить ${price ?? ''}`}
+      </button>
+      <div className="rd-cta-hint">
+        Оплачивая, вы принимаете{' '}
+        <button type="button" className="rd-billing-offer-link" aria-expanded={offerOpen} onClick={() => setOfferOpen((v) => !v)}>условия оферты</button>.
+        {' '}Страница оплаты откроется в браузере — после оплаты вернитесь в Telegram.
+      </div>
+      {offerOpen && (
+        <div className="rd-billing-offer" ref={offerRef}>
             <p className="rd-billing-offer-meta">Редакция от {OFFER_UPDATED}</p>
             {/* ИНН — константа бандла (та же, что на /about): в DTO биллинга его нет, а оферте он нужен. */}
             {offer({
@@ -194,15 +217,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
-
-      <button type="button" className="rd-btn-primary" disabled={!data || checkout.isPending} onClick={handlePay}>
-        {checkout.isPending ? 'Выставляем счёт…' : hasSubscription ? `Продлить на месяц — ${price ?? ''}` : `Оплатить ${price ?? ''}`}
-      </button>
-      <div className="rd-cta-hint">Оплачивая, вы принимаете условия оферты. Откроется страница оплаты в браузере; после оплаты вернитесь в Telegram — кнопка будет на странице.</div>
+      )}
     </>
   );
 
@@ -250,7 +265,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       <div className="ic" aria-hidden="true">✅</div>
       <p className="t">Оплачено{data?.currentPeriodEnd ? ` до ${formatBillingDate(data.currentPeriodEnd)}` : ''}</p>
       <p className="d">
-        {data?.autopay && data.autopayPossible
+        {data?.autopay && data.autopayPossible && data.autopayAvailable
           ? `Автопродление включено: ${chargeDate ?? 'в день окончания периода'} спишем ${price ?? ''} с этой же карты. Отключить можно на странице клуба.`
           : 'Автопродление выключено: напомним за 3 дня и за день до конца периода.'}
       </p>

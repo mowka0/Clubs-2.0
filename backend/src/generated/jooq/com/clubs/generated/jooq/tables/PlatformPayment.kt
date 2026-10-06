@@ -7,10 +7,12 @@ package com.clubs.generated.jooq.tables
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.indexes.IDX_PLATFORM_PAYMENT_CLUB
 import com.clubs.generated.jooq.indexes.IDX_PLATFORM_PAYMENT_PENDING
+import com.clubs.generated.jooq.keys.AUTOPAY_CONSENT__AUTOPAY_CONSENT_PAYMENT_ID_FKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT_INV_ID_KEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT_PKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY
+import com.clubs.generated.jooq.tables.AutopayConsent.AutopayConsentPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.ServiceSubscription.ServiceSubscriptionPath
 import com.clubs.generated.jooq.tables.records.PlatformPaymentRecord
@@ -146,11 +148,12 @@ open class PlatformPayment(
 
     /**
      * The column <code>public.platform_payment.autopay_requested</code>.
-     * Положение ползунка «Продлевать автоматически» в шите на момент чекаута
-     * (только для MOTHER). Переносится на подписку при подтверждении оплаты —
-     * строки подписки до первой оплаты ещё нет.
+     * Отметка «Я согласен на автоматические списания…» в шите на момент чекаута
+     * (только для MOTHER; по умолчанию снята). Переносится на подписку при
+     * подтверждении оплаты — строки подписки до первой оплаты ещё нет. Сам факт
+     * с текстом и редакцией оферты — в autopay_consent.
      */
-    val AUTOPAY_REQUESTED: TableField<PlatformPaymentRecord, Boolean?> = createField(DSL.name("autopay_requested"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "Положение ползунка «Продлевать автоматически» в шите на момент чекаута (только для MOTHER). Переносится на подписку при подтверждении оплаты — строки подписки до первой оплаты ещё нет.")
+    val AUTOPAY_REQUESTED: TableField<PlatformPaymentRecord, Boolean?> = createField(DSL.name("autopay_requested"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Отметка «Я согласен на автоматические списания…» в шите на момент чекаута (только для MOTHER; по умолчанию снята). Переносится на подписку при подтверждении оплаты — строки подписки до первой оплаты ещё нет. Сам факт с текстом и редакцией оферты — в autopay_consent.")
 
     /**
      * The column <code>public.platform_payment.payment_method</code>.
@@ -247,6 +250,22 @@ open class PlatformPayment(
 
     val serviceSubscription: ServiceSubscriptionPath
         get(): ServiceSubscriptionPath = serviceSubscription()
+
+    private lateinit var _autopayConsent: AutopayConsentPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autopay_consent</code> table
+     */
+    fun autopayConsent(): AutopayConsentPath {
+        if (!this::_autopayConsent.isInitialized)
+            _autopayConsent = AutopayConsentPath(this, null, AUTOPAY_CONSENT__AUTOPAY_CONSENT_PAYMENT_ID_FKEY.inverseKey)
+
+        return _autopayConsent;
+    }
+
+    val autopayConsent: AutopayConsentPath
+        get(): AutopayConsentPath = autopayConsent()
     override fun getChecks(): List<Check<PlatformPaymentRecord>> = listOf(
         Internal.createCheck(this, DSL.name("platform_payment_amount_kopecks_check"), "((amount_kopecks > 0))", true),
         Internal.createCheck(this, DSL.name("platform_payment_kind_check"), "(((kind)::text = ANY ((ARRAY['MOTHER'::character varying, 'RECURRING'::character varying])::text[])))", true),

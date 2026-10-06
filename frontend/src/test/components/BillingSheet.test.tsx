@@ -44,6 +44,7 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     graceUntil: null,
     autopay: true,
     autopayPossible: false,
+    autopayAvailable: true,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
     canPay: true,
@@ -77,20 +78,26 @@ describe('BillingSheet', () => {
     // По тексту платят «за клуб», получатель — ФИО целиком (PO 2026-09-07).
     expect(screen.getByRole('heading', { name: 'Оплата за клуб' })).toBeInTheDocument();
     expect(screen.getByText('самозанятый Варламов Иван Иванович')).toBeInTheDocument();
-    // Ползунок включён по умолчанию, и подпись честно говорит, что спишем.
-    expect(screen.getByRole('switch', { name: 'Продлевать автоматически' })).toHaveAttribute('aria-checked', 'true');
+    // Отметка согласия на автосписание — дословно по Robokassa и по умолчанию снята.
+    const consent = screen.getByRole('checkbox', { name: 'Я согласен на автоматические списания согласно условиям оферты' });
+    expect(consent).not.toBeChecked();
+    // Периодичность и способ отмены видны рядом с отметкой и без неё (требование Robokassa).
+    expect(screen.getByText(/199 ₽ каждые 30 дней с этой же карты\. Отключить можно на странице клуба/)).toBeInTheDocument();
 
-    // Оферта — текстом внутри шита, по кнопке.
-    await userEvent.click(screen.getByRole('button', { name: /Условия \(публичная оферта\)/ }));
+    // Ссылка из отметки раскрывает оферту текстом внутри шита (вторая ссылка — под кнопкой оплаты).
+    await userEvent.click(screen.getByRole('button', { name: 'условиям оферты' }));
     expect(screen.getByText(/Исполнитель — самозанятый Варламов Иван Иванович, ИНН/)).toBeInTheDocument();
+    // Оферта цитирует формулировку отметки дословно — текст на экране и текст в договоре не разъезжаются.
+    expect(screen.getByText(/«Я согласен на автоматические списания согласно условиям оферты»/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '3. Услуга, стоимость и порядок оказания' })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('switch', { name: 'Продлевать автоматически' }));
+    await userEvent.click(consent);
+    expect(consent).toBeChecked();
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить 199 ₽' }));
 
     await waitFor(() => expect(openLinkMock).toHaveBeenCalledWith('https://rk.example/pay?inv=100001', { tryInstantView: false }));
-    // Положение ползунка уезжает на бэкенд вместе с чекаутом.
-    expect(checkoutBodies).toEqual([{ autopay: false }]);
+    // Отметка уезжает на бэкенд вместе с чекаутом.
+    expect(checkoutBodies).toEqual([{ autopay: true }]);
     expect(await screen.findByText('Проверяем оплату…')).toBeInTheDocument();
     // Кнопки «подожду в личке» нет — проверку не бросают, закрыть можно только шапкой.
     expect(screen.getAllByRole('button')).toHaveLength(1);
@@ -115,13 +122,44 @@ describe('BillingSheet', () => {
     expect(onPaid).toHaveBeenCalled();
   }, 15000);
 
-  it('после оплаты по СБП ползунок заблокирован с объяснением', async () => {
-    mockBilling(status({ state: 'GRACE', currentPeriodEnd: '2026-09-03T10:00:00Z', graceUntil: '2026-09-10T10:00:00Z', autopayPossible: false }));
+  it('на продлении отметка согласия тоже снята по умолчанию, даже если автопродление на подписке включено', async () => {
+    mockBilling(status({ state: 'GRACE', currentPeriodEnd: '2026-09-03T10:00:00Z', graceUntil: '2026-09-10T10:00:00Z', autopay: true, autopayPossible: false }));
+    const checkoutBodies: unknown[] = [];
+    server.use(
+      http.post(`*/api/clubs/${CLUB_ID}/billing/checkout`, async ({ request }) => {
+        checkoutBodies.push(await request.json());
+        return HttpResponse.json({ paymentUrl: 'https://rk.example/pay?inv=100003', invId: 100003 });
+      }),
+    );
     renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="SUBSCRIPTION_EXPIRED" onClose={() => {}} />);
 
     expect(await screen.findByText(/закончилась 3 сентября/)).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Продлевать автоматически' })).toBeDisabled();
-    expect(screen.getByText(/Карта с прошлой оплаты не сохранена/)).toBeInTheDocument();
+    // Прошлая оплата по СБП отметке не мешает: эта оплата картой карту сохранит.
+    expect(screen.getByRole('checkbox', { name: /Я согласен на автоматические списания/ })).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Продлить на месяц — 199 ₽' }));
+    await waitFor(() => expect(checkoutBodies).toEqual([{ autopay: false }]));
+  });
+
+  it('рекуррент магазину не разрешён — отметки согласия нет, списание не обещаем, чекаут уходит без автопродления', async () => {
+    mockBilling(status({ autopayAvailable: false }));
+    const checkoutBodies: unknown[] = [];
+    server.use(
+      http.post(`*/api/clubs/${CLUB_ID}/billing/checkout`, async ({ request }) => {
+        checkoutBodies.push(await request.json());
+        return HttpResponse.json({ paymentUrl: 'https://rk.example/pay?inv=100002', invId: 100002 });
+      }),
+    );
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
+
+    // Ждём данные: до них шит ещё не знает про флаг и рисует отметку как обычно.
+    expect(await screen.findByText('199 ₽')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByText(/Автопродление пока недоступно/)).toBeInTheDocument();
+    expect(screen.queryByText(/с этой же карты/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить 199 ₽' }));
+    await waitFor(() => expect(checkoutBodies).toEqual([{ autopay: false }]));
   });
 
   it('возврат из браузера с неоплаченным счётом не выдаёт «оплачено» за старый период', async () => {
@@ -140,7 +178,7 @@ describe('BillingSheet', () => {
 
     expect(await screen.findByText('Оплачивает владелец клуба')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Оплатить/ })).toBeNull();
-    expect(screen.queryByRole('switch', { name: 'Продлевать автоматически' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
   it('возврат из браузера: уже погашенный счёт сразу показывает «оплачено»', async () => {

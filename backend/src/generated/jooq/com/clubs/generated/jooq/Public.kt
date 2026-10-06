@@ -6,6 +6,7 @@ package com.clubs.generated.jooq
 
 import com.clubs.generated.jooq.sequences.PLATFORM_PAYMENT_INV_SEQ
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.AutopayConsent
 import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ChatTrial
@@ -67,6 +68,16 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * терминальные могут повторяться при повторных подачах.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * История согласий владельцев клубов на автоматические списания (рекуррент
+     * Robokassa). Только запись: строка на каждый чекаут и на каждое
+     * переключение ползунка автопродления; ничего не обновляется и не
+     * удаляется. В логику продукта не входит — ползунок живёт на
+     * service_subscription.autopay, отметка чекаута — на
+     * platform_payment.autopay_requested.
+     */
+    val AUTOPAY_CONSENT: AutopayConsent get() = AutopayConsent.AUTOPAY_CONSENT
 
     /**
      * Теги наград, выставленные ботом в клубном чате (слайс 4): кому бот
@@ -325,6 +336,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        AutopayConsent.AUTOPAY_CONSENT,
         ChatAwardTags.CHAT_AWARD_TAGS,
         ChatStrictBans.CHAT_STRICT_BANS,
         ChatTrial.CHAT_TRIAL,
