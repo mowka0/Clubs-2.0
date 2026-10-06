@@ -294,8 +294,8 @@ export const ProfilePage: FC = () => {
                 <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
               </div>
             )}
-            {/* Лупа вместо нуля (PO 2026-07-25): пустая строка клубов сама зовёт в каталог;
-                с клубами — обычное число, тап ведёт в таб «Мои клубы». */}
+            {/* Лупа вместо нуля (PO 2026-07-25): без клубов тап ведёт на «/» — там подключение
+                чата (каталог убран из навигации); с клубами — обычное число и таб «Мои клубы». */}
             <button
               type="button"
               className="rd-ostat-row rd-ostat-link"
@@ -314,7 +314,7 @@ export const ProfilePage: FC = () => {
               <span className="rd-ostat-val">
                 {activeClubs.length > 0
                   ? <b>{activeClubs.length}</b>
-                  : <span className="rd-ostat-lupa" aria-label="Найти клубы">🔍</span>}
+                  : <span className="rd-ostat-lupa" aria-label="Подключить чат">🔍</span>}
               </span>
             </button>
             {/* Долги (skladchina-v3 § 9): две цифры и бейдж «ждут подтверждения»; тап → личная книга. */}
