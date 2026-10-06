@@ -52,11 +52,11 @@ export const EventsTab: FC = () => {
     navigate(`/events/${id}`);
   };
 
-  const handleSearchClick = () => {
+  // Раньше вела в каталог («Перейти в Поиск»); каталог убран из навигации, встречи участника
+  // приходят из его собственных клубов.
+  const handleMyClubsClick = () => {
     haptic.impact('light');
-    // Каталог адресуем явным роутом: «/» ведёт в клуб человека, и кнопка поиска
-    // вернула бы его туда, откуда он пришёл.
-    navigate('/discovery');
+    navigate('/my-clubs');
   };
 
   const handleCreateClick = () => {
@@ -73,7 +73,7 @@ export const EventsTab: FC = () => {
   const hasHistory = events.some((e) => e.isHistory);
   const isEmpty = !isLoadingInitial && !isError && !hasUpcoming;
   // Пока роль не определена, пустую сцену держим на скелетоне — иначе организатор
-  // на мгновение увидит участнический вариант с CTA «Перейти в Поиск».
+  // на мгновение увидит участнический вариант с CTA «Открыть мои клубы».
   const isEmptySceneResolving = isEmpty && isRoleLoading;
 
   return (
@@ -103,8 +103,8 @@ export const EventsTab: FC = () => {
           <FoxEmpty
             art={foxCatalogArt}
             title={hasHistory ? 'Предстоящих событий нет' : 'Событий пока нет'}
-            description="Найди интересные клубы в Поиске — они появятся здесь, как только запланируют встречу."
-            primary={{ label: 'Перейти в Поиск', onClick: handleSearchClick }}
+            description="Как только в твоих клубах запланируют встречу, она появится здесь."
+            primary={{ label: 'Открыть мои клубы', onClick: handleMyClubsClick }}
           />
         )
       )}

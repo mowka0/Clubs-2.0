@@ -7,7 +7,7 @@ import { AvatarUpload } from './AvatarUpload';
 import { ClubInterestsPicker } from './club/ClubInterestsPicker';
 import { CityPicker } from './CityPicker';
 import { useCities } from '../queries/cities';
-import foxClubCreatedArt from '../assets/mascot/fox-club-created.png';
+import { ClubCreatedScene } from './club/ClubCreatedScene';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
@@ -203,14 +203,10 @@ export const CreateClubModal: FC<{
   // «позвать своих» — следующее действие. «Позже» просто открывает клуб без шита.
   if (created) {
     return (
-      <div style={{ padding: '26px 24px 24px', textAlign: 'center' }}>
-        <img src={foxClubCreatedArt} alt="" className="rd-foxcreated-art" draggable={false} />
-        <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>
-          Клуб «{created.name}» создан
-        </h3>
-        <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.55, margin: '0 0 22px' }}>
-          Теперь позовите своих — приглашение уйдёт в Telegram от вашего имени, с карточкой клуба.
-        </p>
+      <ClubCreatedScene
+        clubName={created.name}
+        lead="Теперь позовите своих — приглашение уйдёт в Telegram от вашего имени, с карточкой клуба."
+      >
         <button
           type="button"
           className="rd-btn-primary"
@@ -254,7 +250,7 @@ export const CreateClubModal: FC<{
         >
           Позже
         </button>
-      </div>
+      </ClubCreatedScene>
     );
   }
 

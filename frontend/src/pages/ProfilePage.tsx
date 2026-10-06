@@ -294,14 +294,14 @@ export const ProfilePage: FC = () => {
                 <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
               </div>
             )}
-            {/* Лупа вместо нуля (PO 2026-07-25): пустая строка клубов сама зовёт в каталог;
-                с клубами — обычное число, тап ведёт в таб «Мои клубы». */}
+            {/* Лупа вместо нуля (PO 2026-07-25): без клубов тап ведёт на подключение чата
+                (каталог убран из навигации); с клубами — обычное число и таб «Мои клубы». */}
             <button
               type="button"
               className="rd-ostat-row rd-ostat-link"
               onClick={() => {
                 haptic.impact('light');
-                navigate(activeClubs.length > 0 ? '/my-clubs' : '/');
+                navigate(activeClubs.length > 0 ? '/my-clubs' : '/connect-chat');
               }}
             >
               <span className="rd-ostat-ico rd-ost-clubs" aria-hidden="true">🤝</span>
@@ -314,7 +314,7 @@ export const ProfilePage: FC = () => {
               <span className="rd-ostat-val">
                 {activeClubs.length > 0
                   ? <b>{activeClubs.length}</b>
-                  : <span className="rd-ostat-lupa" aria-label="Найти клубы">🔍</span>}
+                  : <span className="rd-ostat-lupa" aria-label="Подключить чат">🔍</span>}
               </span>
             </button>
             {/* Долги (skladchina-v3 § 9): две цифры и бейдж «ждут подтверждения»; тап → личная книга. */}
@@ -393,12 +393,14 @@ export const ProfilePage: FC = () => {
             <div className="rd-sub">
               Вступи в клуб — будем считать твою надёжность по&nbsp;каждому из них.
             </div>
+            {/* Раньше вела в каталог; каталог убран из навигации. «Мои клубы» без клубов сами
+                предлагают подключить чат, а с клубами — показывают их. */}
             <button
               type="button"
               className="rd-ghost-btn"
-              onClick={() => { haptic.impact('light'); navigate('/discovery'); }}
+              onClick={() => { haptic.impact('light'); navigate('/my-clubs'); }}
             >
-              Найти клуб
+              Мои клубы
             </button>
           </div>
         </>

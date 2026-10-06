@@ -30,9 +30,14 @@ vi.mock('../../telegram/sdk', () => ({
 }));
 
 import { InvitePage } from '../../pages/InvitePage';
+import { useAuthStore } from '../../store/useAuthStore';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  // Тест новичка кладёт пользователя в стор — сбрасываем полностью, даже если он упал посередине.
+  useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, error: null } as never);
+});
 afterAll(() => server.close());
 
 const livingClubFacts: ClubFactsDto = {
@@ -110,6 +115,8 @@ function renderInvite() {
     <Routes>
       <Route path="/invite/:code" element={<InvitePage />} />
       <Route path="/clubs/:id" element={<div>Страница клуба</div>} />
+      <Route path="/" element={<div>Главная</div>} />
+      <Route path="/my-clubs" element={<div>Мои клубы</div>} />
     </Routes>,
     { routerEntries: ['/invite/abc123'] },
   );
@@ -266,5 +273,31 @@ describe('InvitePage — посадочная в языке страницы к�
 
     expect(await screen.findByRole('button', { name: 'Попроситься в клуб' })).toBeInTheDocument();
     expect(screen.getByText(/В клубе кончились места/)).toBeInTheDocument();
+  });
+
+  it('битая ссылка ведёт на главную, а не в каталог клубов', async () => {
+    server.use(http.get('*/api/invite/:code', () => HttpResponse.json({ message: 'Not found' }, { status: 404 })));
+    renderInvite();
+
+    expect(await screen.findByText('Ссылка недействительна')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Найти клубы' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'На главную' }));
+    expect(await screen.findByText('Главная')).toBeInTheDocument();
+  });
+
+  it('новичок после заявки в полный клуб уходит в «Мои клубы», где видна заявка', async () => {
+    // Новичок = ещё не видел велком-сцену: только ему показывается вариант «Заявка у организатора».
+    useAuthStore.setState({
+      user: { id: 'user-1', telegramId: 1, firstName: 'Новичок', onboardingTours: ['INTRO'] },
+      isAuthenticated: true,
+      isLoading: false,
+    } as never);
+    mockInvite({ memberCount: 50, memberLimit: 50 });
+    server.use(http.post('*/api/clubs/:id/apply', () => HttpResponse.json({ id: 'app-1', status: 'pending' }, { status: 201 })));
+    renderInvite();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Попроситься в клуб' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Посмотреть мои клубы' }));
+    expect(await screen.findByText('Мои клубы')).toBeInTheDocument();
   });
 });

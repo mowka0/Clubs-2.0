@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -112,6 +113,7 @@ function renderPage() {
   return renderWithProviders(
     <Routes>
       <Route path="/my-clubs" element={<MyClubsPage />} />
+      <Route path="/connect-chat" element={<div>Экран подключения чата</div>} />
     </Routes>,
     { routerEntries: ['/my-clubs'] },
   );
@@ -139,10 +141,15 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
 
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/история и репутация сохранились/)).toBeInTheDocument();
+    // Вместо «Открыть Поиск» (каталог убран из навигации) — создание клуба из чата.
+    expect(screen.queryByRole('button', { name: 'Открыть Поиск' })).not.toBeInTheDocument();
     // Секция «История» под баннером на месте.
     expect(await screen.findByText(/История/)).toBeInTheDocument();
     // Это НЕ полноэкранная сцена W3-01.
-    expect(screen.queryByText('Бот ведёт встречи в вашем чате')).not.toBeInTheDocument();
+    expect(screen.queryByText('Прокачай чат до настоящего клуба')).not.toBeInTheDocument();
+    // Отдельный адрес, а не «/»: на «/» есть док, и нативный «назад» там спрятан.
+    await userEvent.click(screen.getByRole('button', { name: 'Создать клуб из чата' }));
+    expect(await screen.findByText('Экран подключения чата')).toBeInTheDocument();
   });
 
   it('только pending-заявка (членств нет) → баннер с текстом про заявку + секция «Мои заявки»', async () => {
@@ -151,6 +158,8 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
 
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/Заявка уже у организатора/)).toBeInTheDocument();
+    expect(screen.queryByText(/Поиск/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать клуб из чата' })).toBeInTheDocument();
     expect(await screen.findByText(/Мои заявки/)).toBeInTheDocument();
   });
 
@@ -177,7 +186,7 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
     mockEndpoints({ clubs: [], applications: [], historyClubs: [] });
     renderPage();
 
-    expect(await screen.findByText('Бот ведёт встречи в вашем чате')).toBeInTheDocument();
+    expect(await screen.findByText('Прокачай чат до настоящего клуба')).toBeInTheDocument();
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
   });
 });
