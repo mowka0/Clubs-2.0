@@ -393,12 +393,14 @@ export const ProfilePage: FC = () => {
             <div className="rd-sub">
               Вступи в клуб — будем считать твою надёжность по&nbsp;каждому из них.
             </div>
+            {/* Раньше вела в каталог; каталог убран из навигации. «Мои клубы» без клубов сами
+                предлагают подключить чат, а с клубами — показывают их. */}
             <button
               type="button"
               className="rd-ghost-btn"
-              onClick={() => { haptic.impact('light'); navigate('/discovery'); }}
+              onClick={() => { haptic.impact('light'); navigate('/my-clubs'); }}
             >
-              Найти клуб
+              Мои клубы
             </button>
           </div>
         </>

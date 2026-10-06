@@ -201,3 +201,14 @@ describe('ProfilePage — W3-05: нудж «О себе»', () => {
     expect(screen.queryByRole('button', { name: /Добавь пару слов о себе/ })).not.toBeInTheDocument();
   });
 });
+
+describe('ProfilePage — пустая репутация', () => {
+  it('без клубов: плашка «Тут появится репутация» кнопка ведёт в «Мои клубы», а не в каталог', async () => {
+    mockEndpoints({ gamification: ZERO_GAMIFICATION });
+    renderPage();
+
+    expect(await screen.findByText('Тут появится репутация')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Мои клубы' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Найти клуб' })).not.toBeInTheDocument();
+  });
+});

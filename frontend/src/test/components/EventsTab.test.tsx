@@ -178,7 +178,7 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
   });
 
-  it('участник: пустые предстоящие + непустая история → сцена «Предстоящих событий нет» с CTA «Перейти в Поиск» И «История» (AC-H11, member)', async () => {
+  it('участник: пустые предстоящие + непустая история → сцена «Предстоящих событий нет» с CTA «Открыть мои клубы» вместо каталога И «История» (AC-H11, member)', async () => {
     // Нет организаторских клубов → участническая ветка пустого состояния.
     mockEndpoints({
       clubs: [membership({ role: 'member' })],
@@ -187,7 +187,10 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     renderWithProviders(<EventsTab />);
 
     expect(await screen.findByText('Предстоящих событий нет')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Перейти в Поиск' })).toBeInTheDocument();
+    expect(screen.getByText(/Как только в твоих клубах запланируют встречу/)).toBeInTheDocument();
+    // Каталог убран из навигации — вместо «Перейти в Поиск» кнопка ведёт в свои клубы.
+    expect(screen.getByRole('button', { name: 'Открыть мои клубы' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Перейти в Поиск' })).not.toBeInTheDocument();
     // Организаторский CTA участнику не показывается.
     expect(screen.queryByRole('button', { name: 'Создать событие' })).not.toBeInTheDocument();
     expect(await screen.findByText('История')).toBeInTheDocument();

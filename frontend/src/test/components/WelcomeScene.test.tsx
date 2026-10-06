@@ -42,14 +42,14 @@ describe('WelcomeScene — велком-сцена новичка в клубе 
     expect(screen.getByRole('button', { name: 'Перейти в клуб' })).toBeInTheDocument();
   });
 
-  it('applied: заявка у организатора, рассказ о продукте, CTA в каталог', () => {
+  it('applied: заявка у организатора, рассказ о продукте, CTA в «Мои клубы»', () => {
     const { onCta } = renderScene({ variant: 'applied', clubCaption: 'Москва · мест пока нет' });
 
     expect(screen.getByText('Заявка у организатора')).toBeInTheDocument();
     expect(screen.getByText('А пока — оглядись')).toBeInTheDocument();
     expect(screen.getByText('Заявка отправлена.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Посмотреть другие клубы' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Посмотреть мои клубы' }));
     expect(onCta).toHaveBeenCalledTimes(1);
   });
 

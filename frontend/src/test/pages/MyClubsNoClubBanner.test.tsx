@@ -139,6 +139,9 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
 
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/история и репутация сохранились/)).toBeInTheDocument();
+    // Вместо «Открыть Поиск» (каталог убран из навигации) — подключение чата.
+    expect(screen.getByRole('button', { name: 'Подключить чат' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть Поиск' })).not.toBeInTheDocument();
     // Секция «История» под баннером на месте.
     expect(await screen.findByText(/История/)).toBeInTheDocument();
     // Это НЕ полноэкранная сцена W3-01.
@@ -151,6 +154,8 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
 
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/Заявка уже у организатора/)).toBeInTheDocument();
+    expect(screen.queryByText(/Поиск/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Подключить чат' })).toBeInTheDocument();
     expect(await screen.findByText(/Мои заявки/)).toBeInTheDocument();
   });
 

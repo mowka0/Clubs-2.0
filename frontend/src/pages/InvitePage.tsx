@@ -186,14 +186,15 @@ export const InvitePage: FC = () => {
   }
 
   // Лендинг приглашения — часто первый экран новичка в приложении: тупик с битой
-  // ссылкой обязан давать выход в каталог, иначе человек просто закроет Mini App.
+  // ссылкой обязан давать выход, иначе человек просто закроет Mini App. Выход — главная, а не
+  // каталог: каталог убран из навигации, а «/» сама решит — свой клуб или «подключи чат».
   const invalidInviteScene = (
     <div className="rd-page">
       <FoxEmpty
         art={foxInviteArt}
         title="Ссылка недействительна"
         description="Возможно, приглашение устарело или его отозвали — попроси друга прислать новую ссылку"
-        primary={{ label: 'Найти клубы', onClick: () => navigate('/discovery') }}
+        primary={{ label: 'На главную', onClick: () => navigate('/', { replace: true }) }}
       />
     </div>
   );
@@ -331,7 +332,7 @@ export const InvitePage: FC = () => {
 
   if (applied) {
     // Новичок остался БЕЗ клуба (мест не было, ушла заявка) — кадр C: мини-рассказ о продукте
-    // + «Посмотреть другие клубы». Онбординг НЕ помечаем: при следующем обычном входе без
+    // + «Посмотреть мои клубы»: там видна отправленная заявка (PO 2026-10-06). Онбординг НЕ помечаем: при следующем обычном входе без
     // клуба ему честно показать карусель с дверями.
     if (isNewbie) {
       return (
@@ -341,7 +342,7 @@ export const InvitePage: FC = () => {
           clubCaption={`${club.city} · ${isClubFull ? 'мест пока нет' : 'ждём одобрения'}`}
           clubAvatarUrl={club.avatarUrl}
           ctaPending={false}
-          onCta={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
+          onCta={() => { haptic.impact('light'); navigate('/my-clubs', { replace: true }); }}
         />
       );
     }
@@ -354,10 +355,12 @@ export const InvitePage: FC = () => {
               ? `В клубе «${club.name}» сейчас нет мест. Организатор увидит вашу заявку и может расширить клуб — мы сообщим о решении.`
               : `Клуб «${club.name}» принимает по заявке. Организатор посмотрит её и откроет доступ — мы сообщим о решении.`}
           </div>
+          {/* «Мои клубы», а не «/»: при нуле клубов «/» показал бы подключение чата, а обещан
+              список, где видна отправленная заявка (как у новичка, PO 2026-10-06). */}
           <button
             type="button"
             className="rd-btn-primary"
-            onClick={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
+            onClick={() => { haptic.impact('light'); navigate('/my-clubs', { replace: true }); }}
             style={{ maxWidth: 240, margin: '0 auto' }}
           >
             К списку клубов
