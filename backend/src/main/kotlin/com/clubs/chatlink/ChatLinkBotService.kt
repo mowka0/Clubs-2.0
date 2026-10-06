@@ -130,6 +130,8 @@ class ChatLinkBotService(
             nowCanInvite = state?.canInviteUsers ?: moved.canInviteUsers,
             botWasReAdded = true
         )
+        // Переезд и есть момент выдачи прав: `moved` — снимок до переезда, права в нём прежние.
+        chatLinkService.enableFeaturesForGrantedRights(moved.clubId, before = moved)
         log.info("Chat migration adopted on bot add: clubId={} {} → {}", moved.clubId, moved.chatId, chatId)
         return true
     }
@@ -159,6 +161,7 @@ class ChatLinkBotService(
         )
         // Переприглашение убивает старые invite-ссылки группы — та же уборка, что при миграции.
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = state.canInviteUsers, botWasReAdded = true)
+        chatLinkService.enableFeaturesForGrantedRights(clubId, before = link)
         log.info(
             "Bot rights granted: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
             clubId, chatId, status.literal, state.canPinMessages, state.canInviteUsers, state.canRestrictMembers, state.canManageTags
@@ -290,6 +293,7 @@ class ChatLinkBotService(
                     nowCanInvite = state.canInviteUsers,
                     botWasReAdded = true
                 )
+                chatLinkService.enableFeaturesForGrantedRights(clubId, before = existingForClub)
             }
             // Подтверждение НЕ шлём: привязка не менялась, а это событие приходит на каждое
             // техническое переприглашение бота — выдача прав, повторный тап по ссылке, второй
@@ -391,6 +395,9 @@ class ChatLinkBotService(
             chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
                 ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
         }
+        // Функции, на которые бот уже получил права, — сразу включены (PO 2026-10-06). После
+        // закрепа ссылки: что пишет в чат, включается только у показанного клуба.
+        chatLinkService.enableFeaturesForGrantedRights(clubId, before = null)
         // Слепок «видна ли новичкам история»: при скрытой истории закрепы для них не существуют,
         // и таб «Чат» покажет владельцу подсказку, как это переключить.
         gateway.getChatInfo(chatId)?.let {
@@ -415,7 +422,9 @@ class ChatLinkBotService(
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
         // Право «Управление тегами» (Bot API 9.5) не приходит в объекте старой библиотеки —
         // дотягиваем raw-вызовом, пока бот в чате (событие редкое, вызов дешёвый).
-        val canManageTags = status.isInChat && gateway.fetchCanManageTags(chatId)
+        // Telegram не ответил — держим прежнее значение: записанное «нет» превратило бы следующий
+        // ответ «да» в «право появилось», и выключенные руками теги включились бы сами.
+        val canManageTags = status.isInChat && (gateway.fetchCanManageTags(chatId) ?: link.canManageTags)
         chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags)
         log.info(
             "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
@@ -427,6 +436,8 @@ class ChatLinkBotService(
             eventPublisher.publishEvent(ChatDisconnectedEvent(link.clubId, link.linkedByUserId))
         }
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
+        // Права выдали прямо в настройках группы — функции, чьё право появилось, включаются сами.
+        chatLinkService.enableFeaturesForGrantedRights(link.clubId, before = link)
     }
 
     /**
@@ -523,10 +534,11 @@ class ChatLinkBotService(
         // Клуб из чата — экран успеха (PO 2026-10-06): после выдачи прав Telegram оставляет
         // человека в группе, и это сообщение — его дорога в клуб кнопкой «Перейти в клуб».
         val headline = if (isNewClub) {
-            "🎉 Клуб «$clubName» создан из чата «${chatTitle ?: "без названия"}»!\n\n" +
-                "В чат бот пока ничего не писал — пусть участники сразу увидят готовый клуб. " +
-                "Сначала наполните его: город, описание, обложка. Потом покажите клуб в чате: " +
-                "«Пригласить в клуб» → «Показать клуб в чате», бот закрепит сообщение со ссылкой."
+            "🎉 Готово! Клуб «$clubName» вырос из чата «${chatTitle ?: "без названия"}».\n\n" +
+                "🤫 В чате бот пока молчит — первое впечатление за вами.\n\n" +
+                "✍️ Сначала наполните клуб: город, пара слов о нём и обложка.\n" +
+                "📌 Потом откройте «Пригласить в клуб» → «Показать клуб в чате» — бот закрепит " +
+                "ссылку, и все увидят клуб."
         } else {
             "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
                 "Управление — в приложении Clubs, вкладка «Чат»."

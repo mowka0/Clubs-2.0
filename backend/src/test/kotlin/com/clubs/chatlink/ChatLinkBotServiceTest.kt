@@ -494,6 +494,8 @@ class ChatLinkBotServiceTest {
         verify { chatLinkService.adoptMigratedChat(moved, supergroupChatId) }
         verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        // Переезд и есть выдача прав: функции, чьё право появилось, включаются по снимку ДО переезда.
+        verify { chatLinkService.enableFeaturesForGrantedRights(clubId, before = moved) }
         // Права выдали ровно этим действием — перечитываем сразу, не дожидаясь кнопки.
         verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.ADMINISTRATOR, true, true, true, false) }
         // Ссылка создаётся для НОВОГО чата: в старой группе она мертва (реестр багов №2).
@@ -637,6 +639,18 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
+    fun `привязка сразу включает функции, на которые бот получил права`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны")
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleGroupStartNewClub(chatId, "Бегуны", ownerTelegramId)
+
+        verify { chatLinkService.enableFeaturesForGrantedRights(newClubId, before = null) }
+    }
+
+    @Test
     fun `startgroup new - в личку «клуб создан», совет сначала наполнить, кнопка на шторку успеха`() {
         val newClubId = UUID.randomUUID()
         val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны")
@@ -650,7 +664,7 @@ class ChatLinkBotServiceTest {
             gateway.sendDmWithWebAppAndCallbackButton(
                 telegramId = ownerTelegramId,
                 text = match {
-                    it.startsWith("🎉 Клуб «Бегуны» создан из чата «Бегуны»") &&
+                    it.startsWith("🎉 Готово! Клуб «Бегуны» вырос из чата «Бегуны»") &&
                         it.contains("Сначала наполните") && it.contains("Показать клуб в чате") &&
                         it.contains("Это были вы")
                 },

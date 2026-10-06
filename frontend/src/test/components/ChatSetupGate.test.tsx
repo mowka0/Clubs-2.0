@@ -133,7 +133,7 @@ describe('ChatSetupGate — окно статуса после привязки 
     }));
     renderWithProviders(<ChatSetupGate />);
 
-    expect(await screen.findByText(/получил все права/)).toBeInTheDocument();
+    expect(await screen.findByText(/получил нужные права/)).toBeInTheDocument();
     expect(screen.queryByText(/Управление группой/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Проверить права' })).not.toBeInTheDocument();
   });
@@ -204,7 +204,7 @@ describe('ChatSetupGate — окно статуса после привязки 
     await user.click(await screen.findByRole('button', { name: 'Проверить права' }));
 
     await waitFor(() => expect(refreshed).toBe(true));
-    await waitFor(() => expect(screen.getByText(/получил все права/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/получил нужные права/)).toBeInTheDocument());
   });
 });
 
@@ -217,11 +217,26 @@ describe('ChatSetupGate — напоминание про права без от
   it('клуб из чата: прав не хватает — окно всплывает само', async () => {
     // Клуб рождается из чата, отметку о привязке приложение при этом не ставит (её создаёт бот),
     // и напоминание раньше не показывалось вовсе (баг PO 2026-08-19).
-    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: true }));
+    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: false }));
     openOwnedClub();
     renderWithProviders(<ChatSetupGate />);
 
-    expect(await screen.findByText('Управление тегами')).toBeInTheDocument();
+    expect(await screen.findByText('Блокировка пользователей')).toBeInTheDocument();
+  });
+
+  it('не хватает только тегов — окно не всплывает: это право необязательное (PO 2026-10-06)', async () => {
+    mockStatus(status({
+      canPinMessages: true, canInviteUsers: true, canRestrictMembers: true, canManageTags: false,
+    }));
+    openOwnedClub();
+    const StatusProbe: FC = () => {
+      const { data } = useChatLinkStatusQuery(CLUB_ID);
+      return <div>{data ? 'статус получен' : 'ждём'}</div>;
+    };
+    renderWithProviders(<><ChatSetupGate /><StatusProbe /></>);
+
+    expect(await screen.findByText('статус получен')).toBeInTheDocument();
+    expect(screen.queryByText('Управление тегами')).not.toBeInTheDocument();
   });
 
   it('все права выданы — окно не всплывает', async () => {

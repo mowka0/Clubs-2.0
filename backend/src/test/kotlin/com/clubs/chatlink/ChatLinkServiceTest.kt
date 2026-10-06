@@ -637,4 +637,105 @@ class ChatLinkServiceTest {
         verify { strictModeService.liftBansForClub(link) }
         verify(exactly = 0) { strictModeService.disableForClub(any()) }
     }
+
+    // --- Автовключение функций по выданным правам (PO 2026-10-06) ---
+
+    private val presentedPinId = 777L
+
+    @Test
+    fun `привязка показанного клуба с полными правами — закреп, сборы и теги, но ни двери, ни строгого режима`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = presentedPinId)
+
+        service.enableFeaturesForGrantedRights(clubId, before = null)
+
+        verify { chatLinkRepository.updateLivePin(clubId, livePinEnabled = true) }
+        verify { livePinService.backfillForClub(clubId) }
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true) }
+        verify { chatLinkRepository.updateAwardTags(clubId, awardTagsEnabled = true) }
+        // Вход по заявкам и строгий режим — решение владельца, а не следствие права.
+        verify(exactly = 0) { chatLinkRepository.updateDoor(any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateStrictMode(any(), any()) }
+    }
+
+    @Test
+    fun `клуб из чата ещё не показан — в чат ничего не включается, теги включаются`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
+
+        service.enableFeaturesForGrantedRights(clubId, before = null)
+
+        // До «Показать клуб в чате» клуб молчит: первая встреча при наполнении не выдаст его.
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+        verify { chatLinkRepository.updateAwardTags(clubId, awardTagsEnabled = true) }
+    }
+
+    @Test
+    fun `право выдали позже — включается только функция этого права`() {
+        val before = chatLinkFixture(clubId = clubId, canPinMessages = false, clubPinMessageId = presentedPinId)
+        every { chatLinkRepository.findByClubId(clubId) } returns before.copy(canPinMessages = true)
+
+        service.enableFeaturesForGrantedRights(clubId, before = before)
+
+        verify { chatLinkRepository.updateLivePin(clubId, livePinEnabled = true) }
+        // Статус сборов — только при первой привязке; теги не менялись.
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTags(any(), any()) }
+    }
+
+    @Test
+    fun `права не менялись — выключенное владельцем руками не включается обратно`() {
+        val link = chatLinkFixture(clubId = clubId, clubPinMessageId = presentedPinId)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.enableFeaturesForGrantedRights(clubId, before = link)
+
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTags(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+    }
+
+    @Test
+    fun `бот не в чате — ничего не включается`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, botStatus = BotChatStatus.LEFT, clubPinMessageId = presentedPinId)
+
+        service.enableFeaturesForGrantedRights(clubId, before = null)
+
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTags(any(), any()) }
+    }
+
+    @Test
+    fun `строка удалённого клуба — функции не оживляются`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = presentedPinId)
+        every { clubRepository.findById(clubId) } returns null
+
+        service.enableFeaturesForGrantedRights(clubId, before = null)
+
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTags(any(), any()) }
+    }
+
+    @Test
+    fun `первый показ клуба в чате включает закреп и статус сборов`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
+        every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns presentedPinId
+
+        service.pinClubLink(clubId, ownerId)
+
+        verify { chatLinkRepository.updateLivePin(clubId, livePinEnabled = true) }
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateDoor(any(), any(), any()) }
+    }
+
+    @Test
+    fun `повторный закреп ссылки — не показ, выключенное после показа не трогаем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = presentedPinId)
+        every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns 778L
+
+        service.pinClubLink(clubId, ownerId)
+
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+    }
 }
