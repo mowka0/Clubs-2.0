@@ -637,6 +637,28 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
+    fun `startgroup new - в личку экран успеха «клуб создан» с кнопкой в клуб`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны")
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleGroupStartNewClub(chatId, "Бегуны", ownerTelegramId)
+
+        // После выдачи прав Telegram оставляет человека в группе — дорога в клуб идёт через личку.
+        verify {
+            gateway.sendDmWithWebAppAndCallbackButton(
+                telegramId = ownerTelegramId,
+                text = match { it.startsWith("🎉 Клуб «Бегуны» создан из чата «Бегуны»") && it.contains("Это были вы") },
+                webAppButtonText = "Перейти в клуб",
+                webAppPath = "/clubs/$newClubId",
+                callbackButtonText = any(),
+                callbackData = "chatlink:unlink:$newClubId"
+            )
+        }
+    }
+
+    @Test
     fun `startgroup new - размер клуба берётся из числа участников чата`() {
         val newClubId = UUID.randomUUID()
         val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны Сокольники")

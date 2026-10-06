@@ -236,7 +236,7 @@ class ChatLinkBotService(
         // Ссылку в чат НЕ постим: клуб только что родился пустым, и приглашение смотреть на
         // страницу без описания и обложки потратило бы первое впечатление впустую. Презентует
         // орг сам, из шита «Пригласить» во вкладке «Участники» (решение PO 2026-08-17).
-        linkChatToClub(chatId, chatTitle, fromTelegramId, club, announceInChat = false)
+        linkChatToClub(chatId, chatTitle, fromTelegramId, club, isNewClub = true)
     }
 
     /**
@@ -346,7 +346,9 @@ class ChatLinkBotService(
         chatTitle: String?,
         fromTelegramId: Long,
         club: Club,
-        announceInChat: Boolean = true,
+        // Клуб только что родился из этого чата (`?startgroup=new`): в чат ничего не постим —
+        // пустая страница клуба потратила бы первое впечатление, — а в личку пишем «клуб создан».
+        isNewClub: Boolean = false,
     ) {
         val clubId = club.id
         // Права на момент привязки: если владелец пропустил шаг «сделать админом», бот останется
@@ -385,7 +387,7 @@ class ChatLinkBotService(
         // 2026-08-15 — раньше сюда прилетали три уведомления подряд). Постим ВСЕГДА, даже без
         // права закреплять: без закрепа сообщение просто остаётся в ленте, а чат не должен
         // оставаться вовсе без следа привязки. Подтверждение привязки уехало в личку владельцу.
-        if (announceInChat) {
+        if (!isNewClub) {
             chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
                 ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
         }
@@ -397,7 +399,8 @@ class ChatLinkBotService(
         // Личка владельцу — одно сообщение на две задачи: подтверждение привязки (раньше висело
         // отдельным постом В ЧАТЕ) и петля безопасности «это были вы?», из-за которой
         // фишинг-привязка мгновенно видна и обратима.
-        sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId, botHasAdminRights = link.botStatus == BotChatStatus.ADMINISTRATOR)
+        val botHasAdminRights = link.botStatus == BotChatStatus.ADMINISTRATOR
+        sendLinkedDm(fromTelegramId, linkedMessage(chatTitle, club.name, botHasAdminRights, isNewClub), clubId)
     }
 
     /**
@@ -505,7 +508,7 @@ class ChatLinkBotService(
      * безопасности «это были вы?» с кнопкой отвязки. Раньше первая половина уходила отдельным
      * постом в чат, где была не к месту (решение PO 2026-08-15).
      */
-    private fun linkedMessage(chatTitle: String?, clubName: String, botHasAdminRights: Boolean): String {
+    private fun linkedMessage(chatTitle: String?, clubName: String, botHasAdminRights: Boolean, isNewClub: Boolean): String {
         val rights = if (botHasAdminRights) {
             ""
         } else {
@@ -515,25 +518,26 @@ class ChatLinkBotService(
             "\n\n⚠️ Боту не выдали права администратора — опросы, закрепы и приглашения пока " +
                 "не работают. Выдать их можно последним шагом в приложении: «Заполнить клуб»."
         }
-        return "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
-            "Управление — в приложении Clubs, вкладка «Чат»." + rights + "\n\n" +
-            "Это были вы? Если нет — отвяжите чат кнопкой ниже."
+        // Клуб из чата — экран успеха (PO 2026-10-06): после выдачи прав Telegram оставляет
+        // человека в группе, и это сообщение — его дорога в клуб кнопкой «Перейти в клуб».
+        val headline = if (isNewClub) {
+            "🎉 Клуб «$clubName» создан из чата «${chatTitle ?: "без названия"}»!\n" +
+                "Дальше заполните описание и создайте первую встречу — бот сам позовёт чат."
+        } else {
+            "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
+                "Управление — в приложении Clubs, вкладка «Чат»."
+        }
+        return headline + rights + "\n\n" + "Это были вы? Если нет — отвяжите чат кнопкой ниже."
     }
 
     /**
      * Подтверждение привязки в личку владельцу: сверху вход в клуб, снизу петля безопасности
-     * «это были вы?». Один текст на оба вызова — первую привязку и повторное добавление бота.
+     * «это были вы?». Текст собирает [linkedMessage]: у клуба из чата он звучит как «клуб создан».
      */
-    private fun sendLinkedDm(
-        telegramId: Long,
-        chatTitle: String?,
-        clubName: String,
-        clubId: UUID,
-        botHasAdminRights: Boolean,
-    ) {
+    private fun sendLinkedDm(telegramId: Long, text: String, clubId: UUID) {
         gateway.sendDmWithWebAppAndCallbackButton(
             telegramId = telegramId,
-            text = linkedMessage(chatTitle, clubName, botHasAdminRights),
+            text = text,
             webAppButtonText = "Перейти в клуб",
             webAppPath = "/clubs/$clubId",
             callbackButtonText = "Отвязать чат",
