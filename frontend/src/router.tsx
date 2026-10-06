@@ -2,6 +2,7 @@ import { lazy, FC } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { HomeRoute } from './components/HomeRoute';
+import { ConnectChatScreen } from './components/ConnectChatScreen';
 import { LandingPage } from './pages/LandingPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 
@@ -74,6 +75,12 @@ export const router = createBrowserRouter([
         // закладки на витрину не должны давать 404.
         path: '/discovery',
         element: <DiscoveryPage />,
+      },
+      {
+        // Подключение чата, открытое кнопкой изнутри приложения: свой адрес, а не «/», потому
+        // что «/» — экран с доком, где нативный «назад» спрятан (PO 2026-10-06).
+        path: '/connect-chat',
+        element: <ConnectChatScreen />,
       },
       {
         path: '/my-clubs',

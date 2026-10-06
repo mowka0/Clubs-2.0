@@ -294,14 +294,14 @@ export const ProfilePage: FC = () => {
                 <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
               </div>
             )}
-            {/* Лупа вместо нуля (PO 2026-07-25): без клубов тап ведёт на «/» — там подключение
-                чата (каталог убран из навигации); с клубами — обычное число и таб «Мои клубы». */}
+            {/* Лупа вместо нуля (PO 2026-07-25): без клубов тап ведёт на подключение чата
+                (каталог убран из навигации); с клубами — обычное число и таб «Мои клубы». */}
             <button
               type="button"
               className="rd-ostat-row rd-ostat-link"
               onClick={() => {
                 haptic.impact('light');
-                navigate(activeClubs.length > 0 ? '/my-clubs' : '/');
+                navigate(activeClubs.length > 0 ? '/my-clubs' : '/connect-chat');
               }}
             >
               <span className="rd-ostat-ico rd-ost-clubs" aria-hidden="true">🤝</span>

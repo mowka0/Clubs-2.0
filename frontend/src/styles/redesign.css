@@ -3811,3 +3811,9 @@ body:has(> #root .rd-landing), body:has(> #root .rd-pay-return) { background: #0
 .rd-landing footer { margin-top: 40px; color: var(--text-faint); font-size: 12.5px; }
 .rd-landing .pp { color: var(--text-dim); margin: 0 0 10px; font-size: 14px; }
 .rd-landing .hd .logo { text-decoration: none; color: var(--text); }
+
+/* Экран подключения чата: описание абзацами с эмодзи, а не одной стеной текста. */
+.rd-connect-line { display: block; }
+.rd-connect-line + .rd-connect-line { margin-top: 8px; }
+/* Четыре абзаца в 270px — слишком узкая колонка; шире только здесь (без :has — прежняя ширина). */
+.rd-foxcafe-sub:has(.rd-connect-line) { max-width: 320px; }
