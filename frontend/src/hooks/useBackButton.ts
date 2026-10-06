@@ -10,6 +10,7 @@ import {
 import { useHaptic } from './useHaptic';
 import { useHistoryPosition } from './useHistoryPosition';
 import { isChatExitPoint, isChatUnderApp } from '../telegram/chatOrigin';
+import { confirmAndCloseMiniApp } from '../telegram/sdk';
 
 /**
  * Управляет видимостью и поведением Telegram BackButton.
@@ -28,6 +29,10 @@ import { isChatExitPoint, isChatUnderApp } from '../telegram/chatOrigin';
  * приводит на детальные страницы с доком (`/events/:id`, `/clubs/:id`, `/skladchina/:id`),
  * а спрятанную кнопку нажимают мимо приложения — перехватить нажатие можно только когда
  * кнопка наша.
+ *
+ * Позади пусто, а чата под приложением нет (ссылка из лички, приглашение, возврат с оплаты,
+ * компьютер) — «назад» спрашивает нативным попапом и закрывает приложение (PO 2026-10-06):
+ * раньше `navigate(-1)` в этой позиции молчал, и кнопка выглядела сломанной.
  */
 export function useBackButton(visible: boolean, onExitToChat?: () => void): void {
   const navigate = useNavigate();
@@ -76,11 +81,12 @@ export function useBackButton(visible: boolean, onExitToChat?: () => void): void
       // платформе/версии (замечено отсутствие на staging) — вызываем сами,
       // чтобы тап «назад» ощущался так же, как навигация внутри приложения.
       haptic.impact('light');
-      // Позади пусто и под приложением лежит чат клуба — «назад» ведёт туда, а не внутрь
-      // приложения.
-      const exitToChat = exitToChatRef.current;
-      if (exitToChat !== undefined && !canGoBack() && isChatUnderApp()) {
-        exitToChat();
+      if (!canGoBack()) {
+        // Позади пусто. Под приложением чат клуба — «назад» ведёт туда без вопросов (PO
+        // 2026-08-15); иначе — подтверждение и закрытие, холостого перехода больше нет.
+        const exitToChat = exitToChatRef.current;
+        if (exitToChat !== undefined && isChatUnderApp()) exitToChat();
+        else void confirmAndCloseMiniApp();
         return;
       }
       navigate(-1);

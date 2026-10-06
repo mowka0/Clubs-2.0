@@ -6,6 +6,7 @@ import {
   viewport,
   swipeBehavior,
   shareMessage,
+  showPopup,
 } from '@telegram-apps/sdk-react';
 import { isPhonePlatform } from './platform';
 
@@ -157,6 +158,31 @@ export function closeMiniApp(): void {
   } catch (_e) {
     // Не в среде Telegram — закрывать нечего
   }
+}
+
+/** Идентификатор кнопки «Закрыть» в попапе подтверждения — по нему отличаем выбор от отмены. */
+const CLOSE_POPUP_BUTTON_ID = 'close';
+
+/**
+ * «Назад», когда идти некуда и под приложением не чат клуба (вход по ссылке из лички, по
+ * приглашению, возврат со страницы оплаты): холостой `navigate(-1)` выглядел сломанной кнопкой
+ * (PO 2026-10-06). Спрашиваем нативным попапом Telegram и закрываем. Клиент без попапов
+ * (Bot API < 6.2) закрываем сразу: молчащая кнопка хуже лишнего вопроса.
+ */
+export async function confirmAndCloseMiniApp(): Promise<void> {
+  try {
+    if (showPopup.isAvailable()) {
+      const pressed = await showPopup({
+        title: 'Закрыть приложение?',
+        message: 'Назад идти некуда. Закрыть Clubs?',
+        buttons: [{ id: CLOSE_POPUP_BUTTON_ID, type: 'default', text: 'Закрыть' }, { type: 'cancel' }],
+      });
+      if (pressed !== CLOSE_POPUP_BUTTON_ID) return;
+    }
+  } catch (_e) {
+    // Попап не показался (второй открыт, сбой хоста) — ведём себя как без него
+  }
+  closeMiniApp();
 }
 
 /**

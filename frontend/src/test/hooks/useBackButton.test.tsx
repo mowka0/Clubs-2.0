@@ -11,7 +11,8 @@ import { MemoryRouter } from 'react-router-dom';
  * в чат. Вместо холостого хода зовём `onExitToChat` — в приложении это закрытие Mini App
  * (свернуть кодом нельзя, такого метода в протоколе нет).
  *
- * Во всех остальных случаях «назад» обязано остаться обычным переходом по истории.
+ * Позади пусто, а чата под приложением нет (личка, приглашение, компьютер) — «назад» спрашивает
+ * попапом и закрывает приложение (PO 2026-10-06). Есть куда вернуться — обычный переход по истории.
  */
 
 const state: { startParam: string | undefined; platform: string } = {
@@ -19,14 +20,17 @@ const state: { startParam: string | undefined; platform: string } = {
   platform: 'ios',
 };
 
-const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock } = vi.hoisted(
+const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock, confirmCloseMock } = vi.hoisted(
   () => ({
     navigateMock: vi.fn(),
     backButtonHandlers: [] as Array<() => void>,
     showBackButtonMock: vi.fn(),
     hideBackButtonMock: vi.fn(),
+    confirmCloseMock: vi.fn(() => Promise.resolve()),
   }),
 );
+
+vi.mock('../../telegram/sdk', () => ({ confirmAndCloseMiniApp: confirmCloseMock }));
 
 vi.mock('@telegram-apps/sdk-react', () => {
   const available = <T,>(fn: T) => Object.assign(fn as object, { isAvailable: () => true });
@@ -170,7 +174,8 @@ describe('useBackButton — «назад» упирается в чат клуб
     expect(onExitToChat).not.toHaveBeenCalled();
   });
 
-  it('открыто из лички с ботом (startapp нет) → обычный переход назад', () => {
+  it('открыто из лички с ботом (startapp нет), есть куда вернуться → обычный переход назад', () => {
+    setHistoryIndex(1);
     const onExitToChat = vi.fn();
     renderProbe(onExitToChat);
 
@@ -178,20 +183,33 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     expect(navigateMock).toHaveBeenCalledWith(-1);
     expect(onExitToChat).not.toHaveBeenCalled();
+    expect(confirmCloseMock).not.toHaveBeenCalled();
   });
 
-  it('личное приглашение invite_… — это личка, а не чат клуба', () => {
+  it('открыто из лички, позади пусто → подтверждение и закрытие вместо холостого перехода', () => {
+    const onExitToChat = vi.fn();
+    renderProbe(onExitToChat);
+
+    pressBack();
+
+    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(onExitToChat).not.toHaveBeenCalled();
+  });
+
+  it('личное приглашение invite_… — это личка, а не чат клуба: без подсказки, через подтверждение', () => {
     launchedFromChat('invite_a1b2c3d4e5f60718');
     const onExitToChat = vi.fn();
     renderProbe(onExitToChat);
 
     pressBack();
 
-    expect(navigateMock).toHaveBeenCalledWith(-1);
+    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
     expect(onExitToChat).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('на компьютере подсказки нет: Mini App там отдельное окно рядом с чатом', () => {
+  it('на компьютере подсказки нет: Mini App там отдельное окно — закрываем через подтверждение', () => {
     launchedFromChat();
     state.platform = 'tdesktop';
     const onExitToChat = vi.fn();
@@ -199,17 +217,19 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     pressBack();
 
-    expect(navigateMock).toHaveBeenCalledWith(-1);
+    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
     expect(onExitToChat).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('без колбэка хук ведёт себя как раньше — переход назад', () => {
+  it('без колбэка выхода в чат позади пусто → тоже подтверждение и закрытие', () => {
     launchedFromChat();
     renderProbe();
 
     pressBack();
 
-    expect(navigateMock).toHaveBeenCalledWith(-1);
+    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('подписка на нативную кнопку не пересоздаётся на каждый рендер', () => {
