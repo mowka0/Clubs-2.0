@@ -20,17 +20,14 @@ const state: { startParam: string | undefined; platform: string } = {
   platform: 'ios',
 };
 
-const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock, confirmCloseMock } = vi.hoisted(
+const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock } = vi.hoisted(
   () => ({
     navigateMock: vi.fn(),
     backButtonHandlers: [] as Array<() => void>,
     showBackButtonMock: vi.fn(),
     hideBackButtonMock: vi.fn(),
-    confirmCloseMock: vi.fn(() => Promise.resolve()),
   }),
 );
-
-vi.mock('../../telegram/sdk', () => ({ confirmAndCloseMiniApp: confirmCloseMock }));
 
 vi.mock('@telegram-apps/sdk-react', () => {
   const available = <T,>(fn: T) => Object.assign(fn as object, { isAvailable: () => true });
@@ -62,7 +59,11 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { useBackButton } from '../../hooks/useBackButton';
+import { useCloseConfirmStore } from '../../store/useCloseConfirmStore';
 import { rememberDeepLinkLanding, resetChatOriginForTests } from '../../telegram/chatOrigin';
+
+/** Поднялась ли шторка «Закрыть приложение?» — её показывает Layout по этому флагу. */
+const askingClose = () => useCloseConfirmStore.getState().asking;
 
 /** Страница, на которую увела кнопка из чата: закреп встречи ведёт на событие. */
 const LANDING = '/events/11111111-2222-3333-4444-555555555555';
@@ -103,6 +104,7 @@ beforeEach(() => {
   backButtonHandlers.length = 0;
   setHistoryIndex(0);
   resetChatOriginForTests();
+  useCloseConfirmStore.getState().settle();
   vi.clearAllMocks();
 });
 
@@ -183,7 +185,7 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     expect(navigateMock).toHaveBeenCalledWith(-1);
     expect(onExitToChat).not.toHaveBeenCalled();
-    expect(confirmCloseMock).not.toHaveBeenCalled();
+    expect(askingClose()).toBe(false);
   });
 
   it('открыто из лички, позади пусто → подтверждение и закрытие вместо холостого перехода', () => {
@@ -192,7 +194,7 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     pressBack();
 
-    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(askingClose()).toBe(true);
     expect(navigateMock).not.toHaveBeenCalled();
     expect(onExitToChat).not.toHaveBeenCalled();
   });
@@ -204,7 +206,7 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     pressBack();
 
-    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(askingClose()).toBe(true);
     expect(onExitToChat).not.toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
   });
@@ -217,7 +219,7 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     pressBack();
 
-    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(askingClose()).toBe(true);
     expect(onExitToChat).not.toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
   });
@@ -228,7 +230,26 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     pressBack();
 
-    expect(confirmCloseMock).toHaveBeenCalledTimes(1);
+    expect(askingClose()).toBe(true);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('Layout и страница смонтировали хук вместе → одно нажатие обрабатывается один раз', () => {
+    // Раньше Layout закрывал приложение, а страница (без колбэка) тут же спрашивала «закрыть?».
+    launchedFromChat();
+    const onExitToChat = vi.fn();
+    render(
+      <MemoryRouter initialEntries={[LANDING]}>
+        <Probe onExitToChat={onExitToChat} />
+        <Probe />
+      </MemoryRouter>,
+    );
+
+    expect(backButtonHandlers).toHaveLength(2);
+    pressBack();
+
+    expect(onExitToChat).toHaveBeenCalledTimes(1);
+    expect(askingClose()).toBe(false);
     expect(navigateMock).not.toHaveBeenCalled();
   });
 

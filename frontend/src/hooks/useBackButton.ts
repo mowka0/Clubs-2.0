@@ -10,7 +10,21 @@ import {
 import { useHaptic } from './useHaptic';
 import { useHistoryPosition } from './useHistoryPosition';
 import { isChatExitPoint, isChatUnderApp } from '../telegram/chatOrigin';
-import { confirmAndCloseMiniApp } from '../telegram/sdk';
+import { useCloseConfirmStore } from '../store/useCloseConfirmStore';
+
+/**
+ * Нативная кнопка одна, а хук монтируют и Layout (с колбэком выхода в чат), и сама страница:
+ * на одно нажатие срабатывают оба обработчика. Действует первый зарегистрированный (Layout),
+ * остальные в том же тике молчат — иначе Layout закрывал приложение, а страница тут же
+ * открывала вопрос «закрыть?» (staging 2026-10-06).
+ */
+let pressClaimed = false;
+function claimPress(): boolean {
+  if (pressClaimed) return false;
+  pressClaimed = true;
+  queueMicrotask(() => { pressClaimed = false; });
+  return true;
+}
 
 /**
  * Управляет видимостью и поведением Telegram BackButton.
@@ -31,8 +45,8 @@ import { confirmAndCloseMiniApp } from '../telegram/sdk';
  * кнопка наша.
  *
  * Позади пусто, а чата под приложением нет (ссылка из лички, приглашение, возврат с оплаты,
- * компьютер) — «назад» спрашивает нативным попапом и закрывает приложение (PO 2026-10-06):
- * раньше `navigate(-1)` в этой позиции молчал, и кнопка выглядела сломанной.
+ * компьютер) — «назад» поднимает шторку «Закрыть приложение?» (PO 2026-10-06): раньше
+ * `navigate(-1)` в этой позиции молчал, и кнопка выглядела сломанной.
  */
 export function useBackButton(visible: boolean, onExitToChat?: () => void): void {
   const navigate = useNavigate();
@@ -77,6 +91,7 @@ export function useBackButton(visible: boolean, onExitToChat?: () => void): void
     if (!onBackButtonClick.isAvailable()) return;
 
     const handleBack = () => {
+      if (!claimPress()) return;
       // Нативный BackButton Telegram не всегда генерирует haptic на каждой
       // платформе/версии (замечено отсутствие на staging) — вызываем сами,
       // чтобы тап «назад» ощущался так же, как навигация внутри приложения.
@@ -86,7 +101,7 @@ export function useBackButton(visible: boolean, onExitToChat?: () => void): void
         // 2026-08-15); иначе — подтверждение и закрытие, холостого перехода больше нет.
         const exitToChat = exitToChatRef.current;
         if (exitToChat !== undefined && isChatUnderApp()) exitToChat();
-        else void confirmAndCloseMiniApp();
+        else useCloseConfirmStore.getState().ask();
         return;
       }
       navigate(-1);

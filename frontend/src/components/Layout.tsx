@@ -8,10 +8,12 @@ import { NewClubFromChatGate } from './club/NewClubFromChatGate';
 import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
+import { ConfirmSheet } from './ConfirmSheet';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubContextStore } from '../store/useClubContextStore';
+import { useCloseConfirmStore } from '../store/useCloseConfirmStore';
 import { useCreateFlowStore } from '../store/useCreateFlowStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
 import { closeMiniApp, getStartParam } from '../telegram/sdk';
@@ -106,6 +108,10 @@ export const Layout: FC = () => {
   // «Назад» здесь значит «я тут закончил», поэтому закрываем приложение и отдаём человека
   // чату. Свернуть вместо закрытия нельзя — в протоколе Mini Apps такого метода нет.
   useBackButton(!showTabBar, closeMiniApp);
+  // «Назад», когда идти некуда и чата под приложением нет: вопрос в нашей шторке, не в
+  // нативном попапе (стилизуется под приложение, PO 2026-10-06).
+  const askingClose = useCloseConfirmStore((s) => s.asking);
+  const settleClose = useCloseConfirmStore((s) => s.settle);
 
   if (!isAuthenticated) {
     if (error) {
@@ -169,6 +175,14 @@ export const Layout: FC = () => {
         </Suspense>
       </SwipeNavigator>
       <AppDock />
+      {askingClose && (
+        <ConfirmSheet
+          text="Назад идти некуда. Закрыть приложение?"
+          confirmLabel="Закрыть"
+          onConfirm={() => { settleClose(); closeMiniApp(); }}
+          onCancel={settleClose}
+        />
+      )}
     </>
   );
 };
