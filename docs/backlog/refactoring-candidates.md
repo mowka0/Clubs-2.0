@@ -104,3 +104,11 @@ events-feed.md § Non-functional). Фикс: UNION ALL двух половин (
 > Заметка: крупные jOOQ-репозитории (`JooqSkladchinaRepository` 609,
 > `ApplicationService` 458 и т.д.) по аудиту **size-justified** — наборы мелких
 > CRUD-методов, не god-object. Не переписывать ради метрики.
+
+## Пояс «Europe/Moscow» в десятке мест (ревью 2026-10-07)
+
+`ZoneId.of("Europe/Moscow")` объявлен отдельно в `BillingLifecycleService` (`ZONE_ID`), `ReportWeek.ZONE`,
+`BillingNotifier`, `FunnelReportScheduler`, `DebtService`, `DebtReminderService`, `Debt`, `NotificationService`,
+`DebtBotNotifier`, `LivePinRenderer`, `SkladchinaChatStatusRenderer`, `ExpiryReminderRules`. Вынести одну
+константу в `common/util` (строковую — для `@Scheduled(zone = …)`, и `ZoneId`). Отложено по правилу
+«boilerplate отдельным проходом».

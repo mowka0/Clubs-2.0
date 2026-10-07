@@ -34,6 +34,21 @@ data class ServiceSubscription(
 ) {
 
     /**
+     * Продлится сам: включён ползунок, карта сохранена материнским платежом и магазину разрешён
+     * рекуррент. Иначе шедулер не списывает, а напоминает.
+     */
+    fun renewsAutomatically(recurringAvailable: Boolean): Boolean =
+        autopay && autopayPossible && providerToken != null && recurringAvailable
+
+    /**
+     * Неудачи не было (статус ACTIVE), а автосписание ещё впереди (тик в день окончания) или уже
+     * отправлено и ждёт ответа провайдера — даже если ползунок успели выключить: деньги в пути.
+     * Полоска «Продлить» здесь толкала бы владельца заплатить второй раз.
+     */
+    fun awaitsAutoRenewal(recurringAvailable: Boolean, chargeInFlight: Boolean): Boolean =
+        status == SubscriptionStatus.ACTIVE && (chargeInFlight || renewsAutomatically(recurringAvailable))
+
+    /**
      * Можно ли создавать новые встречи (R10): оплаченный период и грейс после него — да, грейс
      * исчерпан — нет. Считается от [currentPeriodEnd], а не от статуса: шедулер переводит
      * ACTIVE → PAST_DUE раз в сутки, и стена не должна зависеть от его тика.

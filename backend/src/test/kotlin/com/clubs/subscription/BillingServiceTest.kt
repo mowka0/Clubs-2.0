@@ -400,6 +400,51 @@ class BillingServiceTest {
     }
 
     @Test
+    fun `after the period end the strip keeps ACTIVE while the auto-renewal is ahead or in flight`() {
+        // Иначе «Подписка закончилась… Продлить» толкала бы владельца с сохранённой картой платить
+        // вручную второй раз (bugfix 2026-10-07).
+        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
+        every { chatLinkRepository.findByClubId(club.id) } returns link
+        every { paymentProvider.recurringAvailable } returns true
+        val renewing = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().minusHours(2))
+        fun stateOf(subscription: ServiceSubscription): BillingState {
+            every { subscriptionRepository.findLatestByClub(club.id) } returns subscription
+            return service.status(club.id, club.ownerId).state
+        }
+
+        every { subscriptionRepository.findLatestByClub(club.id) } returns renewing
+        val awaiting = service.status(club.id, club.ownerId)
+        assertEquals(BillingState.ACTIVE, awaiting.state)
+        assertNull(awaiting.graceUntil)
+
+        assertEquals(BillingState.GRACE, stateOf(renewing.copy(autopay = false)), "без автопродления платить вручную")
+        assertEquals(BillingState.GRACE, stateOf(renewing.copy(autopayPossible = false)), "карта не сохранена")
+        assertEquals(BillingState.GRACE, stateOf(renewing.copy(status = SubscriptionStatus.PAST_DUE)), "списание не прошло")
+        every { paymentProvider.recurringAvailable } returns false
+        assertEquals(BillingState.GRACE, stateOf(renewing), "рекуррент магазину не разрешён — шедулер не спишет")
+
+        // Ползунок выключили, когда дочернее списание уже ушло провайдеру: деньги в пути — не «Продлить».
+        every { paymentRepository.hasPendingRecurring(renewing.id) } returns true
+        assertEquals(BillingState.ACTIVE, stateOf(renewing.copy(autopay = false)))
+    }
+
+    @Test
+    fun `a charge failed on the morning of the last day shows Renew before the period is over`() {
+        // Слот 0 — утро дня окончания: владельцу уже пришло «не удалось списать», полоска не должна
+        // обещать «спишем с карты» до вечера.
+        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
+        every { chatLinkRepository.findByClubId(club.id) } returns link
+        every { paymentProvider.recurringAvailable } returns true
+        every { subscriptionRepository.findLatestByClub(club.id) } returns
+            BillingTestFixtures.subscription(club, status = SubscriptionStatus.PAST_DUE, periodEnd = OffsetDateTime.now().plusHours(10))
+
+        val status = service.status(club.id, club.ownerId)
+
+        assertEquals(BillingState.GRACE, status.state)
+        assertNotNull(status.graceUntil)
+    }
+
+    @Test
     fun `status shows the pause when the bot was kicked, keeping the paid period visible`() {
         every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
         every { chatLinkRepository.findByClubId(club.id) } returns

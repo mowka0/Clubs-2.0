@@ -15,12 +15,16 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
  * Календарь подписки за чат (platform-billing.md § 6.5). Ежедневно — напоминания, дочерние
  * списания по слотам [retryDays], PAST_DUE по концу периода, ENDED по концу грейса. Ежечасно —
  * опрос провайдера по счетам без ответа. Клуб без чата доживает период тихо: ни списаний, ни DM.
+ * «За N дней» и слоты — календарные дни МСК, а не 24-часовые отрезки: иначе «завтра» приходило
+ * в сам день окончания, а списание — на день позже обещанного офертой (bugfix 2026-10-07).
  */
 @Service
 class BillingLifecycleService(
@@ -71,7 +75,9 @@ class BillingLifecycleService(
      * стена встретила бы владельца молча. Два DM: за неделю и за день (решение PO 2026-09-15).
      */
     private fun remindEndingTrials(now: OffsetDateTime, price: Int) {
-        for (trial in chatTrialRepository.findTrialsEndingBefore(now.plusDays(TRIAL_REMINDER_DAYS.first()), trialDays)) {
+        // +1 день к выборке: период, кончающийся через 7 календарных дней поздно вечером, по
+        // отрезкам ещё дальше недели, а по календарю уже в пороге.
+        for (trial in chatTrialRepository.findTrialsEndingBefore(now.plusDays(TRIAL_REMINDER_DAYS.first() + 1), trialDays)) {
             try {
                 remindTrial(trial, now, price)
             } catch (e: RuntimeException) {
@@ -84,17 +90,13 @@ class BillingLifecycleService(
         val trialEnd = trial.startedAt.plusDays(trialDays)
         // Период уже кончился — напоминать поздно: стену человек увидит на создании встречи.
         if (!now.isBefore(trialEnd)) return
-        val daysLeft = if (now.isBefore(trialEnd.minusDays(TRIAL_REMINDER_DAYS.last()))) {
-            TRIAL_REMINDER_DAYS.first().toInt()
-        } else {
-            TRIAL_REMINDER_DAYS.last().toInt()
-        }
+        val threshold = reminderThreshold(calendarDaysUntil(trialEnd, now), TRIAL_REMINDER_DAYS) ?: return
         // Порог уже отправляли (или отправляли более поздний) — тик повторяется, DM нет.
-        if (trial.reminderDaysLeft != null && trial.reminderDaysLeft <= daysLeft) return
+        if (trial.reminderDaysLeft != null && trial.reminderDaysLeft <= threshold) return
         val club = clubRepository.findById(trial.clubId) ?: return
-        chatTrialRepository.markReminded(trial.chatId, daysLeft)
-        notifier.trialEndingSoon(club, trialEnd, price, daysLeft)
-        log.info("Trial reminder sent: chatId={} clubId={} daysLeft={}", trial.chatId, trial.clubId, daysLeft)
+        chatTrialRepository.markReminded(trial.chatId, threshold)
+        notifier.trialEndingSoon(club, trialEnd, price, threshold)
+        log.info("Trial reminder sent: chatId={} clubId={} threshold={}", trial.chatId, trial.clubId, threshold)
     }
 
     private fun processSubscription(subscription: ServiceSubscription, now: OffsetDateTime, price: Int) {
@@ -114,13 +116,11 @@ class BillingLifecycleService(
 
         // Без рекуррента у провайдера (услугу отозвали или ещё не включили) сохранённая карта
         // бесполезна: не списываем, а напоминаем — иначе отказ провайдера уронил бы подписку в PAST_DUE.
-        val autoCharge = subscription.autopay && subscription.autopayPossible && subscription.providerToken != null &&
-            paymentProvider.recurringAvailable
-        if (now.isBefore(periodEnd)) {
-            // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
-            if (!autoCharge) remindBeforeEnd(subscription, club, now, price)
-        } else if (autoCharge) {
+        // С автосписанием напоминаний нет: о дате списания сказано в DM об оплате (PO 2026-09-07).
+        if (subscription.renewsAutomatically(paymentProvider.recurringAvailable)) {
             chargeIfSlotDue(subscription, club, now, price)
+        } else if (now.isBefore(periodEnd)) {
+            remindBeforeEnd(subscription, club, now, price)
         } else if (subscription.status == SubscriptionStatus.ACTIVE) {
             subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
             notifier.periodEnded(club, graceEnd)
@@ -180,18 +180,22 @@ class BillingLifecycleService(
 
     private fun remindBeforeEnd(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int) {
         val periodEnd = subscription.currentPeriodEnd
-        if (now.isBefore(periodEnd.minusDays(3))) return
-        val daysLeft = if (now.isBefore(periodEnd.minusDays(1))) 3 else 1
+        val threshold = reminderThreshold(calendarDaysUntil(periodEnd, now), SUBSCRIPTION_REMINDER_DAYS) ?: return
         // Дедуп по ключу события: тик может повториться, DM — нет.
-        if (subscriptionRepository.recordEventIfNew(subscription.id, "reminder:${periodEnd.toEpochSecond()}:$daysLeft", "REMINDER")) {
-            notifier.expiringSoon(club, periodEnd, price, daysLeft)
+        if (subscriptionRepository.recordEventIfNew(subscription.id, "reminder:${periodEnd.toEpochSecond()}:$threshold", "REMINDER")) {
+            notifier.expiringSoon(club, periodEnd, price, threshold)
         }
     }
 
+    /**
+     * Слот попытки — тик в день (дата конца + retryDays[attempt]) по МСК. Слот 0 — день окончания,
+     * даже если час окончания ещё впереди (оферта п. 3.4): продление всё равно идёт от конца периода.
+     */
     private fun chargeIfSlotDue(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int) {
         val attempt = subscription.chargeAttempts
         if (attempt >= retryDays.size) return
-        if (now.isBefore(subscription.currentPeriodEnd.plusDays(retryDays[attempt]))) return
+        val daysSinceEnd = -calendarDaysUntil(subscription.currentPeriodEnd, now)
+        if (daysSinceEnd < retryDays[attempt]) return
         if (paymentRepository.hasPendingRecurring(subscription.id)) return
         sendRecurringCharge(subscription, club, now, price)
     }
@@ -263,8 +267,26 @@ class BillingLifecycleService(
     }
 
     companion object {
-        // Пороги напоминаний о конце бесплатного периода, в днях до конца (решение PO 2026-09-15).
-        // Первый порог задаёт и окно выборки кандидатов, последний — «завтра».
+        /** Пояс календаря подписки: тик, «за N дней» и слоты списаний считаются по Москве. */
+        const val ZONE_ID = "Europe/Moscow"
+        private val ZONE: ZoneId = ZoneId.of(ZONE_ID)
+
+        // Пороги напоминаний о конце бесплатного периода, в календарных днях до конца (решение PO
+        // 2026-09-15). Первый порог задаёт и окно выборки кандидатов, последний — «завтра».
         private val TRIAL_REMINDER_DAYS = listOf(7L, 1L)
+
+        // Пороги напоминаний о конце оплаченного периода без автосписания: «за 3 дня» и «завтра».
+        private val SUBSCRIPTION_REMINDER_DAYS = listOf(3L, 1L)
+
+        /** Календарных дней МСК от сегодня до даты [end]: 0 — кончается сегодня, отрицательное — уже прошло. */
+        private fun calendarDaysUntil(end: OffsetDateTime, now: OffsetDateTime): Long =
+            ChronoUnit.DAYS.between(now.atZoneSameInstant(ZONE).toLocalDate(), end.atZoneSameInstant(ZONE).toLocalDate())
+
+        /**
+         * Порог, в который попадает остаток: ближайший сверху из [thresholds]. null — до порогов далеко
+         * или период кончается сегодня (сказать «завтра» уже нельзя). Пропущенный тик догоняет порог.
+         */
+        private fun reminderThreshold(daysLeft: Long, thresholds: List<Long>): Int? =
+            if (daysLeft < 1) null else thresholds.filter { daysLeft <= it }.minOrNull()?.toInt()
     }
 }
