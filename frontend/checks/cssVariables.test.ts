@@ -8,8 +8,11 @@ import { join } from 'node:path';
  * рисовалась без подложки, потому что `--warn-soft` не было ни в одной теме (баг PO 2026-10-07).
  *
  * Переменные Telegram (`--tg-…`, `--tgui-…`) задаёт клиент, а `var(--x, запасное)` безопасна сама.
+ *
+ * Файл лежит вне `src` намеренно: ему нужен Node (fs), а типов Node в сборке нет — `tsc` проверяет
+ * только `src`, Vitest находит тест где угодно. Под Vitest CSS через `?raw` приходит пустым.
  */
-const SRC = join(__dirname, '..', '..');
+const SRC = join(__dirname, '..', 'src');
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -29,6 +32,7 @@ describe('CSS-переменные', () => {
       .filter((name) => !name.startsWith('--tg-') && !name.startsWith('--tgui'))
       .filter((name) => !defined.has(name));
 
+    expect(texts.length).toBeGreaterThan(50);
     expect(undefinedVars).toEqual([]);
   });
 });
