@@ -68,7 +68,7 @@ export const EventsTab: FC = () => {
   const isError = myEventsQuery.isError && !myEventsQuery.isPending;
   // Сцена лиса — при отсутствии ПРЕДСТОЯЩИХ (зеркало SkladchinasTab.hasActive, W3-03a):
   // прошедшие посещённые события живут в секции «История» ПОД сценой и не должны её прятать —
-  // иначе юзер с одним старым событием никогда не увидит ни лиса, ни CTA «Создать событие».
+  // иначе юзер с одним старым событием никогда не увидит ни лиса, ни CTA «Создать встречу».
   const hasUpcoming = events.some((e) => !e.isHistory);
   const hasHistory = events.some((e) => e.isHistory);
   const isEmpty = !isLoadingInitial && !isError && !hasUpcoming;
@@ -84,7 +84,7 @@ export const EventsTab: FC = () => {
         <FoxEmpty
           art={foxErrorArt}
           variant="error"
-          title="Не удалось загрузить события"
+          title="Не удалось загрузить встречи"
           description="Проверь соединение и попробуй ещё раз."
           primary={{ label: 'Повторить', onClick: () => { haptic.impact('light'); myEventsQuery.refetch(); } }}
         />
@@ -95,14 +95,14 @@ export const EventsTab: FC = () => {
           <FoxEmpty
             art={foxPlanningArt}
             soonIcon={hasHistory ? undefined : '📅'}
-            title={hasHistory ? 'Предстоящих событий нет' : 'Событий пока нет'}
-            description="В твоём клубе ещё нет событий. Создай первое — участники увидят его здесь и смогут проголосовать за дату"
-            primary={{ label: 'Создать событие', onClick: handleCreateClick }}
+            title={hasHistory ? 'Впереди встреч нет' : 'Встреч пока нет'}
+            description="Создай встречу — бот позовёт чат, а здесь появится, кто идёт."
+            primary={{ label: 'Создать встречу', onClick: handleCreateClick }}
           />
         ) : (
           <FoxEmpty
             art={foxCatalogArt}
-            title={hasHistory ? 'Предстоящих событий нет' : 'Событий пока нет'}
+            title={hasHistory ? 'Впереди встреч нет' : 'Встреч пока нет'}
             description="Как только в твоих клубах запланируют встречу, она появится здесь."
             primary={{ label: 'Открыть мои клубы', onClick: handleMyClubsClick }}
           />

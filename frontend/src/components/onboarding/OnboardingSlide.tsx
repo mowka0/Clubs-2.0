@@ -28,10 +28,7 @@ export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide }) => (
       )}
     </h2>
 
-    <p className="ob-micro">
-      {slide.micro}
-      {slide.microStrong !== undefined && <b>{slide.microStrong}</b>}
-    </p>
+    <p className="ob-micro">{slide.micro}</p>
   </div>
 );
 

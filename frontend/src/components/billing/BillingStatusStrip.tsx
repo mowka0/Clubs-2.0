@@ -152,7 +152,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🚫</span>
           <div className="tx">
             <div className="t">Новые встречи недоступны до оплаты</div>
-            <div className="d">Подписка закончилась {periodEnd}{graceUntil ? `, грейс вышел ${graceUntil}` : ''}. Начатые встречи доживут, чат бот не бросает.</div>
+            <div className="d">Подписка закончилась {periodEnd}. Начатые встречи доживут, бот из чата не уходит.</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
