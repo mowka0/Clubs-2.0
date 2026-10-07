@@ -51,9 +51,9 @@ const introDoneUser = {
 };
 
 /** Слайды опознаём по микро-строкам — единственному тексту под заголовком. */
-const slide1 = () => screen.queryByText(/Знакомства, встречи, активности/i);
+const slide1 = () => screen.queryByText(/Встречи, поездки, игры/i);
 const slide2 = () => screen.queryByText(/В чате болтаем/i);
-const slide3 = () => screen.queryByText(/Подключи чат, разошли инвайты/i);
+const slide3 = () => screen.queryByText(/Организация встреч, автоматические напоминания/i);
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'bypass' });

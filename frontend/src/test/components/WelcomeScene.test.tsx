@@ -25,7 +25,7 @@ describe('WelcomeScene — велком-сцена новичка в клубе 
     expect(screen.getByText('Ты в клубе!')).toBeInTheDocument();
     expect(screen.getByText('Бег по субботам')).toBeInTheDocument();
     expect(screen.getByText('Москва · 14 участников')).toBeInTheDocument();
-    expect(screen.getByText('Голосуй — пойдёшь или нет')).toBeInTheDocument();
+    expect(screen.getByText('Голосуй — пойдёшь на встречу или нет')).toBeInTheDocument();
     expect(screen.getByText('Надёжность')).toBeInTheDocument();
     expect(screen.queryByText(/Оплатить взнос можно/)).not.toBeInTheDocument();
 
@@ -46,7 +46,7 @@ describe('WelcomeScene — велком-сцена новичка в клубе 
     const { onCta } = renderScene({ variant: 'applied', clubCaption: 'Москва · мест пока нет' });
 
     expect(screen.getByText('Заявка у организатора')).toBeInTheDocument();
-    expect(screen.getByText('А пока — оглядись')).toBeInTheDocument();
+    expect(screen.getByText('Пока ждёшь')).toBeInTheDocument();
     expect(screen.getByText('Заявка отправлена.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Посмотреть мои клубы' }));

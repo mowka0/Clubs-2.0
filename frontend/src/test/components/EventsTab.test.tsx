@@ -162,7 +162,7 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     expect(titles).toEqual(['Недавняя', 'Давняя']);
   });
 
-  it('пустые предстоящие + непустая история → сцена «Предстоящих событий нет» И секция «История», без тизера (AC-H11)', async () => {
+  it('пустые предстоящие + непустая история → сцена «Впереди встреч нет» И секция «История», без тизера (AC-H11)', async () => {
     mockEndpoints({
       clubs: [membership({ role: 'organizer' })],
       eventsResponder: () => HttpResponse.json(feed([historyEvent()])),
@@ -170,15 +170,15 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     renderWithProviders(<EventsTab />);
 
     // Сцена лиса не спрятана историей, но её заголовок сигналит именно об отсутствии предстоящих.
-    expect(await screen.findByText('Предстоящих событий нет')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Создать событие' })).toBeInTheDocument();
+    expect(await screen.findByText('Впереди встреч нет')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Создать встречу' })).toBeInTheDocument();
     expect(await screen.findByText('История')).toBeInTheDocument();
     expect(await screen.findByText('Прошлая встреча')).toBeInTheDocument();
     // Тизер «скоро здесь» при непустой истории не рендерится.
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
   });
 
-  it('участник: пустые предстоящие + непустая история → сцена «Предстоящих событий нет» с CTA «Открыть мои клубы» вместо каталога И «История» (AC-H11, member)', async () => {
+  it('участник: пустые предстоящие + непустая история → сцена «Впереди встреч нет» с CTA «Открыть мои клубы» вместо каталога И «История» (AC-H11, member)', async () => {
     // Нет организаторских клубов → участническая ветка пустого состояния.
     mockEndpoints({
       clubs: [membership({ role: 'member' })],
@@ -186,30 +186,30 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     });
     renderWithProviders(<EventsTab />);
 
-    expect(await screen.findByText('Предстоящих событий нет')).toBeInTheDocument();
+    expect(await screen.findByText('Впереди встреч нет')).toBeInTheDocument();
     expect(screen.getByText(/Как только в твоих клубах запланируют встречу/)).toBeInTheDocument();
     // Каталог убран из навигации — вместо «Перейти в Поиск» кнопка ведёт в свои клубы.
     expect(screen.getByRole('button', { name: 'Открыть мои клубы' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Перейти в Поиск' })).not.toBeInTheDocument();
     // Организаторский CTA участнику не показывается.
-    expect(screen.queryByRole('button', { name: 'Создать событие' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Создать встречу' })).not.toBeInTheDocument();
     expect(await screen.findByText('История')).toBeInTheDocument();
     expect(await screen.findByText('Прошлая встреча')).toBeInTheDocument();
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
   });
 
-  it('пустые предстоящие + пустая история → сцена «Событий пока нет» с тизером, без секции «История» (AC-H12)', async () => {
+  it('пустые предстоящие + пустая история → сцена «Встреч пока нет» с тизером, без секции «История» (AC-H12)', async () => {
     mockEndpoints({
       clubs: [membership({ role: 'organizer' })],
       eventsResponder: () => HttpResponse.json(EMPTY_FEED),
     });
     renderWithProviders(<EventsTab />);
 
-    expect(await screen.findByText('Событий пока нет')).toBeInTheDocument();
+    expect(await screen.findByText('Встреч пока нет')).toBeInTheDocument();
     // Тизер «скоро здесь» присутствует, пока истории нет.
     expect(await screen.findByText('скоро здесь')).toBeInTheDocument();
     expect(screen.queryByText('История')).not.toBeInTheDocument();
-    expect(screen.queryByText('Предстоящих событий нет')).not.toBeInTheDocument();
+    expect(screen.queryByText('Впереди встреч нет')).not.toBeInTheDocument();
   });
 
   it('карточка истории компактная: title + клуб, без обложки/бейджа и без счётчика «идут», дата-плитка раздельно (AC-H13)', async () => {
