@@ -271,7 +271,14 @@ class BillingService(
                 else -> BillingState.TRIAL_ENDED
             }
             !subscription.allowsNewMeetings(now, graceDays) -> BillingState.ENDED
+            // Списание не прошло (бывает и до конца периода: слот 0 — утро дня окончания) — владельцу
+            // уже пришло «не удалось списать», и полоска зовёт «Продлить», а не обещает карту.
+            subscription.status == SubscriptionStatus.PAST_DUE -> BillingState.GRACE
             now.isBefore(subscription.currentPeriodEnd) -> BillingState.ACTIVE
+            subscription.awaitsAutoRenewal(
+                paymentProvider.recurringAvailable,
+                chargeInFlight = paymentRepository.hasPendingRecurring(subscription.id),
+            ) -> BillingState.ACTIVE
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }

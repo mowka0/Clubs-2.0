@@ -21,6 +21,7 @@ import com.clubs.common.exception.ConflictException
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 /** Календарь подписки (platform-billing.md § 6.5): напоминания, списания по слотам, PAST_DUE, ENDED, опрос. */
@@ -44,7 +45,9 @@ class BillingLifecycleServiceTest {
     )
 
     private val club = BillingTestFixtures.club()
-    private val now: OffsetDateTime = OffsetDateTime.now()
+    // Тик — 09:30 МСК: календарь подписки считается днями по Москве, и час прогона теста не должен
+    // сдвигать «сегодня» и «завтра».
+    private val now: OffsetDateTime = OffsetDateTime.now(ZoneOffset.ofHours(3)).withHour(9).withMinute(30).withSecond(0).withNano(0)
 
     @BeforeEach
     fun setUp() {
@@ -83,8 +86,25 @@ class BillingLifecycleServiceTest {
         verify(exactly = 1) { notifier.expiringSoon(any(), any(), any(), any()) }
 
         every { subscriptionRepository.recordEventIfNew(any(), any(), any()) } returns true
-        service.runDaily(now.plusDays(2))
+        service.runDaily(now.plusDays(1))
         verify(exactly = 1) { notifier.expiringSoon(club, sub.currentPeriodEnd, PRICE, 1) }
+
+        // День окончания: «завтра» сказать уже нельзя — молчим до конца периода.
+        service.runDaily(now.plusDays(2))
+        verify(exactly = 2) { notifier.expiringSoon(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `the day-before reminder comes on the eve by calendar, not 24 hours before the end hour`() {
+        // Кончается завтра в 14:00: по 24-часовым отрезкам сегодня было бы «за 3 дня», а «завтра»
+        // ушло бы в сам день окончания (баг до 2026-10-07).
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(1).plusHours(4).plusMinutes(30), autopay = false)
+        live(sub)
+
+        service.runDaily(now)
+
+        verify(exactly = 1) { notifier.expiringSoon(club, sub.currentPeriodEnd, PRICE, 1) }
+        verify { subscriptionRepository.recordEventIfNew(sub.id, "reminder:${sub.currentPeriodEnd.toEpochSecond()}:1", "REMINDER") }
     }
 
     @Test
@@ -94,7 +114,7 @@ class BillingLifecycleServiceTest {
         live(sub)
 
         service.runDaily(now)
-        service.runDaily(now.plusDays(2))
+        service.runDaily(now.plusDays(1))
 
         verify(exactly = 0) { notifier.expiringSoon(any(), any(), any(), any()) }
         verify(exactly = 0) { subscriptionRepository.recordEventIfNew(any(), any(), any()) }
@@ -119,6 +139,48 @@ class BillingLifecycleServiceTest {
         verify { subscriptionRepository.recordChargeAttempt(sub.id, now) }
         verify(exactly = 0) { paymentRepository.markFailed(any()) }
         verify(exactly = 0) { subscriptionRepository.transitionStatus(any(), any(), SubscriptionStatus.PAST_DUE) }
+    }
+
+    @Test
+    fun `autopay charges on the day the period ends, even before its hour`() {
+        // Оферта п. 3.4: «в день окончания оплаченного периода». Период кончается сегодня в 19:30 —
+        // утренний тик списывает, а не ждёт следующего дня.
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusHours(10))
+        live(sub)
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns
+            BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
+        every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
+
+        service.runDaily(now)
+
+        verify(exactly = 1) { paymentProvider.charge(any()) }
+        verify(exactly = 0) { subscriptionRepository.transitionStatus(any(), any(), any()) }
+    }
+
+    @Test
+    fun `autopay does not charge the day before the end, even within 24 hours of it`() {
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(1).minusHours(1))
+        live(sub)
+
+        service.runDaily(now)
+
+        verify(exactly = 0) { paymentProvider.charge(any()) }
+        verify(exactly = 0) { notifier.expiringSoon(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `calendar days are Moscow days whatever offset the period end is stored with`() {
+        // 22:00 UTC сегодня = 01:00 МСК завтра: по МСК конец — завтра, значит сегодня «завтра»,
+        // а не «сегодня последний день» (и не списание).
+        val endUtc = now.withOffsetSameInstant(ZoneOffset.UTC).withHour(22).withMinute(0)
+        val reminded = BillingTestFixtures.subscription(club, periodEnd = endUtc, autopay = false)
+        val charged = BillingTestFixtures.subscription(club, periodEnd = endUtc)
+        live(reminded, charged)
+
+        service.runDaily(now)
+
+        verify(exactly = 1) { notifier.expiringSoon(club, endUtc, PRICE, 1) }
+        verify(exactly = 0) { paymentProvider.charge(any()) }
     }
 
     @Test
@@ -265,6 +327,21 @@ class BillingLifecycleServiceTest {
         service.runDaily(now)
         verify(exactly = 1) { notifier.trialEndingSoon(club, now.minusDays(14).plusDays(15), PRICE, 1) }
         verify(exactly = 1) { chatTrialRepository.markReminded(-1001L, 1) }
+    }
+
+    @Test
+    fun `a trial ending in 7 calendar days late in the evening is announced today`() {
+        live()
+        // Кончается через 7 дней в 20:00: по отрезкам это дальше недели, по календарю — порог «неделя».
+        val startedAt = now.plusDays(7).plusHours(10).minusDays(15)
+        every { chatTrialRepository.findTrialsEndingBefore(any(), any()) } returns listOf(
+            ChatTrial(chatId = -1001L, clubId = club.id, startedAt = startedAt, reminderDaysLeft = null),
+        )
+
+        service.runDaily(now)
+
+        verify { chatTrialRepository.findTrialsEndingBefore(now.plusDays(8), 15) }
+        verify(exactly = 1) { notifier.trialEndingSoon(club, startedAt.plusDays(15), PRICE, 7) }
     }
 
     @Test

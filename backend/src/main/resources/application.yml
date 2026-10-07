@@ -177,7 +177,8 @@ subscription:
   # Оплаченный период за одно списание (стаб-провайдер). В днях, чтобы staging мог
   # ужать его для теста окончания периода.
   period-days: ${SUBSCRIPTION_PERIOD_DAYS:30}
-  # Cron для SubscriptionScheduler.endElapsedSubscriptions. По умолчанию ежедневно 09:30 UTC.
+  # Ежедневный тик подписки за чат (ServiceSubscriptionScheduler.runDaily): напоминания, автосписания,
+  # грейс. Пояс — Москва (zone у @Scheduled), по умолчанию 09:30 МСК.
   lifecycle-cron: ${SUBSCRIPTION_LIFECYCLE_CRON:0 30 9 * * *}
 
 membership:

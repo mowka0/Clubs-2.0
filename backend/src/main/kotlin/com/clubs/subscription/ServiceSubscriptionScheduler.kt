@@ -14,8 +14,11 @@ class ServiceSubscriptionScheduler(
     private val lifecycleService: BillingLifecycleService,
 ) {
 
-    /** Ежедневно: напоминания, дочерние списания, PAST_DUE, ENDED. */
-    @Scheduled(cron = "\${subscription.lifecycle-cron:0 30 9 * * *}")
+    /**
+     * Ежедневно: напоминания, дочерние списания, PAST_DUE, ENDED. Пояс задан явно: без него крон
+     * шёл по часам контейнера (UTC), то есть в 12:30 МСК, а календарь подписки считается по Москве.
+     */
+    @Scheduled(cron = "\${subscription.lifecycle-cron:0 30 9 * * *}", zone = BillingLifecycleService.ZONE_ID)
     fun runDaily() {
         lifecycleService.runDaily(OffsetDateTime.now())
     }
