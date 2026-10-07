@@ -154,7 +154,7 @@ export const OnboardingFlow: FC = () => {
       setUser(user);
     } catch {
       haptic.notify('error');
-      setError('Не удалось продолжить. Проверьте связь и попробуйте ещё раз.');
+      setError('Не удалось продолжить. Проверь связь и попробуй ещё раз.');
     }
   };
 

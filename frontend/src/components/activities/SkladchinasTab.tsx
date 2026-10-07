@@ -119,7 +119,7 @@ export const SkladchinasTab: FC = () => {
             art={foxSkladchinaArt}
             soonIcon={hasHistory ? undefined : '💰'}
             title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
-            description="Собери на аренду, инвентарь или общий подарок — создай сбор, и участники увидят его здесь."
+            description="Скинуться на аренду, подарок или поделить счёт после ужина — создай сбор, бот разошлёт доли."
             primary={{ label: 'Создать сбор', onClick: handleCreateClick }}
           />
         ) : (

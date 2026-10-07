@@ -154,6 +154,8 @@ describe('BillingStatusStrip', () => {
     mockStatus(status({ state: 'ENDED', currentPeriodEnd: '2026-09-03T10:00:00Z', graceUntil: '2026-09-10T10:00:00Z' }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
     expect(await screen.findByText('Новые встречи недоступны до оплаты')).toBeInTheDocument();
+    // Дату конца льготы в «закончилась» не показываем (E23, PO 2026-10-07).
+    expect(screen.queryByText(/10 сентября/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Оплатить' })).toBeInTheDocument();
   });
 });

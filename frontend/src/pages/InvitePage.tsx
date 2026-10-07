@@ -215,7 +215,7 @@ export const InvitePage: FC = () => {
       setUser(freshUser);
     } catch {
       haptic.notify('error');
-      setWelcomeError('Не удалось продолжить. Проверьте связь и попробуйте ещё раз.');
+      setWelcomeError('Не удалось продолжить. Проверь связь и попробуй ещё раз.');
     }
   };
 

@@ -76,7 +76,7 @@ function renderLayout() {
   );
 }
 
-const intro = () => screen.queryByText(/Знакомства, встречи, активности/i);
+const intro = () => screen.queryByText(/Встречи, поездки, игры/i);
 const appContent = () => screen.queryByText(/ПРИЗЕМЛИЛИСЬ: каталог/);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
