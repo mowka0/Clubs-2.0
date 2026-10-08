@@ -1,6 +1,8 @@
 import foxWelcomeArt from '../../assets/mascot/fox-onb-1.png';
 import foxChatArt from '../../assets/mascot/fox-chat.png';
-import foxConductorArt from '../../assets/mascot/fox-onb-3.png';
+// WebP, а не PNG: дирижёр очищен в полном цвете (дыры от снятия кромки залиты, зерно палитры
+// сглажено — docs/design/empty-states/fill-holes.py, denoise.py), и в PNG весил бы 477 КБ.
+import foxConductorArt from '../../assets/mascot/fox-onb-3.webp';
 
 /**
  * Тексты интро. Утверждены PO построчно (docs/modules/onboarding.md § «Интро») —
@@ -50,6 +52,20 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
     micro: 'Организация встреч, автоматические напоминания, сборы, репутация и т.д.',
   },
 ];
+
+/**
+ * Первый арт интро запрашивается сразу при старте приложения, параллельно с авторизацией: интро
+ * рисуется только после неё, и на медленной сети картинка иначе начинала качаться последней — вместе
+ * с двумя другими лисами (PO 2026-10-08, «еле-еле грузится»). Повторным запускам её отдаёт кэш.
+ */
+export function preloadFirstSlideArt(): void {
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'image';
+  link.href = foxWelcomeArt;
+  link.fetchPriority = 'high';
+  document.head.appendChild(link);
+}
 
 /** Подпись кнопки на последнем слайде: она же завершает интро и ведёт в профиль. */
 export const ONBOARDING_FINAL_CTA = 'Погнали!';

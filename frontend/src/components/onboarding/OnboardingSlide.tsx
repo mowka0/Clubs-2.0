@@ -3,6 +3,8 @@ import type { OnboardingSlideData } from './slides';
 
 interface OnboardingSlideProps {
   slide: OnboardingSlideData;
+  /** Первый слайд виден сразу — его арт качается раньше двух других. */
+  isFirst: boolean;
 }
 
 /**
@@ -12,10 +14,10 @@ interface OnboardingSlideProps {
  * Заголовок разбивается по `\n` вручную: перенос — часть композиции (две коротких строки
  * читаются как слоган, одна длинная расползается на четыре и выдавливает арт).
  */
-export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide }) => (
+export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide, isFirst }) => (
   <div className="ob-slide">
     <div className="ob-art">
-      <img className="ob-art-img" src={slide.artSrc} alt="" draggable={false} />
+      <img className="ob-art-img" src={slide.artSrc} alt="" draggable={false} fetchPriority={isFirst ? 'high' : 'low'} />
     </div>
 
     <h2 className="ob-title">

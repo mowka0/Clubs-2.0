@@ -10,12 +10,14 @@ import { App } from './App';
 import { RootErrorFallback } from './components/RootErrorFallback';
 import { LandingPage } from './pages/LandingPage';
 import { shouldShowLanding } from './entry';
+import { preloadFirstSlideArt } from './components/onboarding/slides';
 
 initTelegramSdk();
 
 // Не из Telegram и не на публичный адрес — это модератор провайдера или человек из рекламы:
 // ему нужна страница сервиса, а не приложение, которое без initData не стартует.
 const showLanding = shouldShowLanding(window.location.pathname, hasTelegramInitData());
+if (!showLanding) preloadFirstSlideArt();
 
 // Единый экземпляр QueryClient на всё приложение. Настройки по умолчанию ниже отражают реальность
 // Telegram Mini App — короткие ретраи, более длинный staleTime, чтобы не перезапрашивать данные

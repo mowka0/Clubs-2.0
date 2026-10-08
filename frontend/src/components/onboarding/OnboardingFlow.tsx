@@ -187,9 +187,9 @@ export const OnboardingFlow: FC = () => {
         }}
       >
         <div className="ob-track" ref={trackRef}>
-          {ONBOARDING_SLIDES.map((slide) => (
+          {ONBOARDING_SLIDES.map((slide, i) => (
             <div className="ob-cell" key={slide.micro}>
-              <OnboardingSlide slide={slide} />
+              <OnboardingSlide slide={slide} isFirst={i === 0} />
             </div>
           ))}
         </div>
