@@ -53,6 +53,7 @@ describe('ClubCoverButton', () => {
         body: { coverUrl: 'https://cdn/cover.png' },
       });
     });
+    expect(mockedUpload).toHaveBeenCalledWith(expect.any(File), 'photo');
   });
 
   it('показывает ошибку валидации и не грузит файл', async () => {

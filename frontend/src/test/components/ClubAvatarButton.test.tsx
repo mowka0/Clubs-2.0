@@ -76,6 +76,8 @@ describe('ClubAvatarButton', () => {
         body: { avatarUrl: 'https://cdn/new.png' },
       });
     });
+    // Аватар ужимается до размера кружка, а не до полноэкранного фото.
+    expect(mockedUpload).toHaveBeenCalledWith(expect.any(File), 'avatar');
   });
 
   it('не грузит неподходящий тип и показывает причину', async () => {

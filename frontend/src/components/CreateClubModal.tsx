@@ -450,7 +450,7 @@ export const CreateClubModal: FC<{
         <div className="rd-form">
           <div className="rd-field">
             <span className="rd-label">Аватар (необязательно)</span>
-            <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={submitting} />
+            <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={submitting} purpose="avatar" />
           </div>
           <label className="rd-field">
             <span className="rd-label">Описание клуба <span className="rd-req">*</span></span>

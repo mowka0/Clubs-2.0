@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 import { ImageLightbox } from '../../components/ImageLightbox';
 import { PhotoAttach } from '../../components/PhotoAttach';
+import { uploadImage } from '../../api/clubs';
 
 vi.mock('../../api/clubs', () => ({ uploadImage: vi.fn() }));
 
@@ -56,5 +57,19 @@ describe('PhotoAttach', () => {
     render(<PhotoAttach value="https://x/receipt.jpg" onChange={onChange} />);
     fireEvent.click(screen.getByText('Убрать'));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('PhotoAttach — чек', () => {
+  it('уходит без сжатия: его читают, мелкий текст важнее веса', async () => {
+    vi.mocked(uploadImage).mockResolvedValue('https://cdn/check.jpg');
+    const onChange = vi.fn();
+    const { container } = render(<PhotoAttach value={null} onChange={onChange} addLabel="Приложить чек" />);
+    const file = new File(['x'], 'check.jpg', { type: 'image/jpeg' });
+
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('https://cdn/check.jpg'));
+    expect(vi.mocked(uploadImage).mock.calls[0]).toEqual([file]);
   });
 });

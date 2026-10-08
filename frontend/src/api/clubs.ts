@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import { shrinkImage, type ImagePurpose } from '../utils/imageUpload';
 import type { ClubDetailDto, ClubListItemDto, InviteShareDto, MembershipDto, OrganizerCardDto, PageResponse } from '../types/api';
 
 export interface ClubFilters {
@@ -95,8 +96,13 @@ export function deleteClub(id: string): Promise<void> {
   return apiClient.delete<void>(`/api/clubs/${id}`);
 }
 
-export async function uploadImage(file: File): Promise<string> {
-  const { url } = await apiClient.uploadFile('/api/upload', file);
+/**
+ * Загрузка картинки. С `purpose` она сперва уменьшается на телефоне (`shrinkImage`); без него
+ * уходит оригинал — так грузятся чеки, их читают.
+ */
+export async function uploadImage(file: File, purpose?: ImagePurpose): Promise<string> {
+  const body = purpose ? await shrinkImage(file, purpose) : file;
+  const { url } = await apiClient.uploadFile('/api/upload', body);
   return url;
 }
 

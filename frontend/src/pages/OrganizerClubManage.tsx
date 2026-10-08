@@ -317,7 +317,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
       <div className="rd-glass rd-manage-media">
         <div className="rd-manage-media-col">
           <span className="rd-label">Аватар</span>
-          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} centered />
+          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} centered purpose="avatar" />
         </div>
         <div className="rd-manage-media-col">
           <span className="rd-label">Обложка</span>

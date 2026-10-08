@@ -1383,6 +1383,15 @@
 }
 .rd-club-avatar-err { font-size: 11px; line-height: 1.4; color: var(--danger); margin-top: 6px; }
 
+/* Шапка «Управления»: название и состав слева, справа аватар — тап ведёт на страницу клуба.
+   Аватар тот же, что на странице клуба, только внутри обложки, а не на её кромке: под
+   шапкой сразу полоска биллинга, наезд лёг бы на неё. */
+.rd-manage-hero .rd-hero-meta { right: 96px; }
+.rd-manage-hero-ava {
+  position: absolute; right: 16px; bottom: 14px; z-index: 2;
+  width: 64px; height: 64px; cursor: pointer;
+}
+
 .rd-club-name {
   font-size: 30px; font-weight: 800; letter-spacing: -0.04em; line-height: 1;
   color: var(--text); margin-top: 12px;

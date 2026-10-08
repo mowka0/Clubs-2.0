@@ -27,6 +27,25 @@ function claimPress(): boolean {
 }
 
 /**
+ * Кнопка одна, а хуков на экране два — Layout и страница. Каждый не управляет ею, а «просит
+ * показать»: кнопка видна, пока просит хоть один, и прячется, когда не просит никто. Раньше
+ * каждый показывал и прятал сам, и порядок эффектов решал исход: уходя со страницы, открытой
+ * кнопкой из чата, Layout прятал кнопку уже после того, как следующая страница её показала, —
+ * в «Управлении» вместо «Назад» оставалось «Закрыть» (PO 2026-10-08).
+ */
+let showRequests = 0;
+/** Сколько хуков смонтировано: компонент кнопки снимает последний из них. */
+let mountedHooks = 0;
+
+function applyVisibility(): void {
+  if (showRequests > 0) {
+    if (showBackButton.isAvailable()) showBackButton();
+  } else if (hideBackButton.isAvailable()) {
+    hideBackButton();
+  }
+}
+
+/**
  * Управляет видимостью и поведением Telegram BackButton.
  *
  * На главных таб-страницах (/, /my-clubs, /events, /profile) BackButton скрыт.
@@ -61,29 +80,29 @@ export function useBackButton(visible: boolean, onExitToChat?: () => void): void
   const shown = visible || (onExitToChat !== undefined && isChatExitPoint(location.pathname));
 
   useEffect(() => {
-    // Монтируем компонент BackButton, если он поддерживается
-    if (mountBackButton.isAvailable()) {
-      mountBackButton();
-    }
+    mountedHooks += 1;
+    // Уже смонтированную кнопку SDK не даёт смонтировать снова (`isAvailable` ложно), а
+    // неудавшийся раньше mount так повторится со следующим хуком.
+    if (mountBackButton.isAvailable()) mountBackButton();
+    // Кнопку, оставшуюся видимой с прошлого запуска, прячем, если показывать её некому.
+    applyVisibility();
 
     return () => {
-      if (hideBackButton.isAvailable()) {
-        hideBackButton();
-      }
+      mountedHooks -= 1;
+      if (mountedHooks > 0) return;
+      if (hideBackButton.isAvailable()) hideBackButton();
       unmountBackButton();
     };
   }, []);
 
   useEffect(() => {
-    if (shown) {
-      if (showBackButton.isAvailable()) {
-        showBackButton();
-      }
-    } else {
-      if (hideBackButton.isAvailable()) {
-        hideBackButton();
-      }
-    }
+    if (!shown) return;
+    showRequests += 1;
+    applyVisibility();
+    return () => {
+      showRequests -= 1;
+      applyVisibility();
+    };
   }, [shown]);
 
   useEffect(() => {
