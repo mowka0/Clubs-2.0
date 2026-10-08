@@ -3,7 +3,6 @@ import { FoxEmpty } from './feed/FoxEmpty';
 import foxChatArt from '../assets/mascot/fox-chat.png';
 import { useHaptic } from '../hooks/useHaptic';
 import { useNewClubChatLinkQuery, useStartChatLinkingMutation } from '../queries/chatLink';
-import { CHAT_PRICE_LINE } from '../api/billing';
 
 /**
  * Первый экран человека без клубов в чат-модели: предложение подключить свой телеграм-чат.
@@ -54,7 +53,7 @@ export const ConnectChatEmpty: FC = () => {
           <span className="rd-connect-line">🗓 Создал встречу — бот позовёт чат, соберёт «иду / не иду» и сам обновит закреп. Молчунам напомнит в одно нажатие.</span>
           <span className="rd-connect-line">💸 Сходили в бар — бот поделит счёт, разошлёт доли, запомнит, кто кому должен, и сам напомнит должникам.</span>
           <span className="rd-connect-line">📈 История встреч и статистика клуба копятся сами — есть что вспомнить.</span>
-          <span className="rd-connect-line">Клуб создастся из выбранной группы за минуту, заполнять ничего не нужно. {CHAT_PRICE_LINE}</span>
+          <span className="rd-connect-line">Клуб создастся из выбранной группы за минуту, заполнять ничего не нужно.</span>
         </>
       }
       primary={primary}

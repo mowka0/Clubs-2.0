@@ -68,10 +68,11 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
   });
 
-  it('клубов нет — предложение подключить чат, а не каталог чужих клубов', () => {
+  it('клубов нет — «Мои клубы» (там сцена «подключи чат» с шапкой и «+ Клуб»), а не каталог', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ data: [] }));
     renderHome();
-    expect(screen.getByText('подключите чат')).toBeInTheDocument();
+    expect(screen.getByText('мои клубы')).toBeInTheDocument();
+    expect(screen.queryByText('подключите чат')).not.toBeInTheDocument();
     expect(screen.queryByText('каталог клубов')).not.toBeInTheDocument();
   });
 
