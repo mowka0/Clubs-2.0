@@ -82,7 +82,7 @@ describe('ScreenPreview — превью экрана', () => {
 
     const preview = SCREEN_PREVIEWS.ACTIVITIES!;
     await waitFor(() => expect(screen.getByText(preview.title)).toBeInTheDocument());
-    expect(screen.getByText(preview.lead)).toBeInTheDocument();
+    expect(screen.getByText(preview.lead!)).toBeInTheDocument();
     // Правила игры видны целиком: цепочки шагов больше нет, всё на одном экране.
     preview.rules.forEach((rule) => expect(screen.getByText(rule)).toBeInTheDocument());
 
@@ -129,6 +129,16 @@ describe('ScreenPreview — превью экрана', () => {
 
     await waitFor(() => expect(calls).toBe(1));
     expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_MANAGE!.title)).toBeNull();
+  });
+
+  it('превью без подводки рисует только правила', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER');
+
+    const preview = SCREEN_PREVIEWS.CLUB_OWNER!;
+    await waitFor(() => expect(screen.getByText(preview.title)).toBeInTheDocument());
+    expect(document.querySelector('.sp-lead')).toBeNull();
+    preview.rules.forEach((rule) => expect(screen.getByText(rule)).toBeInTheDocument());
   });
 
   it('короткая протяжка шторку не закрывает — она возвращается на место', async () => {
