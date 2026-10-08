@@ -872,9 +872,10 @@ export const MyClubsPage: FC = () => {
             </div>
           )}
         </div>
+        {/* Оранжевая: иначе создание клуба с нуля не замечают (PO 2026-10-08). */}
         <button
           type="button"
-          className="rd-city-pill"
+          className="rd-city-pill rd-pill-accent"
           onClick={openCreate}
           aria-label="Создать клуб"
         >
