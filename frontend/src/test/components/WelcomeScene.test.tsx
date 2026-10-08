@@ -19,13 +19,15 @@ function renderScene(overrides: Partial<Parameters<typeof WelcomeScene>[0]> = {}
 }
 
 describe('WelcomeScene — велком-сцена новичка в клубе (срез 3)', () => {
-  it('free: праздник, три шага, факт о надёжности, CTA «Перейти в клуб» без подсказки', () => {
+  it('free: праздник, четыре шага, факт о надёжности, CTA «Перейти в клуб» без подсказки', () => {
     const { onCta } = renderScene();
 
     expect(screen.getByText('Ты в клубе!')).toBeInTheDocument();
     expect(screen.getByText('Бег по субботам')).toBeInTheDocument();
     expect(screen.getByText('Москва · 14 участников')).toBeInTheDocument();
     expect(screen.getByText('Голосуй — пойдёшь на встречу или нет')).toBeInTheDocument();
+    expect(screen.getByText('Скинулись — бот посчитал')).toBeInTheDocument();
+    expect(screen.getByText(/«Профиль → Долги»/)).toBeInTheDocument();
     expect(screen.getByText('Надёжность')).toBeInTheDocument();
     expect(screen.queryByText(/Оплатить взнос можно/)).not.toBeInTheDocument();
 
@@ -39,6 +41,7 @@ describe('WelcomeScene — велком-сцена новичка в клубе 
     expect(screen.getByText('Ты в клубе!')).toBeInTheDocument();
     expect(screen.getByText('Взнос — напрямую организатору')).toBeInTheDocument();
     expect(screen.getByText('Оплатить взнос можно на странице клуба')).toBeInTheDocument();
+    expect(screen.getByText('Скинулись — бот посчитал')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Перейти в клуб' })).toBeInTheDocument();
   });
 
@@ -47,6 +50,8 @@ describe('WelcomeScene — велком-сцена новичка в клубе 
 
     expect(screen.getByText('Заявка у организатора')).toBeInTheDocument();
     expect(screen.getByText('Пока ждёшь')).toBeInTheDocument();
+    // Человек ещё не в клубе — про доли и «Отдал» рано.
+    expect(screen.queryByText('Скинулись — бот посчитал')).not.toBeInTheDocument();
     expect(screen.getByText('Заявка отправлена.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Посмотреть мои клубы' }));
