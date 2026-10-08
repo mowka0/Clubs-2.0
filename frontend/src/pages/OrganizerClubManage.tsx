@@ -14,7 +14,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
-import foxFinancesArt from '../assets/mascot/fox-finances.png';
+import foxFinancesArt from '../assets/mascot/fox-finances.webp';
 import { Toast } from '../components/Toast';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { ManageHeader } from '../components/manage/ManageHeader';
@@ -310,16 +310,19 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
 
   return (
     <>
-      <div className="rd-section-sub-h">Аватар</div>
-      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
-        <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
-      </div>
-
-      {/* Обложка — картинка шапки страницы клуба, отдельная от аватара (V70). Здесь её можно
-          и снять; на самой странице клуба тап по обложке только добавляет и заменяет. */}
-      <div className="rd-section-sub-h">Обложка</div>
-      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
-        <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} />
+      {/* Аватар и обложка — одной карточкой в две колонки (PO 2026-10-08): порознь две полупустые
+          карточки съедали полэкрана. Обложка — шапка страницы клуба, отдельная от аватара (V70);
+          здесь её можно и снять, на самой странице клуба тап только добавляет и заменяет. */}
+      <div className="rd-section-sub-h">Оформление</div>
+      <div className="rd-glass rd-manage-media">
+        <div className="rd-manage-media-col">
+          <span className="rd-label">Аватар</span>
+          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} centered />
+        </div>
+        <div className="rd-manage-media-col">
+          <span className="rd-label">Обложка</span>
+          <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} centered />
+        </div>
       </div>
 
       <div className="rd-section-sub-h">Основное</div>

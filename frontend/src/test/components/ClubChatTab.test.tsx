@@ -428,6 +428,8 @@ describe('ClubChatTab', () => {
 
     expect(await screen.findByRole('switch', { name: 'Теги наград' })).toBeDisabled();
     expect(screen.getByText('✕ теги запрещены')).toBeInTheDocument();
+    // Путь к праву — словами PO: так он выглядит в живом клиенте Telegram.
+    expect(screen.getByText(/«Настройки группы» → «Участники», выбрать Clubs → «Управление тегами»/)).toBeInTheDocument();
   });
 
   it('теги включены, но право отняли — алерт деградации', async () => {
@@ -461,7 +463,7 @@ describe('ClubChatTab', () => {
 
     expect(await screen.findByText('Новые участники не видят историю чата')).toBeInTheDocument();
     // Путь в настройках Telegram — как он называется в клиенте (уточнение PO 2026-08-15).
-    expect(screen.getByText(/Управление группой → История чата для новых участников/)).toBeInTheDocument();
+    expect(screen.getByText(/«Настройки группы» → «История чата»/)).toBeInTheDocument();
   });
 
   it('история видна — подсказки нет', async () => {

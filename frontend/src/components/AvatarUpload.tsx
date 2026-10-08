@@ -8,9 +8,16 @@ interface Props {
   value: string | null;
   onChange: (url: string | null) => void;
   disabled?: boolean;
+  /** Колонка общей карточки (аватар | обложка в настройках клуба): всё по центру, кнопки друг
+      под другом — в половину ширины рядом они не помещаются. */
+  centered?: boolean;
 }
 
-export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
+/** Кнопки в ряд — обычный вид; в колонку — `centered`, где ряд не помещается. */
+const ROW_BUTTONS = { display: 'flex', gap: 8 } as const;
+const STACKED_BUTTONS = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 } as const;
+
+export const AvatarUpload: FC<Props> = ({ value, onChange, disabled, centered = false }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const haptic = useHaptic();
   const [uploading, setUploading] = useState(false);
@@ -48,7 +55,7 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: centered ? 'center' : 'flex-start' }}>
       <div
         onClick={disabled || uploading ? undefined : pick}
         style={{
@@ -93,7 +100,7 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
         style={{ display: 'none' }}
       />
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={centered ? STACKED_BUTTONS : ROW_BUTTONS}>
         <Button size="s" mode="outline" onClick={pick} disabled={disabled || uploading}>
           {value ? 'Заменить' : 'Загрузить'}
         </Button>
@@ -114,7 +121,7 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
       </div>
 
       {error && (
-        <Text style={{ fontSize: 12, color: 'var(--tgui--destructive_text_color, #d00)' }}>{error}</Text>
+        <Text style={{ fontSize: 12, color: 'var(--tgui--destructive_text_color, #d00)', textAlign: centered ? 'center' : undefined }}>{error}</Text>
       )}
     </div>
   );

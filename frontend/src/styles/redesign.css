@@ -1873,9 +1873,19 @@
 
 .rd-form { display: flex; flex-direction: column; gap: 16px; }
 .rd-field { display: flex; flex-direction: column; gap: 7px; }
-.rd-field > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-field > .rd-label,
+.rd-manage-media-col > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+
 .rd-field > .rd-label .rd-req { color: var(--accent); }
 .rd-field > .rd-label .rd-count { color: var(--text-faint); font-weight: 500; }
+
+/* Аватар и обложка в настройках клуба: две колонки одной карточки, между ними тонкая линия. */
+.rd-manage-media { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px 0; margin-bottom: 14px; }
+.rd-manage-media-col {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 12px;
+  overflow-wrap: anywhere;
+}
+.rd-manage-media-col + .rd-manage-media-col { border-left: 1px solid var(--hairline); }
 
 .rd-input, .rd-textarea, .rd-select {
   width: 100%; background: var(--surface); border: 1px solid var(--hairline);
