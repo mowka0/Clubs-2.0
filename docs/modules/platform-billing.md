@@ -612,8 +612,9 @@ subscription:
   Telegram — приложение как раньше. Реквизиты продавца — `pages/landingContent.ts` (ФИО должно
   совпадать с `BILLING_RECIPIENT_NAME`); числа цены и периода — `TRIAL_DAYS_DEFAULT` и
   `CHAT_PRICE_LABEL` в `api/billing.ts`, одно место на все публичные тексты.
-- Мастер `ClubSetupWizard` и `ConnectChatScreen`: одна строка «Первые 15 дней бесплатно. Дальше
-  199 ₽ в месяц за клуб» (`CHAT_PRICE_LINE`).
+- Строка `CHAT_PRICE_LINE` («Первые 15 дней после первой встречи — бесплатно, дальше 199 ₽ в месяц
+  за клуб») осталась только на `/about`. С экрана подключения чата и шага обложки мастера её
+  убрали (PO 2026-10-08): цену орг видит в полоске подписки созданного клуба.
 - Удалить: `components/subscription/*`, `api/subscription.ts`, `queries/subscription.ts`,
   `SubscriptionCard` из `ProfilePage`, `PaywallModal` из `CreateClubModal`, ключи
   `queryKeys.subscription`.

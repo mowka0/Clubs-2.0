@@ -1,7 +1,6 @@
 import { FC } from 'react';
 import { ClubCoverButton } from '../ClubCoverButton';
 import type { ClubSetupStepProps } from './types';
-import { CHAT_PRICE_LINE } from '../../../api/billing';
 
 type ClubSetupCoverStepProps = Pick<ClubSetupStepProps, 'club' | 'draft' | 'onGoToStep'> & {
   /** Впереди ещё шаг прав бота — тогда это не финал мастера. */
@@ -66,8 +65,9 @@ export const ClubSetupCoverStep: FC<ClubSetupCoverStepProps> = ({
       <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={goNext}>
         Пропустить обложку
       </button>
-      {/* То же обещание, что в рекламе и на экране «Выбрать чат»: цена не должна стать сюрпризом на второй встрече. */}
-      <div className="rd-cta-hint">{CHAT_PRICE_LINE}</div>
+      <div className="rd-cta-hint">
+        Лучше всего смотрится фото с вашей встречи. Главное держи в центре кадра — края обрежутся.
+      </div>
     </>
   );
 };
