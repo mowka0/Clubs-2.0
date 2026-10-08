@@ -37,6 +37,16 @@ interface VariantContent {
   ctaHint?: string;
 }
 
+/**
+ * Сборы — во всех вариантах, где человек уже в клубе (PO 2026-10-08, таблица текстов § 14, S1):
+ * без этого шага новичок узнаёт о долях и «Отдал» только из первой лички бота.
+ */
+const SKLADCHINA_STEP: WelcomeStep = {
+  icon: '4',
+  title: 'Скинулись — бот посчитал',
+  text: 'После встречи бот пришлёт твою долю и реквизиты. Перевёл — нажми «Отдал». Кто кому сколько должен — в «Профиль → Долги».',
+};
+
 // Тексты утверждены PO 2026-07-24 по мокапу docs/design/onboarding/mockups/welcome-scene.html,
 // переписаны 2026-10-07 по docs/design/prerelease-texts-2026-10.md § 2 — не менять без нового решения.
 const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
@@ -64,6 +74,7 @@ const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
         title: 'Приходи вживую',
         text: 'Каждая встреча растит твою надёжность в клубе.',
       },
+      SKLADCHINA_STEP,
     ],
     fact: (
       <>
@@ -98,6 +109,7 @@ const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
         title: 'Приходи вживую',
         text: 'Каждая встреча растит твою надёжность в клубе.',
       },
+      SKLADCHINA_STEP,
     ],
     fact: (
       <>
@@ -139,6 +151,7 @@ const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
         title: 'Приходи вживую',
         text: 'Каждая встреча растит твою надёжность в клубе.',
       },
+      SKLADCHINA_STEP,
     ],
     fact: (
       <>
