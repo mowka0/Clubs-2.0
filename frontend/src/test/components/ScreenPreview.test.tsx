@@ -48,13 +48,13 @@ async function expectNoSheet(title: string) {
   expect(screen.queryByText(title)).toBeNull();
 }
 
-function renderPreview(screenKey: OnboardingTour, ready = true) {
+function renderPreview(screenKey: OnboardingTour, ready = true, onAction?: () => void) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ScreenPreview screen={screenKey} ready={ready} />
+      <ScreenPreview screen={screenKey} ready={ready} onAction={onAction} />
     </QueryClientProvider>,
   );
 }
@@ -139,6 +139,60 @@ describe('ScreenPreview — превью экрана', () => {
     await waitFor(() => expect(screen.getByText(preview.title)).toBeInTheDocument());
     expect(document.querySelector('.sp-lead')).toBeNull();
     preview.rules.forEach((rule) => expect(screen.getByText(rule)).toBeInTheDocument());
+  });
+
+  it('кнопка-действие засчитывает показ и зовёт экран, вторая просто закрывает', async () => {
+    const user = userEvent.setup();
+    let calls = 0;
+    server.use(
+      http.post('*/api/users/me/onboarding/:tour', () => {
+        calls += 1;
+        return HttpResponse.json(makeUser(['CLUB_OWNER']));
+      }),
+    );
+    const onAction = vi.fn();
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER', true, onAction);
+
+    const action = SCREEN_PREVIEWS.CLUB_OWNER!.action!;
+    await waitFor(() => expect(screen.getByRole('button', { name: action.label })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: action.dismissLabel })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Понятно' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: action.label }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(calls).toBe(1));
+    expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeNull();
+  });
+
+  it('«Сначала осмотрюсь» закрывает шторку без действия, показ засчитан', async () => {
+    const user = userEvent.setup();
+    let calls = 0;
+    server.use(
+      http.post('*/api/users/me/onboarding/:tour', () => {
+        calls += 1;
+        return HttpResponse.json(makeUser(['CLUB_OWNER']));
+      }),
+    );
+    const onAction = vi.fn();
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER', true, onAction);
+
+    const action = SCREEN_PREVIEWS.CLUB_OWNER!.action!;
+    await waitFor(() => expect(screen.getByRole('button', { name: action.dismissLabel })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: action.dismissLabel }));
+    expect(onAction).not.toHaveBeenCalled();
+    await waitFor(() => expect(calls).toBe(1));
+    expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeNull();
+  });
+
+  it('превью без action остаётся с «Понятно», даже если экран передал действие', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB', true, vi.fn());
+
+    await waitFor(() => expect(screen.getByText(SCREEN_PREVIEWS.CLUB!.title)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Понятно' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SCREEN_PREVIEWS.CLUB_OWNER!.action!.label })).toBeNull();
   });
 
   it('короткая протяжка шторку не закрывает — она возвращается на место', async () => {

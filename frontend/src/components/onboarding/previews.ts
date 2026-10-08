@@ -32,6 +32,12 @@ export interface ScreenPreviewData {
    * без подводки (PO 2026-10-08).
    */
   rules: readonly string[];
+  /**
+   * Кнопка-действие вместо «Понятно»: оранжевая, под ней обычная с `dismissLabel` — просто
+   * закрывает. Что делает действие, решает экран (`onAction` у `ScreenPreview`); без него
+   * шторка остаётся с «Понятно».
+   */
+  action?: { label: string; dismissLabel: string };
 }
 
 /** Тексты превью по экранам. Ключи зеркалят enum OnboardingTour на бэкенде. */
@@ -71,6 +77,7 @@ export const SCREEN_PREVIEWS: Partial<Record<OnboardingTour, ScreenPreviewData>>
       'Можешь назначить друзей со-организаторами, чтобы они тоже создавали встречи/сборы.',
       'Поначалу будет непривычно, но потом все втянутся и будут заходить сами, успехов! 😉',
     ],
+    action: { label: 'Пригласить участников', dismissLabel: 'Сначала осмотрюсь' },
   },
   CLUB_MANAGE: {
     artSrc: foxFinancesArt,
@@ -104,5 +111,5 @@ export const SCREEN_PREVIEWS: Partial<Record<OnboardingTour, ScreenPreviewData>>
   },
 };
 
-/** Подпись кнопки, закрывающей превью. Одна на все экраны — это подтверждение, а не выбор. */
+/** Подпись кнопки по умолчанию; у превью с `action` её заменяют две кнопки. */
 export const PREVIEW_ACK = 'Понятно';

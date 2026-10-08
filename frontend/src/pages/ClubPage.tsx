@@ -810,7 +810,12 @@ export const ClubPage: FC = () => {
           он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
           Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
           Пока висит велком-сцена или шторка «Клуб создан», подсказки не лезут. */}
-      <ScreenPreview screen={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome && !showCreatedSheet} />
+      <ScreenPreview
+        screen={isOwner ? 'CLUB_OWNER' : 'CLUB'}
+        ready={!showWelcome && !showCreatedSheet}
+        // Таб «Участники» — там живёт вход «Пригласить в клуб»; как в `onShowInChat`.
+        onAction={() => { setActiveTab('members'); setShowInviteSheet(true); }}
+      />
     </div>
   );
 };
