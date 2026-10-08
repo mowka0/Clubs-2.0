@@ -15,6 +15,10 @@ vi.mock('../../components/ConnectChatScreen', () => ({
 }));
 
 const useMyClubsQueryMock = vi.fn();
+const deepLink = { pending: false };
+vi.mock('../../components/DeepLinkHandler', () => ({
+  isDeepLinkPending: () => deepLink.pending,
+}));
 vi.mock('../../queries/clubs', () => ({
   useMyClubsQuery: () => useMyClubsQueryMock(),
 }));
@@ -45,9 +49,20 @@ function ownerMembership(clubId: string) {
 
 beforeEach(() => {
   useMyClubsQueryMock.mockReset();
+  deepLink.pending = false;
 });
 
 describe('HomeRoute — куда ведёт «/» в чат-модели', () => {
+  it('приложение открыто ссылкой — «/» ждёт её, а не уводит в «Мои клубы»', () => {
+    // Баг PO 2026-10-08: новичок без клубов по «Открыть клуб» из чата попадал в «Мои клубы» —
+    // переход «/» срабатывал после перехода по ссылке и побеждал.
+    deepLink.pending = true;
+    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [] }));
+    renderHome();
+    expect(screen.getByText('загрузка')).toBeInTheDocument();
+    expect(screen.queryByText('мои клубы')).toBeNull();
+  });
+
   it('клубы ещё грузятся — спиннер, каталогом не мигаем', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ isPending: true, data: undefined }));
     renderHome();

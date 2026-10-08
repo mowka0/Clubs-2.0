@@ -87,6 +87,14 @@ export function isChatExitPoint(path: string): boolean {
 }
 
 /**
+ * Посадочная заменена другим экраном (`replace`): экран приглашения после вступления уступает
+ * место клубу. «Назад» с нового экрана должен вести туда же, куда вёл со старого, — в чат.
+ */
+export function moveDeepLinkLanding(from: string, to: string): void {
+  if (landingPath === from) landingPath = to;
+}
+
+/**
  * Открыто ли приложение кнопкой из чата клуба — по payload'у `startapp`.
  *
  * Чтение launch-параметров продублировано (`getStartParam` в `telegram/sdk` делает то же

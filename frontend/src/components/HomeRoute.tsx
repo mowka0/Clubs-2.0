@@ -4,6 +4,7 @@ import { DiscoveryPage } from '../pages/DiscoveryPage';
 import { PageFallback } from './Layout';
 import { PRODUCT_PROFILE } from '../config/productProfile';
 import { useMyClubsQuery } from '../queries/clubs';
+import { isDeepLinkPending } from './DeepLinkHandler';
 
 /**
  * Корневой роут «/». В чат-модели первый экран отвечает на вопрос «что у меня
@@ -11,6 +12,7 @@ import { useMyClubsQuery } from '../queries/clubs';
  * клуб, а не в каталог чужих.
  *
  * Ветки:
+ * - приложение открыто ссылкой и она ещё не отработала — спиннер: уводить отсюда будет она;
  * - профиль «каталог» — прежнее поведение, витрина Discovery;
  * - клубы ещё грузятся — спиннер, чтобы не мигнуть каталогом и не увести не туда;
  * - ошибка загрузки — «Мои клубы»: там есть готовый экран ошибки с повтором,
@@ -23,6 +25,10 @@ import { useMyClubsQuery } from '../queries/clubs';
  */
 export const HomeRoute: FC = () => {
   const myClubsQuery = useMyClubsQuery();
+
+  if (isDeepLinkPending()) {
+    return <PageFallback />;
+  }
 
   if (PRODUCT_PROFILE.homeTarget === 'catalog') {
     return <DiscoveryPage />;

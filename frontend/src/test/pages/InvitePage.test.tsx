@@ -301,3 +301,79 @@ describe('InvitePage — посадочная в языке страницы к�
     expect(await screen.findByText('Мои клубы')).toBeInTheDocument();
   });
 });
+
+describe('InvitePage — вход кнопкой «Открыть клуб» из чата (/clubs/:id/join)', () => {
+  /** Клуб по id, без кода приглашения: так его видит человек из чата, ещё не вступивший. */
+  function mockChatClub(club: Partial<ClubDetailDto>) {
+    // Ответ по id клуба имени владельца не несёт (ClubService.getClub) — имя даёт карточка организатора.
+    const detail: ClubDetailDto = { ...mockClubDetail, ownerFirstName: null, ...club };
+    let joinedVia: string | null = null;
+    server.use(
+      // Реквизиты СБП сервер отдаёт только участнику: до вступления их нет.
+      http.get(`*/api/clubs/${detail.id}`, () => HttpResponse.json(
+        joinedVia ? { ...detail, paymentLink: 'https://sbp.example/pay', paymentMethodNote: 'Сбербанк' } : detail,
+      )),
+      http.get(`*/api/clubs/${detail.id}/organizer-card`, () => HttpResponse.json({
+        firstName: 'Иван', lastName: null, username: 'ivan', avatarUrl: null,
+        onPlatformSince: '2026-01-01T00:00:00Z', clubsCount: 1, trustedMembers: 0,
+      })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([])),
+      http.get(`*/api/clubs/${detail.id}/quality`, () => HttpResponse.json(livingClubFacts)),
+      http.get(`*/api/clubs/${detail.id}/events/teaser`, () => HttpResponse.json(teaser)),
+      http.post(`*/api/clubs/${detail.id}/join`, () => {
+        joinedVia = 'club';
+        return HttpResponse.json({
+          id: 'mem-new', userId: 'user-1', clubId: detail.id,
+          status: detail.subscriptionPrice > 0 ? 'frozen' : 'active',
+          role: 'member', joinedAt: '2026-10-08T00:00:00Z', subscriptionExpiresAt: null,
+        }, { status: 201 });
+      }),
+      http.post('*/api/invite/:code/join', () => {
+        joinedVia = 'invite';
+        return HttpResponse.json({}, { status: 500 });
+      }),
+    );
+    return { joinedVia: () => joinedVia };
+  }
+
+  function renderChatJoin() {
+    return renderWithProviders(
+      <Routes>
+        <Route path="/clubs/:id/join" element={<InvitePage />} />
+        <Route path="/clubs/:id" element={<div>Страница клуба</div>} />
+      </Routes>,
+      { routerEntries: [`/clubs/${mockClubDetail.id}/join`] },
+    );
+  }
+
+  it('тот же экран приглашения, вступление — как участник чата, без кода', async () => {
+    const user = userEvent.setup();
+    const api = mockChatClub({ accessType: 'private', subscriptionPrice: 0 });
+    renderChatJoin();
+
+    expect(await screen.findByText(/Организатор — Иван/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Вступить в клуб' }));
+
+    expect(await screen.findByText('Страница клуба')).toBeInTheDocument();
+    expect(api.joinedVia()).toBe('club');
+  });
+
+  it('платный клуб: шит взноса — с реквизитами, пришедшими после вступления', async () => {
+    const user = userEvent.setup();
+    mockChatClub({ accessType: 'private', subscriptionPrice: 1500 });
+    renderChatJoin();
+
+    await user.click(await screen.findByRole('button', { name: 'Вступить и оплатить взнос' }));
+
+    // До вступления клуб пришёл гостевым, без СБП; шит обязан дождаться свежего ответа.
+    expect(await screen.findByText(/Сбербанк/)).toBeInTheDocument();
+  });
+
+  it('в закрытый клуб — заявкой, как на странице клуба', async () => {
+    mockChatClub({ accessType: 'closed' });
+    renderChatJoin();
+
+    expect(await screen.findByRole('button', { name: 'Отправить заявку' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Вступить в клуб' })).not.toBeInTheDocument();
+  });
+});

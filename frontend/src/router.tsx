@@ -162,6 +162,12 @@ export const router = createBrowserRouter([
         element: <InvitePage />,
       },
       {
+        // Тот же экран приглашения для того, кто открыл клуб кнопкой из его чата и ещё не
+        // вступил (PO 2026-10-08): кода приглашения у него нет, клуб известен по id.
+        path: '/clubs/:id/join',
+        element: <InvitePage />,
+      },
+      {
         // Форма обратной связи — открывается из шита «+» («Сообщить о проблеме»).
         path: '/feedback',
         element: <FeedbackPage />,

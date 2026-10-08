@@ -58,3 +58,20 @@ export function isActiveManagerMembership(
   if (membership.role === 'organizer') return true;
   return membership.role === 'co_organizer' && membership.status === 'active';
 }
+
+/**
+ * Место в клубе занято: участник (active), должник (frozen / expired) или отменивший подписку,
+ * у которого ещё идёт оплаченный период. Такому человеку ссылка на клуб открывает клуб, а не
+ * экран вступления: повторное «Вступить» у отменившего в периоде обнулило бы оплаченный срок
+ * (сервер пускает cancelled заново и замораживает до нового взноса).
+ */
+export function holdsClubSeat(
+  membership: { status: string; subscriptionExpiresAt?: string | null } | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!membership) return false;
+  if (membership.status === 'active' || membership.status === 'frozen' || membership.status === 'expired') return true;
+  return membership.status === 'cancelled'
+    && !!membership.subscriptionExpiresAt
+    && new Date(membership.subscriptionExpiresAt).getTime() > now;
+}
