@@ -122,7 +122,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 Прокачай свой чат — пусть это будет настоящий клуб, а не просто место для переписки!
 💳 Первые <trial-days, со склонением: 1 день / 2 дня / 15 дней> после первой встречи — бесплатно, дальше <цена из subscription_pricing> в месяц за клуб.
 👤 Продавец: самозанятый <billing.recipient-name>, ИНН <billing.recipient-inn>.
-✉️ Поддержка: @<telegram.support-username>, <telegram.support-email>
+
+✉️ Поддержка: @<telegram.support-username>, <telegram.support-email>   (отдельным абзацем, PO 2026-10-08)
 [🏠 Открыть Clubs]                        (WebAppInfo <telegram.webapp-base-url> — как у всех WebApp-кнопок бота)
 [📄 Оферта] [🔒 Политика] [💬 Поддержка]   (callback legal:offer / legal:privacy:0 / url https://t.me/<support-username>)
 ```

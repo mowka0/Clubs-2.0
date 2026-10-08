@@ -3,7 +3,7 @@ import foxStatsArt from '../../assets/mascot/fox-stats.png';
 import foxCatalogArt from '../../assets/mascot/fox-catalog.png';
 import foxCafeArt from '../../assets/mascot/fox-cafe.png';
 import foxClubCreatedArt from '../../assets/mascot/fox-club-created.png';
-import foxFinancesArt from '../../assets/mascot/fox-finances.png';
+import foxManageArt from '../../assets/mascot/fox-manage.webp';
 import foxMyClubsArt from '../../assets/mascot/fox-myclubs.png';
 import foxPlanningArt from '../../assets/mascot/fox-planning.png';
 
@@ -80,7 +80,7 @@ export const SCREEN_PREVIEWS: Partial<Record<OnboardingTour, ScreenPreviewData>>
     action: { label: 'Пригласить участников', dismissLabel: 'Сначала осмотрюсь' },
   },
   CLUB_MANAGE: {
-    artSrc: foxFinancesArt,
+    artSrc: foxManageArt,
     title: 'Управление клубом',
     lead: 'Чат, подписка, состав и статистика клуба — всё здесь.',
     rules: [

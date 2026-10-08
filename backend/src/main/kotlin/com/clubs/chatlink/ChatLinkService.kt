@@ -467,8 +467,12 @@ class ChatLinkService(
     fun postAndPinClubLink(chatId: Long, clubName: String, clubId: UUID): Long? {
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = chatId,
-            text = "📌 Клуб «$clubName» живёт в приложении Clubs: здесь встречи, записи и сборы.\n" +
-                "Если вы ещё не в клубе — вступайте, чтобы участвовать.",
+            text = "📌 «$clubName» — клуб нашего чата в приложении Clubs.\n\n" +
+                "🗓 Встречи — афиша и «пойду / не пойду» в одно нажатие, бот сам напомнит.\n" +
+                "💸 Сборы — бот поделит счёт и запомнит, кто кому должен.\n" +
+                "📸 История — все наши встречи в одном месте.\n\n" +
+                "Болтаем по-прежнему здесь, а всё организационное — в клубе. " +
+                "Жмите «Открыть клуб», чтобы вступить 👇",
             buttonText = "Открыть клуб",
             url = clubMiniAppUrl(clubId)
         ) ?: return null
