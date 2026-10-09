@@ -605,7 +605,8 @@ export const ClubPage: FC = () => {
                 : 'У клуба есть чат. Организатор позовёт вас туда после вступления.'
             }
             ctaLabel={club.accessType === 'closed' && showAccessTypeAndApplications ? 'Хочу вступить' : 'Вступить в клуб'}
-            onCta={handleChatHintCta}
+            // Полный клуб без заявок (этап 1): кнопка вела бы в «Club is full» — ответ уже на плашке ниже.
+            onCta={club.memberCount >= club.memberLimit && !showAccessTypeAndApplications ? undefined : handleChatHintCta}
           />
         )}
       </div>
@@ -619,7 +620,7 @@ export const ClubPage: FC = () => {
       {!showTabs && (isFrozenMember || isExpiredMember) && !showClubDues && (
         <ClubLockedNotice
           title="Доступ к клубу закрыт"
-          description="Напиши организатору — он откроет доступ."
+          description="Напиши организатору клуба."
         />
       )}
       {!showTabs && (isFrozenMember || isExpiredMember) && showClubDues && (

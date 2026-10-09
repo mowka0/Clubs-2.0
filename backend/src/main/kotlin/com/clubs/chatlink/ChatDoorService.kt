@@ -63,8 +63,8 @@ class ChatDoorService(
                 log.info("Door: frozen/expired member knocked, DM sent: clubId={} telegramId={}", club.id, requesterTelegramId)
             }
             else -> {
-                // Чужой (или аккаунта в приложении ещё нет): объясняем правило игры, заявка висит
-                // до одобрения в приложении (мокап 02-B).
+                // Чужой (или аккаунта в приложении ещё нет): объясняем правило игры, заявка в чат
+                // висит, пока он не вступит в клуб в приложении (мокап 02-B, этап 1).
                 gateway.sendDmWithWebApp(
                     telegramId = requesterTelegramId,
                     text = "👋 Привет! Чат «${link.chatTitle ?: "клуба"}» принадлежит клубу «${club.name}».\n\n" +

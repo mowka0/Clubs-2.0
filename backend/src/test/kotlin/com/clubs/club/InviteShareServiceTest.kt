@@ -129,6 +129,18 @@ class InviteShareServiceTest {
     }
 
     @Test
+    fun `карточка приглашения без категории — у клуба из чата она всегда «Другое» (этап 1)`() {
+        arrange(AccessType.private)
+        every { membershipRepository.findByUserAndClub(ownerId, clubId) } returns
+            membership(ownerId, MembershipRole.organizer, MembershipStatus.active)
+
+        service.createShare(clubId, ownerId)
+
+        assertTrue(messageHtml.captured.contains("Москва · 4 участника"), messageHtml.captured)
+        assertFalse(messageHtml.captured.contains("Другое"))
+    }
+
+    @Test
     fun `не-участник получает 403`() {
         arrange()
         val strangerId = UUID.randomUUID()

@@ -14,7 +14,8 @@ import { ChatMinimizeHint } from './ChatMinimizeHint';
  */
 export type ClubChatPillProps =
   | { mode: 'open'; clubId: string; inviteLink: string }
-  | { mode: 'hint'; hintText: string; ctaLabel: string; onCta: () => void };
+  /** Без [onCta] подсказка без кнопки: вступить сейчас нельзя (полный клуб без заявок, этап 1). */
+  | { mode: 'hint'; hintText: string; ctaLabel?: string; onCta?: () => void };
 
 export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
   const haptic = useHaptic();
@@ -60,16 +61,18 @@ export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
               и так объявлено через aria-expanded на самой пилюле. */}
           <div className="rd-chathint">
             <div className="rd-chathint-tx">{props.hintText}</div>
-            <button
-              type="button"
-              className="rd-chathint-cta"
-              onClick={() => {
-                setHintOpen(false);
-                props.onCta();
-              }}
-            >
-              {props.ctaLabel}
-            </button>
+            {props.onCta && props.ctaLabel && (
+              <button
+                type="button"
+                className="rd-chathint-cta"
+                onClick={() => {
+                  setHintOpen(false);
+                  props.onCta?.();
+                }}
+              >
+                {props.ctaLabel}
+              </button>
+            )}
           </div>
         </>
       )}
