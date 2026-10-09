@@ -62,6 +62,12 @@ interface ReputationRepository {
     /** Добавляет строки ledger, пропуская уже существующие (ON CONFLICT DO NOTHING). */
     fun appendLedgerIfAbsent(entries: List<LedgerEntry>)
 
+    /**
+     * Сериализует работу с репутацией пары (юзер, клуб) до конца транзакции (advisory xact-lock).
+     * Повторный захват в той же транзакции не блокирует.
+     */
+    fun lockUserClub(userId: UUID, clubId: UUID)
+
     /** Есть ли у человека в клубе исход [kind], случившийся не раньше [since]. */
     fun hasOutcomeSince(userId: UUID, clubId: UUID, kind: ReputationKind, since: OffsetDateTime): Boolean
 

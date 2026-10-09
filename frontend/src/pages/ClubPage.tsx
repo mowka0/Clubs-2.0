@@ -547,7 +547,7 @@ export const ClubPage: FC = () => {
           billing-member-pays.md M4): за неделю до конца периода, в грейс и без оплаты — всем
           участникам, заплатить за клуб может любой. Оплаченный клуб — только в «Управлении».
           «Бот удалён» — организаторам: это тревога, а не счёт. Ползунка здесь нет. */}
-      {(isMember || isManager) && club.chatLinked && (
+      {(isActiveMember || isManager) && club.chatLinked && (
         <BillingStatusStrip clubId={club.id} placement="club" showBotRemoved={isManager} onPay={() => setBillingSheet('pay')} />
       )}
       {billingSheet && (
@@ -713,7 +713,10 @@ export const ClubPage: FC = () => {
                   <span>Отправьте приглашение от своего имени</span>
                 </span>
               </button>
-              <ClubMembersTab clubId={id} isOrganizer={isManager} isOwner={isOwner} managementView={isManager} />
+              <ClubMembersTab
+                clubId={id} isOrganizer={isManager} isOwner={isOwner} managementView={isManager}
+                showLastPayer={club.chatLinked && (isActiveMember || isManager)}
+              />
             </>
           )}
         </>

@@ -488,6 +488,8 @@ class BillingServiceTest {
 
         assertFalse(dueWith(null, null), "период не начат — плашка только в «Управлении»")
         assertFalse(dueWith(2, null), "до конца бесплатного периода 13 дней")
+        assertFalse(dueWith(7, null), "граница: 8 дней — ещё рано")
+        assertTrue(dueWith(8, null), "граница: 7 дней — пора")
         assertTrue(dueWith(9, null), "до конца бесплатного периода 6 дней")
         assertTrue(dueWith(16, null), "бесплатный период кончился, не оплачено")
         assertFalse(dueWith(16, BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(20))), "оплачено надолго")
@@ -496,6 +498,17 @@ class BillingServiceTest {
             dueWith(16, BillingTestFixtures.subscription(club, status = SubscriptionStatus.PAST_DUE, periodEnd = OffsetDateTime.now().minusDays(2))),
             "грейс",
         )
+    }
+
+    @Test
+    fun `payment is not due while the owner's auto charge is in flight — a member would pay twice`() {
+        val live = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusHours(5))
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        assertTrue(service.status(club.id, club.ownerId).paymentDue)
+
+        every { paymentRepository.hasPendingRecurring(live.id) } returns true
+        assertFalse(service.status(club.id, club.ownerId).paymentDue)
     }
 
     @Test
@@ -552,6 +565,35 @@ class BillingServiceTest {
         verify { reputationService.rewardClubBillingPayment(memberId, club.id, payment.id, any(), any()) }
         verify { notifier.paidByMember(club, memberId, any(), ownerAutopayOn = true) }
         verify(exactly = 0) { notifier.paid(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a member paying ahead adds the month to the paid period, records no consent, and a former member earns nothing`() {
+        val memberId = UUID.randomUUID()
+        every { membershipRepository.isActiveMemberInActiveClub(memberId, club.id) } returns false
+        val end = OffsetDateTime.now().plusDays(5)
+        val live = BillingTestFixtures.subscription(club, periodEnd = end)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        every { subscriptionRepository.findById(live.id) } returns live
+        val payment = BillingTestFixtures.payment(club, subscriptionId = live.id, invId = 100901, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify { subscriptionRepository.extendPeriod(live.id, end.plusDays(30)) }
+        verify(exactly = 0) { reputationService.rewardClubBillingPayment(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a member checkout leaves no autopay consent record — the member never saw the mark`() {
+        val memberId = UUID.randomUUID()
+        every { paymentRepository.create(club.id, memberId, null, PaymentKind.MOTHER, PRICE, null, false) } returns
+            BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+
+        service.checkout(club.id, memberId, autopayRequested = false)
+
+        verify(exactly = 0) { consentRepository.record(any()) }
     }
 
     @Test

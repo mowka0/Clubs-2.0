@@ -151,7 +151,7 @@ class BillingLifecycleService(
                 billingService.onResult(ResultNotification(payment.invId, payment.amountKopecks, state.paymentMethod, fee = null))
             PaymentState.FAILED -> {
                 paymentRepository.markFailed(payment.id)
-                if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks)
+                if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks, now)
                 log.info("Billing payment failed at provider: invId={} kind={}", payment.invId, payment.kind)
             }
             // Провайдер молчит слишком долго. Закрываем счёт ЛЮБОГО вида: зависший дочерний иначе
@@ -160,7 +160,7 @@ class BillingLifecycleService(
             PaymentState.PENDING ->
                 if (payment.createdAt.isBefore(now.minusHours(motherExpireHours))) {
                     paymentRepository.markFailed(payment.id)
-                    if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks)
+                    if (payment.kind == PaymentKind.RECURRING) onChargeFailed(payment.subscriptionId, payment.amountKopecks, now)
                     log.info("Stale payment closed: invId={} kind={} clubId={}", payment.invId, payment.kind, payment.clubId)
                 }
         }
@@ -252,14 +252,17 @@ class BillingLifecycleService(
         )
         if (!accepted.accepted) {
             paymentRepository.markFailed(payment.id)
-            onChargeFailed(subscription.id, price)
+            onChargeFailed(subscription.id, price, now)
         }
         return payment.invId
     }
 
     /** Первая неудача: ACTIVE → PAST_DUE и DM; дальнейшие — молча, ретраи по слотам. */
-    private fun onChargeFailed(subscriptionId: UUID?, price: Int) {
+    private fun onChargeFailed(subscriptionId: UUID?, price: Int, now: OffsetDateTime) {
         val subscription = subscriptionId?.let(subscriptionRepository::findById) ?: return
+        // Пока списание было в пути, месяц оплатил кто-то другой (billing-member-pays.md M3): период
+        // уже продлён, и неудача относится к закрытому циклу — ни грейса, ни «не удалось списать».
+        if (calendarDaysUntil(subscription.currentPeriodEnd, now) > 0) return
         val moved = subscriptionRepository.transitionStatus(subscription.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
         if (moved > 0) {
             val club = subscription.subjectClubId?.let(clubRepository::findById) ?: return

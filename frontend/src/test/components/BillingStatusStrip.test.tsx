@@ -47,7 +47,16 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
 }
 
 function mockStatus(dto: BillingStatusDto) {
-  server.use(http.get(`*/api/clubs/${CLUB_ID}/billing`, () => HttpResponse.json(dto)));
+  const served = { count: 0 };
+  server.use(http.get(`*/api/clubs/${CLUB_ID}/billing`, () => { served.count += 1; return HttpResponse.json(dto); }));
+  return served;
+}
+
+/** «Плашки нет» доказывает только ответ, который уже пришёл: пустая плашка и до загрузки пустая. */
+async function expectNoStripAfterLoad(container: HTMLElement, served: { count: number }) {
+  await waitFor(() => expect(served.count).toBeGreaterThan(0));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(container.querySelector('.rd-billing-strip')).toBeNull();
 }
 
 describe('BillingStatusStrip', () => {
@@ -93,10 +102,9 @@ describe('BillingStatusStrip', () => {
   });
 
   it('на странице клуба оплаченный клуб не виден, пока до конца больше недели', async () => {
-    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, paymentDue: false }));
+    const served = mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, paymentDue: false }));
     const { container } = renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(container.querySelector('.rd-billing-strip')).toBeNull();
+    await expectNoStripAfterLoad(container, served);
   });
 
   it('на странице клуба за неделю до конца — плашка с кнопкой и крайним оплатившим, без ползунка', async () => {
@@ -123,11 +131,18 @@ describe('BillingStatusStrip', () => {
     expect(await screen.findByText('7 октября продлится автоматически с карты владельца — можно оплатить месяц вместо него.')).toBeInTheDocument();
   });
 
+  it('владельцу с автопродлением на главной — дата списания с его карты и без «Оплатить»', async () => {
+    // Его оплата без отметки согласия выключила бы автопродление (ревью 2026-10-09, S1).
+    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: true, paymentDue: true }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
+    expect(await screen.findByText('7 октября спишем 199 ₽ с вашей карты.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Оплатить' })).toBeNull();
+  });
+
   it('на странице клуба «бот удалён» видят только организаторы', async () => {
-    mockStatus(status({ state: 'BOT_REMOVED', trialUntil: null }));
+    const served = mockStatus(status({ state: 'BOT_REMOVED', trialUntil: null }));
     const member = renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(member.container.querySelector('.rd-billing-strip')).toBeNull();
+    await expectNoStripAfterLoad(member.container, served);
     member.unmount();
 
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" showBotRemoved onPay={() => {}} />);

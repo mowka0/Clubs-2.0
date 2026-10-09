@@ -29,6 +29,8 @@ interface ClubMembersTabProps {
    * передаётся managementView={isOrganizer}: владелец видит бакеты, обычный участник — плоский список.
    */
   managementView?: boolean;
+  /** Отмечать 💛 крайнего оплатившего: только у клуба с чатом и активному участнику — статус оплаты иначе 403. */
+  showLastPayer?: boolean;
 }
 
 // Окно (в днях), в котором истекающий платный доступ попадает в «Скоро закончится» (зеркалит red-dot бэкенда).
@@ -274,11 +276,11 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, isLastPay
   );
 };
 
-export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false, isOwner = false, managementView = false }) => {
+export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false, isOwner = false, managementView = false, showLastPayer = false }) => {
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const membersQuery = useClubMembersQuery(clubId);
-  const lastPayerId = useBillingQuery(clubId).data?.lastPayer?.userId;
+  const lastPayerId = useBillingQuery(clubId, { enabled: showLastPayer }).data?.lastPayer?.userId;
 
   if (membersQuery.isPending) {
     return (

@@ -164,7 +164,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
             <div className="fi">
               <div className="ft">Разовая оплата за месяц</div>
-              <div className="fd">Карта не сохранится, повторных списаний не будет. Месяц прибавится к оплаченному периоду клуба.</div>
+              <div className="fd">Карта не сохранится, повторных списаний не будет.</div>
             </div>
           </div>
         )

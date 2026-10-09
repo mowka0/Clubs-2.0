@@ -114,10 +114,13 @@ class BillingService(
                     clubId, it.invId, price, autopay, isOwner,
                 )
             }
-        // История согласий (V102, требование Robokassa): строка на каждый чекаут — и с отметкой, и без.
-        consentRepository.record(
-            AutopayConsent(clubId, userId, ConsentSource.CHECKOUT, granted = autopay, paymentId = payment.id, subscriptionId = payment.subscriptionId),
-        )
+        // История согласий (V102, требование Robokassa): строка на каждый чекаут владельца — и с отметкой,
+        // и без. Участнику отметку не показывают, и строка с её текстом была бы ложной.
+        if (isOwner) {
+            consentRepository.record(
+                AutopayConsent(clubId, userId, ConsentSource.CHECKOUT, granted = autopay, paymentId = payment.id, subscriptionId = payment.subscriptionId),
+            )
+        }
 
         // Recurring — у владельца всегда, когда провайдер его умеет: карта сохраняется, и ползунок
         // можно включить позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута.
@@ -267,11 +270,13 @@ class BillingService(
             live.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
         }
         // Надёжность за оплату — не чаще раза в оплаченный период (M7): предоплата на год вперёд
-        // двенадцатью счетами иначе покупала бы её.
-        reputationService.rewardClubBillingPayment(
-            userId = payment.payerUserId, clubId = club.id, paymentId = payment.id,
-            paidAt = now, notBefore = now.minusDays(periodDays),
-        )
+        // двенадцатью счетами иначе покупала бы её. Ушедшему из клуба по старой ссылке — не начисляем.
+        if (membershipRepository.isActiveMemberInActiveClub(payment.payerUserId, club.id)) {
+            reputationService.rewardClubBillingPayment(
+                userId = payment.payerUserId, clubId = club.id, paymentId = payment.id,
+                paidAt = now, notBefore = now.minusDays(periodDays),
+            )
+        }
         notifier.paidByMember(
             club, payment.payerUserId, subscription.currentPeriodEnd,
             ownerAutopayOn = live?.renewsAutomatically(paymentProvider.recurringAvailable) == true,
@@ -315,6 +320,8 @@ class BillingService(
         // «Проверяем оплату» — только по своим счетам: чужой брошенный чекаут тебя не касается.
         val pending = paymentRepository.hasPendingMother(club.id, userId)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
+        // Автосписание ушло провайдеру и ждёт ответа: деньги в пути.
+        val chargeInFlight = subscription != null && paymentRepository.hasPendingRecurring(subscription.id)
         // Бесплатный период идёт по чату и от первой встречи: до неё строки нет вовсе.
         val trialUntil = chatTrialRepository.findStartedAt(link.chatId)?.plusDays(trialDays)
         val state = when {
@@ -330,10 +337,7 @@ class BillingService(
             // уже пришло «не удалось списать», и полоска зовёт «Продлить», а не обещает карту.
             subscription.status == SubscriptionStatus.PAST_DUE -> BillingState.GRACE
             now.isBefore(subscription.currentPeriodEnd) -> BillingState.ACTIVE
-            subscription.awaitsAutoRenewal(
-                paymentProvider.recurringAvailable,
-                chargeInFlight = paymentRepository.hasPendingRecurring(subscription.id),
-            ) -> BillingState.ACTIVE
+            subscription.awaitsAutoRenewal(paymentProvider.recurringAvailable, chargeInFlight) -> BillingState.ACTIVE
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
@@ -341,14 +345,15 @@ class BillingService(
         return mapper().toStatusDto(
             state, price, trialUntil?.takeIf { state == BillingState.TRIAL }, trialDays.toInt(),
             subscription, graceUntil, pending, recipientName, canEnableAutopay, autopayAvailable,
-            paymentDue = isPaymentDue(state, trialUntil, subscription?.currentPeriodEnd, now),
+            paymentDue = !chargeInFlight && isPaymentDue(state, trialUntil, subscription?.currentPeriodEnd, now),
             lastPayer = lastPayer,
         )
     }
 
     /**
      * Пора платить — плашка возвращается на главную ко всем участникам (M4). Считается от даты, а
-     * не от тика шедулера: пропущенный тик плашку не задержит.
+     * не от тика шедулера: пропущенный тик плашку не задержит. Пока автосписание в пути, вызывающий
+     * её прячет: оплата участника поверх прошедшего списания взяла бы деньги дважды.
      */
     private fun isPaymentDue(state: BillingState, trialUntil: OffsetDateTime?, periodEnd: OffsetDateTime?, now: OffsetDateTime): Boolean =
         when (state) {

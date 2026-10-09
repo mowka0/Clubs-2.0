@@ -268,7 +268,8 @@ class BillingLifecycleServiceTest {
 
     @Test
     fun `reconcile applies succeeded charges, fails rejected ones and closes abandoned checkouts`() {
-        val sub = BillingTestFixtures.subscription(club)
+        // Списание ушло в день окончания периода — его неудача открывает грейс.
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusHours(3))
         val succeeded = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 1, createdAt = now.minusHours(7))
         val failed = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 2, createdAt = now.minusHours(7))
         val abandoned = BillingTestFixtures.payment(club, invId = 3, createdAt = now.minusHours(30))
@@ -288,6 +289,22 @@ class BillingLifecycleServiceTest {
         verify { notifier.chargeFailed(club, PRICE, sub.currentPeriodEnd.plusDays(7)) }
         verify { paymentRepository.markFailed(abandoned.id) }
         verify(exactly = 0) { paymentRepository.markFailed(young.id) }
+    }
+
+    @Test
+    fun `a charge that fails after a member already paid the month opens no grace and sends no alarm`() {
+        // Списание с карты владельца было в пути, участник тем временем оплатил месяц — период уже продлён.
+        val extended = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(30))
+        val charge = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = extended.id, invId = 5, createdAt = now.minusHours(7))
+        every { paymentRepository.findPendingCreatedBefore(now.minusHours(6)) } returns listOf(charge)
+        every { paymentProvider.queryState(5) } returns PaymentStateResult(PaymentState.FAILED)
+        every { subscriptionRepository.findById(extended.id) } returns extended
+
+        service.reconcilePending(now)
+
+        verify { paymentRepository.markFailed(charge.id) }
+        verify(exactly = 0) { subscriptionRepository.transitionStatus(any(), any(), SubscriptionStatus.PAST_DUE) }
+        verify(exactly = 0) { notifier.chargeFailed(any(), any(), any()) }
     }
 
     @Test

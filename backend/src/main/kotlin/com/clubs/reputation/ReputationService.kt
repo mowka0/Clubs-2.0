@@ -155,6 +155,8 @@ class ReputationService(
      */
     @Transactional
     fun rewardClubBillingPayment(userId: UUID, clubId: UUID, paymentId: UUID, paidAt: OffsetDateTime, notBefore: OffsetDateTime): Boolean {
+        // Два подтверждения разных счетов одновременно (ResultURL + опрос) иначе оба прошли бы проверку.
+        repository.lockUserClub(userId, clubId)
         if (repository.hasOutcomeSince(userId, clubId, ReputationKind.club_billing_paid, notBefore)) {
             log.info("Club billing reward skipped, already rewarded this period: userId={} clubId={} paymentId={}", userId, clubId, paymentId)
             return false

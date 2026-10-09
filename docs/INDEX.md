@@ -44,10 +44,10 @@
 | `interest` | `club-interests.md` |
 | `membership` | `membership.md`, `membership-lifecycle.md` |
 | `payment` | `payment.md`, `platform-billing.md` (сеам `PaymentProvider`, адаптер Robokassa); `payment-v2.md` — superseded |
-| `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md` |
+| `reputation` | `reputation.md`, `reputation-v2.md`, `reputation-path-back.md`; вид `club_billing_paid` (+10 за оплату клуба участником) — `billing-member-pays.md` § 4.5 |
 | `skladchina`, `debt` | `skladchina-v3.md` |
 | `storage` | `infrastructure.md` |
-| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи; история согласий на автосписание `autopay_consent` — § 5.1b), `membership-lifecycle.md`; `payment-v2.md` — superseded |
+| `subscription` | `platform-billing.md` (биллинг за чат, гейт бесплатной встречи; история согласий на автосписание `autopay_consent` — § 5.1b), `billing-member-pays.md` (оплата любым участником, `paymentDue`, `lastPayer`, V103), `membership-lifecycle.md`; `payment-v2.md` — superseded |
 | `user` | `profile.md`, `profile-quest.md` |
 
 **Миграции** `backend/src/main/resources/db/migration/` → спека модуля, чью таблицу трогает,
@@ -58,7 +58,7 @@
 | Страница | Спеки для сверки |
 |---|---|
 | `DiscoveryPage.tsx` | `discovery-card.md`, `discovery-redesign.md` |
-| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md`; полоска биллинга над «О клубе» — `platform-billing.md` § 7 |
+| `ClubPage.tsx` | `club-page-unified.md`, `clubs.md`; полоска биллинга над «О клубе» (только когда пора платить, всем участникам) и `?billing=` — `billing-member-pays.md` § 6, `platform-billing.md` § 7 |
 | `MyClubsPage.tsx` | `my-clubs-unified.md`, `applications-inbox.md`, `reputation-path-back.md` |
 | `ActivitiesPage.tsx` | `events-feed.md`, `unified-activity-creation.md` |
 | `EventPage.tsx` | `events.md`, `event-formats.md`, `event-vote-block.md`, `event-stage2-composition.md` |
@@ -68,7 +68,7 @@
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7; `hooks/useClubPageUnderneath.ts` (страница клуба под низом истории, чтобы «назад» и свайп работали после оплаты) |
-| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip`, `offerText.ts` + `offerSections.generated.ts` ← `docs/legal/oferta.md` через `scripts/gen-oferta.py`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `PrivacyPage.tsx` + `privacyText.ts` (`/privacy`), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
+| `src/components/billing/` (`BillingSheet`, `BillingStatusStrip` — места `club`/`manage` по `billing-member-pays.md` § 6, `offerText.ts` + `offerSections.generated.ts` ← `docs/legal/oferta.md` через `scripts/gen-oferta.py`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `PrivacyPage.tsx` + `privacyText.ts` (`/privacy`), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
 | `hooks/useBackButton.ts` + `telegram/sdk.ts` (`closeMiniApp`), `telegram/chatOrigin.ts`, `store/useCloseConfirmStore.ts` (шторку рендерит `Layout.tsx`) | `club-chat-link.md` § «Тот же тупик у кнопки «назад»» (выход в чат без вопроса; позади пусто без чата — шторка «Закрыть приложение?», один обработчик на нажатие, AC 10c/10d) |
 | `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
@@ -150,7 +150,8 @@
 | `payment.md` | взносы, оплата участником | 2026-08-10 |
 | `platform-billing-testplan.md` | тест-план staging-прогона биллинга: 21 кейс по блокам (бесплатный период, оплата заглушкой, продление, периферия), переменные staging, что проверяет Dev по БД | 2026-09-16 |
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
-| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, отметка согласия на автосписание (по умолчанию снята — требование Robokassa) и история согласий (V102), ползунок на странице клуба; `canPay` для со-организатора, имя бота на `/pay/return` — из бандла | 2026-10-05 |
+| `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, отметка согласия на автосписание (по умолчанию снята — требование Robokassa) и история согласий (V102), ползунок на странице клуба; имя бота на `/pay/return` — из бандла | 2026-10-09 |
+| `billing-member-pays.md` | оплата клуба **любым участником** (разово, без карты; автосписание — только владельца), плашка на главной «когда пора платить» (`paymentDue`), крайний оплативший 💛 (`lastPayer`), +10 надёжности `club_billing_paid`, V103 | 2026-10-09 |
 | `funnel.md` | **воронка привлечения и недельный отчёт себе (День 4,5)**: `/start ad_<slug>` → `bot_started`, события привязки → `chat_connected`/`chat_disconnected`, V100 `telegram_id`, DM-отчёт админам платформы в понедельник 09:00 МСК (`FUNNEL_REPORT_CRON`, `PLATFORM_ADMIN_TELEGRAM_IDS`) с определениями всех метрик; состав согласован с PO 2026-09-30 | 2026-09-30 |
 
 ### Пользователь и вход

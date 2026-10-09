@@ -30,5 +30,7 @@ COMMENT ON COLUMN reputation_ledger.axis IS
     'Ось репутации (enum reputation_axis): attendance = явка на события; finance = деньги — долги сборов и оплата подписки клуба участником.';
 COMMENT ON COLUMN reputation_ledger.source_type IS
     'Тип источника исхода (enum reputation_source): event = событие; skladchina = складчина (сбор); club_billing = оплата подписки клуба за чат.';
+COMMENT ON COLUMN reputation_ledger.occurred_at IS
+    'Время ПОВЕДЕНИЯ, а не обработки: для attendance = events.event_datetime; для finance = момент закрытия долга сбора (skladchina) или оплаты подписки клуба (club_billing). Неизменяемый якорь для recency-decay.';
 COMMENT ON COLUMN reputation_ledger.source_id IS
     'Идентификатор источника: events.id, skladchinas.id или platform_payment.id (по source_type; FK не объявлен намеренно — леджер переживает удаление источника). UNIQUE (user_id, source_type, source_id) — ровно один исход на источник, повторная обработка = no-op.';

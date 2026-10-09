@@ -240,6 +240,14 @@ disputed/null attendance.
 с прежним `addReliabilityDelta` (трогал только `reliability_index`); значения P1a (+10/−5/−25)
 действовали до решения 2026-06-12.
 
+### Ось «финансы»: оплата подписки клуба участником (V103, PO 2026-10-09)
+Участник, не владелец, оплатил подписку клуба за чат → строка `club_billing_paid`: ось `finance`,
+**+10** (как вовремя закрытый долг), `source_type = club_billing`, `source_id = platform_payment.id`,
+`occurred_at = момент оплаты`. Не чаще одной строки на (user, club) за 30 дней (`subscription.period-days`):
+иначе предоплата вперёд покупала бы надёжность. XP не даёт (XP — только участие), в счётчики сборов
+`skladchinaPaid/Total` не входит. Владелец за свою оплату ничего не получает (анти-фарм правило 1).
+Подробно — `billing-member-pays.md` § 4.5.
+
 ---
 
 ## Анти-фарм правило 1 (владелец ≠ выгодоприобретатель)
@@ -493,7 +501,7 @@ kept/broke/neutral по **kind** (магнитудо-независимо, ко�
 
 | kept | broke | neutral (вне знаменателя) |
 |---|---|---|
-| `ironclad`, `spontaneous`, `skladchina_paid` | `no_show`, `spectator`, `skladchina_expired`, `abandoned_slot` (V45), `open_no_show` (V63, зарезервирован) | `confirmed_unresolved`, `skladchina_declined` (историч.) |
+| `ironclad`, `spontaneous`, `skladchina_paid`, `club_billing_paid` (V103) | `no_show`, `spectator`, `skladchina_expired`, `abandoned_slot` (V45), `open_no_show` (V63, зарезервирован) | `confirmed_unresolved`, `skladchina_declined` (историч.) |
 
 > **UPDATED 2026-07-21 (bugfix/reputation-consistency):** SQL-списки kept/broke в
 > `JooqReputationRepository.recompute` теперь **выводятся из `TrustPolicy.classOf`** — единый

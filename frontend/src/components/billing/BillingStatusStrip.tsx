@@ -117,7 +117,10 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
               {onClubPage
                 // На главной полоска появляется за неделю до конца — зовём продлить, не пугая (M4).
                 ? (autopayOn
-                  ? `${periodEnd} продлится автоматически с карты владельца — можно оплатить месяц вместо него.`
+                  ? (data.canEnableAutopay
+                    // Владельцу — без «вместо него»: его оплата без отметки согласия выключила бы автопродление.
+                    ? `${periodEnd} спишем ${price} с вашей карты.`
+                    : `${periodEnd} продлится автоматически с карты владельца — можно оплатить месяц вместо него.`)
                   : `${price} в месяц за клуб. ${remindLine ?? 'Продлить можно заранее — месяц прибавится к оплаченному.'}`)
                 : `${price} в месяц за клуб · Robokassa`}
             </div>
@@ -151,7 +154,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
               />
             </div>}
           </div>
-          {onClubPage && <button type="button" className="act" onClick={onPay}>Оплатить</button>}
+          {onClubPage && !(autopayOn && data.canEnableAutopay) && <button type="button" className="act" onClick={onPay}>Оплатить</button>}
         </div>
       );
     case 'GRACE':

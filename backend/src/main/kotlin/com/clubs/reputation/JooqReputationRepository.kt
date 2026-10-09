@@ -109,6 +109,10 @@ class JooqReputationRepository(
                 )
             }
 
+    override fun lockUserClub(userId: UUID, clubId: UUID) {
+        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "$userId:$clubId")
+    }
+
     override fun hasOutcomeSince(userId: UUID, clubId: UUID, kind: ReputationKind, since: OffsetDateTime): Boolean =
         dsl.fetchExists(
             dsl.selectOne().from(REPUTATION_LEDGER).where(
@@ -185,7 +189,7 @@ class JooqReputationRepository(
         // источников (посещаемость события + финансы складчины) для одной и той же пары могли бы
         // не увидеть ещё не закоммиченную строку леджера друг друга под READ COMMITTED и затереть
         // кэш (lost update). Advisory-лок транзакции снимается автоматически при коммите.
-        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "$userId:$clubId")
+        lockUserClub(userId, clubId)
 
         val l = REPUTATION_LEDGER
         val attendanceRow = l.AXIS.eq(ReputationAxis.attendance)
