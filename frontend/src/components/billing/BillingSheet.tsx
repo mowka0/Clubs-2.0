@@ -145,7 +145,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       {payingEarly && data?.trialUntil && (
         <div className="rd-billing-note">
           Бесплатный период клуба <b>«{clubName}»</b> идёт до {formatBillingDate(data.trialUntil)} — оплата
-          сейчас его не прерывает: месяц подписки начнётся с момента платежа.
+          сейчас его не прерывает: оплаченный месяц начнётся после него.
         </div>
       )}
       <div className="rd-dues-amount">

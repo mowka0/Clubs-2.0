@@ -229,7 +229,7 @@ class BillingService(
             subscriptionRepository.createChatSubscription(
                 payerUserId = club.ownerId,
                 clubId = club.id,
-                currentPeriodEnd = now.plusDays(periodDays),
+                currentPeriodEnd = firstPeriodStart(club, now).plusDays(periodDays),
                 providerToken = payment.invId.toString(),
                 autopay = payment.autopayRequested,
                 autopayPossible = autopayPossible,
@@ -256,7 +256,7 @@ class BillingService(
             subscriptionRepository.createChatSubscription(
                 payerUserId = club.ownerId,
                 clubId = club.id,
-                currentPeriodEnd = now.plusDays(periodDays),
+                currentPeriodEnd = firstPeriodStart(club, now).plusDays(periodDays),
                 providerToken = null,
                 autopay = false,
                 autopayPossible = false,
@@ -302,6 +302,16 @@ class BillingService(
         subscriptionRepository.resetChargeAttempts(subscription.id)
         notifier.renewed(club, newEnd)
         return subscription.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
+    }
+
+    /**
+     * Первый оплаченный месяц идёт после бесплатного периода, а не с момента оплаты: заплатившему
+     * заранее остаток бесплатных дней не сгорает (PO 2026-10-09).
+     */
+    private fun firstPeriodStart(club: Club, now: OffsetDateTime): OffsetDateTime {
+        val chatId = chatLinkRepository.findByClubId(club.id)?.chatId ?: return now
+        val trialEnd = chatTrialRepository.findStartedAt(chatId)?.plusDays(trialDays) ?: return now
+        return maxOf(now, trialEnd)
     }
 
     private fun buildStatus(club: Club, userId: UUID, now: OffsetDateTime): BillingStatusDto {

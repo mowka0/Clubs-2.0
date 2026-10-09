@@ -612,6 +612,22 @@ class BillingServiceTest {
     }
 
     @Test
+    fun `paying during the free period starts the paid month after it ends, not from the payment`() {
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(10)
+        val memberId = UUID.randomUUID()
+        val payment = BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+        every { subscriptionRepository.createChatSubscription(any(), any(), any(), any(), any(), any()) } returns BillingTestFixtures.subscription(club)
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        val end = slot<OffsetDateTime>()
+        verify { subscriptionRepository.createChatSubscription(club.ownerId, club.id, capture(end), null, false, false) }
+        assertClose(OffsetDateTime.now().plusDays(5 + 30), end.captured)
+    }
+
+    @Test
     fun `the owner's own payment earns no reliability`() {
         val payment = BillingTestFixtures.payment(club, autopayRequested = false)
         every { paymentRepository.findByInvId(payment.invId) } returns payment
