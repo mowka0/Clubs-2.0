@@ -232,9 +232,7 @@ class ChatLinkBotService(
             chatLinkService.releaseKeepingBotInChat(existingForChat)
         }
 
-        // Размер клуба = размер чата: он должен вместить тех, кто уже в группе. Telegram может
-        // не ответить — тогда сервис ставит запасной потолок, а человек правит в мастере.
-        val club = clubService.createClubFromChat(chatTitle, ownerId, gateway.getChatMemberCount(chatId))
+        val club = clubService.createClubFromChat(chatTitle, ownerId)
         log.info("Club created from chat: clubId={} chatId={} ownerTelegramId={}", club.id, chatId, fromTelegramId)
         // Ссылку в чат НЕ постим: клуб только что родился пустым, и приглашение смотреть на
         // страницу без описания и обложки потратило бы первое впечатление впустую. Презентует

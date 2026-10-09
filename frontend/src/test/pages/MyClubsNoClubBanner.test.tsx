@@ -5,6 +5,7 @@ import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { ApplicationDto } from '../../api/membership';
 import type { MembershipDto, UserClubReputationDto } from '../../types/api';
 
@@ -23,6 +24,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 }));
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',
@@ -188,5 +191,44 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
 
     expect(await screen.findByText('Прокачай чат до настоящего клуба')).toBeInTheDocument();
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
+  });
+});
+
+describe('MyClubsPage — этап 1: без заявок, взносов, категории и создания с нуля', () => {
+  withStage1Profile();
+
+  it('одна pending-заявка не считается: пустой экран «подключи чат», без «Мои заявки»', async () => {
+    mockEndpoints({ clubs: [], applications: [pendingApplication()], historyClubs: [] });
+    renderPage();
+
+    expect(await screen.findByText('Прокачай чат до настоящего клуба')).toBeInTheDocument();
+    expect(screen.queryByText(/Мои заявки/)).not.toBeInTheDocument();
+    expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/заявк/)).not.toBeInTheDocument();
+  });
+
+  it('frozen-членство живёт в «Где я состою», без «Доступ закрыт — оплатите»; мета без категории и лимита', async () => {
+    mockEndpoints({ clubs: [membership({ status: 'frozen' })], applications: [], historyClubs: [historyClub()] });
+    renderPage();
+
+    expect(await screen.findByText(/Где я состою/)).toBeInTheDocument();
+    expect(screen.queryByText(/Доступ закрыт — оплатите/)).not.toBeInTheDocument();
+    expect(await screen.findByText('участник · 5 участников')).toBeInTheDocument();
+    expect(screen.queryByText(/Настолки/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/5 \/ 20/)).not.toBeInTheDocument();
+    // «История» тоже без категории.
+    expect(screen.getByText('вы покинули')).toBeInTheDocument();
+  });
+
+  it('«+ Клуб» ведёт к подключению чата, развилки «Создать с нуля» нет', async () => {
+    mockEndpoints({ clubs: [membership()], applications: [], historyClubs: [] });
+    // Ссылка на бота ещё не приехала — экран подключения дождётся её сам.
+    server.use(http.get('*/api/chat-link/new-club-url', () => HttpResponse.json({ message: 'down' }, { status: 500 })));
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Создать клуб' }));
+
+    expect(await screen.findByText('Экран подключения чата')).toBeInTheDocument();
+    expect(screen.queryByText('Создать с нуля')).not.toBeInTheDocument();
   });
 });

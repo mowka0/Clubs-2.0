@@ -36,10 +36,11 @@ export function useMyPendingApplicationsQuery() {
  * организатора (`{ inboxCount }`). Один вызов бэкенда, один слот кэша, зеркалит
  * useSkladchinaActionRequiredCountQuery.
  */
-export function useMyClubsActionCountsQuery() {
+export function useMyClubsActionCountsQuery(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.applications.myPendingActionCounts,
     queryFn: getMyClubsActionCounts,
+    enabled: options.enabled ?? true,
     staleTime: 60_000,
   });
 }

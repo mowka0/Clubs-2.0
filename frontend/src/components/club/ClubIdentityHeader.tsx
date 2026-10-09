@@ -1,6 +1,7 @@
 import { FC, ReactNode } from 'react';
 import { ClubAvatarButton } from './ClubAvatarButton';
-import { formatPrice } from '../../utils/formatters';
+import { formatPrice, memberCountCaption } from '../../utils/formatters';
+import { PRODUCT_PROFILE } from '../../config/productProfile';
 import type { ClubDetailDto } from '../../types/api';
 
 /** Тип доступа в первом чипе параметров. */
@@ -52,21 +53,26 @@ export const ClubIdentityHeader: FC<ClubIdentityHeaderProps> = ({ club, coverAct
 
         <div className="rd-club-name">{club.name}</div>
 
-        {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. */}
+        {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. На этапе 1
+            остаются город и состав — доступа и взноса у клуба из чата нет (PRODUCT_PROFILE). */}
         <div className="rd-club-facts">
-          <span className="rd-club-fact">
-            <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
-          </span>
+          {PRODUCT_PROFILE.showAccessTypeAndApplications && (
+            <span className="rd-club-fact">
+              <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
+            </span>
+          )}
           <span className="rd-club-fact rd-shrink">
             <span aria-hidden="true">📍</span>
             <b>{club.city}</b>
           </span>
           <span className="rd-club-fact">
-            <b>{club.memberCount} / {club.memberLimit}</b>
+            <b>{memberCountCaption(club.memberCount)}</b>
           </span>
-          <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
-            <b>{formatPrice(club.subscriptionPrice)}</b>
-          </span>
+          {PRODUCT_PROFILE.showClubDues && (
+            <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
+              <b>{formatPrice(club.subscriptionPrice)}</b>
+            </span>
+          )}
         </div>
       </div>
     </>

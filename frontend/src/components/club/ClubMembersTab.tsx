@@ -8,6 +8,7 @@ import { Toast } from '../Toast';
 import { MemberProfileModal } from './MemberProfileModal';
 import { isManagerRole, membershipRoleLabel } from '../../utils/membershipRole';
 import { reliabilityTier } from '../../utils/reputationTier';
+import { PRODUCT_PROFILE } from '../../config/productProfile';
 import type { MemberListItemDto } from '../../types/api';
 
 interface ClubMembersTabProps {
@@ -198,8 +199,9 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, isLastPay
   // Без доступа: frozen (первый взнос не подтверждён) или expired (просрочил продление). Такие строки
   // видит только организатор (бэкенд скрывает их от обычных зрителей), так что «ледяное» оформление —
   // только у него.
-  const isFrozen = member.accessStatus === 'frozen';
-  const isExpired = member.accessStatus === 'expired';
+  // Без взносов (этап 1) пометок доступа нет: закрыть доступ и открыть его взносом там нечем.
+  const isFrozen = PRODUCT_PROFILE.showClubDues && member.accessStatus === 'frozen';
+  const isExpired = PRODUCT_PROFILE.showClubDues && member.accessStatus === 'expired';
   const hasScore = member.trust !== null;
   // Строку обещаний показываем только при наличии событийного трека; участник «только финансы»
   // (запись по складчине, 0 подтверждений) сохраняет очки, но прячет обманчивое «Обещания 0%» (F5-08).
@@ -219,7 +221,8 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, isLastPay
           : null;
   // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет
   // срока). Гейт по accessStatus === 'active': у expired тоже есть subscriptionExpiresAt, но «Активен» врал бы.
-  const accessMeta = forOrganizer && !isOwner && member.accessStatus === 'active' && member.subscriptionExpiresAt
+  const accessMeta = PRODUCT_PROFILE.showClubDues && forOrganizer && !isOwner
+    && member.accessStatus === 'active' && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
     : null;
   // Публичные награды клуба (R3) — защищаемся от payload без этого поля (граница не проверяется схемой).
@@ -297,7 +300,8 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   const members = membersQuery.data ?? [];
   // Attention-бакеты — управленческая информация: их видит только организатор в managementView
   // (страница клуба передаёт managementView={isOrganizer}). Обычный зритель — плоский список.
-  const showBuckets = isOrganizer && managementView;
+  // Все бакеты про взносы, поэтому без них (этап 1) список плоский и у организатора.
+  const showBuckets = PRODUCT_PROFILE.showClubDues && isOrganizer && managementView;
   const expired = showBuckets ? members.filter((m) => bucketOf(m) === 'expired') : [];
   const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
   const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];

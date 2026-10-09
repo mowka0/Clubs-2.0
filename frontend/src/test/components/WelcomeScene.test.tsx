@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { WelcomeScene, memberCountCaption } from '../../components/onboarding/WelcomeScene';
+import { WelcomeScene } from '../../components/onboarding/WelcomeScene';
+import { memberCountCaption } from '../../utils/formatters';
 
 function renderScene(overrides: Partial<Parameters<typeof WelcomeScene>[0]> = {}) {
   const onCta = vi.fn();

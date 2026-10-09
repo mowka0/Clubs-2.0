@@ -22,6 +22,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 }));
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',

@@ -68,9 +68,7 @@ class ChatDoorService(
                 gateway.sendDmWithWebApp(
                     telegramId = requesterTelegramId,
                     text = "👋 Привет! Чат «${link.chatTitle ?: "клуба"}» принадлежит клубу «${club.name}».\n\n" +
-                        "Вступление в чат — через клуб:\n" +
-                        "1. Подай заявку в приложении\n" +
-                        "2. Организатор одобрит — и я сразу впущу тебя в чат",
+                        "Вступи в клуб в приложении — и я сразу впущу тебя в чат.",
                     buttonText = "Открыть клуб «${club.name}»",
                     webAppPath = "/clubs/${club.id}"
                 )
@@ -102,7 +100,7 @@ class ChatDoorService(
         if (gateway.approveJoinRequest(link.chatId, telegramId)) {
             gateway.sendDmWithUrlButton(
                 telegramId = telegramId,
-                text = "🎉 Организатор открыл тебе доступ в клуб «$clubName» — ты уже в чате, загляни и представься!",
+                text = "🎉 Ты в клубе «$clubName» — и уже в чате, загляни и представься!",
                 buttonText = "Открыть чат",
                 url = doorLink
             )
@@ -121,7 +119,7 @@ class ChatDoorService(
                     // открытии доступа, даже если из чата он никуда не уходил.
                     gateway.sendDmWithUrlButton(
                         telegramId = telegramId,
-                        text = "🎉 Организатор открыл тебе доступ в клуб «$clubName» — ты уже в чате клуба.",
+                        text = "🎉 Ты в клубе «$clubName»! Чат клуба у тебя уже есть.",
                         buttonText = "Открыть чат",
                         url = doorLink
                     )
@@ -145,7 +143,7 @@ class ChatDoorService(
         }
         gateway.sendDmWithUrlButton(
             telegramId = telegramId,
-            text = "Организатор открыл тебе доступ в клуб «$clubName». Вступай в чат клуба:",
+            text = "🎉 Ты в клубе «$clubName»! Вступай в чат клуба:",
             buttonText = "Вступить в чат",
             url = doorLink
         )

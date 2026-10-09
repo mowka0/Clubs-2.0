@@ -26,7 +26,6 @@ const EMPTY_DRAFT: ClubSetupDraft = {
   city: null,
   description: null,
   interests: null,
-  memberLimit: null,
 };
 
 /**

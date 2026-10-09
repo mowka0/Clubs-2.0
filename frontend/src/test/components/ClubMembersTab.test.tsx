@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { MemberListItemDto, MembershipDto } from '../../types/api';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -15,6 +16,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 }));
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',
@@ -196,5 +199,24 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
 
     await waitFor(() => expect(duesPaidCalled).toBe(true));
     expect(await screen.findByText(/Взнос принят/)).toBeInTheDocument();
+  });
+});
+
+describe('ClubMembersTab — этап 1: без взносов', () => {
+  withStage1Profile();
+
+  it('организатор видит плоский список: без бакетов, «Взнос получен» и пометок доступа', async () => {
+    mockMembers([ORGANIZER, FAR, EXPIRING, EXPIRED, EXPIRED_STATUS, FROZEN]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
+
+    expect(await screen.findByText(/^Участники/)).toBeInTheDocument();
+    expect(screen.getByText('Мария')).toBeInTheDocument();
+    expect(screen.getByText('Семён')).toBeInTheDocument();
+    expect(screen.queryByText(/Доступ истёк/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Доступ закрыт/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Активен · до/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useHistoryPosition } from '../../hooks/useHistoryPosition';
+import { memberCountCaption } from '../../utils/formatters';
 import type { ClubDetailDto } from '../../types/api';
 
 interface ManageHeaderProps {
@@ -39,7 +40,7 @@ export const ManageHeader: FC<ManageHeaderProps> = ({ club }) => {
       <div className="rd-hero-meta">
         <div className="rd-hero-ttl">{club.name}</div>
         <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
-          {club.memberCount} / {club.memberLimit} участников · {club.city}
+          {memberCountCaption(club.memberCount)} · {club.city}
         </div>
       </div>
       <button

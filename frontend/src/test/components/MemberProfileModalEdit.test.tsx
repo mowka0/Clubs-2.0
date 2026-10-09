@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -14,6 +15,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 vi.mock('../../telegram/sdk', () => ({ initTelegramSdk: vi.fn(), getInitDataRaw: () => 'test' }));
 
 import { MemberProfileModal } from '../../components/club/MemberProfileModal';
@@ -196,7 +199,7 @@ describe('MemberProfileModal — role selector (club-roles)', () => {
     expect(screen.queryByRole('radio', { name: 'Организатор' })).not.toBeInTheDocument();
     // У каждого пункта — описание из ROLE_DESCRIPTIONS.
     expect(screen.getByText(/Обычный участник клуба/)).toBeInTheDocument();
-    expect(screen.getByText(/Ведёт клуб вместе с вами/)).toBeInTheDocument();
+    expect(screen.getByText(/Помогает вести клуб/)).toBeInTheDocument();
   });
 
   it('owner promotes a member: select «Со-организатор» → confirm shows both buttons → PUT /role', async () => {
@@ -439,5 +442,32 @@ describe('MemberProfileModal — «Активность в клубе» (B1, о�
     expect(await screen.findByText('Активность в клубе')).toBeInTheDocument();
     expect(screen.queryByText('Открытые встречи')).not.toBeInTheDocument();
     expect(screen.getByText('Спонтанные визиты')).toBeInTheDocument();
+  });
+});
+
+describe('MemberProfileModal — этап 1: без платного слоя', () => {
+  withStage1Profile();
+
+  it('у frozen-участника нет «Взнос получен» и «вернуть перевод», но есть заметка и «Удалить из клуба»', async () => {
+    mockProfile(null);
+    const frozen: MemberListItemDto = { ...MEMBER, accessStatus: 'frozen', subscriptionExpiresAt: null };
+    renderWithProviders(<MemberProfileModal member={frozen} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    expect(await screen.findByPlaceholderText(/помогает с площадкой/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Удалить из клуба/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /вернуть перевод/ })).not.toBeInTheDocument();
+  });
+
+  it('у участника с окном доступа нет строки подписки и упоминания оплаты при удалении', async () => {
+    mockProfile(null);
+    const user = userEvent.setup();
+    renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    await user.click(await screen.findByRole('button', { name: /Удалить из клуба/ }));
+
+    expect(screen.getByText(/Доступ закроется сразу/)).toBeInTheDocument();
+    expect(screen.queryByText(/Если оплатил/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
   });
 });

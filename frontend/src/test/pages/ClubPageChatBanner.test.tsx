@@ -162,7 +162,7 @@ describe('ClubPage · панель подключения чата', () => {
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/полная синхронизация с клубом/i)).toBeInTheDocument();
     expect(screen.getByText(/умное голосование/i)).toBeInTheDocument();
-    expect(screen.getByText(/групповыми взносами/i)).toBeInTheDocument();
+    expect(screen.getByText(/групповыми сборами/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^подключить$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /позже в настройках/i })).toBeInTheDocument();
   });

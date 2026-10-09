@@ -102,7 +102,7 @@ describe('ClubChatTab', () => {
     expect(await screen.findByText('Партия — чат')).toBeInTheDocument();
     expect(screen.getByText('✓ бот в чате')).toBeInTheDocument();
     expect(screen.getByText('✓ приглашения разрешены')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toBeEnabled();
+    expect(screen.getByRole('switch', { name: 'Вход в чат только для участников клуба' })).toBeEnabled();
     // Живой закреп (слайс 3), статус сборов (слайс 3.5) и строгий режим (слайс 5) активны
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Статус сборов в чате' })).toBeEnabled();
@@ -291,10 +291,10 @@ describe('ClubChatTab', () => {
     );
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
-    await userEvent.click(await screen.findByRole('switch', { name: 'Вход в чат через заявки' }));
+    await userEvent.click(await screen.findByRole('switch', { name: 'Вход в чат только для участников клуба' }));
 
     await waitFor(() => expect(patched).toEqual({ doorEnabled: true }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toHaveAttribute('aria-checked', 'true'));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Вход в чат только для участников клуба' })).toHaveAttribute('aria-checked', 'true'));
   });
 
   // Сырую invite-ссылку в карточке не показываем (решение PO 2026-08-19). Сама ссылка живёт
@@ -319,7 +319,7 @@ describe('ClubChatTab', () => {
     }));
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
-    expect(await screen.findByRole('switch', { name: 'Вход в чат через заявки' })).toBeDisabled();
+    expect(await screen.findByRole('switch', { name: 'Вход в чат только для участников клуба' })).toBeDisabled();
     expect(screen.getByText('✕ приглашения запрещены')).toBeInTheDocument();
   });
 

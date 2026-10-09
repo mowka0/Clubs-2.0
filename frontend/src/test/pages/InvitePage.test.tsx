@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockClubDetail } from '../mocks/handlers';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { ClubDetailDto, ClubEventsTeaserDto, ClubFactsDto } from '../../types/api';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -23,6 +24,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 }));
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
@@ -130,7 +133,8 @@ describe('InvitePage — посадочная в языке страницы к�
     // Шапка — та же, что на странице клуба: название, чипы параметров.
     expect(await screen.findByText('Партия')).toBeInTheDocument();
     expect(screen.getByText('Открытый')).toBeInTheDocument();
-    expect(screen.getByText('10 / 50')).toBeInTheDocument();
+    // Состав без лимита «N / M» (stage-1-scope.md, решение 3a).
+    expect(screen.getByText('10 участников')).toBeInTheDocument();
 
     // Кто зовёт — наверху, а не сноской под кнопкой.
     expect(screen.getByText(/Организатор — Иван/)).toBeInTheDocument();
@@ -375,5 +379,51 @@ describe('InvitePage — вход кнопкой «Открыть клуб» и�
 
     expect(await screen.findByRole('button', { name: 'Отправить заявку' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Вступить в клуб' })).not.toBeInTheDocument();
+  });
+});
+
+describe('InvitePage — этап 1: без взносов, типа доступа и заявок', () => {
+  withStage1Profile();
+
+  it('платный клуб «по заявке»: просто «Вступить в клуб», без чипов доступа и цены', async () => {
+    mockInvite({ accessType: 'closed', inviteRequiresApplication: true, subscriptionPrice: 500 });
+    renderInvite();
+
+    expect(await screen.findByRole('button', { name: 'Вступить в клуб' })).toBeInTheDocument();
+    expect(screen.getByText('10 участников')).toBeInTheDocument();
+    expect(screen.getByText('отвечает за клуб и встречи')).toBeInTheDocument();
+    expect(screen.queryByText('По заявке')).not.toBeInTheDocument();
+    expect(screen.queryByText(/500 ₽ \/ мес/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отправить заявку' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /оплатить взнос/i })).not.toBeInTheDocument();
+  });
+
+  it('полный клуб: «Клуб заполнен — напиши организатору», без «Попроситься» и «Вступить»', async () => {
+    mockInvite({ memberCount: 50, memberLimit: 50 });
+    renderInvite();
+
+    expect(await screen.findByText('Клуб заполнен — напиши организатору')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Попроситься в клуб' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Вступить в клуб' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/В клубе кончились места/)).not.toBeInTheDocument();
+  });
+
+  it('вступление в платный клуб не открывает шит взноса — сразу в клуб', async () => {
+    mockInvite({ subscriptionPrice: 500 });
+    mockJoinAndRequisites({ subscriptionPrice: 500 });
+    renderInvite();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Вступить в клуб' }));
+
+    expect(await screen.findByText('Страница клуба')).toBeInTheDocument();
+  });
+
+  it('frozen-участник видит «уже состоите», а не оплату взноса', async () => {
+    mockInvite({ subscriptionPrice: 500 });
+    mockMyMembership('frozen');
+    renderInvite();
+
+    expect(await screen.findByText('Вы уже состоите в этом клубе')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /оплатить взнос/i })).not.toBeInTheDocument();
   });
 });

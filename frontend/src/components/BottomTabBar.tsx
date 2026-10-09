@@ -98,10 +98,15 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
 
   const { data: actionRequiredCount = 0 } = useSkladchinaActionRequiredCountQuery();
   // Организатору требуется действие на «Мои клубы»: заявки в ожидании (inbox) + платные участники,
-  // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы».
-  const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
+  // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы». Слагаемое
+  // спрятанной фичи не считаем: точка без секции, где можно что-то сделать, — ложная тревога.
+  const { showAccessTypeAndApplications, showClubDues } = PRODUCT_PROFILE;
+  const { data: myClubsActionCounts } = useMyClubsActionCountsQuery({
+    enabled: showAccessTypeAndApplications || showClubDues,
+  });
   const myClubsActionTotal =
-    (myClubsActionCounts?.inboxCount ?? 0) + (myClubsActionCounts?.awaitingDuesCount ?? 0);
+    (showAccessTypeAndApplications ? myClubsActionCounts?.inboxCount ?? 0 : 0)
+    + (showClubDues ? myClubsActionCounts?.awaitingDuesCount ?? 0 : 0);
 
   const handleTabClick = useCallback(
     (path: string) => {

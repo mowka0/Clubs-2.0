@@ -96,7 +96,7 @@ class MemberRoleService(
             if (promoted) {
                 notificationService.sendDirectMessageWithDeepLink(
                     telegramId,
-                    "⭐ Вас назначили со-организатором клуба «$clubName». Теперь вам доступны заявки, события, складчины и управление участниками.",
+                    "⭐ Вас назначили со-организатором клуба «$clubName». Теперь вам доступны встречи, сборы и управление участниками.",
                     webAppPath = "/clubs/$clubId",
                     buttonText = "Открыть клуб"
                 )

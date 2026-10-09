@@ -16,14 +16,15 @@ import { useClubQualityQuery } from '../queries/clubQuality';
 import { useCompleteTourMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
-import { formatPrice } from '../utils/formatters';
+import { formatPrice, memberCountCaption } from '../utils/formatters';
+import { PRODUCT_PROFILE } from '../config/productProfile';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
-import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
+import { WelcomeScene } from '../components/onboarding/WelcomeScene';
 import { Toast } from '../components/Toast';
 import foxInviteArt from '../assets/mascot/fox-invite.png';
 import foxErrorArt from '../assets/mascot/fox-error.png';
@@ -84,16 +85,20 @@ export const InvitePage: FC = () => {
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
   const joining = joinMutation.isPending || applyMutation.isPending;
+  // Флаги этапа (stage-1-scope.md): без взносов и заявок посадочная знает только «Вступить».
+  const { showClubDues, showAccessTypeAndApplications } = PRODUCT_PROFILE;
 
   // club-invites (кадр G): в полный клуб прямое вступление невозможно — приглашение
   // деградирует в обычную заявку, организатор может расширить клуб из инбокса.
+  // Без заявок (этап 1) полный клуб просто закрыт: «напиши организатору», без кнопки.
   const isClubFull = !!club && club.memberCount >= club.memberLimit;
+  const isClubFullWithoutApplications = isClubFull && !showAccessTypeAndApplications;
 
   // Приглашение из Telegram в клуб «по заявке» ведёт на ОДОБРЕНИЕ, а не сразу в состав
   // (решение PO 2026-07-30; бэкенд отдаёт признак по коду ссылки и сам отбивает прямое
   // вступление по ней). Прямая ссылка «Скопировать» приходит с false — по ней вступают сразу.
   // Из чата — то же правило, что у «Вступить» на странице клуба: заявка только в закрытый клуб.
-  const needsApplication = !!club
+  const needsApplication = showAccessTypeAndApplications && !!club
     && (isClubFull || (code ? club.inviteRequiresApplication : club.accessType === 'closed'));
 
   // Приглашение открыл человек, который уже в клубе (active / frozen / expired — место
@@ -104,7 +109,7 @@ export const InvitePage: FC = () => {
   const isAlreadyMember = holdsClubSeat(myMembership);
   // Должник: место в клубе занято, но доступа нет — frozen (не передал первый взнос) или
   // expired (не продлил). Ему на посадочной нужна не дверь в клуб, а оплата.
-  const isDebtor = myMembership?.status === 'frozen' || myMembership?.status === 'expired';
+  const isDebtor = showClubDues && (myMembership?.status === 'frozen' || myMembership?.status === 'expired');
 
   // Реквизиты СБП приходят ТОЛЬКО участнику (ClubService.getClub: includeRequisites), поэтому
   // берём их отдельным запросом и лишь когда шит оплаты реально нужен: сразу после вступления
@@ -149,7 +154,7 @@ export const InvitePage: FC = () => {
         const joinedClub = clubQuery.data;
         // Платный клуб: взнос предлагаем здесь же — раньше человека вели на страницу клуба
         // ради одной кнопки «Оплатить взнос».
-        if (joinedClub && joinedClub.subscriptionPrice > 0) {
+        if (showClubDues && joinedClub && joinedClub.subscriptionPrice > 0) {
           setJoinedAtMs(Date.now());
           setJoined(true);
           setDuesStage('sheet');
@@ -263,7 +268,8 @@ export const InvitePage: FC = () => {
     }
   };
 
-  const isPaid = club.subscriptionPrice > 0;
+  // Без взносов (этап 1) любой клуб ведёт себя как бесплатный: платные ветки ниже гаснут разом.
+  const isPaid = showClubDues && club.subscriptionPrice > 0;
 
   /** Шит взноса: реквизиты подгружены — открываем, ещё грузятся — держим спиннер вместо него. */
   const renderDuesSheet = (onClose: () => void, onClaimed: () => void) => {
@@ -421,7 +427,7 @@ export const InvitePage: FC = () => {
   const showChatPill = club.chatLinked;
   // В платном клубе кнопка сразу называет оба шага: тап вступает и открывает выбор способа
   // оплаты здесь же. Раньше между ними лежали два экрана, на которых нечего было решать.
-  const joinCtaLabel = isClubFull
+  const joinCtaLabel = isClubFull && showAccessTypeAndApplications
     ? 'Попроситься в клуб'
     : needsApplication
       ? 'Отправить заявку'
@@ -449,7 +455,9 @@ export const InvitePage: FC = () => {
       goToClub(club.id);
       return;
     }
-    if (needsApplication) {
+    // Заявка и полный клуб без заявок — довести до низа экрана: там вопрос организатора
+    // или объяснение, почему вступить нельзя.
+    if (needsApplication || isClubFullWithoutApplications) {
       ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -524,7 +532,7 @@ export const InvitePage: FC = () => {
         description="Содержимое клуба открывается после вступления."
       />
 
-      {!isAlreadyMember && isClubFull && (
+      {!isAlreadyMember && isClubFull && showAccessTypeAndApplications && (
         <div className="rd-cl-chip">
           <span aria-hidden="true">👥</span>
           <span>В клубе кончились места — вы всё равно можете попроситься, организатор может расширить клуб</span>
@@ -577,6 +585,11 @@ export const InvitePage: FC = () => {
               Перейти в клуб
             </button>
           </>
+        ) : isClubFullWithoutApplications ? (
+          <div className="rd-cl-chip">
+            <span aria-hidden="true">👥</span>
+            <span>Клуб заполнен — напиши организатору</span>
+          </div>
         ) : needsApplication ? (
           <>
             <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
