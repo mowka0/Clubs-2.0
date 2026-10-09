@@ -35,8 +35,8 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
   if (onClubPage && !data.paymentDue && !(data.state === 'BOT_REMOVED' && showBotRemoved)) return null;
   // Ползунок — только владельцу и только в «Управлении»: карта для списаний — его (M2).
   const withAutopayToggle = !onClubPage && data.canEnableAutopay;
-  // Напоминания в личку получает только владелец (M5); остальным — что заплатить может любой.
-  const remindLine = data.canEnableAutopay ? null : 'Оплатить может любой участник клуба.';
+  // Напоминания в личку получает только владелец (M5) — обещать их остальным нельзя.
+  const isOwnerView = data.canEnableAutopay;
   const payerLine = data.lastPayer && (
     <div className="d">Последний платёж — {data.lastPayer.name} 💛</div>
   );
@@ -91,7 +91,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🎁</span>
           <div className="tx">
             <div className="t">Бесплатно до {trialUntil}</div>
-            <div className="d">Дальше {price} в месяц за клуб. {remindLine ?? 'Напомним в личке за неделю и за день — можно оплатить заранее.'}</div>
+            <div className="d">Дальше {price} в месяц за клуб.{isOwnerView && ' Напомним в личке за неделю и за день — можно оплатить заранее.'}</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
@@ -102,7 +102,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">💬</span>
           <div className="tx">
             <div className="t">Бесплатный период закончился</div>
-            <div className="d">Новые встречи — по подписке {price} в месяц за клуб. Начатое доживёт, бот из чата не уходит.{remindLine && ` ${remindLine}`}</div>
+            <div className="d">Новые встречи — по подписке {price} в месяц за клуб. Начатое доживёт, бот из чата не уходит.</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
@@ -120,8 +120,8 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
                   ? (data.canEnableAutopay
                     // Владельцу — без «вместо него»: его оплата без отметки согласия выключила бы автопродление.
                     ? `${periodEnd} спишем ${price} с вашей карты.`
-                    : `${periodEnd} продлится автоматически с карты владельца — можно оплатить месяц вместо него.`)
-                  : `${price} в месяц за клуб. ${remindLine ?? 'Продлить можно заранее — месяц прибавится к оплаченному.'}`)
+                    : `${periodEnd} продлится автоматически с карты владельца.`)
+                  : `${price} в месяц за клуб. Продлить можно заранее — месяц прибавится к оплаченному.`)
                 : `${price} в месяц за клуб · Robokassa`}
             </div>
             {payerLine}
@@ -163,7 +163,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">⏳</span>
           <div className="tx">
             <div className="t">Подписка закончилась {periodEnd}</div>
-            <div className="d">До <b>{graceUntil}</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.{remindLine && ` ${remindLine}`}</div>
+            <div className="d">До <b>{graceUntil}</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.</div>
             {payerLine}
           </div>
           <button type="button" className="act" onClick={onPay}>Продлить</button>
@@ -175,7 +175,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🚫</span>
           <div className="tx">
             <div className="t">Новые встречи недоступны до оплаты</div>
-            <div className="d">Подписка закончилась {periodEnd}. Начатые встречи доживут, бот из чата не уходит.{remindLine && ` ${remindLine}`}</div>
+            <div className="d">Подписка закончилась {periodEnd}. Начатые встречи доживут, бот из чата не уходит.</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>

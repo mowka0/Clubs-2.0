@@ -115,7 +115,8 @@ describe('BillingStatusStrip', () => {
     const onPay = vi.fn();
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={onPay} />);
     expect(await screen.findByText('Клуб оплачен до 7 октября')).toBeInTheDocument();
-    expect(screen.getByText(/Оплатить может любой участник клуба/)).toBeInTheDocument();
+    expect(screen.queryByText(/любой участник/)).toBeNull();
+    expect(screen.getByText(/Продлить можно заранее/)).toBeInTheDocument();
     expect(screen.getByText('Последний платёж — Маша Петрова 💛')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить' }));
@@ -128,7 +129,7 @@ describe('BillingStatusStrip', () => {
       paymentDue: true, canEnableAutopay: false,
     }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
-    expect(await screen.findByText('7 октября продлится автоматически с карты владельца — можно оплатить месяц вместо него.')).toBeInTheDocument();
+    expect(await screen.findByText('7 октября продлится автоматически с карты владельца.')).toBeInTheDocument();
   });
 
   it('владельцу с автопродлением на главной — дата списания с его карты и без «Оплатить»', async () => {
@@ -149,11 +150,12 @@ describe('BillingStatusStrip', () => {
     expect(await screen.findByText('Бот удалён из чата — подписка на паузе')).toBeInTheDocument();
   });
 
-  it('состояния, требующие оплаты, на странице клуба видны всем — участнику с подсказкой, что платить может любой', async () => {
-    mockStatus(status({ state: 'TRIAL_ENDED', trialUntil: null, paymentDue: true, canEnableAutopay: false }));
+  it('состояния, требующие оплаты, на странице клуба видны всем, без обещаний напоминаний не-владельцу', async () => {
+    mockStatus(status({ state: 'TRIAL', trialUntil: '2026-09-30T10:00:00Z', paymentDue: true, canEnableAutopay: false }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
-    expect(await screen.findByText('Бесплатный период закончился')).toBeInTheDocument();
-    expect(screen.getByText(/Оплатить может любой участник клуба/)).toBeInTheDocument();
+    expect(await screen.findByText('Бесплатно до 30 сентября')).toBeInTheDocument();
+    expect(screen.queryByText(/Напомним в личке/)).toBeNull();
+    expect(screen.queryByText(/любой участник/)).toBeNull();
   });
 
   it('в «Управлении» со-организатор видит «оплачено до», но без ползунка', async () => {
