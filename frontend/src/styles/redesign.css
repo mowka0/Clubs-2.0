@@ -1383,6 +1383,18 @@
 }
 .rd-club-avatar-err { font-size: 11px; line-height: 1.4; color: var(--danger); margin-top: 6px; }
 
+/* Шапка страницы клуба: аватар справа на стыке, название и чипы слева (PO 2026-10-09).
+   Аватар вынут из потока, поэтому название оставляет справа место под кружок (70 + зазор),
+   а ошибка загрузки — плашкой под кружком, поверх чипов, а не сдвигом страницы. */
+.rd-club-head { position: relative; }
+.rd-club-head .rd-club-avatar-wrap { position: absolute; top: -34px; right: 0; margin-top: 0; }
+.rd-club-head .rd-club-name { padding-right: 84px; }
+.rd-club-head .rd-club-avatar-err {
+  position: absolute; top: 100%; right: 0; z-index: 7;
+  width: max-content; max-width: 62vw; text-align: right;
+  background: var(--bg); border-radius: 8px; padding: 4px 8px;
+}
+
 /* Шапка «Управления»: название и состав слева, справа аватар — тап ведёт на страницу клуба.
    Аватар тот же, что на странице клуба, только внутри обложки, а не на её кромке: под
    шапкой сразу полоска биллинга, наезд лёг бы на неё. */
