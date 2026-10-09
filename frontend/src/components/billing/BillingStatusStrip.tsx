@@ -125,34 +125,37 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
                 : `${price} в месяц за клуб · Robokassa`}
             </div>
             {payerLine}
-            {withAutopayToggle && <div className="sub">
-              <div className="fi">
-                <div className="ft">Продлевать автоматически</div>
-                <div className="fd">
-                  {!data.autopayAvailable
-                    // Рекуррент магазину не разрешён: даже сохранённую карту шедулер не списывает, шлёт напоминания.
-                    ? 'Автопродление пока недоступно — напомним в личке за 3 дня и за день до конца периода.'
-                    : !data.autopayPossible
-                      // Карта не сохранена: оплата по СБП или оплата в период без рекуррента — причина в
-                      // тексте не называется, чтобы не обещать «оплатите картой», когда это не поможет.
-                      ? 'Карта для автосписания не сохранена — напомним в личке за 3 дня и за день до конца периода.'
-                      : data.autopay
-                        // Списание — в день окончания оплаченного периода (PO 2026-09-07).
-                        ? `${periodEnd} спишем ${price} с сохранённой карты.`
-                        : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
+            {withAutopayToggle && (autopayLocked
+              // Ползунка, который нечего переключить, нет — вместо него одна строка (PO 2026-10-09).
+              ? <div className="sub"><div className="fi"><div className="fd">
+                {!data.autopayAvailable
+                  // Рекуррент магазину не разрешён: даже сохранённую карту шедулер не списывает, шлёт напоминания.
+                  ? 'Автопродление пока недоступно — напомним в личке за 3 дня и за день до конца периода.'
+                  // Карты владельца нет: оплатил участник или владелец платил по СБП. Включится галочкой
+                  // согласия в шите следующей оплаты — отдельной кнопки «оплатить ради автопродления» нет.
+                  : 'Автопродление включится при следующей оплате картой. До этого напомним в личке за 3 дня и за день до конца.'}
+              </div></div></div>
+              : <div className="sub">
+                <div className="fi">
+                  <div className="ft">Продлевать автоматически</div>
+                  <div className="fd">
+                    {data.autopay
+                      // Списание — в день окончания оплаченного периода (PO 2026-09-07).
+                      ? `${periodEnd} спишем ${price} с сохранённой карты.`
+                      : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
+                  </div>
+                  {autopayError && <div className="rd-billing-err">{autopayError}</div>}
                 </div>
-                {autopayError && <div className="rd-billing-err">{autopayError}</div>}
-              </div>
-              <button
-                type="button"
-                className={`rd-cl-tgl${autopayOn ? ' on' : ''}`}
-                role="switch"
-                aria-checked={autopayOn}
-                aria-label="Продлевать автоматически"
-                disabled={autopayLocked || setAutopay.isPending}
-                onClick={toggleAutopay}
-              />
-            </div>}
+                <button
+                  type="button"
+                  className={`rd-cl-tgl${autopayOn ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={autopayOn}
+                  aria-label="Продлевать автоматически"
+                  disabled={setAutopay.isPending}
+                  onClick={toggleAutopay}
+                />
+              </div>)}
           </div>
           {onClubPage && !(autopayOn && data.canEnableAutopay) && <button type="button" className="act" onClick={onPay}>Оплатить</button>}
         </div>

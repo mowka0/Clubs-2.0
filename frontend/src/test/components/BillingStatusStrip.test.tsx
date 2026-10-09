@@ -189,20 +189,18 @@ describe('BillingStatusStrip', () => {
     expect(screen.getByText(/Выключено — напомним/)).toBeInTheDocument();
   });
 
-  it('оплата по СБП — ползунок недоступен с объяснением', async () => {
+  it('карты владельца нет (СБП или оплатил участник) — вместо неактивного ползунка одна строка', async () => {
     mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: false }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
-    expect(await screen.findByRole('switch')).toBeDisabled();
-    expect(screen.getByText(/Карта для автосписания не сохранена/)).toBeInTheDocument();
+    expect(await screen.findByText(/Автопродление включится при следующей оплате картой/)).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
-  it('рекуррент магазину не разрешён — ползунок недоступен даже с сохранённой картой', async () => {
+  it('рекуррент магазину не разрешён — ползунка нет даже с сохранённой картой', async () => {
     mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: true, autopayAvailable: false }));
     renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
-    const toggle = await screen.findByRole('switch');
-    expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/Автопродление пока недоступно/)).toBeInTheDocument();
+    expect(await screen.findByText(/Автопродление пока недоступно/)).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('грейс и стена — сроки и кнопка продления', async () => {
