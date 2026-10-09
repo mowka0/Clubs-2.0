@@ -235,7 +235,8 @@ class BillingLifecycleService(
     private fun sendRecurringCharge(subscription: ServiceSubscription, club: Club, now: OffsetDateTime, price: Int): Long {
         val previousInvId = subscription.providerToken!!.toLong()
         val payment = paymentRepository.create(
-            clubId = club.id, subscriptionId = subscription.id, kind = PaymentKind.RECURRING,
+            // Дочернее списание идёт с сохранённой карты владельца — участник её сохранить не может (M2).
+            clubId = club.id, payerUserId = club.ownerId, subscriptionId = subscription.id, kind = PaymentKind.RECURRING,
             amountKopecks = price, previousInvId = previousInvId, autopayRequested = true,
         )
         subscriptionRepository.recordChargeAttempt(subscription.id, now)
@@ -279,7 +280,7 @@ class BillingLifecycleService(
         private val SUBSCRIPTION_REMINDER_DAYS = listOf(3L, 1L)
 
         /** Календарных дней МСК от сегодня до даты [end]: 0 — кончается сегодня, отрицательное — уже прошло. */
-        private fun calendarDaysUntil(end: OffsetDateTime, now: OffsetDateTime): Long =
+        fun calendarDaysUntil(end: OffsetDateTime, now: OffsetDateTime): Long =
             ChronoUnit.DAYS.between(now.atZoneSameInstant(ZONE).toLocalDate(), end.atZoneSameInstant(ZONE).toLocalDate())
 
         /**

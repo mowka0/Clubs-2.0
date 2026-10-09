@@ -9,27 +9,37 @@ interface BillingStatusStripProps {
   /** «Оплатить» / «Продлить» — открыть шит оплаты. */
   onPay: () => void;
   /**
-   * Показывать ползунок автопродления внутри полоски. На странице клуба его нет: переключать
-   * автопродление — действие управления, его место на «Управлении клубом», а со-организатор
-   * (он полоску тоже видит) всё равно получил бы 403. Сама полоска показывается во всех
-   * состояниях на обоих экранах (PO 2026-09-16).
+   * Где стоит полоска (billing-member-pays.md M4). `manage` — «Управление»: все состояния,
+   * ползунок автопродления владельцу. `club` — главная страница клуба: только когда пора платить
+   * (`paymentDue`), зато всем участникам — заплатить за клуб может любой; ползунка нет.
    */
-  withAutopayToggle?: boolean;
+  placement?: 'manage' | 'club';
+  /** На главной: показывать «бот удалён» — это тревога для организаторов, а не «пора платить». */
+  showBotRemoved?: boolean;
 }
 
 /**
- * Полоска статуса биллинга на странице управления клубом (platform-billing.md § 7): одна
- * полоска, семь состояний из BillingStatusDto; ползунок автопродления живёт прямо в ней —
+ * Полоска статуса биллинга (platform-billing.md § 7, billing-member-pays.md § 6): одна полоска,
+ * семь состояний из BillingStatusDto; ползунок автопродления владельца живёт прямо в ней —
  * отдельного экрана «подписка» нет. У клуба без чата полоски нет: ему не за что платить.
  * По тексту платят «за клуб», хотя единица счёта — чат (PO 2026-09-07).
  */
-export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, withAutopayToggle = true }) => {
+export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, placement = 'manage', showBotRemoved = false }) => {
   const haptic = useHaptic();
   const { data } = useBillingQuery(clubId);
   const setAutopay = useSetAutopayMutation();
   const [autopayError, setAutopayError] = useState<string | null>(null);
 
   if (!data || data.state === 'NO_CHAT') return null;
+  const onClubPage = placement === 'club';
+  if (onClubPage && !data.paymentDue && !(data.state === 'BOT_REMOVED' && showBotRemoved)) return null;
+  // Ползунок — только владельцу и только в «Управлении»: карта для списаний — его (M2).
+  const withAutopayToggle = !onClubPage && data.canEnableAutopay;
+  // Напоминания в личку получает только владелец (M5); остальным — что заплатить может любой.
+  const remindLine = data.canEnableAutopay ? null : 'Оплатить может любой участник клуба.';
+  const payerLine = data.lastPayer && (
+    <div className="d">Последний платёж — {data.lastPayer.name} 💛</div>
+  );
 
   const price = formatRubles(data.priceKopecks);
   const periodEnd = data.currentPeriodEnd ? formatBillingDate(data.currentPeriodEnd) : null;
@@ -81,7 +91,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🎁</span>
           <div className="tx">
             <div className="t">Бесплатно до {trialUntil}</div>
-            <div className="d">Дальше {price} в месяц за клуб. Напомним в личке за неделю и за день — можно оплатить заранее.</div>
+            <div className="d">Дальше {price} в месяц за клуб. {remindLine ?? 'Напомним в личке за неделю и за день — можно оплатить заранее.'}</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
@@ -92,7 +102,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">💬</span>
           <div className="tx">
             <div className="t">Бесплатный период закончился</div>
-            <div className="d">Новые встречи — по подписке {price} в месяц за клуб. Начатое доживёт, бот из чата не уходит.</div>
+            <div className="d">Новые встречи — по подписке {price} в месяц за клуб. Начатое доживёт, бот из чата не уходит.{remindLine && ` ${remindLine}`}</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
@@ -102,8 +112,16 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
         <div className="rd-billing-strip info" data-state={data.state}>
           <span className="ic" aria-hidden="true">✅</span>
           <div className="tx">
-            <div className="t">Оплачено до {periodEnd}</div>
-            <div className="d">{price} в месяц за клуб · Robokassa</div>
+            <div className="t">{onClubPage ? `Клуб оплачен до ${periodEnd}` : `Оплачено до ${periodEnd}`}</div>
+            <div className="d">
+              {onClubPage
+                // На главной полоска появляется за неделю до конца — зовём продлить, не пугая (M4).
+                ? (autopayOn
+                  ? `${periodEnd} продлится автоматически с карты владельца — можно оплатить месяц вместо него.`
+                  : `${price} в месяц за клуб. ${remindLine ?? 'Продлить можно заранее — месяц прибавится к оплаченному.'}`)
+                : `${price} в месяц за клуб · Robokassa`}
+            </div>
+            {payerLine}
             {withAutopayToggle && <div className="sub">
               <div className="fi">
                 <div className="ft">Продлевать автоматически</div>
@@ -133,6 +151,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
               />
             </div>}
           </div>
+          {onClubPage && <button type="button" className="act" onClick={onPay}>Оплатить</button>}
         </div>
       );
     case 'GRACE':
@@ -141,7 +160,8 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">⏳</span>
           <div className="tx">
             <div className="t">Подписка закончилась {periodEnd}</div>
-            <div className="d">До <b>{graceUntil}</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.</div>
+            <div className="d">До <b>{graceUntil}</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.{remindLine && ` ${remindLine}`}</div>
+            {payerLine}
           </div>
           <button type="button" className="act" onClick={onPay}>Продлить</button>
         </div>
@@ -152,7 +172,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🚫</span>
           <div className="tx">
             <div className="t">Новые встречи недоступны до оплаты</div>
-            <div className="d">Подписка закончилась {periodEnd}. Начатые встречи доживут, бот из чата не уходит.</div>
+            <div className="d">Подписка закончилась {periodEnd}. Начатые встречи доживут, бот из чата не уходит.{remindLine && ` ${remindLine}`}</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>

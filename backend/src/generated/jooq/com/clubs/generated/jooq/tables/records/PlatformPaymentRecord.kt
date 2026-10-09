@@ -15,9 +15,10 @@ import org.jooq.impl.UpdatableRecordImpl
 
 
 /**
- * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
- * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
- * дочерние (RECURRING) — автосписания по сохранённой карте.
+ * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один
+ * счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца
+ * или любого участника клуба, дочерние (RECURRING) — автосписания по
+ * сохранённой карте владельца.
  */
 @Suppress("UNCHECKED_CAST")
 open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<PlatformPaymentRecord>(PlatformPayment.PLATFORM_PAYMENT) {
@@ -74,6 +75,10 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
         set(value): Unit = set(12, value)
         get(): OffsetDateTime? = get(12) as OffsetDateTime?
 
+    open var payerUserId: UUID
+        set(value): Unit = set(13, value)
+        get(): UUID = get(13) as UUID
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -83,7 +88,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
     /**
      * Create a detached, initialised PlatformPaymentRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, subscriptionId: UUID? = null, invId: Long? = null, kind: String, previousInvId: Long? = null, amountKopecks: Int, status: String? = null, autopayRequested: Boolean? = null, paymentMethod: String? = null, providerFee: BigDecimal? = null, createdAt: OffsetDateTime? = null, paidAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, subscriptionId: UUID? = null, invId: Long? = null, kind: String, previousInvId: Long? = null, amountKopecks: Int, status: String? = null, autopayRequested: Boolean? = null, paymentMethod: String? = null, providerFee: BigDecimal? = null, createdAt: OffsetDateTime? = null, paidAt: OffsetDateTime? = null, payerUserId: UUID): this() {
         this.id = id
         this.clubId = clubId
         this.subscriptionId = subscriptionId
@@ -97,6 +102,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
         this.providerFee = providerFee
         this.createdAt = createdAt
         this.paidAt = paidAt
+        this.payerUserId = payerUserId
         resetChangedOnNotNull()
     }
 
@@ -118,6 +124,7 @@ open class PlatformPaymentRecord private constructor() : UpdatableRecordImpl<Pla
             this.providerFee = value.providerFee
             this.createdAt = value.createdAt
             this.paidAt = value.paidAt
+            this.payerUserId = value.payerUserId
             resetChangedOnNotNull()
         }
     }

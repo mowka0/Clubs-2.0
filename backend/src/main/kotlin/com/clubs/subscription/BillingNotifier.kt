@@ -3,14 +3,17 @@ package com.clubs.subscription
 import com.clubs.bot.NotificationService
 import com.clubs.club.Club
 import com.clubs.user.UserRepository
+import com.clubs.user.displayName
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /**
- * Личные сообщения владельцу о деньгах (platform-billing.md § 8). В чат — ничего: бюджет
+ * Личные сообщения владельцу о деньгах (platform-billing.md § 8); оплатившему участнику — только
+ * «спасибо» (billing-member-pays.md § 3.2). В чат — ничего: бюджет
  * «1 закреп + 2 поста» не тратится. По тексту платят «за клуб» (решение PO 2026-09-07), хотя
  * единица счёта — чат. Best-effort: ошибки доставки глотает NotificationService.
  */
@@ -31,6 +34,27 @@ class BillingNotifier(
             "Автопродление выключено — напомним за 3 дня и за день до конца."
         }
         send(club, "✅ Оплачено до ${dateFmt.format(periodEnd)}: клуб «${club.name}» ведём дальше. $tail", openClub(club), "Открыть клуб")
+    }
+
+    /**
+     * Оплатил участник (billing-member-pays.md § 3.2): спасибо ему и новость владельцу. Это не
+     * напоминания — напоминания об оплате по-прежнему только владельцу (M5).
+     */
+    fun paidByMember(club: Club, payerId: UUID, periodEnd: OffsetDateTime, ownerAutopayOn: Boolean) {
+        val until = dateFmt.format(periodEnd)
+        val payer = userRepository.findById(payerId)
+        val payerTelegramId = payer?.telegramId
+        if (payerTelegramId == null) {
+            log.warn("Billing DM skipped, payer has no telegram id: clubId={} payerId={}", club.id, payerId)
+        } else {
+            notificationService.sendDirectMessageWithDeepLink(
+                payerTelegramId, "💛 Спасибо! Клуб «${club.name}» оплачен до $until.", "/clubs/${club.id}", "Открыть клуб",
+            )
+        }
+        val name = payer?.let { displayName(it.firstName, it.lastName) } ?: "Участник"
+        // Автосписание владельца не отменяется, а сдвигается на новый конец периода (M3).
+        val tail = if (ownerAutopayOn) " Автосписание с вашей карты перенесено на $until." else ""
+        send(club, "💛 Участник клуба $name оплатил месяц: клуб «${club.name}» оплачен до $until.$tail", openClub(club), "Открыть клуб")
     }
 
     fun renewed(club: Club, periodEnd: OffsetDateTime) {

@@ -109,6 +109,16 @@ class JooqReputationRepository(
                 )
             }
 
+    override fun hasOutcomeSince(userId: UUID, clubId: UUID, kind: ReputationKind, since: OffsetDateTime): Boolean =
+        dsl.fetchExists(
+            dsl.selectOne().from(REPUTATION_LEDGER).where(
+                REPUTATION_LEDGER.USER_ID.eq(userId)
+                    .and(REPUTATION_LEDGER.CLUB_ID.eq(clubId))
+                    .and(REPUTATION_LEDGER.KIND.eq(kind))
+                    .and(REPUTATION_LEDGER.OCCURRED_AT.ge(since)),
+            ),
+        )
+
     override fun appendLedgerIfAbsent(entries: List<LedgerEntry>) {
         entries.forEach { e ->
             dsl.insertInto(REPUTATION_LEDGER)

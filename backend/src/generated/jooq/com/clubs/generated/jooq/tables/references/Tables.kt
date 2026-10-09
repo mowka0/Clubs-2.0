@@ -199,9 +199,10 @@ val MEMBERSHIP_HISTORY: MembershipHistory = MembershipHistory.MEMBERSHIP_HISTORY
 val MEMBERSHIPS: Memberships = Memberships.MEMBERSHIPS
 
 /**
- * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
- * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
- * дочерние (RECURRING) — автосписания по сохранённой карте.
+ * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один
+ * счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца
+ * или любого участника клуба, дочерние (RECURRING) — автосписания по
+ * сохранённой карте владельца.
  */
 val PLATFORM_PAYMENT: PlatformPayment = PlatformPayment.PLATFORM_PAYMENT
 

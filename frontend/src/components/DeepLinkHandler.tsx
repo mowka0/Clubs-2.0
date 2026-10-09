@@ -12,7 +12,7 @@ import type { MembershipDto } from '../types/api';
  *   - `event_<uuid>`        →  /events/<uuid>
  *   - `club_<uuid>`         →  /clubs/<uuid> участнику, /clubs/<uuid>/join — остальным
  *                              (кнопка «Открыть клуб» в чате; экран приглашения, PO 2026-10-08)
- *   - `billing_<uuid>`      →  /clubs/<uuid>/manage?billing=done   (возврат после оплаты за чат)
+ *   - `billing_<uuid>`      →  /clubs/<uuid>?billing=done          (возврат после оплаты за клуб: платит любой участник)
  *   - `invite_<code>`       →  /invite/<code>   (личные приглашения, club-invites)
  * `myClubs` нужен только ссылке на клуб: пока он грузится (undefined), ответа нет; не загрузился
  * (null) — открываем клуб, его страница сама покажет гостю «Вступить».
@@ -35,7 +35,7 @@ export function resolveDeepLink(
     return isSeated ? `/clubs/${club[1]}` : `/clubs/${club[1]}/join`;
   }
   const billing = startParam.match(/^billing_([0-9a-f-]{36})$/i);
-  if (billing) return `/clubs/${billing[1]}/manage?billing=done`;
+  if (billing) return `/clubs/${billing[1]}?billing=done`;
   // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex
   // шире на случай будущей смены длины.
   const invite = startParam.match(/^invite_([0-9a-f]{8,64})$/i);

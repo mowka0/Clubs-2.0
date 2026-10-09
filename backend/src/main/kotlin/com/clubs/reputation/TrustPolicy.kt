@@ -45,7 +45,9 @@ object TrustPolicy {
     enum class TrustClass { KEPT, BROKE, NEUTRAL }
 
     fun classOf(kind: ReputationKind): TrustClass = when (kind) {
-        ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid -> TrustClass.KEPT
+        ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid,
+        // Оплата клуба участником — сдержанное денежное слово (PO 2026-10-09, billing-member-pays.md M7).
+        ReputationKind.club_billing_paid -> TrustClass.KEPT
         ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
         ReputationKind.abandoned_slot,
         // Поздний отказ (V83) — нарушенное обещание в обоих вариантах: человек занимал место в

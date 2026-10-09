@@ -1,6 +1,7 @@
 import { FC, useState } from 'react';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useClubMembersQuery, useMarkMemberDuesPaidMutation } from '../../queries/members';
+import { useBillingQuery } from '../../queries/billing';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ApiError } from '../../api/apiClient';
 import { Toast } from '../Toast';
@@ -180,12 +181,14 @@ const DuesActionRow: FC<DuesActionRowProps> = ({ clubId, member, metaText, onOpe
 interface CalmMemberRowProps {
   member: MemberListItemDto;
   forOrganizer: boolean;
+  /** Крайний оплативший клуб — 💛 у имени, пока подписка жива (billing-member-pays.md M6). */
+  isLastPayer: boolean;
   onOpenProfile: (member: MemberListItemDto) => void;
 }
 
 /** Спокойная строка «Активные»: очки репутации справа; организатору у платного участника также
  *  показывается «Активен · до DATE». */
-const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenProfile }) => {
+const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, isLastPayer, onOpenProfile }) => {
   const haptic = useHaptic();
   const isOwner = member.role === 'organizer';
   // Бейдж роли у имени (PO №4): владелец — «Организатор», со-орг — «Со-организатор», участник — без бейджа.
@@ -232,6 +235,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
       <div className="rd-info">
         <div className="rd-ttl">
           {fullNameOf(member)}
+          {isLastPayer && <span role="img" aria-label="Последний оплатил клуб" title="Последний оплатил клуб" style={{ marginLeft: 6 }}>💛</span>}
           {roleBadge && (
             <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>{roleBadge}</span>
           )}
@@ -274,6 +278,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const membersQuery = useClubMembersQuery(clubId);
+  const lastPayerId = useBillingQuery(clubId).data?.lastPayer?.userId;
 
   if (membersQuery.isPending) {
     return (
@@ -385,6 +390,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
               key={member.userId}
               member={member}
               forOrganizer={isOrganizer}
+              isLastPayer={member.userId === lastPayerId}
               onOpenProfile={setSelectedMember}
             />
           ))}

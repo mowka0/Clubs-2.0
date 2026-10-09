@@ -284,6 +284,26 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `a member paying for the club gets +10 kept once per period and no XP (billing-member-pays M7)`() {
+        val member = insertUser("ClubPayer")
+        val paidAt = OffsetDateTime.now()
+        val firstPayment = UUID.randomUUID()
+
+        assertTrue(reputationService.rewardClubBillingPayment(member, clubId, firstPayment, paidAt, notBefore = paidAt.minusDays(30)))
+        // Повтор вебхука по тому же счёту — UNIQUE леджера, второй строки нет.
+        reputationService.rewardClubBillingPayment(member, clubId, firstPayment, paidAt, notBefore = paidAt.minusDays(31))
+        // Вторая оплата в том же месяце — предоплата вперёд надёжность не покупает.
+        assertFalse(reputationService.rewardClubBillingPayment(member, clubId, UUID.randomUUID(), paidAt, notBefore = paidAt.minusDays(30)))
+
+        assertReputation(member, reliability = 10, conf = 0, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(Triple(1, 0, 0), counts(member), "оплата клуба — сдержанное слово (KEPT)")
+        assertEquals(0, xpService.getGamification(member).xp, "XP — только за участие")
+
+        // Через месяц — снова можно.
+        assertTrue(reputationService.rewardClubBillingPayment(member, clubId, UUID.randomUUID(), paidAt.plusDays(31), notBefore = paidAt.plusDays(1)))
+    }
+
+    @Test
     fun `mixed axes - reliability sums attendance and finance, counters stay attendance-only`() {
         val eventId = insertFinalizedEvent()
         val member = insertUser("Mixed")

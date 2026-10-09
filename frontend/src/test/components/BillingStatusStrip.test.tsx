@@ -39,7 +39,9 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     autopayAvailable: true,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
-    canPay: true,
+    canEnableAutopay: true,
+    paymentDue: false,
+    lastPayer: null,
     ...over,
   };
 }
@@ -90,17 +92,60 @@ describe('BillingStatusStrip', () => {
     expect(onPay).toHaveBeenCalled();
   });
 
-  it('на странице клуба «оплачено до» видно, но ползунка автопродления там нет', async () => {
-    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true }));
-    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} withAutopayToggle={false} onPay={() => {}} />);
-    expect(await screen.findByText('Оплачено до 7 октября')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Продлевать автоматически' })).toBeNull();
+  it('на странице клуба оплаченный клуб не виден, пока до конца больше недели', async () => {
+    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, paymentDue: false }));
+    const { container } = renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(container.querySelector('.rd-billing-strip')).toBeNull();
   });
 
-  it('состояния, требующие внимания, на странице клуба видны', async () => {
-    mockStatus(status({ state: 'TRIAL_ENDED', trialUntil: null }));
-    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} withAutopayToggle={false} onPay={() => {}} />);
+  it('на странице клуба за неделю до конца — плашка с кнопкой и крайним оплатившим, без ползунка', async () => {
+    mockStatus(status({
+      state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: false, autopayPossible: true,
+      paymentDue: true, canEnableAutopay: false, lastPayer: { userId: 'u-2', name: 'Маша Петрова' },
+    }));
+    const onPay = vi.fn();
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={onPay} />);
+    expect(await screen.findByText('Клуб оплачен до 7 октября')).toBeInTheDocument();
+    expect(screen.getByText(/Оплатить может любой участник клуба/)).toBeInTheDocument();
+    expect(screen.getByText('Последний платёж — Маша Петрова 💛')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить' }));
+    expect(onPay).toHaveBeenCalled();
+  });
+
+  it('на странице клуба при автопродлении — дата списания с карты владельца и предложение оплатить вместо него', async () => {
+    mockStatus(status({
+      state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopay: true, autopayPossible: true,
+      paymentDue: true, canEnableAutopay: false,
+    }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
+    expect(await screen.findByText('7 октября продлится автоматически с карты владельца — можно оплатить месяц вместо него.')).toBeInTheDocument();
+  });
+
+  it('на странице клуба «бот удалён» видят только организаторы', async () => {
+    mockStatus(status({ state: 'BOT_REMOVED', trialUntil: null }));
+    const member = renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(member.container.querySelector('.rd-billing-strip')).toBeNull();
+    member.unmount();
+
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" showBotRemoved onPay={() => {}} />);
+    expect(await screen.findByText('Бот удалён из чата — подписка на паузе')).toBeInTheDocument();
+  });
+
+  it('состояния, требующие оплаты, на странице клуба видны всем — участнику с подсказкой, что платить может любой', async () => {
+    mockStatus(status({ state: 'TRIAL_ENDED', trialUntil: null, paymentDue: true, canEnableAutopay: false }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} placement="club" onPay={() => {}} />);
     expect(await screen.findByText('Бесплатный период закончился')).toBeInTheDocument();
+    expect(screen.getByText(/Оплатить может любой участник клуба/)).toBeInTheDocument();
+  });
+
+  it('в «Управлении» со-организатор видит «оплачено до», но без ползунка', async () => {
+    mockStatus(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, canEnableAutopay: false }));
+    renderWithProviders(<BillingStatusStrip clubId={CLUB_ID} onPay={() => {}} />);
+    expect(await screen.findByText('Оплачено до 7 октября')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('оплачено — дата, ползунок шлёт PATCH и принимает ответ', async () => {

@@ -41,7 +41,7 @@ describe('resolveDeepLink', () => {
   it('остальные ссылки от членства не зависят', () => {
     expect(resolveDeepLink(`event_${CLUB}`)).toBe(`/events/${CLUB}`);
     expect(resolveDeepLink(`skladchina_${CLUB}`)).toBe(`/skladchina/${CLUB}`);
-    expect(resolveDeepLink(`billing_${CLUB}`)).toBe(`/clubs/${CLUB}/manage?billing=done`);
+    expect(resolveDeepLink(`billing_${CLUB}`)).toBe(`/clubs/${CLUB}?billing=done`);
     expect(resolveDeepLink('invite_0123456789abcdef')).toBe('/invite/0123456789abcdef');
   });
 

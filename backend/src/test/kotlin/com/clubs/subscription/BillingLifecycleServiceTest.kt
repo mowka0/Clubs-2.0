@@ -127,7 +127,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1), providerToken = "100001")
         live(sub)
         val payment = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 100500)
-        every { paymentRepository.create(club.id, sub.id, PaymentKind.RECURRING, PRICE, 100001, true) } returns payment
+        every { paymentRepository.create(club.id, club.ownerId, sub.id, PaymentKind.RECURRING, PRICE, 100001, true) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
 
         service.runDaily(now)
@@ -147,7 +147,7 @@ class BillingLifecycleServiceTest {
         // утренний тик списывает, а не ждёт следующего дня.
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusHours(10))
         live(sub)
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns
             BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
 
@@ -196,7 +196,7 @@ class BillingLifecycleServiceTest {
         verify(exactly = 0) { paymentProvider.charge(any()) }
 
         every { paymentRepository.hasPendingRecurring(sub.id) } returns false
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns
             BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
         service.runDaily(now.plusDays(1))
@@ -212,7 +212,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1))
         live(sub)
         val payment = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns payment
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(false, "card expired")
         every { subscriptionRepository.findById(sub.id) } returns sub
         every { subscriptionRepository.transitionStatus(sub.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE) } returns 1
@@ -399,7 +399,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(20))
         every { subscriptionRepository.findLatestByClub(club.id) } returns sub
         val payment = BillingTestFixtures.payment(club).copy(kind = PaymentKind.RECURRING, subscriptionId = sub.id)
-        every { paymentRepository.create(club.id, sub.id, PaymentKind.RECURRING, PRICE, 100001L, true) } returns payment
+        every { paymentRepository.create(club.id, club.ownerId, sub.id, PaymentKind.RECURRING, PRICE, 100001L, true) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(accepted = true)
 
         val invId = service.chargeNow(club.id, now)

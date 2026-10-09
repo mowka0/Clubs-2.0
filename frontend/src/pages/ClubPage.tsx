@@ -130,8 +130,9 @@ export const ClubPage: FC = () => {
   const leavePreviewQuery = useLeavePreviewQuery(id, showLeaveModal && !hasActivePaidAccess);
 
   const isOwner = !!club && club.ownerId === user?.id;
-  // Шит оплаты за чат, открытый из полоски биллинга (platform-billing.md § 7).
-  const [billingSheet, setBillingSheet] = useState(false);
+  // Шит оплаты за чат: из полоски биллинга, по `?billing=1` или после возврата из браузера
+  // `?billing=done` — сразу «проверяем оплату» (platform-billing.md § 7, billing-member-pays.md § 3.2).
+  const [billingSheet, setBillingSheet] = useState<'pay' | 'waiting' | null>(null);
   // Менеджер клуба (co-organizers): владелец ИЛИ активный со-организатор — видит таб «Управление»,
   // строку приглашений и организаторский вид ростера. Fail-close: у замороженного/просроченного
   // со-орга роль в membership остаётся, но manager-UI скрывается (бэкенд в этом состоянии отдаёт 403).
@@ -172,6 +173,15 @@ export const ClubPage: FC = () => {
     searchParams, setSearchParams, myClubsQuery.isPending,
     isFrozenMember, isExpiredMember, membership?.duesClaimedAt,
   ]);
+
+  // Возврат после оплаты за клуб ведёт сюда, а не в «Управление»: платить может любой участник,
+  // а в «Управление» участник не попадёт. Параметр гасим, как `?pay=1`.
+  useEffect(() => {
+    const raw = searchParams.get('billing');
+    if (raw !== '1' && raw !== 'done') return;
+    setBillingSheet(raw === 'done' ? 'waiting' : 'pay');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // `?created=1` — кнопка из лички бота сразу после создания клуба из чата: шторка «Клуб создан»
   // поверх своей же страницы (PO 2026-10-06). Только владельцу: ссылку могли переслать.
@@ -533,17 +543,15 @@ export const ClubPage: FC = () => {
         <ClubSetupBanner clubId={club.id} onOpen={() => navigate(`/clubs/${club.id}/setup`)} />
       )}
 
-      {/* Биллинг за чат — над «О клубе» и на самой посещаемой странице клуба (PO 2026-09-16):
-          на «Управлении» полоску видят не все и не каждый день, а сроки бесплатного периода
-          пропускать нельзя. Видна владельцу и со-организаторам (у них статус тоже читается,
-          `MANAGE_EVENTS`), кнопка ведёт в шит — со-организатору он объяснит, что платит владелец.
-          Ползунка автопродления здесь нет: переключать его — действие управления, и со-организатор
-          всё равно получил бы 403. */}
-      {isManager && club.chatLinked && (
-        <BillingStatusStrip clubId={club.id} withAutopayToggle={false} onPay={() => setBillingSheet(true)} />
+      {/* Биллинг за чат — над «О клубе», но только когда пора платить (PO 2026-10-09,
+          billing-member-pays.md M4): за неделю до конца периода, в грейс и без оплаты — всем
+          участникам, заплатить за клуб может любой. Оплаченный клуб — только в «Управлении».
+          «Бот удалён» — организаторам: это тревога, а не счёт. Ползунка здесь нет. */}
+      {(isMember || isManager) && club.chatLinked && (
+        <BillingStatusStrip clubId={club.id} placement="club" showBotRemoved={isManager} onPay={() => setBillingSheet('pay')} />
       )}
       {billingSheet && (
-        <BillingSheet clubId={club.id} reason={null} onClose={() => setBillingSheet(false)} />
+        <BillingSheet clubId={club.id} reason={null} initialMode={billingSheet} onClose={() => setBillingSheet(null)} />
       )}
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):

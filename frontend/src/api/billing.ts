@@ -31,8 +31,20 @@ export interface BillingStatusDto {
   pendingCheckout: boolean;
   /** ФИО самозанятого-получателя целиком; пусто = не настроено на сервере. */
   recipientName: string;
-  /** Смотрящий может платить: платит только владелец клуба, со-организатор видит статус, но не кнопку. */
-  canPay: boolean;
+  /** Смотрящий — владелец: только ему отметка согласия на автосписание и ползунок; участник платит разово. */
+  canEnableAutopay: boolean;
+  /**
+   * Пора платить: до конца бесплатного или оплаченного периода 7 дней или меньше, грейс, не оплачено.
+   * Тогда плашка видна на главной странице клуба всем участникам (billing-member-pays.md M4).
+   */
+  paymentDue: boolean;
+  /** Крайний оплативший, пока подписка жива: имя на плашке и 💛 в списке участников. */
+  lastPayer: BillingPayer | null;
+}
+
+export interface BillingPayer {
+  userId: string;
+  name: string;
 }
 
 export interface CheckoutDto {

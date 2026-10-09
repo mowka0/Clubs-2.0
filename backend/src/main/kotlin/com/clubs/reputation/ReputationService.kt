@@ -148,6 +148,36 @@ class ReputationService(
     }
 
     /**
+     * Участник (не владелец — его отсекает вызывающий) оплатил подписку клуба за чат: +10 на оси
+     * «финансы», как за вовремя закрытый долг (billing-member-pays.md M7). Не чаще одной строки
+     * после [notBefore] на человека в клубе — иначе предоплата вперёд покупала бы надёжность.
+     * Идемпотентно по платежу: UNIQUE(user, source) + ON CONFLICT DO NOTHING.
+     */
+    @Transactional
+    fun rewardClubBillingPayment(userId: UUID, clubId: UUID, paymentId: UUID, paidAt: OffsetDateTime, notBefore: OffsetDateTime): Boolean {
+        if (repository.hasOutcomeSince(userId, clubId, ReputationKind.club_billing_paid, notBefore)) {
+            log.info("Club billing reward skipped, already rewarded this period: userId={} clubId={} paymentId={}", userId, clubId, paymentId)
+            return false
+        }
+        appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    userId = userId,
+                    clubId = clubId,
+                    axis = ReputationAxis.finance,
+                    kind = ReputationKind.club_billing_paid,
+                    points = ReputationPolicy.pointsFor(ReputationKind.club_billing_paid),
+                    occurredAt = paidAt,
+                    sourceType = ReputationSource.club_billing,
+                    sourceId = paymentId
+                )
+            )
+        )
+        log.info("Club billing reward: userId={} clubId={} paymentId={}", userId, clubId, paymentId)
+        return true
+    }
+
+    /**
      * Добавляет строки в леджер (идемпотентно) и пересчитывает кэш для каждой затронутой
      * пары (user, club). Без новой транзакции — присоединяется к транзакции вызывающего
      * (REQUIRES_NEW из processFinalizedEvent, либо транзакция закрытия складчины).

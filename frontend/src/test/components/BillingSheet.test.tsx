@@ -47,7 +47,9 @@ function status(over: Partial<BillingStatusDto> = {}): BillingStatusDto {
     autopayAvailable: true,
     pendingCheckout: false,
     recipientName: 'Варламов Иван Иванович',
-    canPay: true,
+    canEnableAutopay: true,
+    paymentDue: true,
+    lastPayer: null,
     ...over,
   };
 }
@@ -171,15 +173,28 @@ describe('BillingSheet', () => {
     expect(screen.queryByText(/Оплачено до/)).toBeNull();
   });
 
-  it('со-организатору вместо кнопки оплаты объясняет, что платит владелец', async () => {
-    // Со-организатор доходит до стены при создании встречи, но чекаут ему ответил бы 403.
-    mockBilling(status({ canPay: false }));
-    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
+  it('участник платит разово: без отметки согласия, чекаут без автосписания, «спасибо» после оплаты', async () => {
+    // Платит любой участник, но карту участника не сохраняем (billing-member-pays.md M2).
+    const before = status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', canEnableAutopay: false, autopay: true, autopayPossible: true });
+    const after = status({ state: 'ACTIVE', currentPeriodEnd: '2026-11-06T10:00:00Z', canEnableAutopay: false, autopay: true, autopayPossible: true });
+    mockBilling(before, before, after);
+    const checkoutBodies: unknown[] = [];
+    server.use(
+      http.post(`*/api/clubs/${CLUB_ID}/billing/checkout`, async ({ request }) => {
+        checkoutBodies.push(await request.json());
+        return HttpResponse.json({ paymentUrl: 'https://rk.example/pay', invId: 100010 });
+      }),
+    );
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason={null} onClose={() => {}} />);
 
-    expect(await screen.findByText('Оплачивает владелец клуба')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Оплатить/ })).toBeNull();
+    expect(await screen.findByText('Разовая оплата за месяц')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).toBeNull();
-  });
+    await userEvent.click(screen.getByRole('button', { name: 'Продлить на месяц — 199 ₽' }));
+    await waitFor(() => expect(checkoutBodies).toEqual([{ autopay: false }]));
+
+    expect(await screen.findByText('Оплачено до 6 ноября', {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getByText('Спасибо! Подписка клуба продлена на месяц 💛')).toBeInTheDocument();
+  }, 15000);
 
   it('возврат из браузера: уже погашенный счёт сразу показывает «оплачено»', async () => {
     mockBilling(status({ state: 'ACTIVE', currentPeriodEnd: '2026-10-07T10:00:00Z', autopayPossible: true, pendingCheckout: false }));

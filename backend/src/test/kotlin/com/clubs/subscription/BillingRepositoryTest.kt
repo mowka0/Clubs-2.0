@@ -78,8 +78,8 @@ class BillingRepositoryTest {
 
     @Test
     fun `invoice numbers come from the sequence and settle exactly once`() {
-        val first = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = false)
-        val second = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
+        val first = payments.create(clubId, ownerId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = false)
+        val second = payments.create(clubId, ownerId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
 
         assertTrue(first.invId >= 100_000, "InvId стартует со 100000")
         assertTrue(second.invId > first.invId)
@@ -105,7 +105,7 @@ class BillingRepositoryTest {
 
     @Test
     fun `consent history keeps every checkout mark and toggle flip with the wording and offer edition`() {
-        val payment = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
+        val payment = payments.create(clubId, ownerId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
 
         consents.record(AutopayConsent(clubId, ownerId, ConsentSource.CHECKOUT, granted = true, paymentId = payment.id))
         consents.record(AutopayConsent(clubId, ownerId, ConsentSource.TOGGLE, granted = false))
@@ -121,23 +121,44 @@ class BillingRepositoryTest {
     @Test
     fun `pending mother lookup respects the reuse window and pending state`() {
         val now = OffsetDateTime.now()
-        assertNull(payments.findPendingMother(clubId, now.minusMinutes(30)))
+        assertNull(payments.findPendingMother(clubId, ownerId, now.minusMinutes(30)))
 
-        val pending = payments.create(clubId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
-        assertEquals(pending.id, payments.findPendingMother(clubId, now.minusMinutes(30))?.id)
-        assertNull(payments.findPendingMother(clubId, now.plusMinutes(1)), "счёт старше окна не переиспользуется")
+        val pending = payments.create(clubId, ownerId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
+        assertEquals(pending.id, payments.findPendingMother(clubId, ownerId, now.minusMinutes(30))?.id)
+        assertNull(payments.findPendingMother(clubId, ownerId, now.plusMinutes(1)), "счёт старше окна не переиспользуется")
         // Статус для шита смотрит на счета ЛЮБОГО возраста, иначе «проверяем оплату» превращается
         // в ложное «оплачено» при долгой оплате.
-        assertTrue(payments.hasPendingMother(clubId))
+        assertTrue(payments.hasPendingMother(clubId, ownerId))
 
         assertEquals(1, payments.updateAutopayRequested(pending.id, false))
         assertEquals(false, payments.findByInvId(pending.invId)!!.autopayRequested)
 
         payments.markFailed(pending.id)
-        assertNull(payments.findPendingMother(clubId, now.minusMinutes(30)))
-        assertFalse(payments.hasPendingMother(clubId))
+        assertNull(payments.findPendingMother(clubId, ownerId, now.minusMinutes(30)))
+        assertFalse(payments.hasPendingMother(clubId, ownerId))
 
         assertTrue(payments.findPendingCreatedBefore(now.plusMinutes(1)).none { it.id == pending.id })
+    }
+
+    @Test
+    fun `pending checkout is scoped to the payer, and the last settled payment names who paid`() {
+        val memberId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberId', ${telegramSeq.incrementAndGet()}, 'M')")
+        val now = OffsetDateTime.now()
+
+        // Брошенный счёт владельца участнику не достаётся: на нём отметка согласия и Recurring владельца.
+        val ownerPending = payments.create(clubId, ownerId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = true)
+        assertNull(payments.findPendingMother(clubId, memberId, now.minusMinutes(30)))
+        assertFalse(payments.hasPendingMother(clubId, memberId), "«проверяем оплату» — только по своим счетам")
+        assertEquals(ownerPending.id, payments.findPendingMother(clubId, ownerId, now.minusMinutes(30))?.id)
+
+        assertNull(payments.findLastSucceeded(clubId), "клуб ещё ни разу не платил")
+        payments.markSucceeded(ownerPending.id, "BankCard", null, now.minusDays(3))
+        val memberPayment = payments.create(clubId, memberId, null, PaymentKind.MOTHER, 19900, null, autopayRequested = false)
+        assertEquals(memberId, memberPayment.payerUserId)
+        payments.markSucceeded(memberPayment.id, "SBP", null, now)
+
+        assertEquals(memberId, payments.findLastSucceeded(clubId)?.payerUserId, "крайний — последний по времени оплаты")
     }
 
     @Test
@@ -168,7 +189,7 @@ class BillingRepositoryTest {
         assertNull(reloaded.lastChargeAt)
 
         // Дочернее списание привязывается к подписке; после ENDED клуб может подписаться заново.
-        val recurring = payments.create(clubId, created.id, PaymentKind.RECURRING, 19900, 100003, autopayRequested = true)
+        val recurring = payments.create(clubId, ownerId, created.id, PaymentKind.RECURRING, 19900, 100003, autopayRequested = true)
         assertTrue(payments.hasPendingRecurring(created.id))
         payments.markFailed(recurring.id)
         assertFalse(payments.hasPendingRecurring(created.id))

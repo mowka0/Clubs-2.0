@@ -28,6 +28,7 @@ class SubscriptionMapper {
     fun toPayment(record: PlatformPaymentRecord): PlatformPayment = PlatformPayment(
         id = record.id!!,
         clubId = record.clubId,
+        payerUserId = record.payerUserId,
         subscriptionId = record.subscriptionId,
         invId = record.invId!!,
         kind = PaymentKind.valueOf(record.kind),
@@ -50,8 +51,10 @@ class SubscriptionMapper {
         graceUntil: OffsetDateTime?,
         pendingCheckout: Boolean,
         recipientName: String,
-        canPay: Boolean,
+        canEnableAutopay: Boolean,
         autopayAvailable: Boolean,
+        paymentDue: Boolean,
+        lastPayer: BillingPayerDto?,
     ): BillingStatusDto = BillingStatusDto(
         state = state,
         priceKopecks = priceKopecks,
@@ -65,6 +68,8 @@ class SubscriptionMapper {
         autopayAvailable = autopayAvailable,
         pendingCheckout = pendingCheckout,
         recipientName = recipientName,
-        canPay = canPay,
+        canEnableAutopay = canEnableAutopay,
+        paymentDue = paymentDue,
+        lastPayer = lastPayer,
     )
 }

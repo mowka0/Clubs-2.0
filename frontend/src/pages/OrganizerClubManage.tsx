@@ -656,9 +656,10 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader club={club} />
 
-      {/* Полоска биллинга за чат — под шапкой, над сегментами: касается всех вкладок.
-          Только владелец: платит он, ползунок автопродления — его (platform-billing.md § 7). */}
-      {isOwner && <BillingStatusStrip clubId={clubId} onPay={() => setBillingSheet('pay')} />}
+      {/* Полоска биллинга за чат — под шапкой, над сегментами: касается всех вкладок. Здесь она
+          во всех состояниях, включая «Оплачено до …» — на главную возвращается только когда пора
+          платить (billing-member-pays.md M4). Ползунок автопродления — только владельцу. */}
+      <BillingStatusStrip clubId={clubId} onPay={() => setBillingSheet('pay')} />
 
       {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
           переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
@@ -682,7 +683,7 @@ export const OrganizerClubManage: FC = () => {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      {billingSheet && isOwner && (
+      {billingSheet && (
         <BillingSheet
           clubId={clubId}
           reason={null}
