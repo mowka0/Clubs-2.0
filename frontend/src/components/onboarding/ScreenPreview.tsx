@@ -22,8 +22,6 @@ interface ScreenPreviewProps {
    * поверх идёт своя сцена (велком новичка): две шторки подряд человек закроет не читая.
    */
   ready?: boolean;
-  /** Действие оранжевой кнопки, если у превью есть `action`. Показ засчитывается и так. */
-  onAction?: () => void;
 }
 
 /**
@@ -37,7 +35,7 @@ interface ScreenPreviewProps {
  * Закрывается чем угодно: кнопкой, тапом мимо, Escape. Любой из способов засчитывает показ —
  * человек шторку видел, и второй раз она не имеет права появиться.
  */
-export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true, onAction }) => {
+export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) => {
   const haptic = useHaptic();
   const completeTour = useCompleteTourMutation();
   const user = useAuthStore((s) => s.user);
@@ -129,20 +127,9 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true, on
           ))}
         </ul>
 
-        {preview.action && onAction ? (
-          <>
-            <button type="button" className="rd-btn-primary sp-ack" onClick={() => { close(); onAction(); }}>
-              {preview.action.label}
-            </button>
-            <button type="button" className="rd-btn-outline sp-dismiss" onClick={close}>
-              {preview.action.dismissLabel}
-            </button>
-          </>
-        ) : (
-          <button type="button" className="rd-btn-primary sp-ack" onClick={close}>
-            {PREVIEW_ACK}
-          </button>
-        )}
+        <button type="button" className="rd-btn-primary sp-ack" onClick={close}>
+          {preview.ackLabel ?? PREVIEW_ACK}
+        </button>
       </div>
     </div>,
     document.body,

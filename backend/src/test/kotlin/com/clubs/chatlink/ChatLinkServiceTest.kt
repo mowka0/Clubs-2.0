@@ -725,4 +725,28 @@ class ChatLinkServiceTest {
         verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
         verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
     }
+
+    @Test
+    fun `пост клуба в чат — HTML с жирной шапкой и слоганом, название клуба экранировано`() {
+        // Название вводит человек: без экранирования «<b>» или «&» ломали бы разметку поста.
+        every { clubRepository.findById(clubId) } returns chatLinkTestClub(clubId = clubId, ownerId = ownerId, name = "Бег <b>&</b> кофе")
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
+        every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns 778L
+
+        service.pinClubLink(clubId, ownerId)
+
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId = any(),
+                text = match {
+                    it.startsWith("<b>📌 У нашего чата теперь есть клуб — «Бег &lt;b&gt;&amp;&lt;/b&gt; кофе»!</b>") &&
+                        it.contains("<b>В чате болтаем, а в клубе организуем.</b>\n\nВступай в наш клуб")
+                },
+                buttonText = "Вступить в клуб",
+                url = any(),
+                parseMode = "HTML",
+                silent = any()
+            )
+        }
+    }
 }

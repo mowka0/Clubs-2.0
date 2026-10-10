@@ -874,8 +874,6 @@ export const ClubPage: FC = () => {
       <ScreenPreview
         screen={isOwner ? 'CLUB_OWNER' : 'CLUB'}
         ready={!showWelcome && !showCreatedSheet && !showInviteSheet && ownerChecklistDone}
-        // Таб «Участники» — там живёт вход «Пригласить в клуб»; как в `onShowInChat`.
-        onAction={() => { setActiveTab('members'); setShowInviteSheet(true); }}
       />
     </div>
   );

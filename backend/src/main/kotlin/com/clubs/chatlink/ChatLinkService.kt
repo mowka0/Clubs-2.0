@@ -1,11 +1,13 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.event.EventMessageTemplate
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -456,15 +458,18 @@ class ChatLinkService(
     fun postAndPinClubLink(chatId: Long, clubName: String, clubId: UUID): Long? {
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = chatId,
-            text = "📌 У нашего чата теперь есть клуб — «$clubName»!\n\n" +
+            // Название клуба — пользовательский ввод: экранируем, иначе оно ломало бы HTML-разметку.
+            text = "<b>📌 У нашего чата теперь есть клуб — «${EventMessageTemplate.escapeHtml(clubName)}»!</b>\n\n" +
                 "Больше не нужно листать переписку, чтобы понять, когда встречаемся, " +
                 "кто идёт и кто сколько скинул:\n\n" +
                 "🗓 Встречи — афиша, «пойду / не пойду» голосование одной кнопкой, а бот напомнит.\n" +
                 "💸 Сборы — бот поделит счёт и запомнит, кто кому сколько должен.\n" +
                 "🏆 Статистика — сколько раз собирались, у каждого свой уровень и надёжность.\n\n" +
-                "В чате болтаем, а в клубе организуем. Вступай в наш клуб, чтобы быть всегда в курсе происходящего 🔥",
+                "<b>В чате болтаем, а в клубе организуем.</b>\n\n" +
+                "Вступай в наш клуб, чтобы быть всегда в курсе происходящего 🔥",
             buttonText = "Вступить в клуб",
-            url = clubMiniAppUrl(clubId)
+            url = clubMiniAppUrl(clubId),
+            parseMode = PARSE_MODE_HTML
         ) ?: return null
         gateway.pinChatMessage(chatId, messageId)
         return messageId
