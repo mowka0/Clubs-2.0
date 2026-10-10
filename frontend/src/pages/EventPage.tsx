@@ -520,7 +520,7 @@ export const EventPage: FC = () => {
           haptic.notify('success');
           setCancelOpen(false);
           setCancelReason('');
-          setToastMessage('Событие отменено');
+          setToastMessage('Встреча отменена');
         },
         onError: (e) => {
           setCancelError(e.message);
@@ -613,7 +613,7 @@ export const EventPage: FC = () => {
     if (!editDatetime) { setEditError('Укажите дату и время'); haptic.notify('error'); return; }
     const newDate = new Date(editDatetime);
     if (Number.isNaN(newDate.getTime())) { setEditError('Некорректная дата'); haptic.notify('error'); return; }
-    if (newDate.getTime() <= Date.now()) { setEditError('Дата события должна быть в будущем'); haptic.notify('error'); return; }
+    if (newDate.getTime() <= Date.now()) { setEditError('Дата встречи должна быть в будущем'); haptic.notify('error'); return; }
 
     const hint = editHint.trim();
     // Тот же инвариант, что на бэкенде: у встречи должно остаться хоть какое-то указание места.
@@ -674,7 +674,7 @@ export const EventPage: FC = () => {
   if (loadError || !event) {
     return (
       <div className="rd-page">
-        <Placeholder header="Ошибка" description={loadError ?? 'Событие не найдено'} />
+        <Placeholder header="Ошибка" description={loadError ?? 'Встреча не найдена'} />
       </div>
     );
   }
@@ -1241,7 +1241,7 @@ export const EventPage: FC = () => {
       {isCancelled && (
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14, borderLeft: '3px solid var(--danger)' }}>
           <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-            ❌ <b>Событие отменено</b>{event.cancellationReason ? `: ${event.cancellationReason}` : '.'}
+            ❌ <b>Встреча отменена</b>{event.cancellationReason ? `: ${event.cancellationReason}` : '.'}
           </div>
         </div>
       )}
@@ -1744,7 +1744,7 @@ export const EventPage: FC = () => {
           <div className="rd-section-sub-h">Посещаемость</div>
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
             <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-              Окно отметки явки истекло. Событие закрыто без отметки — репутация участникам
+              Окно отметки явки истекло. Встреча закрыта без отметки — репутация участникам
               за него не начислена.
             </div>
           </div>
@@ -2069,10 +2069,10 @@ export const EventPage: FC = () => {
       {cancelOpen && createPortal(
         <>
           <div className="rd-sheet-overlay" onClick={() => setCancelOpen(false)} aria-hidden="true" />
-          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Отмена события">
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Отмена встречи">
             <div className="rd-sheet-grabber" aria-hidden="true" />
             <div className="rd-sheet-head">
-              <h2>Отменить событие?</h2>
+              <h2>Отменить встречу?</h2>
               <button type="button" className="rd-sheet-close" onClick={() => setCancelOpen(false)}>Закрыть</button>
             </div>
             <div className="rd-sheet-body">
@@ -2096,7 +2096,7 @@ export const EventPage: FC = () => {
                   onClick={handleCancelEvent}
                   disabled={cancelMutation.isPending}
                 >
-                  {cancelMutation.isPending ? <Spinner size="s" /> : 'Отменить событие'}
+                  {cancelMutation.isPending ? <Spinner size="s" /> : 'Отменить встречу'}
                 </button>
                 <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setCancelOpen(false)}>
                   Назад

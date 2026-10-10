@@ -35,12 +35,12 @@ describe('formatPeerSignal', () => {
   });
 
   it('handles clubs without any stage-2 events yet', () => {
-    expect(formatPeerSignal({ ...base, memberClubCount: 2 })).toBe('В 2 клубах · ещё не было событий');
+    expect(formatPeerSignal({ ...base, memberClubCount: 2 })).toBe('В 2 клубах · ещё не было встреч');
   });
 
   it('reports attendance once there are confirmations', () => {
     expect(
       formatPeerSignal({ ...base, memberClubCount: 1, totalConfirmations: 5, totalAttendances: 4 }),
-    ).toBe('В 1 клубе · посетил 4 из 5 событий');
+    ).toBe('В 1 клубе · посетил 4 из 5 встреч');
   });
 });

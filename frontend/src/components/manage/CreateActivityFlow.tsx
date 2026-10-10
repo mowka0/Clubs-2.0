@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Modal } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -34,6 +34,8 @@ interface CreateActivityFlowProps {
    * пользователь сейчас просматривает (и организует).
    */
   presetClubId?: string | null;
+  /** Открыть сразу на выборе формата встречи / вида сбора (кнопки пустых состояний). */
+  initialType?: ActivityType | null;
   /** Закрывает весь флоу (сбрасывает внутреннее состояние шага). */
   onClose: () => void;
 }
@@ -74,6 +76,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   canCreate,
   organizerClubs,
   presetClubId,
+  initialType = null,
   onClose,
 }) => {
   const navigate = useNavigate();
@@ -148,6 +151,13 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     setPendingType(type);
     setStep('event_format');
   };
+
+  // Кнопка «Создать встречу» / «Создать сбор» уже ответила на «что создаём» — начинаем со шага ниже.
+  useEffect(() => {
+    if (!open || !initialType || !canCreate) return;
+    setPendingType(initialType);
+    setStep(initialType === 'skladchina' ? 'kind' : 'event_format');
+  }, [open, initialType, canCreate]);
 
   const handlePickFeedback = () => {
     haptic.impact('medium');

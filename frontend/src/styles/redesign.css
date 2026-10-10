@@ -2523,7 +2523,6 @@
 .rd-fullblock-input:focus { outline: none; border-color: var(--accent); }
 
 /* club-invites: боттом-шит «Пригласить» — строки-опции (кадр B мокапа) */
-.rd-inv-sub { font-size: 12px; color: var(--text-dim); text-align: center; margin: -2px 0 12px; }
 .rd-inv-opt {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
@@ -2541,7 +2540,7 @@
 /* Предупреждение под «Скопировать ссылку»: вход по прямой ссылке минует одобрение заявки.
    Акцентный цвет, а не danger — это не ошибка, а осознанный обход, о котором надо знать. */
 .rd-inv-opt-txt .rd-inv-opt-warn { color: var(--accent); font-weight: 600; margin-top: 3px; }
-.rd-inv-title { font-size: 17px; font-weight: 700; text-align: center; margin: 4px 0 2px; }
+.rd-inv-title { font-size: 17px; font-weight: 700; text-align: center; margin: 4px 0 12px; }
 .rd-inv-cancel {
   display: block; width: 100%; text-align: center; background: none; border: none;
   color: var(--text-dim); font-weight: 600; font-size: 13.5px; padding: 12px 0 2px;

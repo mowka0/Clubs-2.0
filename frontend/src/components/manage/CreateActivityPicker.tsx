@@ -25,8 +25,8 @@ const OPTIONS: PickerOption[] = [
   {
     key: 'event',
     emoji: '🗓',
-    title: 'Событие',
-    subtitle: 'Встреча с датой, временем, лимитом',
+    title: 'Встреча',
+    subtitle: 'С датой, временем и местами — или открытая',
   },
   {
     key: 'skladchina',

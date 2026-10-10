@@ -265,7 +265,7 @@ describe('EventPage — отмена события (F5-14)', () => {
     });
     renderEventPage();
 
-    const banner = await screen.findByText(/Событие отменено/);
+    const banner = await screen.findByText(/Встреча отменена/);
     expect(banner.parentElement?.textContent).toContain('Площадка закрылась');
     // Набор/состав и голосование скрыты для отменённого события.
     expect(screen.queryByText(/Набор ·/)).not.toBeInTheDocument();
@@ -367,7 +367,7 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
     expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
     // Карточка места свёрнута по умолчанию: карта и кнопки — после тапа по адресу.
     fireEvent.click(screen.getByRole('button', { name: /Покровка/ }));
-    expect(screen.getByAltText('Карта места события')).toBeInTheDocument();
+    expect(screen.getByAltText('Карта места встречи')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();
   });
@@ -377,7 +377,7 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
     renderEventPage();
 
     expect(await screen.findByText('Бар')).toBeInTheDocument();
-    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места встречи')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
   });
 
@@ -400,7 +400,7 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
     renderEventPage();
 
     expect(await screen.findByText('Встречаемся в зуме')).toBeInTheDocument();
-    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места встречи')).not.toBeInTheDocument();
   });
 });
 

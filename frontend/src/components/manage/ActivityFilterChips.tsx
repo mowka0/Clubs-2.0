@@ -14,7 +14,7 @@ interface Chip {
 
 const CHIPS: Chip[] = [
   { key: 'all', label: 'Все' },
-  { key: 'event', label: 'События' },
+  { key: 'event', label: 'Встречи' },
   { key: 'skladchina', label: 'Сборы' },
 ];
 

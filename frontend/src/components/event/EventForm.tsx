@@ -215,7 +215,7 @@ export const EventForm: FC<EventFormProps> = ({
     const eventDate = new Date(eventDatetime);
     if (Number.isNaN(eventDate.getTime())) return fail('Некорректная дата');
     if (eventDate.getTime() <= Date.now()) {
-      return fail('Дата события должна быть в будущем');
+      return fail('Дата встречи должна быть в будущем');
     }
     // Набор должен помещаться до начала встречи — одно правило вместо режима «состав закроется
     // сразу» (решение PO 2026-09-05; встреча «на сегодня» станет отдельным форматом). Сервер
@@ -261,8 +261,8 @@ export const EventForm: FC<EventFormProps> = ({
         replace: true,
         state: {
           toast: templateFailed
-            ? 'Событие создано, но шаблон сохранить не удалось'
-            : 'Событие создано',
+            ? 'Встреча создана, но шаблон сохранить не удалось'
+            : 'Встреча создана',
         },
       });
     } catch (e) {
@@ -275,7 +275,7 @@ export const EventForm: FC<EventFormProps> = ({
       }
       console.error('createEvent failed', e);
       haptic.notify('error');
-      const msg = e instanceof Error ? e.message : 'Не удалось создать событие';
+      const msg = e instanceof Error ? e.message : 'Не удалось создать встречу';
       setSubmitError(msg);
     }
   };
@@ -672,7 +672,7 @@ export const EventForm: FC<EventFormProps> = ({
           >
             {isTemplateMode
               ? (saveTemplateMut.isPending ? 'Сохраняем…' : 'Сохранить шаблон')
-              : (createMut.isPending ? 'Создаём…' : 'Создать событие')}
+              : (createMut.isPending ? 'Создаём…' : 'Создать встречу')}
           </button>
         </div>
       </div>

@@ -356,9 +356,26 @@ describe('ClubPage · баннер «Клуб ещё не заполнен»', (
 });
 
 describe('ClubPage · шторка «Клуб создан» для клуба из чата (?created=1)', () => {
+  /** Статус чата: шторка показывается, только пока клуб не закреплён в чате (PO 2026-10-10). */
+  function mockChatLink(clubLinkPinned: boolean) {
+    server.use(http.get('*/api/clubs/:id/chat-link', () => HttpResponse.json({ linked: true, clubLinkPinned })));
+  }
+
   beforeEach(() => {
     localStorage.clear();
     server.resetHandlers();
+    mockChatLink(false);
+  });
+
+  it('клуб уже показан в чате — шторки нет, даже по старой кнопке из лички', async () => {
+    setViewer(OWNER_ID);
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(true);
+    renderClubPage(CLUB_ID, undefined, '?created=1');
+
+    expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(`Клуб «${mockClubDetail.name}» создан`)).not.toBeInTheDocument();
   });
 
   it('владелец видит поздравление и кнопку «Заполнить клуб», она ведёт в мастер', async () => {

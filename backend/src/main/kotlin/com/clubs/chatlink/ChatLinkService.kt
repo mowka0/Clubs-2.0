@@ -355,9 +355,10 @@ class ChatLinkService(
      * доступное; иначе — только функции, чьё право выдали сейчас. Поэтому выключенное владельцем
      * руками не включается обратно при каждом пересчёте прав, пока само право не менялось.
      *
-     * Что пишет в чат (живой закреп, статус сборов), включается, только когда клуб уже показан
-     * в чате — есть закреп со ссылкой на клуб. Клуб из чата до «Показать клуб в чате» молчит
-     * (PO 2026-10-06), и эти функции включает сам показ — [pinClubLink].
+     * Включается сразу, как только есть право, — и до «Показать клуб в чате» (PO 2026-10-10: раньше
+     * закреп и статус сборов ждали показа клуба, и владелец видел выключенные тумблеры при выданных
+     * правах). Само включение в чат не пишет: бэкфилл публикует только уже существующие встречи и
+     * сборы, а у только что привязанного клуба их нет.
      *
      * Сами не включаются никогда: вход через заявки (меняет, что видят стучащиеся в группу, —
      * решает владелец) и строгий режим (мьют должников и бан ушедших).
@@ -369,14 +370,13 @@ class ChatLinkService(
         // Строка удалённого клуба (легаси) ждёт перехвата — оживлять её функции незачем.
         if (clubRepository.findById(clubId) == null) return
         val isFirstLink = before == null
-        val isPresented = link.clubPinMessageId != null
         fun granted(now: Boolean, was: Boolean?) = now && (isFirstLink || was != true)
 
         val enabled = buildList {
-            if (isPresented && !link.livePinEnabled && granted(link.canPinMessages, before?.canPinMessages)) {
+            if (!link.livePinEnabled && granted(link.canPinMessages, before?.canPinMessages)) {
                 enableLivePin(link); add("livePin")
             }
-            if (isPresented && isFirstLink && !link.skladchinaStatusEnabled) {
+            if (isFirstLink && !link.skladchinaStatusEnabled) {
                 enableSkladchinaStatus(link); add("skladchinaStatus")
             }
             if (!link.awardTagsEnabled && granted(link.canManageTags, before?.canManageTags)) {
@@ -386,16 +386,6 @@ class ChatLinkService(
         if (enabled.isNotEmpty()) {
             log.info("Chat features auto-enabled by bot rights: clubId={} chatId={} features={}", clubId, link.chatId, enabled)
         }
-    }
-
-    /**
-     * Первый показ клуба в чате: включаем то, что пишет в чат, — до показа оно ждало, чтобы
-     * клуб из чата не выдал себя раньше времени (PO 2026-10-06).
-     */
-    private fun enableFeaturesOnFirstPresentation(link: ChatLink) {
-        if (!link.livePinEnabled && link.canPinMessages) enableLivePin(link)
-        if (!link.skladchinaStatusEnabled) enableSkladchinaStatus(link)
-        log.info("Chat features enabled on first presentation: clubId={} chatId={}", link.clubId, link.chatId)
     }
 
     /** Дверь: ссылка обычно создана при привязке; false — Telegram не дал её создать. */
@@ -448,8 +438,6 @@ class ChatLinkService(
             ?: throw ConflictException("Не удалось отправить сообщение в чат — попробуйте позже")
         chatLinkRepository.updateClubPinMessageId(clubId, messageId)
         log.info("Club link pinned: clubId={} chatId={} messageId={}", clubId, link.chatId, messageId)
-        // Повторный закреп ссылки — не показ: выключенное владельцем после показа не трогаем.
-        if (link.clubPinMessageId == null) enableFeaturesOnFirstPresentation(link)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
@@ -474,7 +462,7 @@ class ChatLinkService(
                 "🗓 Встречи — афиша, «пойду / не пойду» голосование одной кнопкой, а бот напомнит.\n" +
                 "💸 Сборы — бот поделит счёт и запомнит, кто кому сколько должен.\n" +
                 "🏆 Статистика — сколько раз собирались, у каждого свой уровень и надёжность.\n\n" +
-                "Вступить в одно нажатие, бесплатно, прямо в Telegram. Чат никуда не девается 👇",
+                "В чате болтаем, а в клубе организуем. Вступить в одно нажатие, бесплатно, прямо в Telegram 👇",
             buttonText = "Вступить в клуб",
             url = clubMiniAppUrl(clubId)
         ) ?: return null

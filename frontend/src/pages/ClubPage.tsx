@@ -32,6 +32,7 @@ import { ClubSetupBanner } from '../components/club/ClubSetupBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene } from '../components/onboarding/WelcomeScene';
 import { useCompleteTourMutation } from '../queries/profile';
+import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
@@ -188,8 +189,13 @@ export const ClubPage: FC = () => {
   }, [searchParams, setSearchParams]);
 
   // `?created=1` — кнопка из лички бота сразу после создания клуба из чата: шторка «Клуб создан»
-  // поверх своей же страницы (PO 2026-10-06). Только владельцу: ссылку могли переслать.
-  const showCreatedSheet = isOwner && searchParams.get('created') === '1';
+  // поверх своей же страницы (PO 2026-10-06). Только владельцу: ссылку могли переслать. И только
+  // пока клуб не показан в чате: после закрепа её шаги устарели, а кнопка в личке живёт вечно
+  // (PO 2026-10-10). До ответа статуса чата шторку не показываем — иначе она мигнула бы.
+  const createdParam = searchParams.get('created') === '1';
+  const createdChatLinkQuery = useChatLinkStatusQuery(id, { enabled: isOwner && createdParam });
+  const showCreatedSheet = isOwner && createdParam
+    && createdChatLinkQuery.isSuccess && !createdChatLinkQuery.data.clubLinkPinned;
   // Параметр гасим, иначе «назад» из мастера снова открыл бы шторку.
   const closeCreatedSheet = () => setSearchParams({}, { replace: true });
 

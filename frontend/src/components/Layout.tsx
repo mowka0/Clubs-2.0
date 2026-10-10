@@ -51,6 +51,7 @@ export const AppDock: FC = () => {
   // его из глубины страниц, не дублируя сам флоу и его guard'ы.
   const createOpen = useCreateFlowStore((s) => s.isOpen);
   const openCreateFlow = useCreateFlowStore((s) => s.open);
+  const createInitialType = useCreateFlowStore((s) => s.initialType);
   const closeCreateFlow = useCreateFlowStore((s) => s.close);
 
   // Если юзер сейчас смотрит клуб, которым он руководит, FAB заранее выбирает этот
@@ -73,6 +74,7 @@ export const AppDock: FC = () => {
         canCreate={canCreate}
         organizerClubs={organizerClubs}
         presetClubId={presetClubId}
+        initialType={createInitialType}
         onClose={closeCreateFlow}
       />
     </>

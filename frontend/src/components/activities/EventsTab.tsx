@@ -61,7 +61,7 @@ export const EventsTab: FC = () => {
 
   const handleCreateClick = () => {
     haptic.impact('light');
-    openCreateFlow();
+    openCreateFlow('event');
   };
 
   const isLoadingInitial = myEventsQuery.isPending;

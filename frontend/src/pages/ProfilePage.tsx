@@ -346,7 +346,7 @@ export const ProfilePage: FC = () => {
                 <div className="rd-ostat-row">
                   <span className="rd-ostat-ico rd-ost-ticket" aria-hidden="true">🎟</span>
                   <span>
-                    <span className="rd-ostat-lbl">Всего посетил событий</span>
+                    <span className="rd-ostat-lbl">Всего посетил встреч</span>
                     <div className="rd-ostat-sub">по всем клубам, включая открытые встречи</div>
                   </span>
                   <span className="rd-ostat-val"><b>{rep!.visits.totalEventsAttended}</b></span>

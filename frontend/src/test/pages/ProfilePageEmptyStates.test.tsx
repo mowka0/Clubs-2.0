@@ -168,7 +168,7 @@ describe('ProfilePage — статистика одной панелью (PO 202
     expect(screen.getByText('87')).toBeInTheDocument();
     // Остальные строки панели: В клубах + посещения
     expect(screen.getByText('активных участий')).toBeInTheDocument();
-    expect(screen.getByText('Всего посетил событий')).toBeInTheDocument();
+    expect(screen.getByText('Всего посетил встреч')).toBeInTheDocument();
     // Старых плиток больше нет
     expect(document.querySelector('.rd-stats')).toBeNull();
     // «Уровень» стоит выше «Статистики»
