@@ -71,7 +71,7 @@ class ChatLinkBotService(
         // Проверку переезда каждый путь делает РОВНО ОДИН раз, иначе на каждое обычное
         // добавление бота уходил бы двойной опрос Telegram: с намерением — здесь, без
         // намерения — внутри handleGroupStartNewClub (её ClubsBot зовёт и напрямую).
-        if (intent != null && adoptChatMigratedHere(chatId)) {
+        if (intent != null && adoptChatMigratedHere(chatId, fromTelegramId)) {
             log.info("Chat-link intent dropped, chat turned out to be a migration: chatId={}", chatId)
             return
         }
@@ -93,7 +93,7 @@ class ChatLinkBotService(
      * Полагаться на порядок апдейтов нельзя, поэтому спрашиваем Telegram сами — по каждой
      * привязке, сидящей на обычной группе (переехать может только такая, и их единицы).
      */
-    private fun adoptChatMigratedHere(chatId: Long): Boolean {
+    private fun adoptChatMigratedHere(chatId: Long, actorTelegramId: Long): Boolean {
         // Две дешёвые отсечки до единственного дорогого шага — опроса Telegram.
         // Целью переезда всегда становится супергруппа, поэтому обычная группа переездом быть
         // не может; знакомый чат — тем более.
@@ -132,6 +132,7 @@ class ChatLinkBotService(
         )
         // Переезд и есть момент выдачи прав: `moved` — снимок до переезда, права в нём прежние.
         chatLinkService.enableFeaturesForGrantedRights(moved.clubId, before = moved)
+        notifyOwnerIfRightsGrantedByOther(before = moved, nowAdmin = status == BotChatStatus.ADMINISTRATOR, actorTelegramId = actorTelegramId)
         log.info("Chat migration adopted on bot add: clubId={} {} → {}", moved.clubId, moved.chatId, chatId)
         return true
     }
@@ -183,7 +184,7 @@ class ChatLinkBotService(
     fun handleGroupStartNewClub(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
         // Гейт стоит здесь, а не только у вызывающего: это и есть место, где рождался
         // клуб-двойник, а зовут его из двух точек (my_chat_member и `/start new` в группе).
-        if (adoptChatMigratedHere(chatId)) return
+        if (adoptChatMigratedHere(chatId, fromTelegramId)) return
         val existingForChat = chatLinkRepository.findByChatId(chatId)
         val liveLinkOfChat = existingForChat?.takeIf { clubRepository.findById(it.clubId) != null }
         if (liveLinkOfChat != null) {
@@ -415,7 +416,14 @@ class ChatLinkBotService(
      * права). Привязку НЕ удаляем — фичи гаснут, а после возврата прав всё оживает (мокап 01-C).
      */
     @Transactional
-    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
+    fun handleMyChatMember(
+        chatId: Long,
+        newStatusLiteral: String,
+        canPinMessages: Boolean,
+        canInviteUsers: Boolean,
+        canRestrictMembers: Boolean,
+        actorTelegramId: Long
+    ) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
         // Право «Управление тегами» (Bot API 9.5) не приходит в объекте старой библиотеки —
@@ -436,6 +444,36 @@ class ChatLinkBotService(
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
         // Права выдали прямо в настройках группы — функции, чьё право появилось, включаются сами.
         chatLinkService.enableFeaturesForGrantedRights(link.clubId, before = link)
+        notifyOwnerIfRightsGrantedByOther(before = link, nowAdmin = status == BotChatStatus.ADMINISTRATOR, actorTelegramId = actorTelegramId)
+    }
+
+    /**
+     * Права боту выдал не владелец, а админ группы — по ссылке, которую владелец ему переслал
+     * («Отправить ссылку админу»). Владелец ждёт этого вне приложения, поэтому сообщаем в личку
+     * (PO 2026-10-10). Сам владелец выдаёт права из приложения и видит результат там — ему не пишем.
+     */
+    private fun notifyOwnerIfRightsGrantedByOther(before: ChatLink, nowAdmin: Boolean, actorTelegramId: Long) {
+        if (!nowAdmin || before.botStatus == BotChatStatus.ADMINISTRATOR) return
+        val club = clubRepository.findById(before.clubId) ?: return
+        if (userRepository.findByTelegramId(actorTelegramId)?.id == club.ownerId) return
+        val ownerTelegramId = userRepository.findById(club.ownerId)?.telegramId ?: return
+        val link = chatLinkRepository.findByClubId(club.id) ?: return
+        // Следующий шаг чек-листа «Клуб создан» — в его порядке: сначала наполнить, потом показать в чате.
+        val nextStep = when {
+            club.setupCompletedAt == null -> "\n\n✍️ Осталось наполнить клуб: город, пара слов о нём и обложка."
+            link.canPinMessages && link.clubPinMessageId == null ->
+                "\n\n📌 Осталось показать клуб в чате: «Пригласить в клуб» → «Показать клуб в чате» — " +
+                    "бот закрепит ссылку, и все увидят клуб."
+            else -> ""
+        }
+        val sent = gateway.sendDmWithWebApp(
+            telegramId = ownerTelegramId,
+            text = "✅ Админ группы «${link.chatTitle ?: "без названия"}» выдал боту права администратора — " +
+                "клуб «${club.name}» теперь может работать с чатом.$nextStep",
+            buttonText = "Перейти в клуб",
+            webAppPath = "/clubs/${club.id}"
+        )
+        log.info("Owner DM about bot rights granted by chat admin: clubId={} chatId={} sent={}", club.id, link.chatId, sent)
     }
 
     /**

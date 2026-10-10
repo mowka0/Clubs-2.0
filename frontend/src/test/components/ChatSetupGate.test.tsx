@@ -78,7 +78,7 @@ function mockStatus(dto: ChatLinkStatusDto) {
 const OWNER_ID = 'owner-1';
 
 /** Владелец открыл страницу своего клуба — без отметки об уходе за привязкой. */
-function openOwnedClub(chatLinked = true) {
+function openOwnedClub(chatLinked = true, setupCompleted = true) {
   useAuthStore.setState({
     user: {
       id: OWNER_ID, telegramId: 1, telegramUsername: 'owner', firstName: 'Owner', lastName: null,
@@ -92,7 +92,7 @@ function openOwnedClub(chatLinked = true) {
   useClubContextStore.setState({ clubId: CLUB_ID });
   server.use(
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
-      id: CLUB_ID, name: 'Партия', ownerId: OWNER_ID, chatLinked,
+      id: CLUB_ID, name: 'Партия', ownerId: OWNER_ID, chatLinked, setupCompleted,
     })),
   );
 }
@@ -217,16 +217,50 @@ describe('ChatSetupGate — напоминание про права без от
   it('клуб из чата: прав не хватает — окно всплывает само', async () => {
     // Клуб рождается из чата, отметку о привязке приложение при этом не ставит (её создаёт бот),
     // и напоминание раньше не показывалось вовсе (баг PO 2026-08-19).
-    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: false }));
+    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: false, clubLinkPinned: true }));
     openOwnedClub();
     renderWithProviders(<ChatSetupGate />);
 
     expect(await screen.findByText('Блокировка пользователей')).toBeInTheDocument();
   });
 
+  it('чек-лист «Клуб создан» не пройден — окна нет, хотя прав не хватает (PO 2026-10-10)', async () => {
+    // Окно выскакивало первым, и шаг «Заполнить клуб» терялся: про права говорит сам чек-лист.
+    mockStatus(status({ canPinMessages: false, canInviteUsers: false, canRestrictMembers: false, clubLinkPinned: false }));
+    openOwnedClub(true, false);
+    const StatusProbe: FC = () => {
+      const { data } = useChatLinkStatusQuery(CLUB_ID);
+      return <div>{data ? 'статус получен' : 'ждём'}</div>;
+    };
+    renderWithProviders(<><ChatSetupGate /><StatusProbe /></>);
+
+    expect(await screen.findByText('статус получен')).toBeInTheDocument();
+    expect(screen.queryByText('Блокировка пользователей')).not.toBeInTheDocument();
+  });
+
+  it('чек-лист пройден в этом же запуске — окно ждёт следующего запуска, а не лезет поверх «Твой клуб»', async () => {
+    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: false, clubLinkPinned: false }));
+    openOwnedClub();
+    const StatusProbe: FC = () => {
+      const { data } = useChatLinkStatusQuery(CLUB_ID);
+      return <div>{data ? 'статус получен' : 'ждём'}</div>;
+    };
+    const first = renderWithProviders(<><ChatSetupGate /><StatusProbe /></>);
+    expect(await screen.findByText('статус получен')).toBeInTheDocument();
+    first.unmount();
+
+    // Клуб закрепили — чек-лист пройден, но запуск тот же.
+    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: false, clubLinkPinned: true }));
+    renderWithProviders(<><ChatSetupGate /><StatusProbe /></>);
+    expect(await screen.findByText('статус получен')).toBeInTheDocument();
+    expect(screen.queryByText('Блокировка пользователей')).not.toBeInTheDocument();
+  });
+
   it('не хватает только тегов — окно не всплывает: это право необязательное (PO 2026-10-06)', async () => {
     mockStatus(status({
       canPinMessages: true, canInviteUsers: true, canRestrictMembers: true, canManageTags: false,
+      // Чек-лист пройден: иначе окно глушил бы он, а не проверяемое правило.
+      clubLinkPinned: true,
     }));
     openOwnedClub();
     const StatusProbe: FC = () => {
@@ -242,6 +276,8 @@ describe('ChatSetupGate — напоминание про права без от
   it('все права выданы — окно не всплывает', async () => {
     mockStatus(status({
       canPinMessages: true, canInviteUsers: true, canRestrictMembers: true, canManageTags: true,
+      // Чек-лист пройден: иначе окно глушил бы он, а не проверяемое правило.
+      clubLinkPinned: true,
     }));
     openOwnedClub();
     // Пробник ждёт ТОТ ЖЕ запрос, что и гейт: без него проверка «окна нет» проходила бы просто

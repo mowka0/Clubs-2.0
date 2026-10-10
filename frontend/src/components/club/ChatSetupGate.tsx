@@ -55,17 +55,26 @@ export const ChatSetupGate: FC = () => {
   const status = statusQuery.data;
   // Вернулся из Telegram — показываем всегда: он ждёт ответа «получилось ли».
   const isReturningFromLinking = Boolean(pendingClubId);
+  // Чек-лист «Клуб создан» ещё идёт (ClubPage): про права он говорит сам своим шагом.
+  const ownerChecklistPending = isOwner && !!status && (!club.setupCompleted || !status.clubLinkPinned);
 
   // Напоминание про права решается в эффекте, а не в рендере: флаг «уже показывали» —
   // побочный эффект, а рендер обязан оставаться чистым.
   const [remindAboutRights, setRemindAboutRights] = useState(false);
   useEffect(() => {
-    if (isReturningFromLinking || !status?.linked) return;
+    if (isReturningFromLinking || !status?.linked || rightsReminderShown) return;
+    // Пока идёт чек-лист «Клуб создан», окно про права выскакивало первым и сбивало его порядок
+    // (PO 2026-10-10): в этот запуск напоминание пропускаем целиком — иначе оно всплыло бы сразу
+    // после закрепа, поверх превью «Твой клуб». Права не выданы — напомним на следующем запуске.
+    if (ownerChecklistPending) {
+      rightsReminderShown = true;
+      return;
+    }
     // Теги не в счёт: по ссылке Telegram их не выдаёт, и напоминание висело бы у всех (PO 2026-10-06).
-    if (rightsReminderShown || hasAllBotRights(status)) return;
+    if (hasAllBotRights(status)) return;
     rightsReminderShown = true;
     setRemindAboutRights(true);
-  }, [isReturningFromLinking, status]);
+  }, [isReturningFromLinking, status, ownerChecklistPending]);
 
   if (!clubId || closed || !status?.linked) return null;
   if (!isReturningFromLinking && !remindAboutRights) return null;
