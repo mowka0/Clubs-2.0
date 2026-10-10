@@ -65,7 +65,7 @@ export const ActivitiesPage: FC = () => {
           className={segment === 'events' ? 'rd-seg-btn rd-active' : 'rd-seg-btn'}
           onClick={() => handleSelect('events')}
         >
-          События
+          Встречи
         </button>
         <button
           type="button"
