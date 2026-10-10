@@ -215,7 +215,8 @@ class ClubsBot(
             newStatusLiteral = newMember.status,
             canPinMessages = admin?.canPinMessages ?: false,
             canInviteUsers = admin?.canInviteUsers ?: false,
-            canRestrictMembers = admin?.canRestrictMembers ?: false
+            canRestrictMembers = admin?.canRestrictMembers ?: false,
+            actorTelegramId = updated.from.id
         )
 
         // Именно добавление, а не выдача прав уже сидящему боту: иначе каждая правка прав

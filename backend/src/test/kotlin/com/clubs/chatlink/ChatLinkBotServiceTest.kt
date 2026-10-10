@@ -350,7 +350,7 @@ class ChatLinkBotServiceTest {
     fun `my_chat_member по непривязанному чату - no-op`() {
         every { chatLinkRepository.findByChatId(-1L) } returns null
 
-        service.handleMyChatMember(-1L, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+        service.handleMyChatMember(-1L, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, actorTelegramId = ownerTelegramId)
 
         verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any(), any()) }
     }
@@ -359,7 +359,7 @@ class ChatLinkBotServiceTest {
     fun `my_chat_member kick - статус обновлён, привязка живёт`() {
         every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, linkedByUserId = ownerId)
 
-        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, actorTelegramId = ownerTelegramId)
 
         verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.KICKED, false, false, false, false) }
         verify(exactly = 0) { chatLinkRepository.delete(any()) }
@@ -371,7 +371,7 @@ class ChatLinkBotServiceTest {
     fun `my_chat_member kicked после left - потеря чата не считается второй раз`() {
         every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, botStatus = BotChatStatus.LEFT)
 
-        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, actorTelegramId = ownerTelegramId)
 
         verify(exactly = 0) { eventPublisher.publishEvent(ofType<ChatDisconnectedEvent>()) }
     }
@@ -385,7 +385,7 @@ class ChatLinkBotServiceTest {
         )
         every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
 
-        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, actorTelegramId = ownerTelegramId)
 
         verify { gateway.revokeInviteLink(chatId, "https://t.me/+dead") }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
@@ -404,7 +404,7 @@ class ChatLinkBotServiceTest {
             doorInviteLink = "https://t.me/+dead"
         )
 
-        service.handleMyChatMember(chatId, "member", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+        service.handleMyChatMember(chatId, "member", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, actorTelegramId = ownerTelegramId)
 
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
         verify(exactly = 0) { chatLinkRepository.updateInviteLink(any(), any()) }
@@ -418,10 +418,62 @@ class ChatLinkBotServiceTest {
             doorInviteLink = "https://t.me/+alive"
         )
 
-        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, actorTelegramId = ownerTelegramId)
 
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
         verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }
+    }
+
+    @Test
+    fun `my_chat_member - админ группы выдал права по пересланной ссылке - владельцу уходит личка с кнопкой в клуб`() {
+        // Бота добавил не-админ: он сидит обычным участником, пока админ не выдаст права (PO 2026-10-10).
+        val adminTelegramId = 777L
+        every { userRepository.findByTelegramId(adminTelegramId) } returns null
+        every { userRepository.findById(ownerId) } returns mockk(relaxed = true) { every { telegramId } returns ownerTelegramId }
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId, botStatus = BotChatStatus.MEMBER,
+            canPinMessages = false, canInviteUsers = false, canRestrictMembers = false
+        )
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, clubPinMessageId = null)
+
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, actorTelegramId = adminTelegramId)
+
+        verify {
+            gateway.sendDmWithWebApp(
+                telegramId = ownerTelegramId,
+                // Клуб ещё не наполнен — подсказка про первый шаг чек-листа, а не про показ в чате.
+                text = match { it.startsWith("✅ Админ группы «Партия — чат» выдал боту права администратора") && it.contains("Осталось наполнить клуб") },
+                buttonText = "Перейти в клуб",
+                webAppPath = "/clubs/$clubId"
+            )
+        }
+    }
+
+    @Test
+    fun `my_chat_member - права выдал сам владелец - лички нет, он и так в приложении`() {
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId, botStatus = BotChatStatus.MEMBER,
+            canPinMessages = false, canInviteUsers = false, canRestrictMembers = false
+        )
+
+        // Привязка на месте: без неё функция вышла бы раньше, и тест не проверял бы своё условие.
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, clubPinMessageId = null)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, actorTelegramId = ownerTelegramId)
+
+        verify(exactly = 0) { gateway.sendDmWithWebApp(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `my_chat_member - бот уже был админом, админ поменял права - лички нет`() {
+        val adminTelegramId = 777L
+        every { userRepository.findByTelegramId(adminTelegramId) } returns null
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, botStatus = BotChatStatus.ADMINISTRATOR)
+
+        // Привязка на месте: без неё функция вышла бы раньше, и тест не проверял бы своё условие.
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId, clubPinMessageId = null)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = false, canRestrictMembers = true, actorTelegramId = adminTelegramId)
+
+        verify(exactly = 0) { gateway.sendDmWithWebApp(any(), any(), any(), any()) }
     }
 
     @Test
@@ -504,6 +556,29 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
+    fun `переезд обычной группы при выдаче прав админом — владельцу уходит личка`() {
+        // У обычной группы выдача прав и есть переезд: личка обязана уйти и по этому пути (PO 2026-10-10).
+        val basicGroupChatId = -5231168671L
+        val supergroupChatId = -1004320385859L
+        val adminTelegramId = 777L
+        val moved = chatLinkFixture(clubId = clubId, chatId = basicGroupChatId, botStatus = BotChatStatus.MEMBER)
+        every { userRepository.findByTelegramId(adminTelegramId) } returns null
+        every { userRepository.findById(ownerId) } returns mockk(relaxed = true) { every { telegramId } returns ownerTelegramId }
+        every { chatLinkRepository.findByChatId(supergroupChatId) } returns null
+        every { chatLinkRepository.findAllOnBasicGroups() } returns listOf(moved)
+        every { gateway.resolveMigratedChatId(basicGroupChatId) } returns supergroupChatId
+        every { chatLinkService.adoptMigratedChat(moved, supergroupChatId) } returns true
+        every { gateway.getBotChatState(supergroupChatId) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = false)
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = supergroupChatId, clubPinMessageId = null)
+
+        service.handleBotAddedToChat(supergroupChatId, "Никита, Роман и Иван", adminTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any()) }
+        verify { gateway.sendDmWithWebApp(ownerTelegramId, any(), "Перейти в клуб", "/clubs/$clubId") }
+    }
+
+    @Test
     fun `переезд перехватывается и когда человек шёл выдавать права из мастера`() {
         // Самый частый путь: намерение GrantRights, а группа на выдаче прав как раз и переезжает.
         val basicGroupChatId = -5231168671L
@@ -517,10 +592,13 @@ class ChatLinkBotServiceTest {
         every { gateway.getBotChatState(supergroupChatId) } returns
             BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = false)
 
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = supergroupChatId, clubPinMessageId = null)
         service.handleBotAddedToChat(supergroupChatId, "Никита, Роман и Иван", ownerTelegramId)
 
         verify { chatLinkService.adoptMigratedChat(moved, supergroupChatId) }
         verify(exactly = 0) { clubService.createClubFromChat(any(), any()) }
+        // Права выдал сам владелец из мастера — он в приложении, личка была бы дублем.
+        verify(exactly = 0) { gateway.sendDmWithWebApp(any(), any(), any(), any()) }
     }
 
     @Test
