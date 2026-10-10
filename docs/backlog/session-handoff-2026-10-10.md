@@ -14,8 +14,8 @@
 | `feature/billing-member-pays` | `46e39b88` | оплата клуба любым участником (`docs/modules/billing-member-pays.md`), аватар клуба справа, мокапы шапки | V103 |
 | `feature/stage-1-chat-only` | `a98dfe21` (+ этот хэндофф) | этап 1 «только чат» (`docs/design/stage-1-scope.md` § «Спецификация») + правки PO с прогона 10.10 | V104 |
 
-- **Staging** — ветка `feature/stage-1-chat-only` (в ней всё сразу). База **очищена повторно 2026-10-10 05:42 UTC**
-  (дамп `/root/backups/staging-before-wipe-20261010-0542.sql.gz`; прошлая очистка — 09.10 08:14,
+- **Staging** — ветка `feature/stage-1-chat-only` (в ней всё сразу). База **очищена 2026-10-10 06:27 UTC** под новый чек-лист «Клуб создан»
+  (дамп `/root/backups/staging-before-wipe-20261010-0627.sql.gz`; до этого 10.10 05:42 и 09.10 08:14,
   `staging-before-wipe-20261009-0814.sql.gz`): бот вышел из «Test Clubs», клуба и онбординга нет —
   PO проходит тест-план с нуля.
 
