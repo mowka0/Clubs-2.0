@@ -68,7 +68,7 @@ export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
           art={foxStatsArt}
           title="Статистика оживёт после первой встречи"
           description="Создай встречу и позови чат — здесь появятся удержание, вовлечённость и подсказки, что делать дальше."
-          primary={{ label: 'Создать встречу', onClick: () => { haptic.impact('light'); openCreateFlow(); } }}
+          primary={{ label: 'Создать встречу', onClick: () => { haptic.impact('light'); openCreateFlow('event'); } }}
         />
       )}
 

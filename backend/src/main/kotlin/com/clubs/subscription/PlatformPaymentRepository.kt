@@ -9,6 +9,7 @@ interface PlatformPaymentRepository {
     /** Новый счёт; InvId выдаёт последовательность БД. */
     fun create(
         clubId: UUID,
+        payerUserId: UUID,
         subscriptionId: UUID?,
         kind: PaymentKind,
         amountKopecks: Int,
@@ -18,15 +19,22 @@ interface PlatformPaymentRepository {
 
     fun findByInvId(invId: Long): PlatformPayment?
 
-    /** Последний неоплаченный материнский счёт клуба, выставленный не раньше [createdAfter] — для идемпотентного чекаута. */
-    fun findPendingMother(clubId: UUID, createdAfter: OffsetDateTime): PlatformPayment?
+    /**
+     * Последний неоплаченный материнский счёт этого плательщика в клубе, выставленный не раньше
+     * [createdAfter] — для идемпотентного чекаута. По паре (клуб, плательщик): иначе участник
+     * получил бы брошенный счёт владельца с его отметкой согласия на автосписание.
+     */
+    fun findPendingMother(clubId: UUID, payerUserId: UUID, createdAfter: OffsetDateTime): PlatformPayment?
 
     /**
-     * Есть ли у клуба неоплаченный материнский счёт ЛЮБОГО возраста. Статус для шита считается по
+     * Есть ли у плательщика в клубе неоплаченный материнский счёт ЛЮБОГО возраста. Статус для шита считается по
      * нему, а не по окну переиспользования: иначе счёт старше 30 минут выглядел бы как «оплачено»
      * и шит поздравлял бы с несостоявшимся продлением (ревью 2026-09-07).
      */
-    fun hasPendingMother(clubId: UUID): Boolean
+    fun hasPendingMother(clubId: UUID, payerUserId: UUID): Boolean
+
+    /** Последний подтверждённый платёж клуба (любого вида) — «крайний оплативший» на плашке и 💛 в списке. */
+    fun findLastSucceeded(clubId: UUID): PlatformPayment?
 
     /** Ползунок автопродления переехал на существующий счёт: повторный чекаут меняет решение владельца. */
     fun updateAutopayRequested(id: UUID, autopayRequested: Boolean): Int

@@ -13,7 +13,7 @@ export type BotRightKey = 'canPinMessages' | 'canInviteUsers' | 'canRestrictMemb
 /** Права, без которых бот в чате наполовину мёртв. Их Telegram выдаёт по ссылке привязки. */
 export const REQUIRED_BOT_RIGHTS: ReadonlyArray<{ key: BotRightKey; label: string }> = [
   { key: 'canPinMessages', label: 'Закреплять сообщения — живой статус встречи в шапке чата' },
-  { key: 'canInviteUsers', label: 'Приглашать участников — вход в чат по заявке из приложения' },
+  { key: 'canInviteUsers', label: 'Приглашать участников — вход в чат только для участников клуба' },
   { key: 'canRestrictMembers', label: 'Ограничивать участников — строгий режим и возврат ушедших' },
 ];
 

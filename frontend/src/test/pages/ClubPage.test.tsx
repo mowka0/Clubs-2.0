@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockClubDetail } from '../mocks/handlers';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { ClubDetailDto, MembershipDto } from '../../types/api';
 
 // Мок Telegram SDK
@@ -25,6 +26,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 
 // Мок Telegram UI
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 
 // Мок нашего модуля telegram/sdk
 vi.mock('../../telegram/sdk', () => ({
@@ -773,5 +776,91 @@ describe('ClubPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/club not found/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe('ClubPage — этап 1: без взносов, типа доступа и заявок', () => {
+  withStage1Profile();
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1', telegramId: 12345, telegramUsername: 'testuser', firstName: 'Test',
+        lastName: 'User', avatarUrl: null, city: null, country: null, cityId: null, bio: null,
+        onboardingTours: ['INTRO', 'WELCOME'],
+      },
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+    server.resetHandlers();
+  });
+
+  function mockGuestClub(overrides: Partial<ClubDetailDto>) {
+    server.use(
+      http.get('*/api/clubs/:id', () => HttpResponse.json({ ...mockClubDetail, ownerId: 'other-owner', ...overrides })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+    );
+  }
+
+  it('шапка: состав «N участников», без чипов доступа и цены', async () => {
+    mockGuestClub({ accessType: 'closed', subscriptionPrice: 500 });
+
+    renderClubPage();
+
+    expect(await screen.findByText('10 участников')).toBeInTheDocument();
+    expect(screen.queryByText('По заявке')).not.toBeInTheDocument();
+    expect(screen.queryByText(/500 ₽ \/ мес/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Бесплатно')).not.toBeInTheDocument();
+  });
+
+  it('клуб «по заявке»: нет «Хочу вступить», старая заявка не показывает «Заявка на рассмотрении»', async () => {
+    mockGuestClub({ accessType: 'closed' });
+    server.use(
+      http.get('*/api/users/me/applications', () => HttpResponse.json([{
+        id: 'app-1', userId: 'user-1', clubId: 'club-123', status: 'pending',
+        answerText: null, createdAt: '2025-01-01T00:00:00Z',
+      }])),
+    );
+
+    renderClubPage();
+
+    expect(await screen.findByText('Активности клуба доступны участникам')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /хочу вступить/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /заявка на рассмотрении/i })).not.toBeInTheDocument();
+  });
+
+  it('полный клуб: «Клуб заполнен — напиши организатору», без кнопки «Попроситься»', async () => {
+    mockGuestClub({ accessType: 'private', memberCount: 50, memberLimit: 50 });
+
+    renderClubPage();
+
+    expect(await screen.findByText('Клуб заполнен — напиши организатору')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /попроситься/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
+  });
+
+  it('frozen-участник и ?pay=1: шита и «Оплатить взнос» нет, только нейтральная плашка', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => HttpResponse.json({
+        ...mockClubDetail, ownerId: 'other-owner', subscriptionPrice: 500,
+      })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([{
+        id: 'm-1', userId: 'user-1', clubId: 'club-123', status: 'frozen',
+        role: 'member', joinedAt: '2025-01-01T00:00:00Z', subscriptionExpiresAt: null,
+      }] as MembershipDto[])),
+    );
+    mockEmptyTabData();
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/clubs/:id" element={<ClubPage />} />
+      </Routes>,
+      { routerEntries: ['/clubs/club-123?pay=1'] },
+    );
+
+    expect(await screen.findByText('Доступ к клубу закрыт')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /оплатить взнос/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /подтвердить оплату/i })).not.toBeInTheDocument();
   });
 });

@@ -13,6 +13,9 @@ import { useNewClubChatLinkQuery, useStartChatLinkingMutation } from '../queries
  *
  * Возвращается человек сам, когда захочет: Telegram не перебрасывает обратно в Mini App.
  * Появившийся клуб подхватывает HomeRoute при следующем открытии приложения.
+ *
+ * Сюда же ведёт «+ Клуб» в «Моих клубах» на этапе 1, если ссылка на бота ещё не приехала:
+ * создания клуба с нуля там нет (PRODUCT_PROFILE.showClubCreationFromScratch).
  */
 export const ConnectChatScreen: FC = () => (
   <div className="rd-page">

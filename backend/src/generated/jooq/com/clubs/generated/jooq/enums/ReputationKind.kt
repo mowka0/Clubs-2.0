@@ -27,7 +27,8 @@ enum class ReputationKind(@get:JvmName("literal") public val literal: String) : 
     abandoned_slot("abandoned_slot"),
     open_no_show("open_no_show"),
     late_decline_covered("late_decline_covered"),
-    late_decline_uncovered("late_decline_uncovered");
+    late_decline_uncovered("late_decline_uncovered"),
+    club_billing_paid("club_billing_paid");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "reputation_kind"

@@ -111,10 +111,10 @@ describe('CreateActivityFlow', () => {
     const { user } = renderFlow(ONE_CLUB);
 
     // Step 1: type picker is shown; the club picker is not.
-    expect(screen.getByText('Событие')).toBeInTheDocument();
+    expect(screen.getByText('Встреча')).toBeInTheDocument();
     expect(screen.queryByText('Alpha Club')).toBeNull();
 
-    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Встреча'));
 
     // «Событие» разветвляется на шаг формата (обычная / открытая встреча, V86).
     // Заголовков у шагов больше нет (PO 2026-08-11) — шаг опознаём по его пунктам.
@@ -128,7 +128,7 @@ describe('CreateActivityFlow', () => {
   it('Событие → «Открытая встреча» ведёт на форму с ?format=open', async () => {
     const { user } = renderFlow(ONE_CLUB);
 
-    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Встреча'));
     await user.click(screen.getByText('Открытая встреча'));
 
     // Маршрут тот же, формат передаётся query-параметром — CreateEventPage прячет степперы мест.
@@ -139,7 +139,7 @@ describe('CreateActivityFlow', () => {
   it('Событие → «Обычная встреча» ведёт на форму с ?format=normal', async () => {
     const { user } = renderFlow(ONE_CLUB);
 
-    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Встреча'));
     await user.click(screen.getByText('Обычная встреча'));
 
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
@@ -149,7 +149,7 @@ describe('CreateActivityFlow', () => {
   it('форматов ровно два — третьего («с бронью») до денег нет', async () => {
     const { user } = renderFlow(ONE_CLUB);
 
-    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Встреча'));
 
     expect(screen.queryByText('Минимум участников')).toBeNull();
     expect(screen.queryByText('Максимум участников')).toBeNull();
@@ -194,7 +194,7 @@ describe('CreateActivityFlow', () => {
     it('AC-1 без шаблонов пункт «Готовые шаблоны» не показывается', async () => {
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
 
       expect(screen.getByText('Обычная встреча')).toBeInTheDocument();
       expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
@@ -204,7 +204,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       await user.click(screen.getByText('Разговорный клуб'));
 
@@ -217,7 +217,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
 
       // Цветной 🎟 в приглушённой строке метаданных рисовался платформенным шрифтом и выбивался
@@ -232,7 +232,7 @@ describe('CreateActivityFlow', () => {
       ]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 2'));
 
       expect(screen.getByText('Beta Club · открытая · вт 19:00')).toBeInTheDocument();
@@ -246,7 +246,7 @@ describe('CreateActivityFlow', () => {
       ]);
       const { user } = renderFlow(TWO_CLUBS, 'club-2');
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
 
       expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
@@ -257,7 +257,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       await user.click(screen.getByText('Изменить'));
       await user.click(screen.getByLabelText('Изменить Разговорный клуб'));
@@ -272,7 +272,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       await user.click(screen.getByText('Изменить'));
       await user.click(screen.getByText('Разговорный клуб'));
@@ -285,7 +285,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       // Пункта нет вовсе при нуле шаблонов, поэтому пустое состояние проверяем на самом шаге:
       // до него можно доехать, если шаблоны удалили, не выходя из списка.
       expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
@@ -296,7 +296,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(deleteEventTemplate).mockResolvedValue(undefined);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       await user.click(screen.getByText('Изменить'));
       await user.click(screen.getByLabelText('Удалить Разговорный клуб'));
@@ -315,14 +315,14 @@ describe('CreateActivityFlow', () => {
     it('на первом шаге кнопки «Назад» нет', () => {
       renderFlow(TWO_CLUBS);
 
-      expect(screen.getByText('Событие')).toBeInTheDocument();
+      expect(screen.getByText('Встреча')).toBeInTheDocument();
       expect(screen.queryByText('Назад')).toBeNull();
     });
 
     it('с шага формата возвращает к выбору типа', async () => {
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       expect(screen.getByText('Обычная встреча')).toBeInTheDocument();
 
       await user.click(screen.getByText('Назад'));
@@ -336,7 +336,7 @@ describe('CreateActivityFlow', () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
       const { user } = renderFlow(TWO_CLUBS);
 
-      await user.click(screen.getByText('Событие'));
+      await user.click(screen.getByText('Встреча'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
 

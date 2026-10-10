@@ -1383,6 +1383,27 @@
 }
 .rd-club-avatar-err { font-size: 11px; line-height: 1.4; color: var(--danger); margin-top: 6px; }
 
+/* Шапка страницы клуба: аватар справа на стыке, название и чипы слева (PO 2026-10-09).
+   Аватар вынут из потока, поэтому название оставляет справа место под кружок (70 + зазор),
+   а ошибка загрузки — плашкой под кружком, поверх чипов, а не сдвигом страницы. */
+.rd-club-head { position: relative; }
+.rd-club-head .rd-club-avatar-wrap { position: absolute; top: -34px; right: 0; margin-top: 0; }
+.rd-club-head .rd-club-name { padding-right: 84px; }
+.rd-club-head .rd-club-avatar-err {
+  position: absolute; top: 100%; right: 0; z-index: 7;
+  width: max-content; max-width: 62vw; text-align: right;
+  background: var(--bg); border-radius: 8px; padding: 4px 8px;
+}
+
+/* Шапка «Управления»: название и состав слева, справа аватар — тап ведёт на страницу клуба.
+   Аватар тот же, что на странице клуба, только внутри обложки, а не на её кромке: под
+   шапкой сразу полоска биллинга, наезд лёг бы на неё. */
+.rd-manage-hero .rd-hero-meta { right: 96px; }
+.rd-manage-hero-ava {
+  position: absolute; right: 16px; bottom: 14px; z-index: 2;
+  width: 64px; height: 64px; cursor: pointer;
+}
+
 .rd-club-name {
   font-size: 30px; font-weight: 800; letter-spacing: -0.04em; line-height: 1;
   color: var(--text); margin-top: 12px;
@@ -1873,9 +1894,19 @@
 
 .rd-form { display: flex; flex-direction: column; gap: 16px; }
 .rd-field { display: flex; flex-direction: column; gap: 7px; }
-.rd-field > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-field > .rd-label,
+.rd-manage-media-col > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+
 .rd-field > .rd-label .rd-req { color: var(--accent); }
 .rd-field > .rd-label .rd-count { color: var(--text-faint); font-weight: 500; }
+
+/* Аватар и обложка в настройках клуба: две колонки одной карточки, между ними тонкая линия. */
+.rd-manage-media { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px 0; margin-bottom: 14px; }
+.rd-manage-media-col {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 12px;
+  overflow-wrap: anywhere;
+}
+.rd-manage-media-col + .rd-manage-media-col { border-left: 1px solid var(--hairline); }
 
 .rd-input, .rd-textarea, .rd-select {
   width: 100%; background: var(--surface); border: 1px solid var(--hairline);
@@ -2492,7 +2523,6 @@
 .rd-fullblock-input:focus { outline: none; border-color: var(--accent); }
 
 /* club-invites: боттом-шит «Пригласить» — строки-опции (кадр B мокапа) */
-.rd-inv-sub { font-size: 12px; color: var(--text-dim); text-align: center; margin: -2px 0 12px; }
 .rd-inv-opt {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
@@ -2510,7 +2540,7 @@
 /* Предупреждение под «Скопировать ссылку»: вход по прямой ссылке минует одобрение заявки.
    Акцентный цвет, а не danger — это не ошибка, а осознанный обход, о котором надо знать. */
 .rd-inv-opt-txt .rd-inv-opt-warn { color: var(--accent); font-weight: 600; margin-top: 3px; }
-.rd-inv-title { font-size: 17px; font-weight: 700; text-align: center; margin: 4px 0 2px; }
+.rd-inv-title { font-size: 17px; font-weight: 700; text-align: center; margin: 4px 0 12px; }
 .rd-inv-cancel {
   display: block; width: 100%; text-align: center; background: none; border: none;
   color: var(--text-dim); font-weight: 600; font-size: 13.5px; padding: 12px 0 2px;
@@ -3566,13 +3596,19 @@
 .rd-wz-note { font-size: 11px; color: var(--text-faint); text-align: center; padding-top: 10px; }
 .rd-wz-err { font-size: 12.5px; color: var(--danger); margin: 10px 0 0; }
 
+/* Слот и превью режут обложку одной рамкой по центру — как шапка страницы клуба
+   (`background-position: center`): какой кусок видно в слоте, тот и будет в клубе. */
+.rd-wz-cover-slot, .rd-wz-pv-cover { aspect-ratio: 5 / 2; }
+
 /* Слот обложки: пунктир, пока пусто; картинка, когда загружена. Кнопка смены — в углу. */
 .rd-wz-cover-slot {
-  position: relative; height: 104px; border-radius: 14px; overflow: hidden;
+  position: relative; border-radius: 14px; overflow: hidden;
   border: 1px dashed var(--hairline-2); background: var(--surface);
   display: grid; place-items: center;
 }
-.rd-wz-cover-img { width: 100%; height: 100%; object-fit: cover; }
+/* Картинка абсолютом: элементом сетки она растягивала строку до своей высоты, и слот
+   показывал верх фото вместо середины. */
+.rd-wz-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .rd-wz-cover-empty { font-size: 12.5px; color: var(--text-faint); }
 .rd-wz-cover-btn { position: absolute; right: 8px; bottom: 8px; }
 
@@ -3582,7 +3618,7 @@
   background: var(--glass-bg); overflow: hidden;
 }
 .rd-wz-pv-cover {
-  height: 78px; margin: 0 -12px 0; background: var(--hairline);
+  margin: 0 -12px 0; background: var(--hairline);
 }
 .rd-wz-pv-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .rd-wz-pv-ava {

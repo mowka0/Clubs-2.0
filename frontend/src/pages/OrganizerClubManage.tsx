@@ -14,7 +14,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
-import foxFinancesArt from '../assets/mascot/fox-finances.png';
+import foxFinancesArt from '../assets/mascot/fox-finances.webp';
 import { Toast } from '../components/Toast';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { ManageHeader } from '../components/manage/ManageHeader';
@@ -27,6 +27,7 @@ import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 import { ScreenPreview } from '../components/onboarding/ScreenPreview';
+import { PRODUCT_PROFILE } from '../config/productProfile';
 
 type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 
@@ -35,7 +36,7 @@ type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 // Порядок Настройки · Финансы · Чат · Статистика — решение PO 2026-08-17: в чат-модели сюда
 // заходят настраивать клуб, а статистика оживает только после первых встреч.
 // Со-организатору (co-organizers, У-10) таб «Чат» не показывается — GET /chat-link owner-only,
-// таб с гарантированным 403 хуже скрытого.
+// таб с гарантированным 403 хуже скрытого. «Финансы» — только при взносах (PRODUCT_PROFILE).
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'settings', label: 'Настройки' },
   { key: 'finances', label: 'Финансы' },
@@ -43,7 +44,8 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'stats', label: 'Статистика' },
 ];
 
-// Допустимые значения `?tab=` в URL — для валидации deep-link'ов.
+// Допустимые значения `?tab=` в URL — для валидации deep-link'ов. Спрятанный таб здесь остаётся:
+// `?tab=finances` на этапе 1 откатывается на «Настройки» через видимые табы, а не через 404.
 const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
 // Создание/просмотр активностей переехали из «Управления» (теперь на глобальном табе
@@ -149,8 +151,14 @@ interface SettingsTabProps {
   onDeleted: (clubName: string) => void;
 }
 
+// Границы лимита участников — те же, что CHECK-констрейнт схемы (V81) и валидация DTO.
+const MEMBER_LIMIT_MIN = 1;
+const MEMBER_LIMIT_MAX = 500;
+
 const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
   const haptic = useHaptic();
+  // Флаги этапа (stage-1-scope.md): цена, реквизиты, вопрос заявки и «Нельзя изменить» — этап 2.
+  const { showClubDues, showAccessTypeAndApplications, showClubCategory } = PRODUCT_PROFILE;
   const updateMutation = useUpdateClubMutation();
   const deleteMutation = useDeleteClubMutation();
 
@@ -228,13 +236,16 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
       return;
     }
     const limit = Number(memberLimit);
-    // Минимум временно 1 (тест заполняемости, PO 2026-07-11) — согласовано с UpdateClubRequest.
-    if (!Number.isInteger(limit) || limit < 1 || limit > 80) {
-      fail('memberLimit', 'Лимит участников: 1–80');
+    // Те же 1–500, что принимает сервер: клуб из чата рождается с 500, и прежний потолок 80
+    // не давал сохранить настройки такого клуба вовсе.
+    if (!Number.isInteger(limit) || limit < MEMBER_LIMIT_MIN || limit > MEMBER_LIMIT_MAX) {
+      fail('memberLimit', `Лимит участников: ${MEMBER_LIMIT_MIN}–${MEMBER_LIMIT_MAX}`);
       return;
     }
+    // Без взносов поле цены спрятано: проверять нечего, а в payload уходит только diff,
+    // поэтому сервер сохранит прежнее значение.
     const price = Number(subscriptionPrice);
-    if (!Number.isInteger(price) || price < 0) {
+    if (showClubDues && (!Number.isInteger(price) || price < 0)) {
       fail('subscriptionPrice', 'Цена: целое число >= 0');
       return;
     }
@@ -242,7 +253,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     // сохранение платного клуба с пустой ссылкой — включая переключение бесплатный→платный и
     // legacy-клуб, у которого реквизитов никогда не было. Со-оргу поле реквизитов скрыто
     // (владельческая секция), поэтому текст ошибки объясняет, что включить платность может владелец.
-    if (price > 0 && !paymentLink.trim()) {
+    if (showClubDues && price > 0 && !paymentLink.trim()) {
       fail(
         'paymentLink',
         isOwner
@@ -310,16 +321,19 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
 
   return (
     <>
-      <div className="rd-section-sub-h">Аватар</div>
-      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
-        <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
-      </div>
-
-      {/* Обложка — картинка шапки страницы клуба, отдельная от аватара (V70). Здесь её можно
-          и снять; на самой странице клуба тап по обложке только добавляет и заменяет. */}
-      <div className="rd-section-sub-h">Обложка</div>
-      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
-        <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} />
+      {/* Аватар и обложка — одной карточкой в две колонки (PO 2026-10-08): порознь две полупустые
+          карточки съедали полэкрана. Обложка — шапка страницы клуба, отдельная от аватара (V70);
+          здесь её можно и снять, на самой странице клуба тап только добавляет и заменяет. */}
+      <div className="rd-section-sub-h">Оформление</div>
+      <div className="rd-glass rd-manage-media">
+        <div className="rd-manage-media-col">
+          <span className="rd-label">Аватар</span>
+          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} centered purpose="avatar" />
+        </div>
+        <div className="rd-manage-media-col">
+          <span className="rd-label">Обложка</span>
+          <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} centered />
+        </div>
       </div>
 
       <div className="rd-section-sub-h">Основное</div>
@@ -355,23 +369,27 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
           <input className="rd-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
         </label>
         <label className="rd-field">
-          <span className="rd-label">Лимит участников (10–80)</span>
+          <span className="rd-label">Лимит участников ({MEMBER_LIMIT_MIN}–{MEMBER_LIMIT_MAX})</span>
           <input
             className={`rd-input${errorField === 'memberLimit' ? ' rd-invalid' : ''}`}
             type="number"
+            min={MEMBER_LIMIT_MIN}
+            max={MEMBER_LIMIT_MAX}
             value={memberLimit}
             onChange={(e) => setMemberLimit(e.target.value)}
           />
         </label>
-        <label className="rd-field">
-          <span className="rd-label">Цена подписки (₽/мес, 0 = бесплатно)</span>
-          <input
-            className={`rd-input${errorField === 'subscriptionPrice' ? ' rd-invalid' : ''}`}
-            type="number"
-            value={subscriptionPrice}
-            onChange={(e) => setSubscriptionPrice(e.target.value)}
-          />
-        </label>
+        {showClubDues && (
+          <label className="rd-field">
+            <span className="rd-label">Цена подписки (₽/мес, 0 = бесплатно)</span>
+            <input
+              className={`rd-input${errorField === 'subscriptionPrice' ? ' rd-invalid' : ''}`}
+              type="number"
+              value={subscriptionPrice}
+              onChange={(e) => setSubscriptionPrice(e.target.value)}
+            />
+          </label>
+        )}
       </div>
 
       <div className="rd-section-sub-h">Описание и правила</div>
@@ -394,7 +412,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
             onChange={(e) => setRules(e.target.value)}
           />
         </label>
-        {club.accessType === 'closed' && (
+        {showAccessTypeAndApplications && club.accessType === 'closed' && (
           <label className="rd-field">
             <span className="rd-label">Вопрос для заявки (опционально)</span>
             <input
@@ -414,7 +432,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
       </div>
 
       {/* СБП-реквизиты — владельческая секция (PO №2): деньги идут владельцу, со-орг их не меняет. */}
-      {isOwner && Number(subscriptionPrice) > 0 && (
+      {showClubDues && isOwner && Number(subscriptionPrice) > 0 && (
         <>
           <div className="rd-section-sub-h">Реквизиты для взноса (СБП)</div>
           <div className="rd-form" style={{ marginBottom: 14 }}>
@@ -441,20 +459,30 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
         </>
       )}
 
-      <div className="rd-section-sub-h">Нельзя изменить</div>
-      <div className="rd-glass rd-rep-panel">
-        <div className="rd-kv">
-          <span>Категория</span>
-          <span className="rd-v">{CATEGORY_LABELS_RU[club.category] ?? club.category}</span>
-        </div>
-        <div className="rd-kv">
-          <span>Тип доступа</span>
-          <span className="rd-v">{ACCESS_LABELS_RU[club.accessType] ?? club.accessType}</span>
-        </div>
-      </div>
-      <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8, marginBottom: 4 }}>
-        Смена категории или типа доступа не поддерживается.
-      </div>
+      {/* Блок целиком про категорию и тип доступа: на этапе 1 обе скрыты, и пустой заголовок
+          не нужен. Строки показываются по своим флагам, когда хоть одна из них видна. */}
+      {(showClubCategory || showAccessTypeAndApplications) && (
+        <>
+          <div className="rd-section-sub-h">Нельзя изменить</div>
+          <div className="rd-glass rd-rep-panel">
+            {showClubCategory && (
+              <div className="rd-kv">
+                <span>Категория</span>
+                <span className="rd-v">{CATEGORY_LABELS_RU[club.category] ?? club.category}</span>
+              </div>
+            )}
+            {showAccessTypeAndApplications && (
+              <div className="rd-kv">
+                <span>Тип доступа</span>
+                <span className="rd-v">{ACCESS_LABELS_RU[club.accessType] ?? club.accessType}</span>
+              </div>
+            )}
+          </div>
+          <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8, marginBottom: 4 }}>
+            Смена категории или типа доступа не поддерживается.
+          </div>
+        </>
+      )}
 
       {error && <div className="rd-error">{error}</div>}
 
@@ -597,8 +625,11 @@ export const OrganizerClubManage: FC = () => {
   // Таб «Финансы» виден и у бесплатного клуба: бесплатный можно перевести в платный, и путь
   // к этому решению лежит именно отсюда — спрятать таб значило бы спрятать саму возможность.
   // Внутри у бесплатного клуба сцена с лисом и кнопкой в настройки (см. FinancesTab).
-  const visibleTabs = TABS.filter((tab) => tab.key !== 'chat' || isOwner);
-  // Недостижимый таб (deep-link `?tab=chat` у со-организатора) откатывается на первый видимый.
+  // На этапе 1 взносов нет вовсе (PRODUCT_PROFILE.showClubDues) — таб спрятан у всех.
+  const visibleTabs = TABS.filter((tab) =>
+    (tab.key !== 'chat' || isOwner) && (tab.key !== 'finances' || PRODUCT_PROFILE.showClubDues));
+  // Недостижимый таб (deep-link `?tab=chat` у со-организатора, `?tab=finances` на этапе 1)
+  // откатывается на «Настройки».
   const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'settings';
 
   const handleTabChange = (key: TabKey) => {
@@ -653,9 +684,10 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader club={club} />
 
-      {/* Полоска биллинга за чат — под шапкой, над сегментами: касается всех вкладок.
-          Только владелец: платит он, ползунок автопродления — его (platform-billing.md § 7). */}
-      {isOwner && <BillingStatusStrip clubId={clubId} onPay={() => setBillingSheet('pay')} />}
+      {/* Полоска биллинга за чат — под шапкой, над сегментами: касается всех вкладок. Здесь она
+          во всех состояниях, включая «Оплачено до …» — на главную возвращается только когда пора
+          платить (billing-member-pays.md M4). Ползунок автопродления — только владельцу. */}
+      <BillingStatusStrip clubId={clubId} onPay={() => setBillingSheet('pay')} />
 
       {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
           переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
@@ -679,7 +711,7 @@ export const OrganizerClubManage: FC = () => {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      {billingSheet && isOwner && (
+      {billingSheet && (
         <BillingSheet
           clubId={clubId}
           reason={null}

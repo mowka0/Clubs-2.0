@@ -11,9 +11,10 @@ import java.util.UUID
 
 
 /**
- * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
- * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
- * дочерние (RECURRING) — автосписания по сохранённой карте.
+ * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один
+ * счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца
+ * или любого участника клуба, дочерние (RECURRING) — автосписания по
+ * сохранённой карте владельца.
  */
 @Suppress("UNCHECKED_CAST")
 data class PlatformPayment(
@@ -29,7 +30,8 @@ data class PlatformPayment(
     var paymentMethod: String? = null,
     var providerFee: BigDecimal? = null,
     var createdAt: OffsetDateTime? = null,
-    var paidAt: OffsetDateTime? = null
+    var paidAt: OffsetDateTime? = null,
+    var payerUserId: UUID
 ): Serializable {
 
 
@@ -107,6 +109,8 @@ data class PlatformPayment(
         }
         else if (this.paidAt != o.paidAt)
             return false
+        if (this.payerUserId != o.payerUserId)
+            return false
         return true
     }
 
@@ -126,6 +130,7 @@ data class PlatformPayment(
         result = prime * result + (if (this.providerFee == null) 0 else this.providerFee.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.paidAt == null) 0 else this.paidAt.hashCode())
+        result = prime * result + this.payerUserId.hashCode()
         return result
     }
 
@@ -145,6 +150,7 @@ data class PlatformPayment(
         sb.append(", ").append(providerFee)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(paidAt)
+        sb.append(", ").append(payerUserId)
 
         sb.append(")")
         return sb.toString()

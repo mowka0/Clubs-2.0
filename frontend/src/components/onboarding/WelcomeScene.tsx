@@ -3,22 +3,10 @@ import { FC, ReactNode } from 'react';
 /**
  * Контекст первого вступления: free — бесплатный клуб (кадр A мокапа welcome-scene.html),
  * paid — платный, membership в frozen до взноса (кадр B), applied — мест не было,
- * ушла заявка (кадр C).
+ * ушла заявка (кадр C). На этапе 1 (PRODUCT_PROFILE: взносов и заявок нет) вызывающие
+ * передают только free; остальные варианты ждут этапа 2.
  */
 export type WelcomeSceneVariant = 'free' | 'paid' | 'paidClaimed' | 'applied';
-
-/** «14 участников» — русская плюрализация для чипа клуба. */
-export function memberCountCaption(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  const word =
-    mod10 === 1 && mod100 !== 11
-      ? 'участник'
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-        ? 'участника'
-        : 'участников';
-  return `${count} ${word}`;
-}
 
 interface WelcomeStep {
   icon: string;

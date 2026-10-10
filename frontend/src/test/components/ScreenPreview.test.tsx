@@ -82,7 +82,7 @@ describe('ScreenPreview — превью экрана', () => {
 
     const preview = SCREEN_PREVIEWS.ACTIVITIES!;
     await waitFor(() => expect(screen.getByText(preview.title)).toBeInTheDocument());
-    expect(screen.getByText(preview.lead)).toBeInTheDocument();
+    expect(screen.getByText(preview.lead!)).toBeInTheDocument();
     // Правила игры видны целиком: цепочки шагов больше нет, всё на одном экране.
     preview.rules.forEach((rule) => expect(screen.getByText(rule)).toBeInTheDocument());
 
@@ -129,6 +129,44 @@ describe('ScreenPreview — превью экрана', () => {
 
     await waitFor(() => expect(calls).toBe(1));
     expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_MANAGE!.title)).toBeNull();
+  });
+
+  it('превью без подводки рисует только правила', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER');
+
+    const preview = SCREEN_PREVIEWS.CLUB_OWNER!;
+    await waitFor(() => expect(screen.getByText(preview.title)).toBeInTheDocument());
+    expect(document.querySelector('.sp-lead')).toBeNull();
+    preview.rules.forEach((rule) => expect(screen.getByText(rule)).toBeInTheDocument());
+  });
+
+  it('«Твой клуб» — одна кнопка «Понял, спасибо», она засчитывает показ', async () => {
+    const user = userEvent.setup();
+    let calls = 0;
+    server.use(
+      http.post('*/api/users/me/onboarding/:tour', () => {
+        calls += 1;
+        return HttpResponse.json(makeUser(['CLUB_OWNER']));
+      }),
+    );
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER');
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Понял, спасибо' })).toBeInTheDocument());
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Понял, спасибо' }));
+    await waitFor(() => expect(calls).toBe(1));
+    expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeNull();
+  });
+
+  it('превью без своей подписи — с «Понятно»', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB');
+
+    await waitFor(() => expect(screen.getByText(SCREEN_PREVIEWS.CLUB!.title)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Понятно' })).toBeInTheDocument();
   });
 
   it('короткая протяжка шторку не закрывает — она возвращается на место', async () => {

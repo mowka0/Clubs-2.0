@@ -287,20 +287,6 @@ class ChatTelegramGateway(
     }
 
     /**
-     * Сколько человек в чате — размер клуба, рождающегося из этой группы. Считает вместе с
-     * ботами и самим ботом, поэтому число приблизительное; человек правит его в мастере.
-     * null — Telegram не ответил, вызывающий подставляет свой запасной лимит. Переезд группы
-     * в супергруппу этот метод НЕ различает (ошибка гасится в catch) — для него отдельный
-     * [resolveMigratedChatId].
-     */
-    fun getChatMemberCount(chatId: Long): Int? = try {
-        telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
-    } catch (e: Exception) {
-        log.warn("getChatMemberCount failed: chatId={} error={}", chatId, e.message)
-        null
-    }
-
-    /**
      * Переехала ли группа в супергруппу. Возвращает НОВЫЙ chat_id либо null (чат жив или
      * Telegram не ответил).
      *

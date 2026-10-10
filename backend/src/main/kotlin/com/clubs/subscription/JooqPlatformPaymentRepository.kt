@@ -15,6 +15,7 @@ class JooqPlatformPaymentRepository(
 
     override fun create(
         clubId: UUID,
+        payerUserId: UUID,
         subscriptionId: UUID?,
         kind: PaymentKind,
         amountKopecks: Int,
@@ -23,6 +24,7 @@ class JooqPlatformPaymentRepository(
     ): PlatformPayment {
         val record = dsl.insertInto(PLATFORM_PAYMENT)
             .set(PLATFORM_PAYMENT.CLUB_ID, clubId)
+            .set(PLATFORM_PAYMENT.PAYER_USER_ID, payerUserId)
             .set(PLATFORM_PAYMENT.SUBSCRIPTION_ID, subscriptionId)
             .set(PLATFORM_PAYMENT.KIND, kind.name)
             .set(PLATFORM_PAYMENT.PREVIOUS_INV_ID, previousInvId)
@@ -36,10 +38,11 @@ class JooqPlatformPaymentRepository(
     override fun findByInvId(invId: Long): PlatformPayment? =
         dsl.selectFrom(PLATFORM_PAYMENT).where(PLATFORM_PAYMENT.INV_ID.eq(invId)).fetchOne()?.let(mapper::toPayment)
 
-    override fun findPendingMother(clubId: UUID, createdAfter: OffsetDateTime): PlatformPayment? =
+    override fun findPendingMother(clubId: UUID, payerUserId: UUID, createdAfter: OffsetDateTime): PlatformPayment? =
         dsl.selectFrom(PLATFORM_PAYMENT)
             .where(
                 PLATFORM_PAYMENT.CLUB_ID.eq(clubId)
+                    .and(PLATFORM_PAYMENT.PAYER_USER_ID.eq(payerUserId))
                     .and(PLATFORM_PAYMENT.KIND.eq(PaymentKind.MOTHER.name))
                     .and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.PENDING.name))
                     .and(PLATFORM_PAYMENT.CREATED_AT.ge(createdAfter)),
@@ -49,14 +52,23 @@ class JooqPlatformPaymentRepository(
             .fetchOne()
             ?.let(mapper::toPayment)
 
-    override fun hasPendingMother(clubId: UUID): Boolean =
+    override fun hasPendingMother(clubId: UUID, payerUserId: UUID): Boolean =
         dsl.fetchExists(
             dsl.selectOne().from(PLATFORM_PAYMENT).where(
                 PLATFORM_PAYMENT.CLUB_ID.eq(clubId)
+                    .and(PLATFORM_PAYMENT.PAYER_USER_ID.eq(payerUserId))
                     .and(PLATFORM_PAYMENT.KIND.eq(PaymentKind.MOTHER.name))
                     .and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.PENDING.name)),
             ),
         )
+
+    override fun findLastSucceeded(clubId: UUID): PlatformPayment? =
+        dsl.selectFrom(PLATFORM_PAYMENT)
+            .where(PLATFORM_PAYMENT.CLUB_ID.eq(clubId).and(PLATFORM_PAYMENT.STATUS.eq(PlatformPaymentStatus.SUCCEEDED.name)))
+            .orderBy(PLATFORM_PAYMENT.PAID_AT.desc())
+            .limit(1)
+            .fetchOne()
+            ?.let(mapper::toPayment)
 
     override fun updateAutopayRequested(id: UUID, autopayRequested: Boolean): Int =
         dsl.update(PLATFORM_PAYMENT)

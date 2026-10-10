@@ -226,6 +226,8 @@ stat-grid (Надёжность средняя+tier / В клубах; ⚠️ 20
   (`rd-hero-btn rd-left`, ‹-иконка) слева сверху → `/clubs/:id`. Проп `onOpenClub`→`onBack`.
   **Отменено 2026-07-30:** кнопка и бейдж «УПРАВЛЕНИЕ» сняты с обложки как избыточные (назад ведут
   нативный BackButton и свайп от кромки), проп `onBack` удалён вместе с классом `.rd-hero-btn.rd-left`.
+  **2026-10-08 (PO):** справа в шапке аватар клуба (`.rd-manage-hero-ava`), тап — назад на
+  страницу клуба; актуальное описание — `ui-pages.md` § «Управление».
 - **MemberProfileModal** → rd-sheet (`createPortal`), контент на `rd-avatar`/`rd-section-sub-h`/
   `rd-glass rd-rep-panel`/`rd-kv` (был telegram-ui Modal + Section/Cell).
 

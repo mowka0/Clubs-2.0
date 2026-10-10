@@ -6,7 +6,7 @@ import java.util.UUID
 // Имя invite-ссылки бота в списке приглашений группы — чтобы организатор узнавал её в
 // настройках Telegram. Общая для создания при привязке/включении двери (ChatLinkService)
 // и пересоздания после возвращения бота (ChatLinkBotService).
-internal const val DOOR_INVITE_LINK_NAME = "Clubs: вход через заявки"
+internal const val DOOR_INVITE_LINK_NAME = "Clubs: вход для участников клуба"
 
 /**
  * Граница между обычной группой и супергруппой в id чата: у супергрупп префикс «-100», поэтому

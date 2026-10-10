@@ -84,7 +84,7 @@ export const SkladchinasTab: FC = () => {
 
   const handleCreateClick = () => {
     haptic.impact('light');
-    openCreateFlow();
+    openCreateFlow('skladchina');
   };
 
   const isLoadingInitial = query.isPending;

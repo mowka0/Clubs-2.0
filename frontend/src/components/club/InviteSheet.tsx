@@ -107,7 +107,6 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
 
         <div className="rd-sheet-body">
           <div className="rd-inv-title">Пригласить в клуб</div>
-          <div className="rd-inv-sub">Приглашение уйдёт от вашего имени</div>
 
           {loadError && <div className="rd-error" style={{ textAlign: 'left' }}>{loadError}</div>}
 

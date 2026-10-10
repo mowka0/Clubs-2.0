@@ -224,9 +224,10 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val MEMBERSHIPS: Memberships get() = Memberships.MEMBERSHIPS
 
     /**
-     * Платежи владельцев клубов платформе за чат через провайдера (Robokassa).
-     * Один ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы
-     * оплаты, дочерние (RECURRING) — автосписания по сохранённой карте.
+     * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд =
+     * один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от
+     * владельца или любого участника клуба, дочерние (RECURRING) — автосписания
+     * по сохранённой карте владельца.
      */
     val PLATFORM_PAYMENT: PlatformPayment get() = PlatformPayment.PLATFORM_PAYMENT
 

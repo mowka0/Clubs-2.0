@@ -1,6 +1,7 @@
 import { FC, ReactNode } from 'react';
 import { ClubAvatarButton } from './ClubAvatarButton';
-import { formatPrice } from '../../utils/formatters';
+import { formatPrice, memberCountCaption } from '../../utils/formatters';
+import { PRODUCT_PROFILE } from '../../config/productProfile';
 import type { ClubDetailDto } from '../../types/api';
 
 /** Тип доступа в первом чипе параметров. */
@@ -17,7 +18,8 @@ interface ClubIdentityHeaderProps {
 }
 
 /**
- * Шапка клуба: обложка → аватар на стыке → название → чипы параметров.
+ * Шапка клуба: обложка → аватар на стыке справа, название и чипы параметров слева
+ * (вариант 1 мокапа `docs/design/club-header-avatar-right`, PO 2026-10-09).
  * Общая для страницы клуба и посадочной приглашения (решение PO 2026-07-30): приглашение
  * показывает тот же самый клуб, и две разные вёрстки означали бы, что человек до и после
  * перехода видит как будто разные продукты. Держать их врозь и вручную синхронизировать —
@@ -40,31 +42,38 @@ export const ClubIdentityHeader: FC<ClubIdentityHeaderProps> = ({ club, coverAct
         {coverActions && <div className="rd-hero-acts">{coverActions}</div>}
       </div>
 
-      {/* Аватар наезжает на стык обложки и страницы. */}
-      <ClubAvatarButton
-        clubId={club.id}
-        clubName={club.name}
-        avatarUrl={club.avatarUrl ?? null}
-        editable={avatarEditable}
-      />
+      {/* Аватар наезжает на стык обложки и страницы справа; название начинается слева на его высоте. */}
+      <div className="rd-club-head">
+        <ClubAvatarButton
+          clubId={club.id}
+          clubName={club.name}
+          avatarUrl={club.avatarUrl ?? null}
+          editable={avatarEditable}
+        />
 
-      <div className="rd-club-name">{club.name}</div>
+        <div className="rd-club-name">{club.name}</div>
 
-      {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. */}
-      <div className="rd-club-facts">
-        <span className="rd-club-fact">
-          <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
-        </span>
-        <span className="rd-club-fact rd-shrink">
-          <span aria-hidden="true">📍</span>
-          <b>{club.city}</b>
-        </span>
-        <span className="rd-club-fact">
-          <b>{club.memberCount} / {club.memberLimit}</b>
-        </span>
-        <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
-          <b>{formatPrice(club.subscriptionPrice)}</b>
-        </span>
+        {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. На этапе 1
+            остаются город и состав — доступа и взноса у клуба из чата нет (PRODUCT_PROFILE). */}
+        <div className="rd-club-facts">
+          {PRODUCT_PROFILE.showAccessTypeAndApplications && (
+            <span className="rd-club-fact">
+              <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
+            </span>
+          )}
+          <span className="rd-club-fact rd-shrink">
+            <span aria-hidden="true">📍</span>
+            <b>{club.city}</b>
+          </span>
+          <span className="rd-club-fact">
+            <b>{memberCountCaption(club.memberCount)}</b>
+          </span>
+          {PRODUCT_PROFILE.showClubDues && (
+            <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
+              <b>{formatPrice(club.subscriptionPrice)}</b>
+            </span>
+          )}
+        </div>
       </div>
     </>
   );

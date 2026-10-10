@@ -31,6 +31,8 @@ class LegalSheetTest {
             "@clubs_tech_support", "support@example.com", "настоящий клуб").forEach {
             assertTrue(it in block, "нет «$it»")
         }
+        // Контакты поддержки — отдельным абзацем, не хвостом строки продавца (PO 2026-10-08).
+        assertTrue("\n\n✉️ Поддержка: @clubs_tech_support" in block)
         assertTrue(block.length <= LegalSheet.TELEGRAM_TEXT_LIMIT)
     }
 

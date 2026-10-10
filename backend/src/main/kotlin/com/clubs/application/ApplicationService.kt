@@ -24,6 +24,7 @@ import com.clubs.reputation.ApplicantSignalService
 import com.clubs.reputation.PeerStatsAggregate
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
+import com.clubs.user.displayName
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -115,7 +116,7 @@ class ApplicationService(
                 return
             }
             val applicant = userRepository.findById(applicantId)
-            val applicantName = applicant?.let { buildDisplayName(it.firstName, it.lastName) } ?: "Новый пользователь"
+            val applicantName = applicant?.let { displayName(it.firstName, it.lastName) } ?: "Новый пользователь"
 
             notificationService.sendApplicationCreatedDM(
                 organizerTelegramId = organizer.telegramId,
@@ -134,9 +135,6 @@ class ApplicationService(
             )
         }
     }
-
-    private fun buildDisplayName(firstName: String, lastName: String?): String =
-        if (lastName.isNullOrBlank()) firstName else "$firstName $lastName"
 
     // Полный клуб = мест нет; лимит считает занятые места так же, как везде (active+frozen+expired).
     private fun isClubFull(club: Club): Boolean =

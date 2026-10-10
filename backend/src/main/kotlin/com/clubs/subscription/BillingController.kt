@@ -1,7 +1,6 @@
 package com.clubs.subscription
 
-import com.clubs.common.auth.ClubCapability
-import com.clubs.common.auth.RequiresCapability
+import com.clubs.common.auth.RequiresMembership
 import com.clubs.common.auth.RequiresOrganizer
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.security.AuthenticatedUser
@@ -34,12 +33,13 @@ class BillingController(
 
     private val log = LoggerFactory.getLogger(BillingController::class.java)
 
-    @RequiresCapability(ClubCapability.MANAGE_EVENTS)
+    // Статус и оплата — любому участнику: плашка «пора платить» показывается всем (billing-member-pays.md M1, M4).
+    @RequiresMembership
     @GetMapping("/api/clubs/{id}/billing")
     fun status(@PathVariable id: UUID, @AuthenticationPrincipal user: AuthenticatedUser): ResponseEntity<BillingStatusDto> =
         ResponseEntity.ok(billingService.status(id, user.userId))
 
-    @RequiresOrganizer
+    @RequiresMembership
     @PostMapping("/api/clubs/{id}/billing/checkout")
     fun checkout(
         @PathVariable id: UUID,

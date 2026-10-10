@@ -17,7 +17,8 @@ import org.jooq.Schema
 @Suppress("UNCHECKED_CAST")
 enum class ReputationSource(@get:JvmName("literal") public val literal: String) : EnumType {
     event("event"),
-    skladchina("skladchina");
+    skladchina("skladchina"),
+    club_billing("club_billing");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "reputation_source"

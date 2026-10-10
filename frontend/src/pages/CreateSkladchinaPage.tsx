@@ -88,7 +88,8 @@ export const CreateSkladchinaPage: FC = () => {
   const [paymentLink, setPaymentLink] = useState('');
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
   const [deadline, setDeadline] = useState(plusDays(flow === 'per_head' ? 5 : 3));
-  const [noDeadline, setNoDeadline] = useState(flow === 'voluntary');
+  // «Без срока» по умолчанию снята: срок — норма для любого сбора, отказ от него — осознанный (PO 2026-10-10).
+  const [noDeadline, setNoDeadline] = useState(false);
   const eventId = presetEventId;
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
   const [minParticipants, setMinParticipants] = useState('');

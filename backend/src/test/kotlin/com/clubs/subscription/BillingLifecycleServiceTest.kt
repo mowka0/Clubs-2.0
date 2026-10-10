@@ -127,7 +127,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1), providerToken = "100001")
         live(sub)
         val payment = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 100500)
-        every { paymentRepository.create(club.id, sub.id, PaymentKind.RECURRING, PRICE, 100001, true) } returns payment
+        every { paymentRepository.create(club.id, club.ownerId, sub.id, PaymentKind.RECURRING, PRICE, 100001, true) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
 
         service.runDaily(now)
@@ -147,7 +147,7 @@ class BillingLifecycleServiceTest {
         // утренний тик списывает, а не ждёт следующего дня.
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusHours(10))
         live(sub)
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns
             BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
 
@@ -196,7 +196,7 @@ class BillingLifecycleServiceTest {
         verify(exactly = 0) { paymentProvider.charge(any()) }
 
         every { paymentRepository.hasPendingRecurring(sub.id) } returns false
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns
             BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
         every { paymentProvider.charge(any()) } returns ChargeAccepted(true)
         service.runDaily(now.plusDays(1))
@@ -212,7 +212,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.minusHours(1))
         live(sub)
         val payment = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id)
-        every { paymentRepository.create(any(), any(), any(), any(), any(), any()) } returns payment
+        every { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(false, "card expired")
         every { subscriptionRepository.findById(sub.id) } returns sub
         every { subscriptionRepository.transitionStatus(sub.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE) } returns 1
@@ -268,7 +268,8 @@ class BillingLifecycleServiceTest {
 
     @Test
     fun `reconcile applies succeeded charges, fails rejected ones and closes abandoned checkouts`() {
-        val sub = BillingTestFixtures.subscription(club)
+        // Списание ушло в день окончания периода — его неудача открывает грейс.
+        val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusHours(3))
         val succeeded = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 1, createdAt = now.minusHours(7))
         val failed = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = sub.id, invId = 2, createdAt = now.minusHours(7))
         val abandoned = BillingTestFixtures.payment(club, invId = 3, createdAt = now.minusHours(30))
@@ -288,6 +289,22 @@ class BillingLifecycleServiceTest {
         verify { notifier.chargeFailed(club, PRICE, sub.currentPeriodEnd.plusDays(7)) }
         verify { paymentRepository.markFailed(abandoned.id) }
         verify(exactly = 0) { paymentRepository.markFailed(young.id) }
+    }
+
+    @Test
+    fun `a charge that fails after a member already paid the month opens no grace and sends no alarm`() {
+        // Списание с карты владельца было в пути, участник тем временем оплатил месяц — период уже продлён.
+        val extended = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(30))
+        val charge = BillingTestFixtures.payment(club, kind = PaymentKind.RECURRING, subscriptionId = extended.id, invId = 5, createdAt = now.minusHours(7))
+        every { paymentRepository.findPendingCreatedBefore(now.minusHours(6)) } returns listOf(charge)
+        every { paymentProvider.queryState(5) } returns PaymentStateResult(PaymentState.FAILED)
+        every { subscriptionRepository.findById(extended.id) } returns extended
+
+        service.reconcilePending(now)
+
+        verify { paymentRepository.markFailed(charge.id) }
+        verify(exactly = 0) { subscriptionRepository.transitionStatus(any(), any(), SubscriptionStatus.PAST_DUE) }
+        verify(exactly = 0) { notifier.chargeFailed(any(), any(), any()) }
     }
 
     @Test
@@ -399,7 +416,7 @@ class BillingLifecycleServiceTest {
         val sub = BillingTestFixtures.subscription(club, periodEnd = now.plusDays(20))
         every { subscriptionRepository.findLatestByClub(club.id) } returns sub
         val payment = BillingTestFixtures.payment(club).copy(kind = PaymentKind.RECURRING, subscriptionId = sub.id)
-        every { paymentRepository.create(club.id, sub.id, PaymentKind.RECURRING, PRICE, 100001L, true) } returns payment
+        every { paymentRepository.create(club.id, club.ownerId, sub.id, PaymentKind.RECURRING, PRICE, 100001L, true) } returns payment
         every { paymentProvider.charge(any()) } returns ChargeAccepted(accepted = true)
 
         val invId = service.chargeNow(club.id, now)

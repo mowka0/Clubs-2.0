@@ -27,6 +27,7 @@ import type { AssignableMemberRole } from '../../api/membership';
 import { DonutRing } from '../reputation/DonutRing';
 import { ImageLightbox } from '../ImageLightbox';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
+import { PRODUCT_PROFILE } from '../../config/productProfile';
 import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
 
 // Подобранный набор эмодзи для пикера наград — достаточно широкий для большинства видов признания.
@@ -563,8 +564,8 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         )}
 
-        {/* «Удалить из клуба» — только active/бесплатные (frozen платным вступлениям — «Отказать·вернуть» выше). */}
-        {!frozen && (
+        {/* «Удалить из клуба» — всем, кроме frozen платного вступления: у него «Отказать·вернуть» выше. */}
+        {!(isPaidMember && frozen) && (
           !confirmingKick ? (
             <div className="rd-mgmt-killzone">
               <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setKickReason(''); setConfirmingKick(true); }}>
@@ -573,7 +574,10 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
             </div>
           ) : (
             <div className="rd-mgmt-killconfirm">
-              <div className="rd-reject-q">Удалить {member.firstName} из клуба? Доступ закроется сразу. Если оплатил — возврат на ваше усмотрение (деньги вне платформы).</div>
+              <div className="rd-reject-q">
+                Удалить {member.firstName} из клуба? Доступ закроется сразу.
+                {isPaidMember && ' Если оплатил — возврат на ваше усмотрение (деньги вне платформы).'}
+              </div>
               <textarea
                 className="rd-textarea"
                 rows={2}
@@ -723,7 +727,7 @@ const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
           <div className="rd-reject-confirm" ref={confirmRef}>
             <div className="rd-reject-q">
               {pendingRole === 'co_organizer'
-                ? `Сделать ${member.firstName} со-организатором? Появится доступ к заявкам, событиям, складчинам и участникам — кроме владельческих настроек.`
+                ? `Сделать ${member.firstName} со-организатором? Появится доступ к встречам, сборам и участникам — кроме владельческих настроек.`
                 : `Снять с ${member.firstName} роль со-организатора? Управляющие экраны клуба станут недоступны.`}
             </div>
             <div className="rd-org-gate-acts">
@@ -896,8 +900,9 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   // Платный участник = есть окно доступа, либо статус без доступа (frozen — ждёт первого взноса,
   // expired — просрочил продление). Гейтит de-Stars-слой (строка подписки + dues-действия + своя
   // дата); бесплатному остаются только заметка + награды.
-  const isPaidMember =
-    member.accessStatus === 'frozen' || member.accessStatus === 'expired' || !!member.subscriptionExpiresAt;
+  // Без взносов (этап 1) платного слоя нет ни у кого — остаются заметка, награды и удаление.
+  const isPaidMember = PRODUCT_PROFILE.showClubDues
+    && (member.accessStatus === 'frozen' || member.accessStatus === 'expired' || !!member.subscriptionExpiresAt);
 
   // Режим редактирования живёт здесь (не в OrganizerGate), чтобы ✎ в шапке переключал редактор наград
   // (под интересами) и форму «Своя дата» вместе. Заметка всегда открыта (✎ её не гейтит). Редактирует

@@ -15,7 +15,7 @@ export const ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
   member:
     'Обычный участник клуба: посещает встречи, участвует в складчинах. Без доступа к управлению.',
   co_organizer:
-    'Ведёт клуб вместе с вами: разбирает заявки, создаёт события и складчины, управляет участниками, видит финансы и статистику. Не может: менять роли, СБП-реквизиты, чат клуба, удалять клуб.',
+    'Помогает вести клуб: встречи, сборы, участники и статистика. Не может: менять роли, чат клуба, удалять клуб.',
   organizer: 'Владелец клуба. Эту роль нельзя назначить или снять.',
 };
 
@@ -57,4 +57,21 @@ export function isActiveManagerMembership(
   if (!membership) return false;
   if (membership.role === 'organizer') return true;
   return membership.role === 'co_organizer' && membership.status === 'active';
+}
+
+/**
+ * Место в клубе занято: участник (active), должник (frozen / expired) или отменивший подписку,
+ * у которого ещё идёт оплаченный период. Такому человеку ссылка на клуб открывает клуб, а не
+ * экран вступления: повторное «Вступить» у отменившего в периоде обнулило бы оплаченный срок
+ * (сервер пускает cancelled заново и замораживает до нового взноса).
+ */
+export function holdsClubSeat(
+  membership: { status: string; subscriptionExpiresAt?: string | null } | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!membership) return false;
+  if (membership.status === 'active' || membership.status === 'frozen' || membership.status === 'expired') return true;
+  return membership.status === 'cancelled'
+    && !!membership.subscriptionExpiresAt
+    && new Date(membership.subscriptionExpiresAt).getTime() > now;
 }

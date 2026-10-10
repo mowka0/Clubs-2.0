@@ -42,25 +42,24 @@ function renderGate(startPath: string) {
 }
 
 describe('NewClubFromChatGate', () => {
-  it('вернулся после создания клуба из чата — на страницу клуба со шторкой «Клуб создан»', async () => {
+  it('открыл кнопкой из лички — остаётся на странице нового клуба', async () => {
     rememberNewClubLinkingStarted([KNOWN_CLUB_ID], Date.now());
     mockMyClubs([KNOWN_CLUB_ID, NEW_CLUB_ID]);
 
-    // Открыл кнопкой из лички: адрес уже с параметром — гейт не должен его потерять.
-    renderGate(`/clubs/${NEW_CLUB_ID}?created=1`);
+    renderGate(`/clubs/${NEW_CLUB_ID}`);
 
     // Ждём, пока гейт отработает (он стирает отметку), — иначе адрес совпал бы ещё до перехода.
     await waitFor(() => expect(localStorage.getItem('clubs:chat-linking-pending')).toBeNull());
-    expect(screen.getByText(`at:/clubs/${NEW_CLUB_ID}?created=1`)).toBeInTheDocument();
+    expect(screen.getByText(`at:/clubs/${NEW_CLUB_ID}`)).toBeInTheDocument();
   });
 
-  it('открыл приложение сам, не через личку — тоже попадает на шторку', async () => {
+  it('открыл приложение сам, не через личку, — гейт ведёт на страницу нового клуба', async () => {
     rememberNewClubLinkingStarted([KNOWN_CLUB_ID], Date.now());
     mockMyClubs([KNOWN_CLUB_ID, NEW_CLUB_ID]);
 
     renderGate('/');
 
-    expect(await screen.findByText(`at:/clubs/${NEW_CLUB_ID}?created=1`)).toBeInTheDocument();
+    expect(await screen.findByText(`at:/clubs/${NEW_CLUB_ID}`)).toBeInTheDocument();
   });
 
   it('никто не уходил создавать клуб — гейт никуда не ведёт', async () => {

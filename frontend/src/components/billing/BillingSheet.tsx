@@ -61,7 +61,10 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
   // сохранится, согласие на списания принимать нельзя — отметки нет, чекаут уходит с autopay=false.
   // Прошлая оплата по СБП отметке не мешает: эта оплата картой карту сохранит.
   const autopayUnavailable = !!data && !data.autopayAvailable;
-  const effectiveAutopay = autopayUnavailable ? false : autopay;
+  // Платит не владелец — разовая оплата: карту участника не сохраняем, отметки согласия нет
+  // (billing-member-pays.md M2; сервер всё равно выключит автосписание сам).
+  const oneTimePayment = !!data && !data.canEnableAutopay;
+  const effectiveAutopay = autopayUnavailable || oneTimePayment ? false : autopay;
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -142,7 +145,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       {payingEarly && data?.trialUntil && (
         <div className="rd-billing-note">
           Бесплатный период клуба <b>«{clubName}»</b> идёт до {formatBillingDate(data.trialUntil)} — оплата
-          сейчас его не прерывает: месяц подписки начнётся с момента платежа.
+          сейчас его не прерывает: оплаченный месяц начнётся после него.
         </div>
       )}
       <div className="rd-dues-amount">
@@ -156,7 +159,16 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           && ` · ${trialPassedLabel(data.trialDays, (n) => pluralRu(n, ['день', 'дня', 'дней']))}`}
       </div>
 
-      {autopayUnavailable
+      {oneTimePayment
+        ? (
+          <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
+            <div className="fi">
+              <div className="ft">Разовая оплата за месяц</div>
+              <div className="fd">Карта не сохранится, повторных списаний не будет.</div>
+            </div>
+          </div>
+        )
+        : autopayUnavailable
         ? (
           <div className="rd-cl-feat" style={{ paddingTop: 2 }}>
             <div className="fi">
@@ -221,21 +233,6 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
     </>
   );
 
-  // Со-организатор доходит до стены при создании встречи, но платит только владелец (R1):
-  // кнопка чекаута ответила бы ему 403, поэтому вместо неё — что делать дальше.
-  const renderNotOwner = () => (
-    <div className="rd-billing-state">
-      <div className="ic" aria-hidden="true">🔑</div>
-      <p className="t">Оплачивает владелец клуба</p>
-      <p className="d">
-        Подписку за клуб {clubName ? <b>«{clubName}»</b> : 'этот клуб'}
-        {price ? ` — ${price} в месяц — ` : ' '}
-        оплачивает его владелец. Попросите его открыть клуб: кнопка оплаты ждёт на странице управления.
-      </p>
-      <button type="button" className="rd-btn-outline" style={{ marginTop: 14 }} onClick={onClose}>Понятно</button>
-    </div>
-  );
-
   // Кнопки «Закрыть» здесь нет намеренно (PO 2026-09-07): проверку не бросают, шит закрывается шапкой.
   const renderWaiting = () => (
     <div className="rd-billing-state">
@@ -265,7 +262,9 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
       <div className="ic" aria-hidden="true">✅</div>
       <p className="t">Оплачено{data?.currentPeriodEnd ? ` до ${formatBillingDate(data.currentPeriodEnd)}` : ''}</p>
       <p className="d">
-        {data?.autopay && data.autopayPossible && data.autopayAvailable
+        {oneTimePayment
+          ? 'Спасибо! Подписка клуба продлена на месяц 💛'
+          : data?.autopay && data.autopayPossible && data.autopayAvailable
           ? `Автопродление включено: ${chargeDate ?? 'в день окончания периода'} спишем ${price ?? ''} с этой же карты. Отключить можно на странице клуба.`
           : 'Автопродление выключено: напомним за 3 дня и за день до конца периода.'}
       </p>
@@ -287,7 +286,7 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
           </div>
         </div>
         <div className="rd-sheet-body">
-          {mode === 'pay' && (data && !data.canPay ? renderNotOwner() : renderPay())}
+          {mode === 'pay' && renderPay()}
           {mode === 'waiting' && renderWaiting()}
           {mode === 'timeout' && renderTimeout()}
           {mode === 'paid' && renderPaid()}

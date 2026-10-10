@@ -47,7 +47,7 @@ const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId,
       <div className="rd-cl-ladder">
         <div className="rd-cl-step">
           <span className="n">1</span>
-          <span className="t"><b>Вход через заявки</b> — новые люди попадают в чат только через одобренную заявку в клуб</span>
+          <span className="t"><b>Вход в чат только для участников клуба</b> — бот впускает в чат только тех, кто вступил в клуб в приложении</span>
         </div>
         <div className="rd-cl-step">
           <span className="n">2</span>
@@ -59,7 +59,7 @@ const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId,
         </div>
         <div className="rd-cl-step">
           <span className="n">4</span>
-          <span className="t"><b>Строгий режим</b> — должники читают, но не пишут; покинувшие клуб уходят и из чата</span>
+          <span className="t"><b>Строгий режим</b> — кто вышел из клуба, бот убирает из чата</span>
         </div>
       </div>
       <button
@@ -119,11 +119,11 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
   const alert = !botInChat
     ? { title: 'Бот удалён из чата', sub: 'Привязка сохранена: верните бота в группу и нажмите «Проверить права ещё раз» — всё оживёт само.' }
     : status.doorEnabled && !status.canInviteUsers
-      ? { title: 'Бот потерял право приглашать участников', sub: 'Вход через заявки остановлен. Верните боту право «Приглашение участников» в настройках группы — и всё оживёт.' }
+      ? { title: 'Бот потерял право приглашать участников', sub: 'Бот перестал впускать в чат вступивших в клуб. Верните боту право «Приглашение участников» в настройках группы — и всё оживёт.' }
       : status.livePinEnabled && !status.canPinMessages
         ? { title: 'Бот потерял право закреплять сообщения', sub: 'Уже созданные статусы бот продолжит обновлять, но закрепить новые не сможет. Верните боту право «Закрепление сообщений» в настройках группы.' }
         : status.strictModeEnabled && !status.canRestrictMembers
-          ? { title: 'Бот потерял право блокировать участников', sub: 'Строгий режим остановлен: бот не может ограничивать должников и банить покинувших клуб. Верните боту право «Блокировка пользователей» в настройках группы.' }
+          ? { title: 'Бот потерял право блокировать участников', sub: 'Строгий режим остановлен: бот не может убирать из чата покинувших клуб. Верните боту право «Блокировка пользователей» в настройках группы.' }
           : status.awardTagsEnabled && !status.canManageTags
             ? { title: 'Бот потерял право управлять тегами', sub: 'Теги наград остановлены: бот не может выставлять и менять теги участников. Верните боту право «Управление тегами» в настройках группы.' }
             : null;
@@ -284,7 +284,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             <div className="rd-cl-hist-d">
               Telegram скрывает от них всё, что было до вступления, — включая закреплённые
               сообщения о встречах и ссылку на клуб. Включается в самом Telegram:
-              <b> Управление группой → История чата для новых участников</b>.
+              <b> «Настройки группы» → «История чата»</b>.
               После этого нажмите «Проверить права ещё раз».
             </div>
           </div>
@@ -320,10 +320,9 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
       <div className="rd-glass" style={{ padding: '2px 14px', marginBottom: 10 }}>
         <div className="rd-cl-feat">
           <div className="fi">
-            <div className="ft">Вход в чат через заявки</div>
+            <div className="ft">Вход в чат только для участников клуба</div>
             <div className="fd">
-              Стучащимся в чат не-участникам бот напишет правила и впустит только после одобрения
-              заявки в клуб. Участников с доступом бот впускает всегда.
+              Бот впускает в чат только тех, кто вступил в клуб в приложении.
             </div>
           </div>
           <button
@@ -331,7 +330,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             className={`rd-cl-tgl${status.doorEnabled ? ' on' : ''}`}
             role="switch"
             aria-checked={status.doorEnabled}
-            aria-label="Вход в чат через заявки"
+            aria-label="Вход в чат только для участников клуба"
             disabled={busy || (!status.doorEnabled && (!botInChat || !status.canInviteUsers))}
             onClick={handleToggleDoor}
           />
@@ -380,16 +379,15 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <div className="fi">
             <div className="ft">Теги наград</div>
             <div className="fd">
-              Последняя награда участника видна в чате тегом рядом с именем. Работает в обе
-              стороны: тег, поставленный в чате руками, станет наградой в приложении.
+              Последняя награда участника видна в чате как тег. Работает в обе стороны: тег,
+              проставленный в чате, станет наградой в приложении.
               {!status.canManageTags && (
                 <>
                   {' '}
                   {/* Единственное право, которого нет в экране добавления бота: Telegram не отдаёт
                       его ни по ссылке, ни через дефолтные права (проверено 2026-08-19). */}
-                  <b>Боту нужно право «Управление тегами»</b> — включается только руками: профиль
-                  бота в группе → «Изменить права» → «Управление тегами», затем «Проверить права
-                  ещё раз» выше.
+                  <b>Боту нужно выдать право:</b> «Настройки группы» → «Участники», выбрать Clubs →
+                  «Управление тегами», затем «Проверить права ещё раз».
                 </>
               )}
             </div>
@@ -404,14 +402,14 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             onClick={handleToggleAwardTags}
           />
         </div>
-        {/* Строгий режим (слайс 5): включение требует права «Блокировка пользователей»,
-            сразу мьютит текущих должников (backfill на бэке). */}
+        {/* Строгий режим (слайс 5): включение требует права «Блокировка пользователей». Мьют
+            должников на бэке остался, но на этапе 1 взносов нет — в тексте только уход из клуба. */}
         <div className="rd-cl-feat">
           <div className="fi">
             <div className="ft">Строгий режим</div>
             <div className="fd">
-              Должники — только чтение до оплаты взноса; покинувшие клуб — бан в чате.
-              Возврат в клуб автоматически снимает бан.
+              Кто вышел из клуба — бот убирает его из чата. Возврат в клуб автоматически
+              снимает бан.
             </div>
           </div>
           <button

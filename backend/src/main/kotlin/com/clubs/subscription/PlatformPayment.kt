@@ -14,6 +14,8 @@ enum class PlatformPaymentStatus { PENDING, SUCCEEDED, FAILED }
 data class PlatformPayment(
     val id: UUID,
     val clubId: UUID,
+    /** Кто платит: владелец или участник (MOTHER); у RECURRING — владелец, списание с его карты (V103). */
+    val payerUserId: UUID,
     /** null у материнского счёта до подтверждения: подписка появляется с первой оплатой. */
     val subscriptionId: UUID?,
     val invId: Long,

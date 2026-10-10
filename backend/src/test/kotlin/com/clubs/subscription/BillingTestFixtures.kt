@@ -58,8 +58,9 @@ internal object BillingTestFixtures {
         status: PlatformPaymentStatus = PlatformPaymentStatus.PENDING,
         autopayRequested: Boolean = true,
         createdAt: OffsetDateTime = OffsetDateTime.now().minusMinutes(5),
+        payerUserId: UUID = club.ownerId,
     ) = PlatformPayment(
-        id = UUID.randomUUID(), clubId = club.id, subscriptionId = subscriptionId, invId = invId, kind = kind,
+        id = UUID.randomUUID(), clubId = club.id, payerUserId = payerUserId, subscriptionId = subscriptionId, invId = invId, kind = kind,
         previousInvId = if (kind == PaymentKind.RECURRING) 100001 else null, amountKopecks = PRICE, status = status,
         autopayRequested = autopayRequested, paymentMethod = null, providerFee = null, createdAt = createdAt, paidAt = null,
     )

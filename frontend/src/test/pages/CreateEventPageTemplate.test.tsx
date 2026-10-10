@@ -271,7 +271,7 @@ describe('CreateEventPage — максимум и минимум участни�
 
     await user.type(screen.getByPlaceholderText('Например: Йога в парке'), 'Баня');
     await user.type(screen.getByPlaceholderText('Вход со двора, домофон 12'), 'у входа');
-    await user.click(screen.getByRole('button', { name: 'Создать событие' }));
+    await user.click(screen.getByRole('button', { name: 'Создать встречу' }));
 
     expect(await screen.findByText(
       'До встречи меньше 18 часов. Подвиньте время встречи или выберите срок короче',
@@ -293,7 +293,7 @@ describe('CreateEventPage — максимум и минимум участни�
     await user.type(screen.getByPlaceholderText('Вход со двора, домофон 12'), 'у входа');
     await user.click(screen.getByRole('checkbox'));
     await user.type(screen.getByPlaceholderText(/Разговорный клуб \(вторники\)/), 'Баня по средам');
-    await user.click(screen.getByRole('button', { name: 'Создать событие' }));
+    await user.click(screen.getByRole('button', { name: 'Создать встречу' }));
 
     await waitFor(() => expect(events).toHaveLength(1));
     expect(events[0]!.minParticipants).toBe(4);

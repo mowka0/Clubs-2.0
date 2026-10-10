@@ -108,21 +108,26 @@ open class ReputationLedger(
 
     /**
      * The column <code>public.reputation_ledger.axis</code>. Ось репутации
-     * (enum reputation_axis): attendance = явка на события; finance =
-     * складчины.
+     * (enum reputation_axis): attendance = явка на события; finance = деньги —
+     * долги сборов и оплата подписки клуба участником.
      */
-    val AXIS: TableField<ReputationLedgerRecord, ReputationAxis?> = createField(DSL.name("axis"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationAxis::class.java), this, "Ось репутации (enum reputation_axis): attendance = явка на события; finance = складчины.")
+    val AXIS: TableField<ReputationLedgerRecord, ReputationAxis?> = createField(DSL.name("axis"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationAxis::class.java), this, "Ось репутации (enum reputation_axis): attendance = явка на события; finance = деньги — долги сборов и оплата подписки клуба участником.")
 
     /**
      * The column <code>public.reputation_ledger.kind</code>. Вид исхода (enum
      * reputation_kind): ironclad = обещал (going) и пришёл; no_show = обещал и
      * не пришёл; spontaneous = голосовал maybe и пришёл; spectator = голосовал
      * maybe и не пришёл; confirmed_unresolved = подтвердил, но явка не
-     * выяснена/спор (0 очков); skladchina_paid = оплатил складчину;
+     * выяснена/спор (0 очков); skladchina_paid = долг сбора закрыт до срока;
      * skladchina_declined = исторический — с редизайна 2026-06 отказ не пишется
-     * в леджер вовсе; skladchina_expired = промолчал до дедлайна складчины.
+     * в леджер вовсе; skladchina_expired = долг сбора просрочен дольше трёх
+     * недель; abandoned_slot = отказ от подтверждённого места без замены;
+     * open_no_show = зарезервирован, не выдаётся; late_decline_covered /
+     * late_decline_uncovered = поздний отказ с заменой / без замены;
+     * club_billing_paid = участник (не владелец) оплатил подписку клуба за чат,
+     * не чаще раза в 30 дней.
      */
-    val KIND: TableField<ReputationLedgerRecord, ReputationKind?> = createField(DSL.name("kind"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationKind::class.java), this, "Вид исхода (enum reputation_kind): ironclad = обещал (going) и пришёл; no_show = обещал и не пришёл; spontaneous = голосовал maybe и пришёл; spectator = голосовал maybe и не пришёл; confirmed_unresolved = подтвердил, но явка не выяснена/спор (0 очков); skladchina_paid = оплатил складчину; skladchina_declined = исторический — с редизайна 2026-06 отказ не пишется в леджер вовсе; skladchina_expired = промолчал до дедлайна складчины.")
+    val KIND: TableField<ReputationLedgerRecord, ReputationKind?> = createField(DSL.name("kind"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationKind::class.java), this, "Вид исхода (enum reputation_kind): ironclad = обещал (going) и пришёл; no_show = обещал и не пришёл; spontaneous = голосовал maybe и пришёл; spectator = голосовал maybe и не пришёл; confirmed_unresolved = подтвердил, но явка не выяснена/спор (0 очков); skladchina_paid = долг сбора закрыт до срока; skladchina_declined = исторический — с редизайна 2026-06 отказ не пишется в леджер вовсе; skladchina_expired = долг сбора просрочен дольше трёх недель; abandoned_slot = отказ от подтверждённого места без замены; open_no_show = зарезервирован, не выдаётся; late_decline_covered / late_decline_uncovered = поздний отказ с заменой / без замены; club_billing_paid = участник (не владелец) оплатил подписку клуба за чат, не чаще раза в 30 дней.")
 
     /**
      * The column <code>public.reputation_ledger.points</code>. Очки,
@@ -145,18 +150,18 @@ open class ReputationLedger(
     /**
      * The column <code>public.reputation_ledger.source_type</code>. Тип
      * источника исхода (enum reputation_source): event = событие; skladchina =
-     * складчина.
+     * складчина (сбор); club_billing = оплата подписки клуба за чат.
      */
-    val SOURCE_TYPE: TableField<ReputationLedgerRecord, ReputationSource?> = createField(DSL.name("source_type"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationSource::class.java), this, "Тип источника исхода (enum reputation_source): event = событие; skladchina = складчина.")
+    val SOURCE_TYPE: TableField<ReputationLedgerRecord, ReputationSource?> = createField(DSL.name("source_type"), SQLDataType.VARCHAR.nullable(false).asEnumDataType(ReputationSource::class.java), this, "Тип источника исхода (enum reputation_source): event = событие; skladchina = складчина (сбор); club_billing = оплата подписки клуба за чат.")
 
     /**
      * The column <code>public.reputation_ledger.source_id</code>. Идентификатор
-     * источника: events.id или skladchinas.id (по source_type; FK не объявлен
-     * намеренно — леджер переживает удаление источника). UNIQUE (user_id,
-     * source_type, source_id) — ровно один исход на источник, повторная
-     * обработка = no-op.
+     * источника: events.id, skladchinas.id или platform_payment.id (по
+     * source_type; FK не объявлен намеренно — леджер переживает удаление
+     * источника). UNIQUE (user_id, source_type, source_id) — ровно один исход
+     * на источник, повторная обработка = no-op.
      */
-    val SOURCE_ID: TableField<ReputationLedgerRecord, UUID?> = createField(DSL.name("source_id"), SQLDataType.UUID.nullable(false), this, "Идентификатор источника: events.id или skladchinas.id (по source_type; FK не объявлен намеренно — леджер переживает удаление источника). UNIQUE (user_id, source_type, source_id) — ровно один исход на источник, повторная обработка = no-op.")
+    val SOURCE_ID: TableField<ReputationLedgerRecord, UUID?> = createField(DSL.name("source_id"), SQLDataType.UUID.nullable(false), this, "Идентификатор источника: events.id, skladchinas.id или platform_payment.id (по source_type; FK не объявлен намеренно — леджер переживает удаление источника). UNIQUE (user_id, source_type, source_id) — ровно один исход на источник, повторная обработка = no-op.")
 
     /**
      * The column <code>public.reputation_ledger.created_at</code>. Когда строка

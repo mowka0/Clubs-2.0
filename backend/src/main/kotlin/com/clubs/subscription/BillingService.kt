@@ -4,16 +4,18 @@ import com.clubs.chatlink.ChatLink
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubCapability
-import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 import com.clubs.generated.jooq.enums.SubscriptionStatus
+import com.clubs.membership.MembershipRepository
 import com.clubs.payment.CheckoutRequest
 import com.clubs.payment.PaymentProvider
 import com.clubs.payment.ResultNotification
+import com.clubs.reputation.ReputationService
+import com.clubs.user.UserRepository
+import com.clubs.user.displayName
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.DependsOn
@@ -48,7 +50,9 @@ class BillingService(
     private val paymentRepository: PlatformPaymentRepository,
     private val chatLinkRepository: ChatLinkRepository,
     private val clubRepository: ClubRepository,
-    private val clubRoleGuard: ClubRoleGuard,
+    private val membershipRepository: MembershipRepository,
+    private val userRepository: UserRepository,
+    private val reputationService: ReputationService,
     private val chatTrialRepository: ChatTrialRepository,
     private val funnelEventRepository: FunnelEventRepository,
     private val consentRepository: AutopayConsentRepository,
@@ -70,27 +74,34 @@ class BillingService(
 
     private val log = LoggerFactory.getLogger(BillingService::class.java)
 
+    /** Статус видит любой участник: плашка «пора платить» показывается всем (billing-member-pays.md M4). */
     @Transactional(readOnly = true)
-    fun status(clubId: UUID, userId: UUID): BillingStatusDto {
-        val club = clubRoleGuard.requireCapability(clubId, userId, ClubCapability.MANAGE_EVENTS)
-        return buildStatus(club, userId, OffsetDateTime.now())
-    }
+    fun status(clubId: UUID, userId: UUID): BillingStatusDto =
+        buildStatus(requireMember(clubId, userId), userId, OffsetDateTime.now())
 
+    /**
+     * Чекаут материнского платежа. Платит любой участник (M1), но автосписание — только с карты
+     * владельца (M2): участнику сервер сам выключает и отметку согласия, и сохранение карты,
+     * что бы ни пришло в запросе.
+     */
     @Transactional
-    fun checkout(clubId: UUID, userId: UUID, autopay: Boolean): CheckoutDto {
-        val club = requireOwner(clubId, userId)
+    fun checkout(clubId: UUID, userId: UUID, autopayRequested: Boolean): CheckoutDto {
+        val club = requireMember(clubId, userId)
         val link = chatLinkRepository.findByClubId(clubId)
             ?: throw ConflictException("Подписка нужна только клубу с чатом — сначала подключите чат")
+        val isOwner = club.ownerId == userId
+        val autopay = autopayRequested && isOwner
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         val now = OffsetDateTime.now()
 
-        val payment = paymentRepository.findPendingMother(clubId, now.minusMinutes(checkoutReuseMinutes))
+        val payment = paymentRepository.findPendingMother(clubId, userId, now.minusMinutes(checkoutReuseMinutes))
             // Тот же счёт, но ползунок мог переключиться между попытками: решение владельца
             // всегда берётся из последнего чекаута (ревью 2026-09-07).
             ?.also { paymentRepository.updateAutopayRequested(it.id, autopay) }
             ?.copy(autopayRequested = autopay)
             ?: paymentRepository.create(
                 clubId = clubId,
+                payerUserId = userId,
                 subscriptionId = liveSubscription(clubId)?.id,
                 kind = PaymentKind.MOTHER,
                 amountKopecks = price,
@@ -98,22 +109,29 @@ class BillingService(
                 autopayRequested = autopay,
             ).also {
                 funnelEventRepository.record(FunnelStep.CHECKOUT_STARTED, userId, clubId)
-                log.info("Billing checkout: clubId={} invId={} amountKopecks={} autopay={}", clubId, it.invId, price, autopay)
+                log.info(
+                    "Billing checkout: clubId={} invId={} amountKopecks={} autopay={} byOwner={}",
+                    clubId, it.invId, price, autopay, isOwner,
+                )
             }
-        // История согласий (V102, требование Robokassa): строка на каждый чекаут — и с отметкой, и без.
-        consentRepository.record(
-            AutopayConsent(clubId, userId, ConsentSource.CHECKOUT, granted = autopay, paymentId = payment.id, subscriptionId = payment.subscriptionId),
-        )
+        // История согласий (V102, требование Robokassa): строка на каждый чекаут владельца — и с отметкой,
+        // и без. Участнику отметку не показывают, и строка с её текстом была бы ложной.
+        if (isOwner) {
+            consentRepository.record(
+                AutopayConsent(clubId, userId, ConsentSource.CHECKOUT, granted = autopay, paymentId = payment.id, subscriptionId = payment.subscriptionId),
+            )
+        }
 
-        // Recurring — всегда, когда провайдер его умеет: карта сохраняется, и ползунок можно включить
-        // позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута. Пока услуга
-        // магазину не разрешена (Robokassa, ошибка 34), платим без неё — иначе не проходит ничего.
+        // Recurring — у владельца всегда, когда провайдер его умеет: карта сохраняется, и ползунок
+        // можно включить позже без новой оплаты. Списывать или нет — решает ползунок, не флаг чекаута.
+        // Пока услуга магазину не разрешена (Robokassa, ошибка 34), платим без неё — иначе не проходит
+        // ничего. Карту участника не сохраняем никогда: списывать с неё некому разрешить (M2).
         val url = paymentProvider.createCheckout(
             CheckoutRequest(
                 invId = payment.invId,
                 amountKopecks = payment.amountKopecks,
                 description = describe(club, link),
-                recurring = paymentProvider.recurringAvailable,
+                recurring = isOwner && paymentProvider.recurringAvailable,
                 clubId = clubId,
                 successUrl = "$successUrl?club=$clubId",
                 failUrl = "$failUrl?club=$clubId",
@@ -201,16 +219,17 @@ class BillingService(
     }
 
     private fun settleMother(payment: PlatformPayment, club: Club, notification: ResultNotification, now: OffsetDateTime): ServiceSubscription {
+        val live = payment.subscriptionId?.let(subscriptionRepository::findById)?.takeIf { it.status != SubscriptionStatus.ENDED }
+            ?: liveSubscription(club.id)
+        if (payment.payerUserId != club.ownerId) return settleMemberPayment(payment, club, live, now)
         // Карта сохранена только если мы просили Recurring (провайдер его умеет) и платили картой:
         // иначе шедулер пошёл бы списывать по несуществующему токену.
         val autopayPossible = paymentProvider.recurringAvailable && isCard(notification.paymentMethod)
-        val live = payment.subscriptionId?.let(subscriptionRepository::findById)?.takeIf { it.status != SubscriptionStatus.ENDED }
-            ?: liveSubscription(club.id)
         val subscription = if (live == null) {
             subscriptionRepository.createChatSubscription(
                 payerUserId = club.ownerId,
                 clubId = club.id,
-                currentPeriodEnd = now.plusDays(periodDays),
+                currentPeriodEnd = firstPeriodStart(club, now).plusDays(periodDays),
                 providerToken = payment.invId.toString(),
                 autopay = payment.autopayRequested,
                 autopayPossible = autopayPossible,
@@ -223,6 +242,45 @@ class BillingService(
             live.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
         }
         notifier.paid(club, subscription.currentPeriodEnd, autopayOn = payment.autopayRequested && autopayPossible, priceKopecks = payment.amountKopecks)
+        return subscription
+    }
+
+    /**
+     * Участник оплатил месяц (billing-member-pays.md M3): период сдвигается на 30 дней, а карта,
+     * токен и ползунок владельца остаются — его автосписание уйдёт в новый день окончания. Подписка,
+     * рождённая оплатой участника, остаётся подпиской владельца, но без карты: автопродление
+     * появится, когда владелец сам оплатит месяц картой.
+     */
+    private fun settleMemberPayment(payment: PlatformPayment, club: Club, live: ServiceSubscription?, now: OffsetDateTime): ServiceSubscription {
+        val subscription = if (live == null) {
+            subscriptionRepository.createChatSubscription(
+                payerUserId = club.ownerId,
+                clubId = club.id,
+                currentPeriodEnd = firstPeriodStart(club, now).plusDays(periodDays),
+                providerToken = null,
+                autopay = false,
+                autopayPossible = false,
+            )
+        } else {
+            val newEnd = maxOf(now, live.currentPeriodEnd).plusDays(periodDays)
+            subscriptionRepository.extendPeriod(live.id, newEnd)
+            subscriptionRepository.transitionStatus(live.id, listOf(SubscriptionStatus.PAST_DUE), SubscriptionStatus.ACTIVE)
+            // Новый цикл продления: неудачные попытки списать с карты владельца остались в прошлом.
+            subscriptionRepository.resetChargeAttempts(live.id)
+            live.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
+        }
+        // Надёжность за оплату — не чаще раза в оплаченный период (M7): предоплата на год вперёд
+        // двенадцатью счетами иначе покупала бы её. Ушедшему из клуба по старой ссылке — не начисляем.
+        if (membershipRepository.isActiveMemberInActiveClub(payment.payerUserId, club.id)) {
+            reputationService.rewardClubBillingPayment(
+                userId = payment.payerUserId, clubId = club.id, paymentId = payment.id,
+                paidAt = now, notBefore = now.minusDays(periodDays),
+            )
+        }
+        notifier.paidByMember(
+            club, payment.payerUserId, subscription.currentPeriodEnd,
+            ownerAutopayOn = live?.renewsAutomatically(paymentProvider.recurringAvailable) == true,
+        )
         return subscription
     }
 
@@ -246,9 +304,19 @@ class BillingService(
         return subscription.copy(currentPeriodEnd = newEnd, status = SubscriptionStatus.ACTIVE)
     }
 
+    /**
+     * Первый оплаченный месяц идёт после бесплатного периода, а не с момента оплаты: заплатившему
+     * заранее остаток бесплатных дней не сгорает (PO 2026-10-09).
+     */
+    private fun firstPeriodStart(club: Club, now: OffsetDateTime): OffsetDateTime {
+        val chatId = chatLinkRepository.findByClubId(club.id)?.chatId ?: return now
+        val trialEnd = chatTrialRepository.findStartedAt(chatId)?.plusDays(trialDays) ?: return now
+        return maxOf(now, trialEnd)
+    }
+
     private fun buildStatus(club: Club, userId: UUID, now: OffsetDateTime): BillingStatusDto {
-        // Платит владелец (R1); со-организатору шит показывает «попросите владельца».
-        val canPay = club.ownerId == userId
+        // Отметка согласия и ползунок — только владельцу: участник платит разово (M2).
+        val canEnableAutopay = club.ownerId == userId
         val price = subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT)
         // Рекуррент магазину не разрешён (ROBOKASSA_RECURRING_ENABLED=false) — фронт прячет обещание списания.
         val autopayAvailable = paymentProvider.recurringAvailable
@@ -256,10 +324,14 @@ class BillingService(
             ?: return mapper().toStatusDto(
                 BillingState.NO_CHAT, price, trialUntil = null, trialDays = trialDays.toInt(),
                 subscription = null, graceUntil = null, pendingCheckout = false,
-                recipientName = recipientName, canPay = canPay, autopayAvailable = autopayAvailable,
+                recipientName = recipientName, canEnableAutopay = canEnableAutopay, autopayAvailable = autopayAvailable,
+                paymentDue = false, lastPayer = null,
             )
-        val pending = paymentRepository.hasPendingMother(club.id)
+        // «Проверяем оплату» — только по своим счетам: чужой брошенный чекаут тебя не касается.
+        val pending = paymentRepository.hasPendingMother(club.id, userId)
         val subscription = subscriptionRepository.findLatestByClub(club.id)
+        // Автосписание ушло провайдеру и ждёт ответа: деньги в пути.
+        val chargeInFlight = subscription != null && paymentRepository.hasPendingRecurring(subscription.id)
         // Бесплатный период идёт по чату и от первой встречи: до неё строки нет вовсе.
         val trialUntil = chatTrialRepository.findStartedAt(link.chatId)?.plusDays(trialDays)
         val state = when {
@@ -275,22 +347,51 @@ class BillingService(
             // уже пришло «не удалось списать», и полоска зовёт «Продлить», а не обещает карту.
             subscription.status == SubscriptionStatus.PAST_DUE -> BillingState.GRACE
             now.isBefore(subscription.currentPeriodEnd) -> BillingState.ACTIVE
-            subscription.awaitsAutoRenewal(
-                paymentProvider.recurringAvailable,
-                chargeInFlight = paymentRepository.hasPendingRecurring(subscription.id),
-            ) -> BillingState.ACTIVE
+            subscription.awaitsAutoRenewal(paymentProvider.recurringAvailable, chargeInFlight) -> BillingState.ACTIVE
             else -> BillingState.GRACE
         }
         val graceUntil = subscription?.currentPeriodEnd?.plusDays(graceDays)?.takeIf { state == BillingState.GRACE || state == BillingState.ENDED }
+        val lastPayer = if (state == BillingState.ACTIVE || state == BillingState.GRACE) lastPayer(club.id) else null
         return mapper().toStatusDto(
             state, price, trialUntil?.takeIf { state == BillingState.TRIAL }, trialDays.toInt(),
-            subscription, graceUntil, pending, recipientName, canPay, autopayAvailable,
+            subscription, graceUntil, pending, recipientName, canEnableAutopay, autopayAvailable,
+            paymentDue = !chargeInFlight && isPaymentDue(state, trialUntil, subscription?.currentPeriodEnd, now),
+            lastPayer = lastPayer,
         )
     }
 
+    /**
+     * Пора платить — плашка возвращается на главную ко всем участникам (M4). Считается от даты, а
+     * не от тика шедулера: пропущенный тик плашку не задержит. Пока автосписание в пути, вызывающий
+     * её прячет: оплата участника поверх прошедшего списания взяла бы деньги дважды.
+     */
+    private fun isPaymentDue(state: BillingState, trialUntil: OffsetDateTime?, periodEnd: OffsetDateTime?, now: OffsetDateTime): Boolean =
+        when (state) {
+            BillingState.TRIAL -> trialUntil != null && BillingLifecycleService.calendarDaysUntil(trialUntil, now) <= PAYMENT_DUE_DAYS
+            BillingState.ACTIVE -> periodEnd != null && BillingLifecycleService.calendarDaysUntil(periodEnd, now) <= PAYMENT_DUE_DAYS
+            BillingState.TRIAL_ENDED, BillingState.GRACE, BillingState.ENDED -> true
+            BillingState.NO_CHAT, BillingState.BOT_REMOVED, BillingState.TRIAL_NOT_STARTED -> false
+        }
+
+    private fun lastPayer(clubId: UUID): BillingPayerDto? {
+        val payerId = paymentRepository.findLastSucceeded(clubId)?.payerUserId ?: return null
+        val user = userRepository.findById(payerId) ?: return null
+        return BillingPayerDto(payerId, displayName(user.firstName, user.lastName))
+    }
+
+    // Платит любой участник (M1); владелец — тоже участник, у него строка членства «organizer».
+    private fun requireMember(clubId: UUID, userId: UUID): Club {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (!membershipRepository.isActiveMemberInActiveClub(userId, clubId)) {
+            throw ForbiddenException("Оплачивать подписку за клуб могут только его участники")
+        }
+        return club
+    }
+
+    // Ползунок автопродления — только у владельца: карта для списаний — его (M2).
     private fun requireOwner(clubId: UUID, userId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Оплачивать подписку за чат может только владелец клуба")
+        if (club.ownerId != userId) throw ForbiddenException("Автопродлением управляет только владелец клуба")
         return club
     }
 
@@ -311,5 +412,9 @@ class BillingService(
 
         // Сколько знаков названия чата входит в описание платежа (см. describe); хвост « на 30 дней» при этом сохраняется.
         private const val TITLE_IN_DESCRIPTION_MAX = 40
+
+        // За сколько календарных дней МСК до конца периода плашка возвращается на главную (M4) — та же
+        // неделя, что у первого напоминания о конце бесплатного периода.
+        private const val PAYMENT_DUE_DAYS = 7L
     }
 }

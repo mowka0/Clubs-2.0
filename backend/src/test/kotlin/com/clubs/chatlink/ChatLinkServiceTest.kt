@@ -658,14 +658,13 @@ class ChatLinkServiceTest {
     }
 
     @Test
-    fun `клуб из чата ещё не показан — в чат ничего не включается, теги включаются`() {
+    fun `клуб из чата ещё не показан — функции включаются сразу по правам (PO 2026-10-10)`() {
         every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
 
         service.enableFeaturesForGrantedRights(clubId, before = null)
 
-        // До «Показать клуб в чате» клуб молчит: первая встреча при наполнении не выдаст его.
-        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
-        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+        verify { chatLinkRepository.updateLivePin(clubId, livePinEnabled = true) }
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true) }
         verify { chatLinkRepository.updateAwardTags(clubId, awardTagsEnabled = true) }
     }
 
@@ -717,25 +716,37 @@ class ChatLinkServiceTest {
     }
 
     @Test
-    fun `первый показ клуба в чате включает закреп и статус сборов`() {
+    fun `закреп ссылки на клуб функции не трогает — выключенное владельцем остаётся выключенным`() {
         every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
-        every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns presentedPinId
-
-        service.pinClubLink(clubId, ownerId)
-
-        verify { chatLinkRepository.updateLivePin(clubId, livePinEnabled = true) }
-        verify { chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true) }
-        verify(exactly = 0) { chatLinkRepository.updateDoor(any(), any(), any()) }
-    }
-
-    @Test
-    fun `повторный закреп ссылки — не показ, выключенное после показа не трогаем`() {
-        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = presentedPinId)
         every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns 778L
 
         service.pinClubLink(clubId, ownerId)
 
         verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
         verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+    }
+
+    @Test
+    fun `пост клуба в чат — HTML с жирной шапкой и слоганом, название клуба экранировано`() {
+        // Название вводит человек: без экранирования «<b>» или «&» ломали бы разметку поста.
+        every { clubRepository.findById(clubId) } returns chatLinkTestClub(clubId = clubId, ownerId = ownerId, name = "Бег <b>&</b> кофе")
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, clubPinMessageId = null)
+        every { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) } returns 778L
+
+        service.pinClubLink(clubId, ownerId)
+
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId = any(),
+                text = match {
+                    it.startsWith("<b>📌 У нашего чата теперь есть клуб — «Бег &lt;b&gt;&amp;&lt;/b&gt; кофе»!</b>") &&
+                        it.contains("<b>В чате болтаем, а в клубе организуем.</b>\n\nВступай в наш клуб")
+                },
+                buttonText = "Вступить в клуб",
+                url = any(),
+                parseMode = "HTML",
+                silent = any()
+            )
+        }
     }
 }

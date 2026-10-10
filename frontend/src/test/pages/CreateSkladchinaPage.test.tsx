@@ -163,10 +163,14 @@ describe('CreateSkladchinaPage — одна форма на три вида', ()
     expect(screen.queryByText('Кто платит')).not.toBeInTheDocument();
   });
 
-  it('«По желанию» показывает «Скрыть от» и чекбокс «Без срока»', async () => {
+  it('«По желанию» показывает «Скрыть от» и чекбокс «Без срока» — по умолчанию снят, срок обязателен', async () => {
     server.use(http.get(`*/api/clubs/${CLUB_ID}/members`, () => HttpResponse.json([MEMBER])));
-    renderPage('?kind=voluntary');
+    const { user } = renderPage('?kind=voluntary');
     expect(await screen.findByText('Скрыть от')).toBeInTheDocument();
-    expect(screen.getByLabelText('Без срока')).toBeChecked();
+    expect(screen.getByLabelText('Без срока')).not.toBeChecked();
+    expect(screen.getByText('Срок оплаты')).toBeInTheDocument();
+    // Отметил «Без срока» — поле срока прячется.
+    await user.click(screen.getByLabelText('Без срока'));
+    expect(screen.queryByText('Срок оплаты')).not.toBeInTheDocument();
   });
 });

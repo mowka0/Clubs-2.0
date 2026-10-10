@@ -18,9 +18,10 @@ import org.jooq.impl.DAOImpl
 
 
 /**
- * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
- * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
- * дочерние (RECURRING) — автосписания по сохранённой карте.
+ * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один
+ * счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца
+ * или любого участника клуба, дочерние (RECURRING) — автосписания по
+ * сохранённой карте владельца.
  */
 @Suppress("UNCHECKED_CAST")
 open class PlatformPaymentDao(configuration: Configuration?) : DAOImpl<PlatformPaymentRecord, com.clubs.generated.jooq.tables.pojos.PlatformPayment, UUID>(PlatformPayment.PLATFORM_PAYMENT, com.clubs.generated.jooq.tables.pojos.PlatformPayment::class.java, configuration) {
@@ -184,4 +185,15 @@ open class PlatformPaymentDao(configuration: Configuration?) : DAOImpl<PlatformP
      * Fetch records that have <code>paid_at IN (values)</code>
      */
     fun fetchByPaidAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetch(PlatformPayment.PLATFORM_PAYMENT.PAID_AT, *values)
+
+    /**
+     * Fetch records that have <code>payer_user_id BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfPayerUserId(lowerInclusive: UUID, upperInclusive: UUID): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetchRange(PlatformPayment.PLATFORM_PAYMENT.PAYER_USER_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payer_user_id IN (values)</code>
+     */
+    fun fetchByPayerUserId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.PlatformPayment> = fetch(PlatformPayment.PLATFORM_PAYMENT.PAYER_USER_ID, *values)
 }

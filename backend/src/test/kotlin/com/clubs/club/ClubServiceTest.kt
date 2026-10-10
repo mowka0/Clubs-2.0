@@ -148,6 +148,17 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `club from a chat gets the 500 ceiling, not the chat size — new people in the group never hit a full club`() {
+        val ownerId = UUID.randomUUID()
+        every { clubRepository.countByOwnerId(ownerId) } returns 0
+        every { clubRepository.createFromChat(any(), ownerId, any(), any()) } returns makeClub(ownerId = ownerId, memberLimit = 500)
+
+        clubService.createClubFromChat("Бегуны", ownerId)
+
+        verify { clubRepository.createFromChat("Бегуны", ownerId, 500, any()) }
+    }
+
+    @Test
     fun `createClub should throw ValidationException when category is invalid`() {
         val ownerId = UUID.randomUUID()
         val request = CreateClubRequest(

@@ -12,7 +12,10 @@ import {
   useMyApplicationsQuery,
   useMyPendingApplicationsQuery,
 } from '../queries/applications';
+import { useNewClubChatLinkQuery, useStartChatLinkingMutation } from '../queries/chatLink';
 import { queryKeys } from '../queries/queryKeys';
+import { PRODUCT_PROFILE } from '../config/productProfile';
+import { memberCountCaption } from '../utils/formatters';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { CreateClubChoiceSheet } from '../components/club/CreateClubChoiceSheet';
@@ -137,10 +140,11 @@ const MyClubCard: FC<MyClubCardProps> = ({
   // Со-организатор (co-organizers): менеджер, но не владелец — своя подпись роли, 👑 остаётся.
   const isCoOrganizer = membership.role === 'co_organizer';
   const crownTitle = isCoOrganizer ? 'Вы со-организатор' : 'Вы организатор';
+  // Состав без лимита «N / M» (stage-1-scope.md, решение 3a); категория — только при её показе.
   const meta = [
     isManager ? (isCoOrganizer ? 'со-организатор' : 'организатор') : 'участник',
-    club ? (CATEGORY_LABELS[category] ?? category) : null,
-    club ? `${club.memberCount} / ${club.memberLimit}` : null,
+    club && PRODUCT_PROFILE.showClubCategory ? (CATEGORY_LABELS[category] ?? category) : null,
+    club ? memberCountCaption(club.memberCount) : null,
   ].filter(Boolean).join(' · ');
 
   const hasScore = rep?.trust != null;
@@ -273,7 +277,10 @@ interface HistoryClubCardProps {
 /** Клуб, который пользователь покинул, но в котором остался репутационный след («История»). */
 const HistoryClubCard: FC<HistoryClubCardProps> = ({ club, onClick }) => {
   const tier = reliabilityTier(club.trust);
-  const meta = [CATEGORY_LABELS[club.category] ?? club.category, 'вы покинули'].filter(Boolean).join(' · ');
+  const meta = [
+    PRODUCT_PROFILE.showClubCategory ? (CATEGORY_LABELS[club.category] ?? club.category) : null,
+    'вы покинули',
+  ].filter(Boolean).join(' · ');
   return (
     <button type="button" className="rd-rep-row" onClick={onClick}>
       <span className="rd-ico">
@@ -598,12 +605,18 @@ export const MyClubsPage: FC = () => {
   const haptic = useHaptic();
   const { user } = useAuthStore();
 
+  // Флаги этапа (stage-1-scope.md): спрятанные секции получают пустые списки, а не свои условия.
+  const { showClubDues, showAccessTypeAndApplications, showClubCreationFromScratch } = PRODUCT_PROFILE;
+
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
   const pendingInboxQuery = useMyPendingApplicationsQuery();
   const reputationQuery = useMyReputationQuery();
+  // «+ Клуб» на этапе 1 сразу уводит выбирать группу — тот же путь, что пункт «Из телеграм-чата».
+  const newClubChatLink = useNewClubChatLinkQuery();
+  const startChatLinking = useStartChatLinkingMutation();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  // Развилка «+ Клуб»: сначала способ (из чата / с нуля), и только потом форма.
+  // Развилка «+ Клуб» (этап 2): сначала способ (из чата / с нуля), и только потом форма.
   const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
@@ -614,21 +627,26 @@ export const MyClubsPage: FC = () => {
   // Собственные членства без доступа — frozen (ждёт первого взноса) и expired (подписка истекла) —
   // выносим в отдельный блок «Доступ закрыт — оплатите», чтобы участник увидел, что потерял доступ
   // и должен оплатить, а не искал клуб, молча висящий среди активных. Остальные — в «Где я состою».
+  // Без взносов (этап 1) блока нет, и такие клубы остаются в общем списке, а не пропадают.
   const lockedMyClubs = useMemo(
-    () => myClubs.filter((m) => m.status === 'frozen' || m.status === 'expired'),
-    [myClubs],
+    () => (showClubDues ? myClubs.filter((m) => m.status === 'frozen' || m.status === 'expired') : []),
+    [myClubs, showClubDues],
   );
   const activeMyClubs = useMemo(
-    () => myClubs.filter((m) => m.status !== 'frozen' && m.status !== 'expired'),
-    [myClubs],
+    () => (showClubDues ? myClubs.filter((m) => m.status !== 'frozen' && m.status !== 'expired') : myClubs),
+    [myClubs, showClubDues],
   );
   // Раннее продление: активные подписки в окне T-3 — секция «Подписка истекает» с CTA
   // «Продлить подписку». Клубы при этом остаются и в «Где я состою» (доступ ещё жив).
-  const renewalMyClubs = useMemo(() => myClubs.filter(isRenewalDue), [myClubs]);
+  const renewalMyClubs = useMemo(
+    () => (showClubDues ? myClubs.filter(isRenewalDue) : []),
+    [myClubs, showClubDues],
+  );
   // Клуб, для которого открыт шит оплаты продления (null = закрыт).
   const [renewalClubId, setRenewalClubId] = useState<string | null>(null);
   const applications = applicationsQuery.data ?? [];
-  const pendingInbox = pendingInboxQuery.data ?? [];
+  // Запрос инбокса живёт и на этапе 1 (на нём держится гейт загрузки), но заявок не показываем.
+  const pendingInbox = showAccessTypeAndApplications ? pendingInboxQuery.data ?? [] : [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
   // Репутация по активным клубам для раскрывающихся карточек (join по clubId с membership'ами).
   const repByClub = useMemo(() => {
@@ -641,7 +659,7 @@ export const MyClubsPage: FC = () => {
   // Кросс-клубовые «Ждут оплаты»: запрашиваем только у менеджеров клубов — владельцев и активных
   // со-организаторов (У-5: скоуп бэкенда расширен owned → managed; иначе сервер вернёт []).
   const isAnyClubManager = myClubs.some((m) => isActiveManagerMembership(m));
-  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyClubManager });
+  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: showClubDues && isAnyClubManager });
   const awaitingDues = awaitingDuesQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
@@ -758,8 +776,8 @@ export const MyClubsPage: FC = () => {
   //    лимба «approved-awaiting-payment» больше нет.)
   //  - «Заявки в мои клубы» (инбокс организатора): ждут рассмотрения.
   const myActiveApps = useMemo(
-    () => applications.filter((a) => a.status === 'pending'),
-    [applications],
+    () => (showAccessTypeAndApplications ? applications.filter((a) => a.status === 'pending') : []),
+    [applications, showAccessTypeAndApplications],
   );
   const myApplicationsCount = myActiveApps.length;
   const organizerInboxCount = pendingInbox.length;
@@ -832,8 +850,20 @@ export const MyClubsPage: FC = () => {
   };
 
   const openCreate = () => {
+    // Двойной тап, пока уходим в Telegram, открыл бы выбор группы дважды.
+    if (startChatLinking.isPending) return;
     haptic.impact('light');
-    setShowCreateChoice(true);
+    if (showClubCreationFromScratch) {
+      setShowCreateChoice(true);
+      return;
+    }
+    // Ссылка на бота ещё не приехала — на экран подключения: он дождётся её сам, и тап
+    // не уйдёт в пустоту.
+    if (!newClubChatLink.data) {
+      navigate('/connect-chat');
+      return;
+    }
+    startChatLinking.mutate({ clubId: null, startGroupUrl: newClubChatLink.data.startGroupUrl });
   };
 
   const handleClubClick = (clubId: string) => {
@@ -872,7 +902,8 @@ export const MyClubsPage: FC = () => {
             </div>
           )}
         </div>
-        {/* Оранжевая: иначе создание клуба с нуля не замечают (PO 2026-10-08). */}
+        {/* Оранжевая: иначе «+ Клуб» не замечают (PO 2026-10-08). На этапе 1 ведёт сразу
+            к подключению чата, на этапе 2 — в развилку «из чата / с нуля». */}
         <button
           type="button"
           className="rd-city-pill rd-pill-accent"
@@ -903,8 +934,8 @@ export const MyClubsPage: FC = () => {
 
       {/* Пустое состояние — та же сцена, что и на «/»: в чат-модели путь начинается с
           подключения чата, а прежние двери («создать клуб» формой и «открыть Поиск»)
-          ведут мимо неё. Создание клуба формой не удалено — оно осталось на кнопке
-          «+ Клуб» в шапке для тех, кому клуб нужен без чата. */}
+          ведут мимо неё. Форма создания с нуля не удалена — на этапе 2 она вернётся
+          за кнопкой «+ Клуб» (PRODUCT_PROFILE.showClubCreationFromScratch). */}
       {empty && <ConnectChatEmpty />}
 
       {/* Частичный сбой: вторичные query упали, но контент жив — плашка вместо полного

@@ -13,8 +13,6 @@ export interface ClubSetupDraft {
   city: CityDto | null;
   description: string | null;
   interests: string[] | null;
-  /** Строкой, а не числом: поле ввода отдаёт текст, и пустое значение тоже нужно уметь показать. */
-  memberLimit: string | null;
 }
 
 /** Правка черновика: шаг отдаёт только свои поля, остальное остаётся как было. */

@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockClubDetail } from '../mocks/handlers';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import { withStage1Profile } from '../mocks/productProfile';
 import type { ClubStatsDto, FinancesDto } from '../../types/api';
 
 // Мок Telegram SDK
@@ -25,6 +26,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 
 // Мок Telegram UI
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+// Взносы, заявки и прочее спрятанное на этапе 1 проверяются под профилем этапа 2 (mocks/productProfile).
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 
 // Мок нашего модуля telegram/sdk
 vi.mock('../../telegram/sdk', () => ({
@@ -229,5 +232,89 @@ describe('OrganizerClubManage — Финансы: честный хинт (W3-08
     await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
 
     expect(await screen.findByText(/напрямую тебе/)).toBeInTheDocument();
+  });
+});
+
+describe('OrganizerClubManage — лимит участников 1–500 (клуб из чата рождается с 500)', () => {
+  beforeEach(() => {
+    server.resetHandlers();
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/stats`, () => HttpResponse.json(EMPTY_STATS)));
+  });
+
+  it('подпись поля 1–500, лимит 120 сохраняется, 501 — ошибка без запроса', async () => {
+    setViewer(OWNER_ID);
+    // Город нужен валидации формы, иначе сохранение упрётся в него раньше лимита.
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({ ...mockClubDetail, cityId: 'city-msk' })),
+    );
+    let putBody: Record<string, unknown> | undefined;
+    server.use(
+      http.put(`*/api/clubs/${CLUB_ID}`, async ({ request }) => {
+        putBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...mockClubDetail, cityId: 'city-msk', memberLimit: 120 });
+      }),
+    );
+    const { user } = renderManage();
+
+    const limitInput = await screen.findByLabelText('Лимит участников (1–500)');
+    await user.clear(limitInput);
+    await user.type(limitInput, '501');
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(await screen.findByText('Лимит участников: 1–500')).toBeInTheDocument();
+    expect(putBody).toBeUndefined();
+
+    await user.clear(limitInput);
+    await user.type(limitInput, '120');
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(await screen.findByText('Изменения сохранены')).toBeInTheDocument();
+    expect(putBody).toEqual({ memberLimit: 120 });
+  });
+});
+
+describe('OrganizerClubManage — этап 1: взносов, типа доступа и категории нет', () => {
+  withStage1Profile();
+
+  beforeEach(() => {
+    server.resetHandlers();
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/stats`, () => HttpResponse.json(EMPTY_STATS)));
+  });
+
+  it('таба «Финансы» нет, в настройках нет цены, реквизитов и блока «Нельзя изменить»', async () => {
+    setViewer(OWNER_ID);
+    mockPaidClub();
+    renderManage();
+
+    expect(await screen.findByRole('tab', { name: 'Настройки' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Чат' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Статистика' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument();
+
+    expect(await screen.findByText('Название')).toBeInTheDocument();
+    expect(screen.getByText('Лимит участников (1–500)')).toBeInTheDocument();
+    expect(screen.queryByText(/Цена подписки/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Реквизиты для взноса/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Нельзя изменить')).not.toBeInTheDocument();
+    expect(screen.queryByText('Тип доступа')).not.toBeInTheDocument();
+    expect(screen.queryByText('Категория')).not.toBeInTheDocument();
+  });
+
+  it('deep-link ?tab=finances откатывается на «Настройки»', async () => {
+    setViewer(OWNER_ID);
+    renderManage(`/clubs/${CLUB_ID}/manage?tab=finances`);
+
+    const settingsTab = await screen.findByRole('tab', { name: 'Настройки' });
+    expect(settingsTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Клуб бесплатный')).not.toBeInTheDocument();
+  });
+
+  it('вопрос для заявки не показывается даже у клуба «по заявке»', async () => {
+    setViewer(OWNER_ID);
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({ ...mockClubDetail, accessType: 'closed' })),
+    );
+    renderManage();
+
+    expect(await screen.findByText('Название')).toBeInTheDocument();
+    expect(screen.queryByText(/Вопрос для заявки/)).not.toBeInTheDocument();
   });
 });

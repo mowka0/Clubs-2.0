@@ -126,11 +126,11 @@ export const LocationPickerSheet: FC<LocationPickerSheetProps> = ({
   return createPortal(
     <>
       <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
-      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Место события">
+      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Место встречи">
         <div className="rd-sheet-grabber" aria-hidden="true" />
 
         <div className="rd-sheet-body">
-          <div className="rd-sheet-head"><h2>Место события</h2></div>
+          <div className="rd-sheet-head"><h2>Место встречи</h2></div>
 
           <div className="rd-geo-search">
             <input

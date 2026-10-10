@@ -119,7 +119,7 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) 
         </div>
 
         <h2 className="sp-title" id="sp-title">{preview.title}</h2>
-        <p className="sp-lead">{preview.lead}</p>
+        {preview.lead && <p className="sp-lead">{preview.lead}</p>}
 
         <ul className="sp-rules">
           {preview.rules.map((rule) => (
@@ -128,7 +128,7 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) 
         </ul>
 
         <button type="button" className="rd-btn-primary sp-ack" onClick={close}>
-          {PREVIEW_ACK}
+          {preview.ackLabel ?? PREVIEW_ACK}
         </button>
       </div>
     </div>,

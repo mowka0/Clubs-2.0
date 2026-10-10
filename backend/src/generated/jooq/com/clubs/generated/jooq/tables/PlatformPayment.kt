@@ -11,10 +11,12 @@ import com.clubs.generated.jooq.keys.AUTOPAY_CONSENT__AUTOPAY_CONSENT_PAYMENT_ID
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT_INV_ID_KEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT_PKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_PAYER_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY
 import com.clubs.generated.jooq.tables.AutopayConsent.AutopayConsentPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.ServiceSubscription.ServiceSubscriptionPath
+import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.PlatformPaymentRecord
 
 import java.math.BigDecimal
@@ -51,9 +53,10 @@ import org.jooq.impl.TableImpl
 
 
 /**
- * Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один
- * ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты,
- * дочерние (RECURRING) — автосписания по сохранённой карте.
+ * Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один
+ * счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца
+ * или любого участника клуба, дочерние (RECURRING) — автосписания по
+ * сохранённой карте владельца.
  */
 @Suppress("UNCHECKED_CAST")
 open class PlatformPayment(
@@ -72,7 +75,7 @@ open class PlatformPayment(
     parentPath,
     aliased,
     parameters,
-    DSL.comment("Платежи владельцев клубов платформе за чат через провайдера (Robokassa). Один ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты, дочерние (RECURRING) — автосписания по сохранённой карте."),
+    DSL.comment("Платежи платформе за чат клуба через провайдера (Robokassa). Один ряд = один счёт (InvId); материнский платёж (MOTHER) со страницы оплаты — от владельца или любого участника клуба, дочерние (RECURRING) — автосписания по сохранённой карте владельца."),
     TableOptions.table(),
     where,
 ) {
@@ -182,6 +185,15 @@ open class PlatformPayment(
      */
     val PAID_AT: TableField<PlatformPaymentRecord, OffsetDateTime?> = createField(DSL.name("paid_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда провайдер подтвердил оплату (NULL, пока PENDING/FAILED).")
 
+    /**
+     * The column <code>public.platform_payment.payer_user_id</code>. Кто платит
+     * по счёту (FK users.id). MOTHER — тот, кто открыл оплату: владелец (карта
+     * может сохраниться для автопродления) или участник (разовая оплата, карта
+     * не сохраняется). RECURRING — владелец клуба: списание идёт с его
+     * сохранённой карты. Старые счета заполнены владельцем клуба (V103).
+     */
+    val PAYER_USER_ID: TableField<PlatformPaymentRecord, UUID?> = createField(DSL.name("payer_user_id"), SQLDataType.UUID.nullable(false), this, "Кто платит по счёту (FK users.id). MOTHER — тот, кто открыл оплату: владелец (карта может сохраниться для автопродления) или участник (разовая оплата, карта не сохраняется). RECURRING — владелец клуба: списание идёт с его сохранённой карты. Старые счета заполнены владельцем клуба (V103).")
+
     private constructor(alias: Name, aliased: Table<PlatformPaymentRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<PlatformPaymentRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<PlatformPaymentRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -218,7 +230,7 @@ open class PlatformPayment(
     override fun getIdentity(): Identity<PlatformPaymentRecord, Long?> = super.getIdentity() as Identity<PlatformPaymentRecord, Long?>
     override fun getPrimaryKey(): UniqueKey<PlatformPaymentRecord> = PLATFORM_PAYMENT_PKEY
     override fun getUniqueKeys(): List<UniqueKey<PlatformPaymentRecord>> = listOf(PLATFORM_PAYMENT_INV_ID_KEY)
-    override fun getReferences(): List<ForeignKey<PlatformPaymentRecord, *>> = listOf(PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY, PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<PlatformPaymentRecord, *>> = listOf(PLATFORM_PAYMENT__PLATFORM_PAYMENT_CLUB_ID_FKEY, PLATFORM_PAYMENT__PLATFORM_PAYMENT_PAYER_USER_ID_FKEY, PLATFORM_PAYMENT__PLATFORM_PAYMENT_SUBSCRIPTION_ID_FKEY)
 
     private lateinit var _clubs: ClubsPath
 
@@ -234,6 +246,21 @@ open class PlatformPayment(
 
     val clubs: ClubsPath
         get(): ClubsPath = clubs()
+
+    private lateinit var _users: UsersPath
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table.
+     */
+    fun users(): UsersPath {
+        if (!this::_users.isInitialized)
+            _users = UsersPath(this, PLATFORM_PAYMENT__PLATFORM_PAYMENT_PAYER_USER_ID_FKEY, null)
+
+        return _users;
+    }
+
+    val users: UsersPath
+        get(): UsersPath = users()
 
     private lateinit var _serviceSubscription: ServiceSubscriptionPath
 

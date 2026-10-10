@@ -68,7 +68,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
               <div className="rd-wz-lbl">Дополнительно</div>
               <p className="rd-wz-hint">
                 {OPTIONAL_BOT_RIGHT.label}. Telegram это право по ссылке не выдаёт — включается только
-                руками: откройте группу → профиль бота → «Изменить права» → «Управление тегами».
+                руками: «Настройки группы» → «Участники», выбрать Clubs → «Управление тегами».
                 Галочка появится здесь сама, когда вернётесь в приложение.
               </p>
             </>

@@ -9,27 +9,37 @@ interface BillingStatusStripProps {
   /** «Оплатить» / «Продлить» — открыть шит оплаты. */
   onPay: () => void;
   /**
-   * Показывать ползунок автопродления внутри полоски. На странице клуба его нет: переключать
-   * автопродление — действие управления, его место на «Управлении клубом», а со-организатор
-   * (он полоску тоже видит) всё равно получил бы 403. Сама полоска показывается во всех
-   * состояниях на обоих экранах (PO 2026-09-16).
+   * Где стоит полоска (billing-member-pays.md M4). `manage` — «Управление»: все состояния,
+   * ползунок автопродления владельцу. `club` — главная страница клуба: только когда пора платить
+   * (`paymentDue`), зато всем участникам — заплатить за клуб может любой; ползунка нет.
    */
-  withAutopayToggle?: boolean;
+  placement?: 'manage' | 'club';
+  /** На главной: показывать «бот удалён» — это тревога для организаторов, а не «пора платить». */
+  showBotRemoved?: boolean;
 }
 
 /**
- * Полоска статуса биллинга на странице управления клубом (platform-billing.md § 7): одна
- * полоска, семь состояний из BillingStatusDto; ползунок автопродления живёт прямо в ней —
+ * Полоска статуса биллинга (platform-billing.md § 7, billing-member-pays.md § 6): одна полоска,
+ * семь состояний из BillingStatusDto; ползунок автопродления владельца живёт прямо в ней —
  * отдельного экрана «подписка» нет. У клуба без чата полоски нет: ему не за что платить.
  * По тексту платят «за клуб», хотя единица счёта — чат (PO 2026-09-07).
  */
-export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, withAutopayToggle = true }) => {
+export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay, placement = 'manage', showBotRemoved = false }) => {
   const haptic = useHaptic();
   const { data } = useBillingQuery(clubId);
   const setAutopay = useSetAutopayMutation();
   const [autopayError, setAutopayError] = useState<string | null>(null);
 
   if (!data || data.state === 'NO_CHAT') return null;
+  const onClubPage = placement === 'club';
+  if (onClubPage && !data.paymentDue && !(data.state === 'BOT_REMOVED' && showBotRemoved)) return null;
+  // Ползунок — только владельцу и только в «Управлении»: карта для списаний — его (M2).
+  const withAutopayToggle = !onClubPage && data.canEnableAutopay;
+  // Напоминания в личку получает только владелец (M5) — обещать их остальным нельзя.
+  const isOwnerView = data.canEnableAutopay;
+  const payerLine = data.lastPayer && (
+    <div className="d">Последний платёж — {data.lastPayer.name} 💛</div>
+  );
 
   const price = formatRubles(data.priceKopecks);
   const periodEnd = data.currentPeriodEnd ? formatBillingDate(data.currentPeriodEnd) : null;
@@ -81,7 +91,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <span className="ic" aria-hidden="true">🎁</span>
           <div className="tx">
             <div className="t">Бесплатно до {trialUntil}</div>
-            <div className="d">Дальше {price} в месяц за клуб. Напомним в личке за неделю и за день — можно оплатить заранее.</div>
+            <div className="d">Дальше {price} в месяц за клуб.{isOwnerView && ' Напомним в личке за неделю и за день — можно оплатить заранее.'}</div>
           </div>
           <button type="button" className="act" onClick={onPay}>Оплатить</button>
         </div>
@@ -102,37 +112,52 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
         <div className="rd-billing-strip info" data-state={data.state}>
           <span className="ic" aria-hidden="true">✅</span>
           <div className="tx">
-            <div className="t">Оплачено до {periodEnd}</div>
-            <div className="d">{price} в месяц за клуб · Robokassa</div>
-            {withAutopayToggle && <div className="sub">
-              <div className="fi">
-                <div className="ft">Продлевать автоматически</div>
-                <div className="fd">
-                  {!data.autopayAvailable
-                    // Рекуррент магазину не разрешён: даже сохранённую карту шедулер не списывает, шлёт напоминания.
-                    ? 'Автопродление пока недоступно — напомним в личке за 3 дня и за день до конца периода.'
-                    : !data.autopayPossible
-                      // Карта не сохранена: оплата по СБП или оплата в период без рекуррента — причина в
-                      // тексте не называется, чтобы не обещать «оплатите картой», когда это не поможет.
-                      ? 'Карта для автосписания не сохранена — напомним в личке за 3 дня и за день до конца периода.'
-                      : data.autopay
-                        // Списание — в день окончания оплаченного периода (PO 2026-09-07).
-                        ? `${periodEnd} спишем ${price} с сохранённой карты.`
-                        : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
+            <div className="t">{onClubPage ? `Клуб оплачен до ${periodEnd}` : `Оплачено до ${periodEnd}`}</div>
+            <div className="d">
+              {onClubPage
+                // На главной полоска появляется за неделю до конца — зовём продлить, не пугая (M4).
+                ? (autopayOn
+                  ? (data.canEnableAutopay
+                    // Владельцу — без «вместо него»: его оплата без отметки согласия выключила бы автопродление.
+                    ? `${periodEnd} спишем ${price} с вашей карты.`
+                    : `${periodEnd} продлится автоматически с карты владельца.`)
+                  : `${price} в месяц за клуб. Продлить можно заранее — месяц прибавится к оплаченному.`)
+                : `${price} в месяц за клуб · Robokassa`}
+            </div>
+            {payerLine}
+            {withAutopayToggle && (autopayLocked
+              // Ползунка, который нечего переключить, нет — вместо него одна строка (PO 2026-10-09).
+              ? <div className="sub"><div className="fi"><div className="fd">
+                {!data.autopayAvailable
+                  // Рекуррент магазину не разрешён: даже сохранённую карту шедулер не списывает, шлёт напоминания.
+                  ? 'Автопродление пока недоступно — напомним в личке за 3 дня и за день до конца периода.'
+                  // Карты владельца нет: оплатил участник или владелец платил по СБП. Включится галочкой
+                  // согласия в шите следующей оплаты — отдельной кнопки «оплатить ради автопродления» нет.
+                  : 'Автопродление включится при следующей оплате картой. До этого напомним в личке за 3 дня и за день до конца.'}
+              </div></div></div>
+              : <div className="sub">
+                <div className="fi">
+                  <div className="ft">Продлевать автоматически</div>
+                  <div className="fd">
+                    {data.autopay
+                      // Списание — в день окончания оплаченного периода (PO 2026-09-07).
+                      ? `${periodEnd} спишем ${price} с сохранённой карты.`
+                      : 'Выключено — напомним в личке за 3 дня и за день до конца периода.'}
+                  </div>
+                  {autopayError && <div className="rd-billing-err">{autopayError}</div>}
                 </div>
-                {autopayError && <div className="rd-billing-err">{autopayError}</div>}
-              </div>
-              <button
-                type="button"
-                className={`rd-cl-tgl${autopayOn ? ' on' : ''}`}
-                role="switch"
-                aria-checked={autopayOn}
-                aria-label="Продлевать автоматически"
-                disabled={autopayLocked || setAutopay.isPending}
-                onClick={toggleAutopay}
-              />
-            </div>}
+                <button
+                  type="button"
+                  className={`rd-cl-tgl${autopayOn ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={autopayOn}
+                  aria-label="Продлевать автоматически"
+                  disabled={setAutopay.isPending}
+                  onClick={toggleAutopay}
+                />
+              </div>)}
           </div>
+          {onClubPage && !(autopayOn && data.canEnableAutopay) && <button type="button" className="act" onClick={onPay}>Оплатить</button>}
         </div>
       );
     case 'GRACE':
@@ -142,6 +167,7 @@ export const BillingStatusStrip: FC<BillingStatusStripProps> = ({ clubId, onPay,
           <div className="tx">
             <div className="t">Подписка закончилась {periodEnd}</div>
             <div className="d">До <b>{graceUntil}</b> всё работает как раньше. Потом новые встречи — только после оплаты, начатое доживёт.</div>
+            {payerLine}
           </div>
           <button type="button" className="act" onClick={onPay}>Продлить</button>
         </div>

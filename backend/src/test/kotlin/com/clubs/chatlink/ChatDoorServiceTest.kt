@@ -132,7 +132,7 @@ class ChatDoorServiceTest {
 
         verify(exactly = 0) { gateway.approveJoinRequest(any(), any()) }
         verify(exactly = 0) { gateway.declineJoinRequest(any(), any()) }
-        verify { gateway.sendDmWithWebApp(telegramId, match { it.contains("Подай заявку") }, any(), "/clubs/$clubId") }
+        verify { gateway.sendDmWithWebApp(telegramId, match { it.contains("Вступи в клуб в приложении") }, any(), "/clubs/$clubId") }
     }
 
     @Test
@@ -200,7 +200,7 @@ class ChatDoorServiceTest {
 
         service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
-        verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("открыл тебе доступ") }, any(), doorLink) }
+        verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("Ты в клубе") }, any(), doorLink) }
     }
 
     @Test

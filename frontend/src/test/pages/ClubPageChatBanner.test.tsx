@@ -33,6 +33,7 @@ vi.mock('../../telegram/sdk', () => ({
 
 import { ClubPage } from '../../pages/ClubPage';
 import { useAuthStore } from '../../store/useAuthStore';
+import { resetPostponedClubCreatedSheetsForTests } from '../../components/club/ClubCreatedSheet';
 
 const OWNER_ID = 'owner-1';
 const CLUB_ID = 'club-123';
@@ -162,7 +163,7 @@ describe('ClubPage · панель подключения чата', () => {
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
     expect(screen.getByText(/полная синхронизация с клубом/i)).toBeInTheDocument();
     expect(screen.getByText(/умное голосование/i)).toBeInTheDocument();
-    expect(screen.getByText(/групповыми взносами/i)).toBeInTheDocument();
+    expect(screen.getByText(/групповыми сборами/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^подключить$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /позже в настройках/i })).toBeInTheDocument();
   });
@@ -355,49 +356,133 @@ describe('ClubPage · баннер «Клуб ещё не заполнен»', (
   });
 });
 
-describe('ClubPage · шторка «Клуб создан» для клуба из чата (?created=1)', () => {
+describe('ClubPage · чек-лист «Клуб создан» владельца клуба из чата', () => {
+  const SHEET_TITLE = `Клуб «${mockClubDetail.name}» создан`;
+  /** Превью CLUB_OWNER «Твой клуб» — после чек-листа, не раньше (PO 2026-10-10). */
+  const OWNER_PREVIEW_TITLE = 'Твой клуб';
+
+  function mockChatLink(clubLinkPinned: boolean, rights: { botStatus?: string; canPinMessages?: boolean } = {}) {
+    server.use(http.get('*/api/clubs/:id/chat-link', () => HttpResponse.json({
+      linked: true, clubLinkPinned, botStatus: 'administrator', canPinMessages: true, ...rights,
+    })));
+  }
+
+  /** Шаг чек-листа по началу его текста: пройденный помечен классом is-done (зачёркнут). */
+  function step(label: string): HTMLElement {
+    return screen.getByText(label).closest('li') as HTMLElement;
+  }
+
   beforeEach(() => {
     localStorage.clear();
     server.resetHandlers();
+    resetPostponedClubCreatedSheetsForTests();
+    setViewer(OWNER_ID);
+    mockChatLink(false);
   });
 
-  it('владелец видит поздравление и кнопку «Заполнить клуб», она ведёт в мастер', async () => {
-    setViewer(OWNER_ID);
+  it('встречает владельца без всякого параметра в адресе; «Заполнить клуб» ведёт в мастер', async () => {
     mockClub({ chatLinked: true, setupCompleted: false });
-    const { user } = renderClubPage(CLUB_ID, undefined, '?created=1');
+    const { user } = renderClubPage();
 
-    const title = await screen.findByText(`Клуб «${mockClubDetail.name}» создан`);
+    const title = await screen.findByText(SHEET_TITLE);
     expect(screen.getByText(/участникам пока ничего не написал/)).toBeInTheDocument();
+    expect(step('Наполни клуб:')).not.toHaveClass('is-done');
+    expect(step('Покажи клуб в чате:')).not.toHaveClass('is-done');
     // Кнопка с тем же текстом есть и в баннере «Клуб ещё не заполнен» — берём из поздравления.
     const scene = title.parentElement as HTMLElement;
     await user.click(within(scene).getByRole('button', { name: 'Заполнить клуб' }));
     expect(await screen.findByText('мастер наполнения')).toBeInTheDocument();
   });
 
-  it('клуб уже наполнен — главная кнопка «Показать клуб в чате»', async () => {
-    setViewer(OWNER_ID);
+  it('клуб наполнен — первый шаг зачёркнут, главная кнопка «Показать клуб в чате»', async () => {
     mockClub({ chatLinked: true, setupCompleted: true });
-    renderClubPage(CLUB_ID, undefined, '?created=1');
+    renderClubPage();
 
     expect(await screen.findByRole('button', { name: 'Показать клуб в чате' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Заполнить клуб' })).not.toBeInTheDocument();
+    expect(step('Наполни клуб:')).toHaveClass('is-done');
+    expect(step('Покажи клуб в чате:')).not.toHaveClass('is-done');
   });
 
-  it('«Позже» закрывает шторку', async () => {
-    setViewer(OWNER_ID);
+  it('клуб наполнен, но боту нельзя закреплять — кнопка «Проверить права» ведёт в «Управление → Чат»', async () => {
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(false, { canPinMessages: false });
+    const { user } = renderClubPage();
+
+    await screen.findByText(SHEET_TITLE);
+    expect(screen.getByText(/боту нужно право закреплять сообщения/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Показать клуб в чате' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Проверить права' }));
+    expect(await screen.findByText(`manage:/clubs/${CLUB_ID}/manage?tab=chat`)).toBeInTheDocument();
+  });
+
+  it('бот удалён из чата — тоже «Проверить права»', async () => {
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(false, { botStatus: 'kicked', canPinMessages: true });
+    renderClubPage();
+
+    expect(await screen.findByRole('button', { name: 'Проверить права' })).toBeInTheDocument();
+  });
+
+  it('клуб закреплён в чате раньше, чем наполнен, — второй шаг зачёркнут, ведёт в мастер', async () => {
     mockClub({ chatLinked: true, setupCompleted: false });
-    const { user } = renderClubPage(CLUB_ID, undefined, '?created=1');
+    mockChatLink(true);
+    renderClubPage();
+
+    await screen.findByText(SHEET_TITLE);
+    expect(screen.getByText(/Клуб уже закреплён в чате/)).toBeInTheDocument();
+    expect(step('Наполни клуб:')).not.toHaveClass('is-done');
+    expect(step('Покажи клуб в чате:')).toHaveClass('is-done');
+    expect(screen.queryByRole('button', { name: 'Показать клуб в чате' })).not.toBeInTheDocument();
+  });
+
+  it('оба шага пройдены — шторки нет, вместо неё превью «Твой клуб»', async () => {
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(true);
+    renderClubPage();
+
+    expect(await screen.findByText(OWNER_PREVIEW_TITLE)).toBeInTheDocument();
+    expect(screen.queryByText(SHEET_TITLE)).not.toBeInTheDocument();
+  });
+
+  it('пока шаги не пройдены, превью «Твой клуб» не всплывает — и после «Позже» тоже', async () => {
+    mockClub({ chatLinked: true, setupCompleted: false });
+    const { user } = renderClubPage();
 
     await user.click(await screen.findByRole('button', { name: 'Позже' }));
-    await waitFor(() => expect(screen.queryByText(`Клуб «${mockClubDetail.name}» создан`)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(SHEET_TITLE)).not.toBeInTheDocument());
+    // Превью поднимается с задержкой ~0,4 с — ждём дольше, чтобы его отсутствие что-то значило.
+    await new Promise((r) => setTimeout(r, 600));
+    expect(screen.queryByText(OWNER_PREVIEW_TITLE)).not.toBeInTheDocument();
   });
 
-  it('не владельцу шторка не показывается, даже по пересланной ссылке', async () => {
-    setViewer('someone-else');
-    mockClub({ chatLinked: true }, [membership({ userId: 'someone-else' })]);
-    renderClubPage(CLUB_ID, undefined, '?created=1');
+  it('«Позже» откладывает шторку до перезапуска приложения: новый заход в клуб её не показывает', async () => {
+    mockClub({ chatLinked: true, setupCompleted: false });
+    const first = renderClubPage();
+    await first.user.click(await screen.findByRole('button', { name: 'Позже' }));
+    first.unmount();
+
+    renderClubPage();
+    expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(SHEET_TITLE)).not.toBeInTheDocument();
+  });
+
+  it('приход по оплате за клуб (?billing=1) — шторка не ложится поверх шита оплаты', async () => {
+    mockClub({ chatLinked: true, setupCompleted: false });
+    renderClubPage(CLUB_ID, undefined, '?billing=1');
 
     expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
-    expect(screen.queryByText(`Клуб «${mockClubDetail.name}» создан`)).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(SHEET_TITLE)).not.toBeInTheDocument();
+  });
+
+  it('не владельцу шторка не показывается', async () => {
+    setViewer('someone-else');
+    mockClub({ chatLinked: true, setupCompleted: false }, [membership({ userId: 'someone-else' })]);
+    renderClubPage();
+
+    expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(SHEET_TITLE)).not.toBeInTheDocument();
   });
 });

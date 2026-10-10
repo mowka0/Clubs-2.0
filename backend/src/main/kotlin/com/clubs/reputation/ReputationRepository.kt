@@ -1,5 +1,7 @@
 package com.clubs.reputation
 
+import com.clubs.generated.jooq.enums.ReputationKind
+import java.time.OffsetDateTime
 import java.util.UUID
 
 interface ReputationRepository {
@@ -59,6 +61,15 @@ interface ReputationRepository {
 
     /** Добавляет строки ledger, пропуская уже существующие (ON CONFLICT DO NOTHING). */
     fun appendLedgerIfAbsent(entries: List<LedgerEntry>)
+
+    /**
+     * Сериализует работу с репутацией пары (юзер, клуб) до конца транзакции (advisory xact-lock).
+     * Повторный захват в той же транзакции не блокирует.
+     */
+    fun lockUserClub(userId: UUID, clubId: UUID)
+
+    /** Есть ли у человека в клубе исход [kind], случившийся не раньше [since]. */
+    fun hasOutcomeSince(userId: UUID, clubId: UUID, kind: ReputationKind, since: OffsetDateTime): Boolean
 
     /**
      * Пересчитывает кэш-строку user_club_reputation для (юзер, клуб) чисто на основе

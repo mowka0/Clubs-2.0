@@ -49,7 +49,7 @@ export function useClubImageUpload(clubId: string, field: ClubImageField) {
 
     setUploading(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, field === 'avatarUrl' ? 'avatar' : 'photo');
       await updateClub.mutateAsync({ id: clubId, body: { [field]: url } });
       haptic.notify('success');
     } catch (err) {

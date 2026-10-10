@@ -40,7 +40,7 @@ export const CreateClubChoiceSheet: FC<CreateClubChoiceSheetProps> = ({ onPickFr
           <span className="rd-pick-ic" aria-hidden="true">💬</span>
           <span className="rd-pick-txt">
             <b>Из телеграм-чата</b>
-            <span>Клуб соберётся сам из группы: название, размер, участники</span>
+            <span>Клуб соберётся сам из группы: название и участники</span>
           </span>
         </button>
       </div>

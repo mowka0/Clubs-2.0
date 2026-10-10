@@ -71,7 +71,8 @@ class InviteShareService(
         val messageHtml = buildString {
             append(if (fromManager) "<b>Приглашаю тебя в мой клуб!</b>\n" else "<b>Приглашаю тебя в наш клуб!</b>\n")
             append("<blockquote><b>").append(escapeHtml(club.name)).append("</b>\n")
-            append(categoryRu(club.category.literal)).append(" · ").append(escapeHtml(club.city))
+            // Категории на этапе 1 нет (у всех клубов из чата «Другое») — только город и состав (PO 2026-10-09).
+            append(escapeHtml(club.city))
             append(" · ").append(club.memberCount).append(' ').append(membersWord(club.memberCount))
             append("</blockquote>")
             val snippet = club.description.trim().let { if (it.length > DESCRIPTION_SNIPPET_MAX) it.take(DESCRIPTION_SNIPPET_MAX).trimEnd() + "…" else it }
@@ -97,18 +98,6 @@ class InviteShareService(
     }
 
     private fun inviteUrl(code: String): String = "https://t.me/$botUsername?startapp=invite_$code"
-
-    // Русские подписи категорий для текста приглашения (enum club_category → подпись как на фронте).
-    private fun categoryRu(literal: String): String = when (literal) {
-        "sport" -> "Спорт"
-        "creative" -> "Творчество"
-        "food" -> "Еда"
-        "board_games" -> "Настолки"
-        "cinema" -> "Кино"
-        "education" -> "Образование"
-        "travel" -> "Путешествия"
-        else -> "Другое"
-    }
 
     // parse_mode=HTML: пользовательские строки (название клуба, город, описание) обязаны экранироваться.
     private fun escapeHtml(s: String): String =

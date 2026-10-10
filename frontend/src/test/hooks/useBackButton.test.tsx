@@ -20,12 +20,13 @@ const state: { startParam: string | undefined; platform: string } = {
   platform: 'ios',
 };
 
-const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock } = vi.hoisted(
+const { navigateMock, backButtonHandlers, showBackButtonMock, hideBackButtonMock, unmountBackButtonMock } = vi.hoisted(
   () => ({
     navigateMock: vi.fn(),
     backButtonHandlers: [] as Array<() => void>,
     showBackButtonMock: vi.fn(),
     hideBackButtonMock: vi.fn(),
+    unmountBackButtonMock: vi.fn(),
   }),
 );
 
@@ -37,7 +38,7 @@ vi.mock('@telegram-apps/sdk-react', () => {
       tgWebAppStartParam: state.startParam,
     }),
     mountBackButton: available(vi.fn()),
-    unmountBackButton: available(vi.fn()),
+    unmountBackButton: available(unmountBackButtonMock),
     showBackButton: available(showBackButtonMock),
     hideBackButton: available(hideBackButtonMock),
     onBackButtonClick: available((handler: () => void) => {
@@ -269,5 +270,52 @@ describe('useBackButton — «назад» упирается в чат клуб
 
     expect(backButtonHandlers).toHaveLength(1);
     expect(onExitToChat).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useBackButton — кнопка одна, хуков несколько', () => {
+  // Layout и страница держат каждый свой хук. Ушли со страницы, открытой из чата: Layout
+  // перестаёт просить кнопку, а страница «Управление» просит — кнопка должна остаться.
+  const Pair = ({ layoutVisible }: { layoutVisible: boolean }) => (
+    <MemoryRouter>
+      <Probe visible={layoutVisible} />
+      <Probe visible />
+    </MemoryRouter>
+  );
+
+  it('Layout перестал просить кнопку — страница её удерживает', () => {
+    const { rerender } = render(<Pair layoutVisible />);
+    vi.clearAllMocks();
+
+    rerender(<Pair layoutVisible={false} />);
+
+    expect(hideBackButtonMock).not.toHaveBeenCalled();
+  });
+
+  it('компонент кнопки снимает только последний хук', () => {
+    const Layout = ({ withPage }: { withPage: boolean }) => (
+      <MemoryRouter>
+        <Probe visible={false} />
+        {withPage && <Probe visible />}
+      </MemoryRouter>
+    );
+    const { rerender, unmount } = render(<Layout withPage />);
+
+    rerender(<Layout withPage={false} />);
+    expect(unmountBackButtonMock).not.toHaveBeenCalled();
+
+    unmount();
+    expect(unmountBackButtonMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('не просит никто — кнопка спрятана', () => {
+    const { unmount } = render(<Pair layoutVisible />);
+    vi.clearAllMocks();
+
+    unmount();
+
+    // Итог решает последний вызов: хуки снимаются по одному, по дороге кнопка ещё видна.
+    const lastCall = (mock: typeof hideBackButtonMock) => Math.max(0, ...mock.mock.invocationCallOrder);
+    expect(lastCall(hideBackButtonMock)).toBeGreaterThan(lastCall(showBackButtonMock));
   });
 });

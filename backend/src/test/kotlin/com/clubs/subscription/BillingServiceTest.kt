@@ -2,16 +2,19 @@ package com.clubs.subscription
 
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 import com.clubs.generated.jooq.enums.SubscriptionStatus
+import com.clubs.generated.jooq.tables.records.UsersRecord
+import com.clubs.membership.MembershipRepository
 import com.clubs.payment.CheckoutRequest
 import com.clubs.payment.CheckoutUrl
 import com.clubs.payment.PaymentProvider
 import com.clubs.payment.ResultNotification
+import com.clubs.reputation.ReputationService
 import com.clubs.subscription.BillingTestFixtures.PRICE
+import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -35,7 +38,9 @@ class BillingServiceTest {
     private val paymentRepository = mockk<PlatformPaymentRepository>(relaxed = true)
     private val chatLinkRepository = mockk<ChatLinkRepository>()
     private val clubRepository = mockk<ClubRepository>()
-    private val clubRoleGuard = mockk<ClubRoleGuard>()
+    private val membershipRepository = mockk<MembershipRepository>()
+    private val userRepository = mockk<UserRepository>(relaxed = true)
+    private val reputationService = mockk<ReputationService>(relaxed = true)
     private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
     private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
     private val consentRepository = mockk<AutopayConsentRepository>(relaxed = true)
@@ -43,7 +48,7 @@ class BillingServiceTest {
     private val notifier = mockk<BillingNotifier>(relaxed = true)
 
     private val service = BillingService(
-        subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, clubRoleGuard,
+        subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, membershipRepository, userRepository, reputationService,
         chatTrialRepository, funnelEventRepository, consentRepository, paymentProvider, notifier,
         graceDays = 7, trialDays = 15, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
@@ -59,7 +64,9 @@ class BillingServiceTest {
         every { chatLinkRepository.findByClubId(club.id) } returns link
         every { subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT) } returns PRICE
         every { subscriptionRepository.findLatestByClub(club.id) } returns null
-        every { paymentRepository.findPendingMother(club.id, any()) } returns null
+        every { paymentRepository.findPendingMother(club.id, any(), any()) } returns null
+        // Владелец — тоже участник (строка членства organizer); не-участника тесты задают явно.
+        every { membershipRepository.isActiveMemberInActiveClub(any(), club.id) } returns true
         every { paymentProvider.id } returns "robokassa"
         every { paymentProvider.recurringAvailable } returns true
         every { paymentProvider.createCheckout(any()) } answers { CheckoutUrl("https://rk.example/pay?inv=${firstArg<CheckoutRequest>().invId}") }
@@ -69,13 +76,13 @@ class BillingServiceTest {
     fun `provider without recurring - checkout asks no Recurring and a card payment leaves autopay impossible`() {
         every { paymentProvider.recurringAvailable } returns false
         val payment = BillingTestFixtures.payment(club, autopayRequested = true)
-        every { paymentRepository.create(club.id, null, PaymentKind.MOTHER, PRICE, null, true) } returns payment
+        every { paymentRepository.create(club.id, club.ownerId, null, PaymentKind.MOTHER, PRICE, null, true) } returns payment
         every { paymentRepository.findByInvId(payment.invId) } returns payment
         every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
         val created = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(30), autopay = true)
         every { subscriptionRepository.createChatSubscription(club.ownerId, club.id, any(), "100001", true, false) } returns created
 
-        service.checkout(club.id, club.ownerId, autopay = true)
+        service.checkout(club.id, club.ownerId, autopayRequested = true)
         service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
 
         val request = slot<CheckoutRequest>()
@@ -110,9 +117,9 @@ class BillingServiceTest {
     @Test
     fun `checkout creates a mother invoice with the requested autopay and records the funnel step`() {
         val created = BillingTestFixtures.payment(club, autopayRequested = false)
-        every { paymentRepository.create(club.id, null, PaymentKind.MOTHER, PRICE, null, false) } returns created
+        every { paymentRepository.create(club.id, club.ownerId, null, PaymentKind.MOTHER, PRICE, null, false) } returns created
 
-        val result = service.checkout(club.id, club.ownerId, autopay = false)
+        val result = service.checkout(club.id, club.ownerId, autopayRequested = false)
 
         assertEquals(created.invId, result.invId)
         assertEquals("https://rk.example/pay?inv=${created.invId}", result.paymentUrl)
@@ -133,12 +140,12 @@ class BillingServiceTest {
     @Test
     fun `checkout reuses a fresh pending invoice instead of creating a second one`() {
         val pending = BillingTestFixtures.payment(club)
-        every { paymentRepository.findPendingMother(club.id, any()) } returns pending
+        every { paymentRepository.findPendingMother(club.id, club.ownerId, any()) } returns pending
 
-        val result = service.checkout(club.id, club.ownerId, autopay = true)
+        val result = service.checkout(club.id, club.ownerId, autopayRequested = true)
 
         assertEquals(pending.invId, result.invId)
-        verify(exactly = 0) { paymentRepository.create(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) }
         verify(exactly = 0) { funnelEventRepository.record(any(), any(), any(), any()) }
         // Согласие по отметке пишется на тот же счёт — каждый чекаут оставляет след.
         verify(exactly = 1) {
@@ -150,19 +157,21 @@ class BillingServiceTest {
     fun `reusing an invoice carries the autopay choice made on the second attempt`() {
         // Ползунок выключили при повторном заходе — счёт тот же, решение владельца новое.
         val pending = BillingTestFixtures.payment(club, autopayRequested = true)
-        every { paymentRepository.findPendingMother(club.id, any()) } returns pending
+        every { paymentRepository.findPendingMother(club.id, club.ownerId, any()) } returns pending
 
-        service.checkout(club.id, club.ownerId, autopay = false)
+        service.checkout(club.id, club.ownerId, autopayRequested = false)
 
         verify(exactly = 1) { paymentRepository.updateAutopayRequested(pending.id, false) }
     }
 
     @Test
-    fun `checkout is owner-only and needs a linked chat`() {
-        assertThrows<ForbiddenException> { service.checkout(club.id, UUID.randomUUID(), autopay = true) }
+    fun `checkout is for club members only and needs a linked chat`() {
+        val stranger = UUID.randomUUID()
+        every { membershipRepository.isActiveMemberInActiveClub(stranger, club.id) } returns false
+        assertThrows<ForbiddenException> { service.checkout(club.id, stranger, autopayRequested = true) }
 
         every { chatLinkRepository.findByClubId(club.id) } returns null
-        assertThrows<ConflictException> { service.checkout(club.id, club.ownerId, autopay = true) }
+        assertThrows<ConflictException> { service.checkout(club.id, club.ownerId, autopayRequested = true) }
     }
 
     // ---------- onResult ----------
@@ -357,7 +366,6 @@ class BillingServiceTest {
 
     @Test
     fun `status reflects chat, free meeting, period and grace`() {
-        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
 
         every { chatLinkRepository.findByClubId(club.id) } returns null
         val noChat = service.status(club.id, club.ownerId)
@@ -395,7 +403,7 @@ class BillingServiceTest {
             BillingTestFixtures.subscription(club, status = SubscriptionStatus.ENDED, periodEnd = OffsetDateTime.now().minusDays(20))
         assertEquals(BillingState.ENDED, service.status(club.id, club.ownerId).state)
 
-        every { paymentRepository.hasPendingMother(club.id) } returns true
+        every { paymentRepository.hasPendingMother(club.id, club.ownerId) } returns true
         assertTrue(service.status(club.id, club.ownerId).pendingCheckout)
     }
 
@@ -403,7 +411,6 @@ class BillingServiceTest {
     fun `after the period end the strip keeps ACTIVE while the auto-renewal is ahead or in flight`() {
         // Иначе «Подписка закончилась… Продлить» толкала бы владельца с сохранённой картой платить
         // вручную второй раз (bugfix 2026-10-07).
-        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
         every { chatLinkRepository.findByClubId(club.id) } returns link
         every { paymentProvider.recurringAvailable } returns true
         val renewing = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().minusHours(2))
@@ -432,7 +439,6 @@ class BillingServiceTest {
     fun `a charge failed on the morning of the last day shows Renew before the period is over`() {
         // Слот 0 — утро дня окончания: владельцу уже пришло «не удалось списать», полоска не должна
         // обещать «спишем с карты» до вечера.
-        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
         every { chatLinkRepository.findByClubId(club.id) } returns link
         every { paymentProvider.recurringAvailable } returns true
         every { subscriptionRepository.findLatestByClub(club.id) } returns
@@ -446,7 +452,6 @@ class BillingServiceTest {
 
     @Test
     fun `status shows the pause when the bot was kicked, keeping the paid period visible`() {
-        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
         every { chatLinkRepository.findByClubId(club.id) } returns
             BillingTestFixtures.link(club, botStatus = com.clubs.chatlink.BotChatStatus.KICKED)
         val sub = BillingTestFixtures.subscription(club)
@@ -459,18 +464,184 @@ class BillingServiceTest {
     }
 
     @Test
-    fun `status tells a co-organizer that only the owner can pay`() {
-        val coOrganizer = UUID.randomUUID()
-        every { clubRoleGuard.requireCapability(club.id, any(), any()) } returns club
+    fun `only the owner is offered the autopay consent, members pay once`() {
         every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
 
-        assertTrue(service.status(club.id, club.ownerId).canPay)
-        assertFalse(service.status(club.id, coOrganizer).canPay, "чекаут ответил бы со-организатору 403")
+        assertTrue(service.status(club.id, club.ownerId).canEnableAutopay)
+        assertFalse(service.status(club.id, UUID.randomUUID()).canEnableAutopay, "участник платит разово, карту не сохраняем")
+    }
+
+    @Test
+    fun `status is for club members only`() {
+        val stranger = UUID.randomUUID()
+        every { membershipRepository.isActiveMemberInActiveClub(stranger, club.id) } returns false
+        assertThrows<ForbiddenException> { service.status(club.id, stranger) }
+    }
+
+    @Test
+    fun `payment is due a week before the end of the free or paid period, and whenever the club is unpaid`() {
+        fun dueWith(trialStartedDaysAgo: Long?, subscription: ServiceSubscription?): Boolean {
+            every { chatTrialRepository.findStartedAt(link.chatId) } returns trialStartedDaysAgo?.let { OffsetDateTime.now().minusDays(it) }
+            every { subscriptionRepository.findLatestByClub(club.id) } returns subscription
+            return service.status(club.id, club.ownerId).paymentDue
+        }
+
+        assertFalse(dueWith(null, null), "период не начат — плашка только в «Управлении»")
+        assertFalse(dueWith(2, null), "до конца бесплатного периода 13 дней")
+        assertFalse(dueWith(7, null), "граница: 8 дней — ещё рано")
+        assertTrue(dueWith(8, null), "граница: 7 дней — пора")
+        assertTrue(dueWith(9, null), "до конца бесплатного периода 6 дней")
+        assertTrue(dueWith(16, null), "бесплатный период кончился, не оплачено")
+        assertFalse(dueWith(16, BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(20))), "оплачено надолго")
+        assertTrue(dueWith(16, BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusDays(5))), "до конца оплаченного 5 дней")
+        assertTrue(
+            dueWith(16, BillingTestFixtures.subscription(club, status = SubscriptionStatus.PAST_DUE, periodEnd = OffsetDateTime.now().minusDays(2))),
+            "грейс",
+        )
+    }
+
+    @Test
+    fun `payment is not due while the owner's auto charge is in flight — a member would pay twice`() {
+        val live = BillingTestFixtures.subscription(club, periodEnd = OffsetDateTime.now().plusHours(5))
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        assertTrue(service.status(club.id, club.ownerId).paymentDue)
+
+        every { paymentRepository.hasPendingRecurring(live.id) } returns true
+        assertFalse(service.status(club.id, club.ownerId).paymentDue)
+    }
+
+    @Test
+    fun `the last payer is named while the subscription is alive`() {
+        val memberId = UUID.randomUUID()
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
+        every { paymentRepository.findLastSucceeded(club.id) } returns
+            BillingTestFixtures.payment(club, status = PlatformPaymentStatus.SUCCEEDED, payerUserId = memberId)
+        every { userRepository.findById(memberId) } returns UsersRecord(id = memberId, telegramId = 7L, firstName = "Маша", lastName = "Петрова")
+
+        assertNull(service.status(club.id, club.ownerId).lastPayer, "подписки нет — и «крайнего» нет")
+
+        every { subscriptionRepository.findLatestByClub(club.id) } returns BillingTestFixtures.subscription(club)
+        val payer = service.status(club.id, club.ownerId).lastPayer
+        assertEquals(memberId, payer?.userId)
+        assertEquals("Маша Петрова", payer?.name)
+    }
+
+    // ---------- оплата участником (billing-member-pays.md) ----------
+
+    @Test
+    fun `a member checkout never asks for autopay or a saved card, whatever the request says`() {
+        val memberId = UUID.randomUUID()
+        val created = BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.create(club.id, memberId, null, PaymentKind.MOTHER, PRICE, null, false) } returns created
+
+        service.checkout(club.id, memberId, autopayRequested = true)
+
+        val request = slot<CheckoutRequest>()
+        verify { paymentProvider.createCheckout(capture(request)) }
+        assertFalse(request.captured.recurring, "карту участника не сохраняем")
+        verify { paymentRepository.create(club.id, memberId, null, PaymentKind.MOTHER, PRICE, null, false) }
+        verify { paymentRepository.findPendingMother(club.id, memberId, any()) }
+    }
+
+    @Test
+    fun `a member payment shifts the period and keeps the owner's card, autopay and token`() {
+        val memberId = UUID.randomUUID()
+        val live = BillingTestFixtures.subscription(club, status = SubscriptionStatus.PAST_DUE, periodEnd = OffsetDateTime.now().minusDays(1), chargeAttempts = 1)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        every { subscriptionRepository.findById(live.id) } returns live
+        val payment = BillingTestFixtures.payment(club, subscriptionId = live.id, invId = 100900, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "SBP", null, any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "SBP", null))
+
+        val newEnd = slot<OffsetDateTime>()
+        verify { subscriptionRepository.extendPeriod(live.id, capture(newEnd)) }
+        assertClose(OffsetDateTime.now().plusDays(30), newEnd.captured)
+        verify { subscriptionRepository.transitionStatus(live.id, listOf(SubscriptionStatus.PAST_DUE), SubscriptionStatus.ACTIVE) }
+        verify { subscriptionRepository.resetChargeAttempts(live.id) }
+        verify(exactly = 0) { subscriptionRepository.markMotherPaid(any(), any(), any(), any()) }
+        verify { reputationService.rewardClubBillingPayment(memberId, club.id, payment.id, any(), any()) }
+        verify { notifier.paidByMember(club, memberId, any(), ownerAutopayOn = true) }
+        verify(exactly = 0) { notifier.paid(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a member paying ahead adds the month to the paid period, records no consent, and a former member earns nothing`() {
+        val memberId = UUID.randomUUID()
+        every { membershipRepository.isActiveMemberInActiveClub(memberId, club.id) } returns false
+        val end = OffsetDateTime.now().plusDays(5)
+        val live = BillingTestFixtures.subscription(club, periodEnd = end)
+        every { subscriptionRepository.findLatestByClub(club.id) } returns live
+        every { subscriptionRepository.findById(live.id) } returns live
+        val payment = BillingTestFixtures.payment(club, subscriptionId = live.id, invId = 100901, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify { subscriptionRepository.extendPeriod(live.id, end.plusDays(30)) }
+        verify(exactly = 0) { reputationService.rewardClubBillingPayment(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a member checkout leaves no autopay consent record — the member never saw the mark`() {
+        val memberId = UUID.randomUUID()
+        every { paymentRepository.create(club.id, memberId, null, PaymentKind.MOTHER, PRICE, null, false) } returns
+            BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+
+        service.checkout(club.id, memberId, autopayRequested = false)
+
+        verify(exactly = 0) { consentRepository.record(any()) }
+    }
+
+    @Test
+    fun `the first payment made by a member creates the owner's subscription without a card`() {
+        val memberId = UUID.randomUUID()
+        val payment = BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+        val created = BillingTestFixtures.subscription(club, autopay = false, autopayPossible = false, providerToken = null)
+        every { subscriptionRepository.createChatSubscription(club.ownerId, club.id, any(), null, false, false) } returns created
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify { subscriptionRepository.createChatSubscription(club.ownerId, club.id, any(), null, autopay = false, autopayPossible = false) }
+        verify { notifier.paidByMember(club, memberId, created.currentPeriodEnd, ownerAutopayOn = false) }
+    }
+
+    @Test
+    fun `paying during the free period starts the paid month after it ends, not from the payment`() {
+        every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(10)
+        val memberId = UUID.randomUUID()
+        val payment = BillingTestFixtures.payment(club, autopayRequested = false, payerUserId = memberId)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+        every { subscriptionRepository.createChatSubscription(any(), any(), any(), any(), any(), any()) } returns BillingTestFixtures.subscription(club)
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        val end = slot<OffsetDateTime>()
+        verify { subscriptionRepository.createChatSubscription(club.ownerId, club.id, capture(end), null, false, false) }
+        assertClose(OffsetDateTime.now().plusDays(5 + 30), end.captured)
+    }
+
+    @Test
+    fun `the owner's own payment earns no reliability`() {
+        val payment = BillingTestFixtures.payment(club, autopayRequested = false)
+        every { paymentRepository.findByInvId(payment.invId) } returns payment
+        every { paymentRepository.markSucceeded(payment.id, "BankCard", null, any()) } returns 1
+        every { subscriptionRepository.createChatSubscription(any(), any(), any(), any(), any(), any()) } returns BillingTestFixtures.subscription(club)
+
+        service.onResult(ResultNotification(payment.invId, PRICE, "BankCard", null))
+
+        verify(exactly = 0) { reputationService.rewardClubBillingPayment(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { notifier.paidByMember(any(), any(), any(), any()) }
     }
 
     @Test
     fun `status tells the sheet whether autopay is available at all`() {
-        every { clubRoleGuard.requireCapability(club.id, club.ownerId, any()) } returns club
         every { chatLinkRepository.findByClubId(club.id) } returns link
         every { chatTrialRepository.findStartedAt(link.chatId) } returns OffsetDateTime.now().minusDays(16)
 

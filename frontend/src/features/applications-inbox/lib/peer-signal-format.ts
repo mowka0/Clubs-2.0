@@ -18,7 +18,7 @@ function pluralRu(n: number, forms: readonly [string, string, string]): string {
  * заявителя. Три случая (см. docs/modules/applications-inbox.md §
  * «Peer-signal — формула и edge cases»):
  *   - клубов нет вовсе → «Новый пользователь»
- *   - клубы есть, Stage-2-подтверждений ещё нет → «В N клубе/клубах · ещё не было событий»
+ *   - клубы есть, Stage-2-подтверждений ещё нет → «В N клубе/клубах · ещё не было встреч»
  *   - обычный случай → «В N клубе/клубах · посетил X из Y событий»
  */
 export function formatPeerSignal(stats: PeerStatsDto): string {
@@ -32,12 +32,12 @@ export function formatPeerSignal(stats: PeerStatsDto): string {
   const clubsWord = pluralRu(memberClubCount, ['клубе', 'клубах', 'клубах']);
 
   if (totalConfirmations === 0) {
-    return `В ${memberClubCount} ${clubsWord} · ещё не было событий`;
+    return `В ${memberClubCount} ${clubsWord} · ещё не было встреч`;
   }
 
   // «из {Y} <слово>» — родительный падеж: «события» для 1 (а также 21, 31…), «событий»
   // для всех остальных количеств (включая 0, 2–20 и т.д.).
-  const eventsWord = pluralRu(totalConfirmations, ['события', 'событий', 'событий']);
+  const eventsWord = pluralRu(totalConfirmations, ['встречи', 'встреч', 'встреч']);
   return `В ${memberClubCount} ${clubsWord} · посетил ${totalAttendances} из ${totalConfirmations} ${eventsWord}`;
 }
 

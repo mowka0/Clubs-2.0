@@ -4,18 +4,19 @@ import type { ClubSetupStepProps } from './types';
 
 /** Потолок названия клуба, совпадает с VARCHAR(60) в схеме. */
 const NAME_MAX = 60;
-/** Границы размера клуба — те же, что в CHECK-констрейнте схемы (V81) и в валидации DTO. */
-const MEMBER_LIMIT_MIN = 1;
-const MEMBER_LIMIT_MAX = 500;
 
 type ClubSetupNameStepProps =
   Pick<ClubSetupStepProps, 'club' | 'draft' | 'onDraftChange' | 'saving' | 'error' | 'onSaveAndNext'>;
 
 /**
- * Шаг 1: название, аватар и размер клуба.
+ * Шаг 1: название и аватар клуба.
  *
  * Идёт первым намеренно — это то, что человек знает про свой чат наизусть, и отвечается
- * не думая. Название и размер уже подставлены из группы, ему остаётся согласиться.
+ * не думая. Название уже подставлено из группы, ему остаётся согласиться.
+ *
+ * Размера клуба здесь больше нет (этап 1, stage-1-scope.md): клуб из чата рождается с лимитом
+ * 500 — потолком схемы, и спрашивать число, которое ни на что не влияет, незачем. Поправить
+ * лимит можно в «Управлении → Настройки».
  */
 export const ClubSetupNameStep: FC<ClubSetupNameStepProps> = ({
   club,
@@ -26,14 +27,6 @@ export const ClubSetupNameStep: FC<ClubSetupNameStepProps> = ({
   onSaveAndNext,
 }) => {
   const name = draft.name ?? club.name;
-  const memberLimit = draft.memberLimit ?? String(club.memberLimit);
-  // null = введено не число или значение вне границ схемы: кнопка «Дальше» тогда заблокирована,
-  // и мы не отправляем заведомо отбиваемый бэком PATCH.
-  const memberLimitNumber = /^\d+$/.test(memberLimit.trim())
-    ? Number(memberLimit) >= MEMBER_LIMIT_MIN && Number(memberLimit) <= MEMBER_LIMIT_MAX
-      ? Number(memberLimit)
-      : null
-    : null;
 
   return (
     <>
@@ -55,29 +48,11 @@ export const ClubSetupNameStep: FC<ClubSetupNameStepProps> = ({
         aria-label="Название клуба"
       />
 
-      {/* Размер подставлен из чата (getChatMemberCount при рождении клуба) — Telegram считает
-          вместе с ботами, поэтому число приблизительное и правится руками. */}
-      <div className="rd-wz-lbl">Сколько человек в клубе</div>
-      <input
-        className="rd-input"
-        type="number"
-        inputMode="numeric"
-        min={MEMBER_LIMIT_MIN}
-        max={MEMBER_LIMIT_MAX}
-        value={memberLimit}
-        onChange={(e) => onDraftChange({ memberLimit: e.target.value })}
-        aria-label="Размер клуба"
-      />
-      <span className="rd-wz-hint">Взяли из чата. Потолок — {MEMBER_LIMIT_MAX}, потом можно поменять.</span>
-
       <button
         type="button"
         className="rd-btn-primary rd-wz-next"
-        disabled={!name.trim() || memberLimitNumber === null || saving}
-        onClick={() =>
-          memberLimitNumber !== null &&
-          onSaveAndNext({ name: name.trim(), memberLimit: memberLimitNumber }, 2)
-        }
+        disabled={!name.trim() || saving}
+        onClick={() => onSaveAndNext({ name: name.trim() }, 2)}
       >
         Дальше
       </button>

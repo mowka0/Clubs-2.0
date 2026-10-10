@@ -48,7 +48,7 @@ export const EventPlaceCard: FC<EventPlaceCardProps> = ({ locationText, location
         <img
           className="rd-geo-minimap"
           src={staticMapUrl(point)}
-          alt="Карта места события"
+          alt="Карта места встречи"
           loading="lazy"
           onClick={() => openExternal(openMapUrl(point))}
           onError={() => setMapImageFailed(true)}

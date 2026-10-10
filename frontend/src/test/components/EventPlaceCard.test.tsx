@@ -31,11 +31,11 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
     expect(screen.getByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
     // Уточнение видно и свёрнутым — оно отделено оранжевой чертой (PO 2026-09-14).
     expect(screen.getByText('Вход со двора, домофон 12')).toHaveClass('rd-geo-hint');
-    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места встречи')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Покровка/ }));
-    const img = screen.getByAltText('Карта места события');
+    const img = screen.getByAltText('Карта места встречи');
     expect(img).toHaveAttribute('src', expect.stringContaining('static-maps.yandex.ru'));
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();
@@ -59,9 +59,9 @@ describe('EventPlaceCard (event-geo, кадр C)', () => {
     render(<EventPlaceCard locationText="Адрес" locationHint={null} point={POINT} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Адрес/ }));
-    fireEvent.error(screen.getByAltText('Карта места события'));
+    fireEvent.error(screen.getByAltText('Карта места встречи'));
 
-    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места встречи')).not.toBeInTheDocument();
     expect(screen.getByText('Адрес')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
   });

@@ -1,11 +1,13 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.event.EventMessageTemplate
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -355,9 +357,10 @@ class ChatLinkService(
      * доступное; иначе — только функции, чьё право выдали сейчас. Поэтому выключенное владельцем
      * руками не включается обратно при каждом пересчёте прав, пока само право не менялось.
      *
-     * Что пишет в чат (живой закреп, статус сборов), включается, только когда клуб уже показан
-     * в чате — есть закреп со ссылкой на клуб. Клуб из чата до «Показать клуб в чате» молчит
-     * (PO 2026-10-06), и эти функции включает сам показ — [pinClubLink].
+     * Включается сразу, как только есть право, — и до «Показать клуб в чате» (PO 2026-10-10: раньше
+     * закреп и статус сборов ждали показа клуба, и владелец видел выключенные тумблеры при выданных
+     * правах). Само включение в чат не пишет: бэкфилл публикует только уже существующие встречи и
+     * сборы, а у только что привязанного клуба их нет.
      *
      * Сами не включаются никогда: вход через заявки (меняет, что видят стучащиеся в группу, —
      * решает владелец) и строгий режим (мьют должников и бан ушедших).
@@ -369,14 +372,13 @@ class ChatLinkService(
         // Строка удалённого клуба (легаси) ждёт перехвата — оживлять её функции незачем.
         if (clubRepository.findById(clubId) == null) return
         val isFirstLink = before == null
-        val isPresented = link.clubPinMessageId != null
         fun granted(now: Boolean, was: Boolean?) = now && (isFirstLink || was != true)
 
         val enabled = buildList {
-            if (isPresented && !link.livePinEnabled && granted(link.canPinMessages, before?.canPinMessages)) {
+            if (!link.livePinEnabled && granted(link.canPinMessages, before?.canPinMessages)) {
                 enableLivePin(link); add("livePin")
             }
-            if (isPresented && isFirstLink && !link.skladchinaStatusEnabled) {
+            if (isFirstLink && !link.skladchinaStatusEnabled) {
                 enableSkladchinaStatus(link); add("skladchinaStatus")
             }
             if (!link.awardTagsEnabled && granted(link.canManageTags, before?.canManageTags)) {
@@ -386,16 +388,6 @@ class ChatLinkService(
         if (enabled.isNotEmpty()) {
             log.info("Chat features auto-enabled by bot rights: clubId={} chatId={} features={}", clubId, link.chatId, enabled)
         }
-    }
-
-    /**
-     * Первый показ клуба в чате: включаем то, что пишет в чат, — до показа оно ждало, чтобы
-     * клуб из чата не выдал себя раньше времени (PO 2026-10-06).
-     */
-    private fun enableFeaturesOnFirstPresentation(link: ChatLink) {
-        if (!link.livePinEnabled && link.canPinMessages) enableLivePin(link)
-        if (!link.skladchinaStatusEnabled) enableSkladchinaStatus(link)
-        log.info("Chat features enabled on first presentation: clubId={} chatId={}", link.clubId, link.chatId)
     }
 
     /** Дверь: ссылка обычно создана при привязке; false — Telegram не дал её создать. */
@@ -448,8 +440,6 @@ class ChatLinkService(
             ?: throw ConflictException("Не удалось отправить сообщение в чат — попробуйте позже")
         chatLinkRepository.updateClubPinMessageId(clubId, messageId)
         log.info("Club link pinned: clubId={} chatId={} messageId={}", clubId, link.chatId, messageId)
-        // Повторный закреп ссылки — не показ: выключенное владельцем после показа не трогаем.
-        if (link.clubPinMessageId == null) enableFeaturesOnFirstPresentation(link)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
@@ -463,14 +453,23 @@ class ChatLinkService(
      * подряд на ровном месте. Приглашение влилось сюда второй строкой (кнопка ведёт на клуб и
      * работает и как «вступить», и как «открыть» — второе стало правдой только 2026-08-19,
      * см. `MembershipService.joinWithoutApproval`), подтверждение уехало в личку владельцу.
+     * Подписана «Вступить в клуб» (PO 2026-10-09): закреп пишется для тех, кто ещё не вступил.
      */
     fun postAndPinClubLink(chatId: Long, clubName: String, clubId: UUID): Long? {
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = chatId,
-            text = "📌 Клуб «$clubName» живёт в приложении Clubs: здесь встречи, записи и сборы.\n" +
-                "Если вы ещё не в клубе — вступайте, чтобы участвовать.",
-            buttonText = "Открыть клуб",
-            url = clubMiniAppUrl(clubId)
+            // Название клуба — пользовательский ввод: экранируем, иначе оно ломало бы HTML-разметку.
+            text = "<b>📌 У нашего чата теперь есть клуб — «${EventMessageTemplate.escapeHtml(clubName)}»!</b>\n\n" +
+                "Больше не нужно листать переписку, чтобы понять, когда встречаемся, " +
+                "кто идёт и кто сколько скинул:\n\n" +
+                "🗓 Встречи — афиша, «пойду / не пойду» голосование одной кнопкой, а бот напомнит.\n" +
+                "💸 Сборы — бот поделит счёт и запомнит, кто кому сколько должен.\n" +
+                "🏆 Статистика — сколько раз собирались, у каждого свой уровень и надёжность.\n\n" +
+                "<b>В чате болтаем, а в клубе организуем.</b>\n\n" +
+                "Вступай в наш клуб, чтобы быть всегда в курсе происходящего 🔥",
+            buttonText = "Вступить в клуб",
+            url = clubMiniAppUrl(clubId),
+            parseMode = PARSE_MODE_HTML
         ) ?: return null
         gateway.pinChatMessage(chatId, messageId)
         return messageId
