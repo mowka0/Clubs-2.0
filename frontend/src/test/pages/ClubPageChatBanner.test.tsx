@@ -361,8 +361,10 @@ describe('ClubPage · чек-лист «Клуб создан» владельц
   /** Превью CLUB_OWNER «Твой клуб» — после чек-листа, не раньше (PO 2026-10-10). */
   const OWNER_PREVIEW_TITLE = 'Твой клуб';
 
-  function mockChatLink(clubLinkPinned: boolean) {
-    server.use(http.get('*/api/clubs/:id/chat-link', () => HttpResponse.json({ linked: true, clubLinkPinned })));
+  function mockChatLink(clubLinkPinned: boolean, rights: { botStatus?: string; canPinMessages?: boolean } = {}) {
+    server.use(http.get('*/api/clubs/:id/chat-link', () => HttpResponse.json({
+      linked: true, clubLinkPinned, botStatus: 'administrator', canPinMessages: true, ...rights,
+    })));
   }
 
   /** Шаг чек-листа по началу его текста: пройденный помечен классом is-done (зачёркнут). */
@@ -399,6 +401,26 @@ describe('ClubPage · чек-лист «Клуб создан» владельц
     expect(await screen.findByRole('button', { name: 'Показать клуб в чате' })).toBeInTheDocument();
     expect(step('Наполни клуб:')).toHaveClass('is-done');
     expect(step('Покажи клуб в чате:')).not.toHaveClass('is-done');
+  });
+
+  it('клуб наполнен, но боту нельзя закреплять — кнопка «Проверить права» ведёт в «Управление → Чат»', async () => {
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(false, { canPinMessages: false });
+    const { user } = renderClubPage();
+
+    await screen.findByText(SHEET_TITLE);
+    expect(screen.getByText(/боту нужно право закреплять сообщения/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Показать клуб в чате' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Проверить права' }));
+    expect(await screen.findByText(`manage:/clubs/${CLUB_ID}/manage?tab=chat`)).toBeInTheDocument();
+  });
+
+  it('бот удалён из чата — тоже «Проверить права»', async () => {
+    mockClub({ chatLinked: true, setupCompleted: true });
+    mockChatLink(false, { botStatus: 'kicked', canPinMessages: true });
+    renderClubPage();
+
+    expect(await screen.findByRole('button', { name: 'Проверить права' })).toBeInTheDocument();
   });
 
   it('клуб закреплён в чате раньше, чем наполнен, — второй шаг зачёркнут, ведёт в мастер', async () => {

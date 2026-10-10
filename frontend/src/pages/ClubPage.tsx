@@ -196,6 +196,10 @@ export const ClubPage: FC = () => {
   // До ответа статуса чата не показываем — иначе шторка мигнула бы.
   const ownerChatLinkQuery = useChatLinkStatusQuery(id, { enabled: isOwner && !!club?.chatLinked });
   const ownerClubLinkPinned = ownerChatLinkQuery.data?.clubLinkPinned === true;
+  // Как проверяет сервер перед закрепом (ChatLinkService.pinClubLink): бот в чате и может закреплять.
+  const ownerChatStatus = ownerChatLinkQuery.data;
+  const ownerCanPinClubLink = !!ownerChatStatus && ownerChatStatus.canPinMessages
+    && (ownerChatStatus.botStatus === 'administrator' || ownerChatStatus.botStatus === 'member');
   const ownerChecklistDone = !isOwner || !club?.chatLinked
     || (ownerChatLinkQuery.isSuccess && club.setupCompleted && ownerClubLinkPinned);
   // Закрыта кнопкой на этом заходе: после мастера страница монтируется заново и шторка встретит
@@ -768,6 +772,7 @@ export const ClubPage: FC = () => {
           clubName={club.name}
           setupCompleted={club.setupCompleted}
           clubLinkPinned={ownerClubLinkPinned}
+          canPinClubLink={ownerCanPinClubLink}
           onFillClub={() => {
             haptic.impact('medium');
             closeCreatedSheet();
@@ -778,6 +783,11 @@ export const ClubPage: FC = () => {
             closeCreatedSheet();
             setActiveTab('members');
             setShowInviteSheet(true);
+          }}
+          onCheckRights={() => {
+            haptic.impact('medium');
+            closeCreatedSheet();
+            navigate(`/clubs/${club.id}/manage?tab=chat`);
           }}
           onPostpone={() => { haptic.impact('light'); postponeClubCreatedSheet(club.id); closeCreatedSheet(); }}
         />
