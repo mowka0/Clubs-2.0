@@ -1,5 +1,6 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { BotRightsStep } from '../components/club/setup/BotRightsStep';
 import { ClubSetupAboutStep } from '../components/club/setup/ClubSetupAboutStep';
 import { ClubSetupCityStep } from '../components/club/setup/ClubSetupCityStep';
@@ -12,6 +13,8 @@ import { hasAllBotRights } from '../utils/botRights';
 import { ApiError } from '../api/apiClient';
 import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
+import { queryKeys } from '../queries/queryKeys';
+import type { ClubDetailDto } from '../types/api';
 import {
   CLUB_SETUP_TOTAL_STEPS,
   CLUB_SETUP_STEPS_WITHOUT_RIGHTS,
@@ -57,6 +60,7 @@ export const ClubSetupWizard: FC = () => {
   const haptic = useHaptic();
   const clubQuery = useClubQuery(id);
   const updateClub = useUpdateClubMutation();
+  const queryClient = useQueryClient();
   // Права бота Telegram выдаёт прямо при добавлении по ссылке, поэтому шаг про них нужен не
   // всегда: он появляется, только если чего-то не хватает (правка PO 2026-08-18).
   const chatLinkQuery = useChatLinkStatusQuery(id, { enabled: Boolean(id) });
@@ -106,13 +110,23 @@ export const ClubSetupWizard: FC = () => {
    *
    * Отметка нужна серверная (V82): раньше баннер держался на «городе нет» и пропадал сразу
    * после второго шага — описание с обложкой доделать было уже негде (баг PO 2026-08-19).
-   * Уходим в клуб не дожидаясь ответа: пропущенные шаги и так разрешены, а держать человека
-   * на экране ради технической отметки незачем — упавший запрос вернёт баннер, и только.
+   * В клуб уходим, когда сервер ответил, и с его ответом в кэше: по отметке страница клуба
+   * открывает чек-лист «Клуб создан» (PO 2026-10-10), и со старой он встретил бы непройденным
+   * шагом, сменив кнопку под пальцем. Упавший запрос в клуб всё равно пускает — шаг останется
+   * незачёркнутым, и только.
    */
   const finish = () => {
     clearClubSetupProgress(club.id);
-    if (!club.setupCompleted) updateClub.mutate({ id: club.id, body: { setupCompleted: true } });
-    navigate(`/clubs/${club.id}`, { replace: true });
+    const goToClub = () => navigate(`/clubs/${club.id}`, { replace: true });
+    if (club.setupCompleted) {
+      goToClub();
+      return;
+    }
+    if (updateClub.isPending) return;
+    updateClub.mutate({ id: club.id, body: { setupCompleted: true } }, {
+      onSuccess: (updated) => queryClient.setQueryData<ClubDetailDto>(queryKeys.clubs.detail(club.id), updated),
+      onSettled: goToClub,
+    });
   };
   // Город обязателен, поэтому шаг дальше второго без него — рассинхрон (например, город
   // сбросили в управлении): возвращаем на него, а не показываем недостижимый прогресс.

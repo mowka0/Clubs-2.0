@@ -669,7 +669,7 @@ class ChatLinkBotServiceTest {
                         it.contains("Это были вы")
                 },
                 webAppButtonText = "Перейти в клуб",
-                webAppPath = "/clubs/$newClubId?created=1",
+                webAppPath = "/clubs/$newClubId",
                 callbackButtonText = any(),
                 callbackData = "chatlink:unlink:$newClubId"
             )

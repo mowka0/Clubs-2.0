@@ -28,9 +28,7 @@ export const NewClubFromChatGate: FC = () => {
     const fresh = clubs.find((membership) => !known.has(membership.clubId));
     if (!fresh) return;
     forgetChatLinking();
-    // С шторкой «Клуб создан» (PO 2026-10-06): без `?created=1` этот переход съедал её у того,
-    // кто открыл приложение кнопкой из лички, — первое открытие шло сюда и терял параметр.
-    navigate(`/clubs/${fresh.clubId}?created=1`, { replace: true });
+    navigate(`/clubs/${fresh.clubId}`, { replace: true });
   }, [pending, clubs, navigate]);
 
   return null;

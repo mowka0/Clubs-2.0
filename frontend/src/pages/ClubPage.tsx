@@ -37,7 +37,9 @@ import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
-import { ClubCreatedSheet } from '../components/club/ClubCreatedSheet';
+import {
+  ClubCreatedSheet, isClubCreatedSheetPostponed, postponeClubCreatedSheet,
+} from '../components/club/ClubCreatedSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 import { ClubChatPill } from '../components/club/ClubChatPill';
@@ -188,16 +190,22 @@ export const ClubPage: FC = () => {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  // `?created=1` — кнопка из лички бота сразу после создания клуба из чата: шторка «Клуб создан»
-  // поверх своей же страницы (PO 2026-10-06). Только владельцу: ссылку могли переслать. И только
-  // пока клуб не показан в чате: после закрепа её шаги устарели, а кнопка в личке живёт вечно
-  // (PO 2026-10-10). До ответа статуса чата шторку не показываем — иначе она мигнула бы.
-  const createdParam = searchParams.get('created') === '1';
-  const createdChatLinkQuery = useChatLinkStatusQuery(id, { enabled: isOwner && createdParam });
-  const showCreatedSheet = isOwner && createdParam
-    && createdChatLinkQuery.isSuccess && !createdChatLinkQuery.data.clubLinkPinned;
-  // Параметр гасим, иначе «назад» из мастера снова открыл бы шторку.
-  const closeCreatedSheet = () => setSearchParams({}, { replace: true });
+  // Шторка «Клуб создан» — чек-лист владельца клуба из чата (PO 2026-10-10): наполнить клуб и
+  // показать его в чате. Встречает при каждом заходе, каким бы путём он ни пришёл, пока оба шага
+  // не пройдены; пройденный зачёркнут. Только владельцу: и мастер, и закреп — его действия.
+  // До ответа статуса чата не показываем — иначе шторка мигнула бы.
+  const ownerChatLinkQuery = useChatLinkStatusQuery(id, { enabled: isOwner && !!club?.chatLinked });
+  const ownerClubLinkPinned = ownerChatLinkQuery.data?.clubLinkPinned === true;
+  const ownerChecklistDone = !isOwner || !club?.chatLinked
+    || (ownerChatLinkQuery.isSuccess && club.setupCompleted && ownerClubLinkPinned);
+  // Закрыта кнопкой на этом заходе: после мастера страница монтируется заново и шторка встретит
+  // уже с зачёркнутым шагом. Помним клуб, а не флаг: при переходе A → B страница не перемонтируется.
+  const [createdSheetClosedFor, setCreatedSheetClosedFor] = useState<string | null>(null);
+  // Поверх оплаты за клуб (`?billing=…`) и шита приглашения не открываемся: две модалки сразу.
+  const showCreatedSheet = !!club && !ownerChecklistDone && ownerChatLinkQuery.isSuccess
+    && createdSheetClosedFor !== club.id && !isClubCreatedSheetPostponed(club.id)
+    && !billingSheet && !showInviteSheet;
+  const closeCreatedSheet = () => setCreatedSheetClosedFor(club?.id ?? null);
 
   if (clubQuery.isPending) {
     return (
@@ -759,6 +767,7 @@ export const ClubPage: FC = () => {
         <ClubCreatedSheet
           clubName={club.name}
           setupCompleted={club.setupCompleted}
+          clubLinkPinned={ownerClubLinkPinned}
           onFillClub={() => {
             haptic.impact('medium');
             closeCreatedSheet();
@@ -770,7 +779,7 @@ export const ClubPage: FC = () => {
             setActiveTab('members');
             setShowInviteSheet(true);
           }}
-          onClose={() => { haptic.impact('light'); closeCreatedSheet(); }}
+          onPostpone={() => { haptic.impact('light'); postponeClubCreatedSheet(club.id); closeCreatedSheet(); }}
         />
       )}
 
@@ -849,10 +858,12 @@ export const ClubPage: FC = () => {
       {/* Тур клуба. Владельцу — свой, более подробный (те же блоки плюс вход в настройки):
           он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
           Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
-          Пока висит велком-сцена или шторка «Клуб создан», подсказки не лезут. */}
+          Владельцу клуба из чата — только после чек-листа «Клуб создан» (PO 2026-10-10): сначала
+          дела, потом «как устроен клуб». Пока поверх висит другая шторка, превью не лезет;
+          закрытие шита приглашения после закрепа и поднимает его. */}
       <ScreenPreview
         screen={isOwner ? 'CLUB_OWNER' : 'CLUB'}
-        ready={!showWelcome && !showCreatedSheet}
+        ready={!showWelcome && !showCreatedSheet && !showInviteSheet && ownerChecklistDone}
         // Таб «Участники» — там живёт вход «Пригласить в клуб»; как в `onShowInChat`.
         onAction={() => { setActiveTab('members'); setShowInviteSheet(true); }}
       />
