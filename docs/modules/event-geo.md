@@ -101,7 +101,7 @@ ALTER TABLE events
 `locationLat: Double?`, `locationLon: Double?`, `locationHint: String?` — null у событий без
 точки. `locationText` теперь тоже `String?` (V58) — во **всех** событийных DTO
 (`EventDetailDto`, `EventListItemDto`, `MyEventListItemDto`, `ActivityItemDto.EventActivity`);
-потребители (карточки лент, DM бота, живой закреп чата, /кто_идет) прячут строку места при null.
+потребители (карточки лент, DM бота, живой закреп чата; /кто_идет — удалена 2026-10-10) прячут строку места при null.
 
 Списковые DTO (`EventListItemDto`, `MyEventListItemDto`, `ActivityItemDto`) координаты
 **не получают** — карта показывается только на странице события (YAGNI).
@@ -182,7 +182,7 @@ deep-link, `Event.yandexMapsUrl`) второй строкой клавиатур
   DM не получают (маршрутизатор), поэтому кнопка обязана жить и в закрепе.
 
 Текст места единый через `Event.locationDisplay`: **«адрес (уточнение)»** / адрес /
-уточнение / строка 📍 отсутствует — в DM, закрепе (stage1/stage2) и ответе бота /кто_идет.
+уточнение / строка 📍 отсутствует — в DM и закрепе (stage1/stage2); команда /кто_идет удалена 2026-10-10.
 
 - Фото статичной карты в DM **отклонено PO** (требовало бы отдельного ключа Static API
   без referer-ограничений — Telegram качает фото своими серверами без referer).

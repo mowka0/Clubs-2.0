@@ -128,10 +128,10 @@ object EventMessageTemplate {
     }
 
     /**
-     * Что означает число участников — одна строка на все бот-поверхности (DM, /status, закреп).
+     * Что означает число участников — одна строка на все бот-поверхности (DM и закреп).
      * Формат без лимита сообщает свою суть, а не «Мест — null».
      */
-    fun seatsLine(event: Event): String = when (event.format) {
+    private fun seatsLine(event: Event): String = when (event.format) {
         EventFormat.NORMAL -> event.minParticipants
             ?.let { "👥 Мест — ${event.participantLimit}, нужно минимум $it — иначе встреча отменится" }
             ?: "👥 Мест — ${event.participantLimit}"
