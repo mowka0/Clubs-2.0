@@ -5,6 +5,7 @@ import { AvatarUpload } from '../AvatarUpload';
 import { LocationPickerSheet } from './LocationPickerSheet';
 import { RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
 import { useCreateEventMutation } from '../../queries/events';
+import { useChatPostWarning } from '../club/ChatPostWarningSheet';
 import { paywallFromError, type PaywallInfo } from '../../api/billing';
 import { BillingSheet } from '../billing/BillingSheet';
 import { useSaveEventTemplateMutation } from '../../queries/eventTemplates';
@@ -101,6 +102,8 @@ export const EventForm: FC<EventFormProps> = ({
   const navigate = useNavigate();
   const haptic = useHaptic();
   const createMut = useCreateEventMutation();
+  // Шаблон встречу не создаёт — статус чата ему не нужен.
+  const chatPostWarning = useChatPostWarning(isTemplateMode ? undefined : clubId, 'event');
   const saveTemplateMut = useSaveEventTemplateMutation();
 
   // Формат выбран на шаге пикера и в форме не меняется (V86): у обычной встречи — степперы
@@ -686,6 +689,8 @@ export const EventForm: FC<EventFormProps> = ({
           onPaid={() => setPaywall(null)}
         />
       )}
+
+      {chatPostWarning}
 
       {pickerOpen && (
         <LocationPickerSheet

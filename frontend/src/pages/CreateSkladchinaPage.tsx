@@ -8,6 +8,7 @@ import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
 import { useAuthStore } from '../store/useAuthStore';
+import { useChatPostWarning } from '../components/club/ChatPostWarningSheet';
 import type { CreateSkladchinaRequest, MemberListItemDto } from '../types/api';
 import { rubToKopecks } from '../utils/money';
 import { DATE_FMT, FLOW_EMOJI, FLOW_KIND, FLOW_LABEL, FLOW_SUBTITLE, isSkladchinaFlow, type SkladchinaFlow } from '../utils/skladchinaKind';
@@ -64,6 +65,7 @@ export const CreateSkladchinaPage: FC = () => {
   const haptic = useHaptic();
   const myId = useAuthStore((st) => st.user?.id);
   const createMut = useCreateSkladchinaMutation();
+  const chatPostWarning = useChatPostWarning(clubId, 'skladchina');
 
   const flow = resolveFlow(searchParams);
   const kind = FLOW_KIND[flow];
@@ -477,6 +479,7 @@ export const CreateSkladchinaPage: FC = () => {
           </button>
         </div>
       </div>
+      {chatPostWarning}
     </div>
   );
 };

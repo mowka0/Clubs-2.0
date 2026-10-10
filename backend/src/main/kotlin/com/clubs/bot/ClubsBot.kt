@@ -2,10 +2,6 @@ package com.clubs.bot
 
 import com.clubs.chatlink.ChatDoorService
 import com.clubs.chatlink.ChatLinkBotService
-import com.clubs.event.EventMessageTemplate
-import com.clubs.event.EventRepository
-import com.clubs.event.EventResponseRepository
-import com.clubs.event.locationDisplay
 import com.clubs.subscription.FunnelTracker
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -26,8 +22,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import org.telegram.telegrambots.meta.generics.TelegramClient
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 // Статусы бота в чате, означающие «его там нет» и «он там есть» (литералы Bot API). Переход
@@ -42,8 +36,6 @@ private const val COMMAND_LOG_LENGTH = 40
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
     private val telegramClient: TelegramClient,
-    private val eventRepository: EventRepository,
-    private val eventResponseRepository: EventResponseRepository,
     private val chatLinkBotService: ChatLinkBotService,
     private val chatDoorService: ChatDoorService,
     private val rosterCallbackService: RosterCallbackService,
@@ -53,8 +45,6 @@ class ClubsBot(
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
-
-    private val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 
     override fun getBotToken(): String = botToken
 
@@ -142,7 +132,6 @@ class ClubsBot(
                 // нажал «Старт» и приветствия уже не видит. Только в личке: в группе это шум.
                 // Шаг воронки не пишет: это не вход, а повтор приветствия.
                 text.startsWith("/terms") -> if (!isGroupChat(update.message)) sendStartScreen(chatId)
-                text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(update.message)
             }
         } catch (e: Exception) {
             // В лог — только имя команды: хвост сообщения (payload /start, произвольный текст) —
@@ -379,62 +368,5 @@ class ClubsBot(
             log.warn("Legal view edit failed: chatId={} messageId={} error={}", message.chatId, message.messageId, e.message)
             LegalSheet.EDIT_FAILED_ALERT
         }
-    }
-
-    /**
-     * «/кто_идет» — ближайшая встреча КЛУБА, к чьему чату привязан бот. Ответ несёт место и
-     * время встречи, то есть данные для участников клуба, поэтому единственная аудитория команды —
-     * привязанная группа. В личке команда отвечает подсказкой: до 2026-09-15 она отдавала там
-     * ближайшую встречу ВСЕЙ платформы — адрес чужого клуба любому, кто нашёл бота (OWASP A01).
-     */
-    private fun handleWhoIsGoing(message: Message) {
-        val chatId = message.chatId.toString()
-        if (!isGroupChat(message)) {
-            sendText(chatId, "Команда работает в чате клуба, к которому подключён бот. Свои встречи смотри в приложении.")
-            return
-        }
-
-        val clubId = chatLinkBotService.findLinkedClubId(message.chatId)
-        if (clubId == null) {
-            sendText(chatId, "Этот чат не привязан к клубу.")
-            return
-        }
-
-        // Тот же набор статусов, что у «Живого закрепа», ближайшая встреча — первая в списке.
-        val event = eventRepository.findFutureEventsByClub(clubId, OffsetDateTime.now()).firstOrNull()
-        if (event == null) {
-            sendText(chatId, "Ближайших встреч нет")
-            return
-        }
-
-        val counts = eventResponseRepository.countByVote(event.id)
-        val goingCount = counts["going"] ?: 0
-        val maybeCount = counts["maybe"] ?: 0
-
-        val formattedDate = event.eventDatetime.format(dateFormatter)
-
-        val text = buildString {
-            appendLine("\uD83D\uDCC5 Ближайшая встреча: ${event.title}")
-            // Место опционально (V58): строку с адресом печатаем, только когда оно указано.
-            event.locationDisplay?.let { appendLine("\uD83D\uDCCD $it") }
-            appendLine("\uD83D\uDDD3 $formattedDate")
-            appendLine("\u2705 Пойдут: $goingCount")
-            appendLine("\uD83E\uDD14 Возможно: $maybeCount")
-            // Что означает число участников — общая строка со всеми бот-поверхностями (V85).
-            append(EventMessageTemplate.seatsLine(event))
-        }
-
-        sendText(chatId, text)
-    }
-
-    /** Короткий текстовый ответ в чат — общий для всех реплик команды. */
-    private fun sendText(chatId: String, text: String) {
-        telegramClient.execute(
-            SendMessage
-                .builder()
-                .chatId(chatId)
-                .text(text)
-                .build()
-        )
     }
 }
