@@ -253,39 +253,34 @@ export const EventForm: FC<EventFormProps> = ({
       photoUrl: photoUrl ?? undefined,
     };
 
-    const create = async () => {
-      try {
-        haptic.impact('medium');
-        await createMut.mutateAsync({ clubId, body });
-        haptic.notify('success');
-        // Шаблон сохраняем ПОСЛЕ встречи и отдельной попыткой: встреча — главное действие, и
-        // упавшее сохранение шаблона не должно ни отменять её, ни притворяться, что всё прошло.
-        const templateFailed = saveAsTemplate ? !(await persistTemplate(eventDate)) : false;
-        navigate('/events', {
-          replace: true,
-          state: {
-            toast: templateFailed
-              ? 'Встреча создана, но шаблон сохранить не удалось'
-              : 'Встреча создана',
-          },
-        });
-      } catch (e) {
-        // Стена биллинга — не ошибка формы: открываем шит оплаты, поля остаются на месте.
-        const pw = paywallFromError(e);
-        if (pw) {
-          haptic.notify('warning');
-          setPaywall(pw);
-          return;
-        }
-        console.error('createEvent failed', e);
-        haptic.notify('error');
-        const msg = e instanceof Error ? e.message : 'Не удалось создать встречу';
-        setSubmitError(msg);
+    try {
+      haptic.impact('medium');
+      await createMut.mutateAsync({ clubId, body });
+      haptic.notify('success');
+      // Шаблон сохраняем ПОСЛЕ встречи и отдельной попыткой: встреча — главное действие, и
+      // упавшее сохранение шаблона не должно ни отменять её, ни притворяться, что всё прошло.
+      const templateFailed = saveAsTemplate ? !(await persistTemplate(eventDate)) : false;
+      navigate('/events', {
+        replace: true,
+        state: {
+          toast: templateFailed
+            ? 'Встреча создана, но шаблон сохранить не удалось'
+            : 'Встреча создана',
+        },
+      });
+    } catch (e) {
+      // Стена биллинга — не ошибка формы: открываем шит оплаты, поля остаются на месте.
+      const pw = paywallFromError(e);
+      if (pw) {
+        haptic.notify('warning');
+        setPaywall(pw);
+        return;
       }
-    };
-    // Клуб ещё не показан в чате — встреча станет первым сообщением бота (PO 2026-10-10).
-    if (chatPostWarning.shouldWarn) return chatPostWarning.warn(() => void create());
-    await create();
+      console.error('createEvent failed', e);
+      haptic.notify('error');
+      const msg = e instanceof Error ? e.message : 'Не удалось создать встречу';
+      setSubmitError(msg);
+    }
   };
 
   /**
@@ -695,7 +690,7 @@ export const EventForm: FC<EventFormProps> = ({
         />
       )}
 
-      {chatPostWarning.warningSheet}
+      {chatPostWarning}
 
       {pickerOpen && (
         <LocationPickerSheet

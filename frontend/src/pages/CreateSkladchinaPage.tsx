@@ -229,22 +229,16 @@ export const CreateSkladchinaPage: FC = () => {
       }
     }
 
-    const create = async () => {
-      try {
-        haptic.impact('medium');
-        const created = await createMut.mutateAsync({ clubId, body });
-        haptic.notify('success');
-        navigate(`/skladchina/${created.id}`, { replace: true });
-      } catch (e) {
-        console.error('createSkladchina failed', e);
-        haptic.notify('error');
-        setSubmitError(createErrorMessage(e));
-      }
-    };
-    // Клуб ещё не показан в чате — сбор станет первым сообщением бота (PO 2026-10-10). Скрытый
-    // сбор в чат не пишется вовсе.
-    if (chatPostWarning.shouldWarn && !body.hiddenFromUserId) return chatPostWarning.warn(() => void create());
-    await create();
+    try {
+      haptic.impact('medium');
+      const created = await createMut.mutateAsync({ clubId, body });
+      haptic.notify('success');
+      navigate(`/skladchina/${created.id}`, { replace: true });
+    } catch (e) {
+      console.error('createSkladchina failed', e);
+      haptic.notify('error');
+      setSubmitError(createErrorMessage(e));
+    }
   };
 
   const perPersonHint = (() => {
@@ -485,7 +479,7 @@ export const CreateSkladchinaPage: FC = () => {
           </button>
         </div>
       </div>
-      {chatPostWarning.warningSheet}
+      {chatPostWarning}
     </div>
   );
 };

@@ -1,7 +1,6 @@
 import { FC, ReactNode, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { useHaptic } from '../../hooks/useHaptic';
 import { useChatLinkStatusQuery } from '../../queries/chatLink';
 import { useClubQuery } from '../../queries/clubs';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -35,9 +34,9 @@ interface ChatPostWarningSheetProps {
 }
 
 /**
- * Предупреждение перед созданием встречи или сбора, пока клуб не показан в чате (PO 2026-10-10):
- * бот опубликует их в чат раньше, чем ссылку на клуб. Главная кнопка — настройки чата, где пост
- * выключается; вторая — создать как есть.
+ * Предупреждение на форме встречи или сбора, пока клуб не показан в чате (PO 2026-10-10): бот
+ * опубликует их в чат раньше, чем ссылку на клуб. Главная кнопка — настройки чата, где пост
+ * выключается; вторая — закрыть и создавать как есть.
  */
 const ChatPostWarningSheet: FC<ChatPostWarningSheetProps> = ({ kind, chatTitle, onOpenSettings, onProceed, onCancel }) => {
   const copy = COPY[kind];
@@ -62,51 +61,36 @@ const ChatPostWarningSheet: FC<ChatPostWarningSheetProps> = ({ kind, chatTitle, 
 };
 
 /**
- * `const { shouldWarn, warn, warningSheet } = useChatPostWarning(clubId, 'event')`: форма перед
- * созданием зовёт `warn(create)`, если `shouldWarn`, иначе создаёт сразу; `warningSheet` рендерится
- * в JSX один раз.
+ * `const chatPostWarning = useChatPostWarning(clubId, 'event')` — шторка, которую форма рендерит в
+ * JSX. Поднимается сама при открытии формы, а не на «Создать» (PO 2026-10-10): «Настройки чата»
+ * уводят со страницы, и заполненное потерялось бы. «Создать …» и тап мимо — просто закрыть и
+ * заполнять дальше.
  *
  * Только владельцу: статус чата — владельческий эндпоинт, а до показа клуба в чате действует, как
  * правило, он один. Пост уйдёт, только если бот в чате и включён тумблер своей фичи.
  */
-export function useChatPostWarning(clubId: string | undefined, kind: ChatPostKind) {
+export function useChatPostWarning(clubId: string | undefined, kind: ChatPostKind): ReactNode {
   const navigate = useNavigate();
-  const haptic = useHaptic();
   const user = useAuthStore((s) => s.user);
   const club = useClubQuery(clubId).data;
   const isOwner = !!club && club.ownerId === user?.id;
   const status = useChatLinkStatusQuery(clubId, { enabled: isOwner && club.chatLinked }).data;
-  const [pendingCreate, setPendingCreate] = useState<(() => void) | null>(null);
-  // «Создать» уже нажато: создание могло сорваться (оплата, ошибка) — повторная попытка без вопроса.
-  const [confirmed, setConfirmed] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const botInChat = status?.botStatus === 'administrator' || status?.botStatus === 'member';
   const postsToChat = kind === 'event' ? status?.livePinEnabled : status?.skladchinaStatusEnabled;
   // chatLinked — из детали клуба: при выключенном запросе кэш статуса может быть старым.
-  const shouldWarn = isOwner && club.chatLinked && !confirmed && !!status?.linked && botInChat
+  const shouldWarn = isOwner && club.chatLinked && !!status?.linked && botInChat
     && !!postsToChat && !status.clubLinkPinned;
 
-  const warn = (create: () => void) => {
-    haptic.impact('light');
-    setPendingCreate(() => create);
-  };
-
-  const warningSheet: ReactNode = pendingCreate && clubId ? (
+  if (!shouldWarn || dismissed || !clubId) return null;
+  return (
     <ChatPostWarningSheet
       kind={kind}
-      chatTitle={status?.chatTitle ?? null}
-      onOpenSettings={() => {
-        setPendingCreate(null);
-        navigate(`/clubs/${clubId}/manage?tab=chat`);
-      }}
-      onProceed={() => {
-        setPendingCreate(null);
-        setConfirmed(true);
-        pendingCreate();
-      }}
-      onCancel={() => setPendingCreate(null)}
+      chatTitle={status.chatTitle ?? null}
+      onOpenSettings={() => navigate(`/clubs/${clubId}/manage?tab=chat`)}
+      onProceed={() => setDismissed(true)}
+      onCancel={() => setDismissed(true)}
     />
-  ) : null;
-
-  return { shouldWarn, warn, warningSheet };
+  );
 }
