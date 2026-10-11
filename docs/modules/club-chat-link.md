@@ -300,6 +300,7 @@ chat was upgraded to a supergroup chat` + `parameters.migrate_to_chat_id`
 | Метод | Путь | Что делает |
 |---|---|---|
 | GET | `/api/clubs/{id}/chat-link` | Статус: `{ linked, chatTitle, linkedAt, botStatus, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags, doorEnabled, doorInviteLink, livePinEnabled, skladchinaStatusEnabled, strictModeEnabled, awardTagsEnabled, startGroupUrl }` |
+| GET | `/api/clubs/{id}/chat-link/member-count` | `{ humans: Int? }` — людей в чате без ботов (общее число из Telegram минус боты-админы и сам бот). Не владельческий: капабилити `MANAGE_EVENTS` — подсказка максимума мест в форме встречи (PO 2026-10-10). Null — нет привязки, бот не в чате или Telegram не ответил |
 | POST | `/api/clubs/{id}/chat-link/refresh` | Перечитать `GetChat` + `GetChatMember`, обновить строку, вернуть статус («Проверить права ещё раз»). Сначала проверяет переезд чата — см. § «Переезд группы в супергруппу»; 409, если новый чат уже занят чужим живым клубом |
 | PATCH | `/api/clubs/{id}/chat-link` | `{ doorEnabled?, livePinEnabled?, skladchinaStatusEnabled?, strictModeEnabled?, awardTagsEnabled? }` — частичные тумблеры (дверь / живой закреп / статус сборов / строгий режим / теги наград); меняются только присланные поля |
 | DELETE | `/api/clubs/{id}/chat-link` | Отвязать: полное освобождение чата (см. § «Освобождение чата») + бот выходит из чата |

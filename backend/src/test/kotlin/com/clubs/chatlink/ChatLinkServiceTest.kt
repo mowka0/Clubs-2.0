@@ -749,4 +749,18 @@ class ChatLinkServiceTest {
             )
         }
     }
+
+    @Test
+    fun `людей в чате — из Telegram, когда бот в чате, без привязки или без бота — null`() {
+        // Подсказка максимума мест в форме встречи (PO 2026-10-10): только живой чат с ботом.
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = -100777L)
+        every { gateway.countHumanMembers(-100777L) } returns 7
+        assertEquals(7, service.countChatHumans(clubId).humans)
+
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, botStatus = BotChatStatus.KICKED)
+        assertEquals(null, service.countChatHumans(clubId).humans)
+
+        every { chatLinkRepository.findByClubId(clubId) } returns null
+        assertEquals(null, service.countChatHumans(clubId).humans)
+    }
 }

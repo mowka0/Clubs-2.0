@@ -303,3 +303,52 @@ describe('CreateEventPage — максимум и минимум участни�
     expect(templates[0]!.format).toBe('normal');
   });
 });
+
+/** Максимум по умолчанию — сколько людей в чате клуба без ботов (PO 2026-10-10). */
+describe('CreateEventPage — максимум мест по числу людей в чате', () => {
+  it('без шаблона максимум берётся из чата', async () => {
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => HttpResponse.json({ humans: 7 })));
+    renderPage('');
+
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    await waitFor(() => expect(maxInput()).toHaveValue('7'));
+  });
+
+  it('в чате один человек — встреча на одно место бессмысленна, остаётся 20', async () => {
+    const requested = vi.fn();
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => {
+      requested();
+      return HttpResponse.json({ humans: 1 });
+    }));
+    renderPage('');
+
+    await waitFor(() => expect(requested).toHaveBeenCalled());
+    expect(maxInput()).toHaveValue('20');
+  });
+
+  it('чата нет (null) — остаётся прежний дефолт 20', async () => {
+    const requested = vi.fn();
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => {
+      requested();
+      return HttpResponse.json({ humans: null });
+    }));
+    renderPage('');
+
+    await waitFor(() => expect(requested).toHaveBeenCalled());
+    expect(maxInput()).toHaveValue('20');
+  });
+
+  it('по шаблону — максимум шаблона, число из чата даже не спрашивается', async () => {
+    const requested = vi.fn();
+    mockTemplates([TEMPLATE]);
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => {
+      requested();
+      return HttpResponse.json({ humans: 7 });
+    }));
+    renderPage('?template=tpl-1');
+
+    await screen.findByDisplayValue('Разговорный клуб');
+    expect(maxInput()).toHaveValue('12');
+    expect(requested).not.toHaveBeenCalled();
+  });
+});

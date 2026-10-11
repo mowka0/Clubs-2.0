@@ -63,7 +63,7 @@ class LivePinRenderer(
             EventMessageTemplate.rosterClosedStats(event, confirmed, waitlisted)
 
     /**
-     * Этап 1 (идёт голосование) — общий шаблон встречи: формат жирным, что/когда/где, призыв
+     * Этап 1 (идёт голосование) — общий шаблон встречи: жирное название, описание/когда/где, призыв
      * проголосовать и голоса.
      */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =

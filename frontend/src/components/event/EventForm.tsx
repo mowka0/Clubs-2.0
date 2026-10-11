@@ -1,11 +1,12 @@
-import { FC, useRef, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../../hooks/useHaptic';
 import { AvatarUpload } from '../AvatarUpload';
 import { LocationPickerSheet } from './LocationPickerSheet';
-import { RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
+import { MIN_PARTICIPANTS_FLOOR, PARTICIPANT_MAX, RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
 import { useCreateEventMutation } from '../../queries/events';
 import { useChatPostWarning } from '../club/ChatPostWarningSheet';
+import { useChatMemberCountQuery } from '../../queries/chatLink';
 import { paywallFromError, type PaywallInfo } from '../../api/billing';
 import { BillingSheet } from '../billing/BillingSheet';
 import { useSaveEventTemplateMutation } from '../../queries/eventTemplates';
@@ -23,7 +24,7 @@ const LOCATION_MAX = 500;
 const LOCATION_HINT_MAX = 200;
 // Лимит имени шаблона — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
 const TEMPLATE_NAME_MAX = 60;
-// Максимум участников по умолчанию у новой обычной встречи.
+// Максимум участников по умолчанию у новой обычной встречи — пока не пришло число людей в чате.
 const PARTICIPANT_LIMIT_DEFAULT = 20;
 
 
@@ -168,6 +169,22 @@ export const EventForm: FC<EventFormProps> = ({
     minParticipants: template?.minParticipants ?? null,
   });
   const { limits } = rosterLimits;
+
+  // Максимум по умолчанию — сколько людей в чате клуба, без ботов (PO 2026-10-10). Только у новой
+  // встречи без шаблона (у шаблона свой максимум) и только пока степпер никто не трогал: число
+  // приезжает из Telegram уже после первого рендера.
+  // У открытой встречи мест нет — и спрашивать незачем.
+  const chatHumans = useChatMemberCountQuery(isTemplateMode || template || !hasLimit ? undefined : clubId).data?.humans ?? null;
+  const chatLimitApplied = useRef(false);
+  useEffect(() => {
+    if (chatLimitApplied.current || chatHumans === null) return;
+    chatLimitApplied.current = true;
+    // В чате один организатор (группа только создана) — встреча на одно место бессмысленна, дефолт остаётся.
+    if (limits.participantLimit !== PARTICIPANT_LIMIT_DEFAULT || chatHumans < MIN_PARTICIPANTS_FLOOR) return;
+    rosterLimits.setParticipantLimit(Math.min(chatHumans, PARTICIPANT_MAX));
+    // Разовая подстановка: зависим только от приехавшего числа, сеттер хука пересоздаётся каждый рендер.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatHumans]);
 
   /** Индекс отметки, ближайшей к точке X (координата viewport). */
   const leadIndexAtX = (clientX: number): number => {

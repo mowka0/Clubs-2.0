@@ -118,23 +118,11 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
 
           {share && (
             <>
-              {shareAvailable && (
-                <button type="button" className="rd-inv-opt" onClick={handleShare} disabled={sending}>
-                  <span className="rd-inv-opt-ic" aria-hidden="true">{sending ? '⏳' : '✈️'}</span>
-                  <span className="rd-inv-opt-txt">
-                    <b>{sentCount > 0 ? 'Отправить ещё' : 'Отправить в Telegram'}</b>
-                    <span>
-                      {sentCount > 0
-                        ? `Отправлено: ${sentCount} ✓ — можно пригласить следующего`
-                        : 'Выберите друзей или чаты — они получат карточку клуба с кнопкой'}
-                    </span>
-                  </span>
-                </button>
-              )}
               {/* Публикация в чате клуба — только владельцу и только пока чат её не видел.
                   Автопост при подключении убран: клуб рождается пустым, и приглашение смотреть
                   на голую страницу тратило бы первое впечатление впустую. Момент презентации
-                  выбирает орг (решение PO 2026-08-17). */}
+                  выбирает орг (решение PO 2026-08-17). Стоит первой: это главный шаг чек-листа «Клуб создан»
+                  (PO 2026-10-10). */}
               {canPublishToChat && (
                 <button
                   type="button"
@@ -149,6 +137,19 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
                       {pinClubLink.isError
                         ? 'Не получилось — проверьте, что бот всё ещё админ чата'
                         : 'Бот закрепит в чате сообщение со ссылкой — участники увидят клуб'}
+                    </span>
+                  </span>
+                </button>
+              )}
+              {shareAvailable && (
+                <button type="button" className="rd-inv-opt" onClick={handleShare} disabled={sending}>
+                  <span className="rd-inv-opt-ic" aria-hidden="true">{sending ? '⏳' : '✈️'}</span>
+                  <span className="rd-inv-opt-txt">
+                    <b>{sentCount > 0 ? 'Отправить ещё' : 'Отправить в Telegram'}</b>
+                    <span>
+                      {sentCount > 0
+                        ? `Отправлено: ${sentCount} ✓ — можно пригласить следующего`
+                        : 'Выберите друзей или чаты — они получат карточку клуба с кнопкой'}
                     </span>
                   </span>
                 </button>
