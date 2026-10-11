@@ -314,16 +314,12 @@ describe('CreateEventPage — максимум мест по числу люде
     await waitFor(() => expect(maxInput()).toHaveValue('7'));
   });
 
-  it('в чате один человек — встреча на одно место бессмысленна, остаётся 20', async () => {
-    const requested = vi.fn();
-    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => {
-      requested();
-      return HttpResponse.json({ humans: 1 });
-    }));
+  it('в чате один человек — максимум 1: берём ровно число людей в чате (PO 2026-10-11)', async () => {
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link/member-count`, () => HttpResponse.json({ humans: 1 })));
     renderPage('');
 
-    await waitFor(() => expect(requested).toHaveBeenCalled());
-    expect(maxInput()).toHaveValue('20');
+    await screen.findByRole('heading', { name: 'Обычная встреча' });
+    await waitFor(() => expect(maxInput()).toHaveValue('1'));
   });
 
   it('чата нет (null) — остаётся прежний дефолт 20', async () => {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../../hooks/useHaptic';
 import { AvatarUpload } from '../AvatarUpload';
 import { LocationPickerSheet } from './LocationPickerSheet';
-import { MIN_PARTICIPANTS_FLOOR, PARTICIPANT_MAX, RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
+import { PARTICIPANT_MAX, PARTICIPANT_MIN, RosterLimitsFields, useRosterLimits } from './RosterLimitsFields';
 import { useCreateEventMutation } from '../../queries/events';
 import { useChatPostWarning } from '../club/ChatPostWarningSheet';
 import { useChatMemberCountQuery } from '../../queries/chatLink';
@@ -24,7 +24,7 @@ const LOCATION_MAX = 500;
 const LOCATION_HINT_MAX = 200;
 // Лимит имени шаблона — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
 const TEMPLATE_NAME_MAX = 60;
-// Максимум участников по умолчанию у новой обычной встречи — пока не пришло число людей в чате.
+// Максимум участников по умолчанию — только когда числа людей в чате нет (чата/бота нет, Telegram молчит).
 const PARTICIPANT_LIMIT_DEFAULT = 20;
 
 
@@ -179,9 +179,8 @@ export const EventForm: FC<EventFormProps> = ({
   useEffect(() => {
     if (chatLimitApplied.current || chatHumans === null) return;
     chatLimitApplied.current = true;
-    // В чате один организатор (группа только создана) — встреча на одно место бессмысленна, дефолт остаётся.
-    if (limits.participantLimit !== PARTICIPANT_LIMIT_DEFAULT || chatHumans < MIN_PARTICIPANTS_FLOOR) return;
-    rosterLimits.setParticipantLimit(Math.min(chatHumans, PARTICIPANT_MAX));
+    if (limits.participantLimit !== PARTICIPANT_LIMIT_DEFAULT) return;
+    rosterLimits.setParticipantLimit(Math.min(Math.max(chatHumans, PARTICIPANT_MIN), PARTICIPANT_MAX));
     // Разовая подстановка: зависим только от приехавшего числа, сеттер хука пересоздаётся каждый рендер.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatHumans]);
