@@ -305,9 +305,11 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 📌 {title} — {eventDatetime, dd.MM.yyyy HH:mm}
 
-Вы перешли из листа ожидания — место ваше. Откройте событие:
+Вы перешли из листа ожидания — место автоматически стало вашим.
+Приходите, Вас ждут!
 ```
-**Inline-кнопка:** «Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}`.
+(текст PO 2026-10-12; до него — «место ваше. Откройте событие:»)
+**Inline-кнопка:** «Открыть встречу» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}`.
 **Подключение:** публикуется `WaitlistPromotedEvent(eventId, promotedUserId)` в ДВУХ местах авто-повышения: `Stage2Service.declineParticipation` (отказ подтверждённого освободил слот) и `MembershipService` (выход подтверждённого из клуба; `promoteFirstWaitlisted` возвращает `UUID?` повышённого). `bot/WaitlistPromotedListener` (`@TransactionalEventListener`, AFTER_COMMIT) дозапрашивает событие по `eventId` и зовёт `@Async sendWaitlistPromoted`. AFTER_COMMIT обязателен: DM читает закоммиченное повышение. Best-effort, зеркалит `sendStage2Started`.
 
 ### `sendRosterClosed` / `sendRosterWarning` / `sendRosterBroken` — набор состава (V83–V86)

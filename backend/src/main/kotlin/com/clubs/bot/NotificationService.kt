@@ -306,8 +306,8 @@ class NotificationService(
             return
         }
         val text = "🎉 Освободилось место!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "Вы перешли из листа ожидания — место ваше. Откройте событие:"
-        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+            "Вы перешли из листа ожидания — место автоматически стало вашим.\nПриходите, Вас ждут!"
+        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть встречу")
     }
 
 
