@@ -45,3 +45,9 @@ data class UpdateChatLinkRequest(
     val strictModeEnabled: Boolean? = null,
     val awardTagsEnabled: Boolean? = null
 )
+
+/**
+ * Людей в чате клуба (без ботов) — подсказка максимума мест в форме встречи (PO 2026-10-10).
+ * Null — чат не привязан, бота в нём нет или Telegram не ответил: форма берёт свой дефолт.
+ */
+data class ChatMemberCountDto(val humans: Int?)

@@ -1,5 +1,7 @@
 package com.clubs.chatlink
 
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.RequiresCapability
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
@@ -17,7 +19,8 @@ import java.util.UUID
 
 /**
  * Привязка телеграм-чата к клубу — владельческий API таба «Чат» в «Управлении клубом».
- * Ownership-гейт на каждом методе внутри ChatLinkService (403 не-владельцу).
+ * Ownership-гейт на каждом методе внутри ChatLinkService (403 не-владельцу); исключение —
+ * число людей в чате: оно нужно форме встречи, и его видит всякий, кто создаёт встречи.
  */
 @RestController
 @RequestMapping("/api/clubs/{clubId}/chat-link")
@@ -32,6 +35,11 @@ class ChatLinkController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ChatLinkStatusDto> =
         ResponseEntity.ok(chatLinkService.getStatus(clubId, user.userId))
+
+    @RequiresCapability(ClubCapability.MANAGE_EVENTS, clubIdParam = "clubId")
+    @GetMapping("/member-count")
+    fun getMemberCount(@PathVariable clubId: UUID): ResponseEntity<ChatMemberCountDto> =
+        ResponseEntity.ok(chatLinkService.countChatHumans(clubId))
 
     @PostMapping("/refresh")
     fun refresh(

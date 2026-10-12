@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getChatLinkStatus,
+  getChatMemberCount,
   getNewClubChatLinkUrl,
   pinClubLink,
   refreshChatLink,
@@ -28,6 +29,17 @@ export function useChatLinkStatusQuery(clubId: string | undefined, options: { en
     queryFn: () => getChatLinkStatus(clubId!),
     enabled: Boolean(clubId) && (options.enabled ?? true),
     refetchOnWindowFocus: true,
+  });
+}
+
+/** Людей в чате без ботов — максимум мест по умолчанию в форме встречи (PO 2026-10-10). */
+export function useChatMemberCountQuery(clubId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.clubs.chatMemberCount(clubId ?? ''),
+    queryFn: () => getChatMemberCount(clubId!),
+    enabled: Boolean(clubId),
+    // Каждый запрос — два вызова Telegram API, а число людей за минуты почти не меняется.
+    staleTime: 5 * 60_000,
   });
 }
 

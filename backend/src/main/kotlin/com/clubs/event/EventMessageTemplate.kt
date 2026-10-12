@@ -9,17 +9,18 @@ import java.time.format.DateTimeFormatter
  * DM, живой закреп и уведомления о правках рендерили дату и место каждый по-своему,
  * и формат встречи упоминался только эмодзи в заголовке DM о создании.
  *
- * Форма:
+ * Форма (PO 2026-10-10: сверху название, а не формат; каждое поле — своим абзацем):
  * ```
- * <b>Встреча: до 20 человек</b>
+ * <b>Новая встреча: Бар</b>
  *
- * Название
- * Описание
+ * описание: Описание
+ *
  * когда: 27.07.2026 09:15 МСК
+ *
  * где: дом
  *
- * ✅ Подтвердили — 0 из 20
- * ⏳ Подтвердить до — 27.07.2026 09:15 МСК
+ * Проголосуй в клубе!
+ * 👥 Заняты 0 из 20 мест — свободно 20.
  * ```
  *
  * Требует **HTML parse_mode** у отправителя (жирный заголовок), поэтому весь пользовательский
@@ -29,8 +30,8 @@ import java.time.format.DateTimeFormatter
 object EventMessageTemplate {
 
     /**
-     * Формат встречи словами — он же заголовок сообщения. Словарь общий с бейджами карточек:
-     * «4–10» при минимуме, «до 10» без него, «открытая» без мест.
+     * Формат встречи словами — заголовок сообщений о событиях встречи («… перенесена», «… отменена»).
+     * Словарь общий с бейджами карточек: «4–10» при минимуме, «до 10» без него, «открытая» без мест.
      */
     fun formatName(event: Event): String = when (event.format) {
         EventFormat.NORMAL -> when (val min = event.minParticipants) {
@@ -43,16 +44,16 @@ object EventMessageTemplate {
     }
 
     /**
-     * Шапка: жирный формат, затем что / о чём / когда / где. Пустые поля (описание, место)
-     * не рендерятся вовсе — строка-заготовка «где: —» выглядит как недоделка, а не как факт.
+     * Шапка: жирное «Новая встреча: …», затем описание / когда / где — каждое своим абзацем (PO 2026-10-10:
+     * формат встречи сверху читался как характеристика, а не как встреча; места и так видны ниже).
+     * Пустые поля (описание, место) не рендерятся вовсе — заготовка «где: —» выглядит как недоделка.
      */
     fun head(event: Event, fmt: DateTimeFormatter): String {
-        val sb = StringBuilder("<b>${escapeHtml(formatName(event))}</b>\n\n")
-        sb.append(escapeHtml(event.title)).append("\n")
-        event.description?.takeIf { it.isNotBlank() }?.let { sb.append(escapeHtml(it)).append("\n") }
-        sb.append("когда: ").append(event.eventDatetime.format(fmt)).append("\n")
-        event.locationDisplay?.let { sb.append("где: ").append(escapeHtml(it)) }
-        return sb.toString().trimEnd()
+        val sb = StringBuilder("<b>Новая встреча: ${escapeHtml(event.title)}</b>")
+        event.description?.takeIf { it.isNotBlank() }?.let { sb.append("\n\nописание: ").append(escapeHtml(it)) }
+        sb.append("\n\nкогда: ").append(event.eventDatetime.format(fmt))
+        event.locationDisplay?.let { sb.append("\n\nгде: ").append(escapeHtml(it)) }
+        return sb.toString()
     }
 
     /**

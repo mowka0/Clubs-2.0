@@ -58,6 +58,15 @@ class ChatLinkService(
     }
 
     /**
+     * Людей в чате клуба без ботов — для максимума мест по умолчанию в форме встречи. Доступ —
+     * у того, кто создаёт встречи (капабилити-гейт на контроллере), а не только у владельца.
+     */
+    fun countChatHumans(clubId: UUID): ChatMemberCountDto {
+        val link = chatLinkRepository.findByClubId(clubId)?.takeIf { it.botStatus.isInChat }
+        return ChatMemberCountDto(link?.let { gateway.countHumanMembers(it.chatId) })
+    }
+
+    /**
      * Перенос привязки на новый chat_id после переезда группы в супергруппу. Возвращает true,
      * если чат теперь принадлежит клубу этой привязки.
      *

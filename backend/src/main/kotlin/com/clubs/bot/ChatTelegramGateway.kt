@@ -12,6 +12,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.EditChatIn
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatAdministrators
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
@@ -308,6 +309,23 @@ class ChatTelegramGateway(
         }
     } catch (e: Exception) {
         log.warn("resolveMigratedChatId failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
+    /**
+     * Сколько в группе людей — без ботов. Telegram отдаёт только общее число (боты в нём есть), а
+     * список участников боту недоступен; ботов видно лишь среди администраторов. Поэтому вычитаем
+     * ботов-админов и нас самих, если нас среди них нет: бот-участник без прав в чате всё равно
+     * сидит. Ботов — рядовых участников не видно, их число остаётся в счёте. Null — Telegram не ответил.
+     */
+    fun countHumanMembers(chatId: Long): Int? = try {
+        val total = telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
+        val adminBotIds = telegramClient.execute(GetChatAdministrators.builder().chatId(chatId).build())
+            .map { it.user }.filter { it.isBot }.map { it.id }.toSet()
+        val selfOutsideAdmins = botId()?.let { if (it in adminBotIds) 0 else 1 } ?: 0
+        (total - adminBotIds.size - selfOutsideAdmins).coerceAtLeast(0)
+    } catch (e: Exception) {
+        log.warn("countHumanMembers failed: chatId={} error={}", chatId, e.message)
         null
     }
 

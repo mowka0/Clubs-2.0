@@ -8,6 +8,11 @@ export function getChatLinkStatus(clubId: string): Promise<ChatLinkStatusDto> {
   return apiClient.get<ChatLinkStatusDto>(`/api/clubs/${clubId}/chat-link`);
 }
 
+/** Людей в чате клуба без ботов (null — чата или бота нет). Доступно тем, кто создаёт встречи. */
+export function getChatMemberCount(clubId: string): Promise<{ humans: number | null }> {
+  return apiClient.get<{ humans: number | null }>(`/api/clubs/${clubId}/chat-link/member-count`);
+}
+
 /** «Проверить права ещё раз» — перечитать статус бота из Telegram. */
 export function refreshChatLink(clubId: string): Promise<ChatLinkStatusDto> {
   return apiClient.post<ChatLinkStatusDto>(`/api/clubs/${clubId}/chat-link/refresh`);

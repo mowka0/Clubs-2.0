@@ -278,7 +278,7 @@ class LivePinServiceTest {
             gateway.editGroupMessage(
                 chatId, 777L,
                 match {
-                    it.contains("<b>Встреча: до 15 человек</b>") && it.contains("Состав собран: 12 из 15") &&
+                    it.startsWith("<b>Новая встреча: Поход в баню</b>") && it.contains("Состав собран: 12 из 15") &&
                         it.contains("В очереди — 2")
                 },
                 "Открыть встречу",
