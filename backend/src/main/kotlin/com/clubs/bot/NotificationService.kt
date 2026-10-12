@@ -384,10 +384,9 @@ class NotificationService(
             edited.isLocationChanged -> "меняет место"
             else -> "перенесена"
         }
-        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
-        sb.append(esc(event.title)).append("\n")
+        val sb = StringBuilder(EventMessageTemplate.eventHeadline(event, what)).append("\n\n")
         if (edited.isDatetimeChanged) {
-            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда было: ${old.eventDatetime.format(fmt)}\n")
             sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
         } else {
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")

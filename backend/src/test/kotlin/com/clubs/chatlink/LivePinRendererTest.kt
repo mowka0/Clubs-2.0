@@ -150,7 +150,7 @@ class LivePinRendererTest {
     @Test
     fun `отмена — причина опциональна`() {
         val withReason = renderer.cancelledText(event, "все заболели")
-        assertTrue(withReason.contains("<b>Встреча: до 15 человек отменена</b>"))
+        assertTrue(withReason.startsWith("<b>Встреча: Поход в баню отменена</b>\n\nкогда: "), withReason)
         assertTrue(withReason.contains("причина: все заболели"))
         assertFalse(renderer.cancelledText(event, null).contains("причина"))
     }
@@ -160,7 +160,7 @@ class LivePinRendererTest {
         val moved = event.copy(locationText = "парк имени Революции 1905 года")
         val text = renderer.editedText(EventEditedEvent(event = moved, oldEvent = event))
 
-        assertTrue(text.contains("<b>Встреча: до 15 человек меняет место</b>"))
+        assertTrue(text.startsWith("<b>Встреча: Поход в баню меняет место</b>\n\nкогда: "), text)
         // Именно \n\n: адреса длинные, переносятся на две-три строки и без отступа читаются
         // как один абзац — разница «было/стало» теряется (правка PO 2026-08-10).
         assertTrue(text.contains("где было: Сандуны\n\nгде стало: парк имени Революции 1905 года"))
@@ -169,9 +169,22 @@ class LivePinRendererTest {
     }
 
     @Test
+    fun `перенос — «Встреча название перенесена», затем было, стало и где без отдельной строки названия`() {
+        val later = event.copy(eventDatetime = event.eventDatetime.plusDays(1))
+        val text = renderer.editedText(EventEditedEvent(event = later, oldEvent = event))
+        assertTrue(
+            text.startsWith(
+                "<b>Встреча: Поход в баню перенесена</b>\n\n" +
+                    "когда было: 12.07.2026 19:00 МСК\nкогда стало: 13.07.2026 19:00 МСК\nгде: Сандуны\n\nПроголосуй в клубе!"
+            ),
+            text
+        )
+    }
+
+    @Test
     fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.contains("<b>Встреча: до 15 человек началась</b>"))
+        assertTrue(text.startsWith("<b>Встреча: Поход в баню началась</b>\n\nкогда: "), text)
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
     }

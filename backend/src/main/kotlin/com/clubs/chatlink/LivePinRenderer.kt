@@ -76,8 +76,7 @@ class LivePinRenderer(
      * Не «Сбор закрыт» — слово «сбор» у нас занято складчиной и путало (фидбек PO 2026-07-08).
      */
     fun closedText(event: Event, confirmed: Int): String =
-        "<b>${esc(EventMessageTemplate.formatName(event))} началась</b>\n\n" +
-            "${esc(event.title)}\n" +
+        "${EventMessageTemplate.eventHeadline(event, "началась")}\n\n" +
             "когда: ${event.eventDatetime.format(fmt)}\n\n" +
             // У открытой встречи никто ничего не подтверждал — люди просто сказали «Пойду» (v3).
             (event.participantLimit?.let { "✅ Подтвердили — $confirmed из $it" } ?: "✅ Шли — $confirmed") +
@@ -97,10 +96,9 @@ class LivePinRenderer(
             edited.isLocationChanged -> "меняет место"
             else -> "перенесена"
         }
-        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
-        sb.append(esc(event.title)).append("\n")
+        val sb = StringBuilder(EventMessageTemplate.eventHeadline(event, what)).append("\n\n")
         if (edited.isDatetimeChanged) {
-            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда было: ${old.eventDatetime.format(fmt)}\n")
             sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
         } else {
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
@@ -123,8 +121,7 @@ class LivePinRenderer(
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {
         val reasonLine = reason?.let { "\nпричина: ${esc(it)}" } ?: ""
-        return "<b>${esc(EventMessageTemplate.formatName(event))} отменена</b>\n\n" +
-            "${esc(event.title)}\n" +
+        return "${EventMessageTemplate.eventHeadline(event, "отменена")}\n\n" +
             "когда: ${event.eventDatetime.format(fmt)}$reasonLine"
     }
 

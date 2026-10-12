@@ -30,18 +30,12 @@ import java.time.format.DateTimeFormatter
 object EventMessageTemplate {
 
     /**
-     * Формат встречи словами — заголовок сообщений о событиях встречи («… перенесена», «… отменена»).
-     * Словарь общий с бейджами карточек: «4–10» при минимуме, «до 10» без него, «открытая» без мест.
+     * Заголовок сообщений о том, что со встречей случилось: «Встреча: Бар перенесена», «… отменена»,
+     * «… началась» (PO 2026-10-12: название вместо формата «до N человек»; отдельной строки с
+     * названием под ним больше нет). Жирный — нужен HTML parse_mode у отправителя.
      */
-    fun formatName(event: Event): String = when (event.format) {
-        EventFormat.NORMAL -> when (val min = event.minParticipants) {
-            null -> "Встреча: до ${event.participantLimit} человек"
-            // «Ровно N» (четыре места в машине): «6–6» читалось бы как опечатка.
-            event.participantLimit -> "Встреча: ровно $min человек"
-            else -> "Встреча: $min–${event.participantLimit} человек"
-        }
-        EventFormat.OPEN -> "Встреча: открытая"
-    }
+    fun eventHeadline(event: Event, what: String): String =
+        "<b>Встреча: ${escapeHtml(event.title)} $what</b>"
 
     /**
      * Шапка: жирное «Новая встреча: …», затем описание / когда / где — каждое своим абзацем (PO 2026-10-10:
