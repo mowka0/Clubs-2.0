@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter
  *
  * Форма (PO 2026-10-10: сверху название, а не формат; каждое поле — своим абзацем):
  * ```
- * <b>Название</b>
+ * <b>Новая встреча: Бар</b>
  *
  * описание: Описание
  *
@@ -44,12 +44,12 @@ object EventMessageTemplate {
     }
 
     /**
-     * Шапка: жирное название, затем описание / когда / где — каждое своим абзацем (PO 2026-10-10:
+     * Шапка: жирное «Новая встреча: …», затем описание / когда / где — каждое своим абзацем (PO 2026-10-10:
      * формат встречи сверху читался как характеристика, а не как встреча; места и так видны ниже).
      * Пустые поля (описание, место) не рендерятся вовсе — заготовка «где: —» выглядит как недоделка.
      */
     fun head(event: Event, fmt: DateTimeFormatter): String {
-        val sb = StringBuilder("<b>${escapeHtml(event.title)}</b>")
+        val sb = StringBuilder("<b>Новая встреча: ${escapeHtml(event.title)}</b>")
         event.description?.takeIf { it.isNotBlank() }?.let { sb.append("\n\nописание: ").append(escapeHtml(it)) }
         sb.append("\n\nкогда: ").append(event.eventDatetime.format(fmt))
         event.locationDisplay?.let { sb.append("\n\nгде: ").append(escapeHtml(it)) }

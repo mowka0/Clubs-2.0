@@ -39,7 +39,7 @@ class LivePinRendererTest {
     fun `stage1 — голоса, места, время в МСК`() {
         val text = renderer.stage1Text(event, going = 9, maybe = 3)
         // Общий шаблон (PO 2026-10-10): сверху жирное название, затем когда/где — каждое своим абзацем.
-        assertTrue(text.startsWith("<b>Поход в баню</b>\n\nкогда: 12.07.2026 19:00 МСК"), text)
+        assertTrue(text.startsWith("<b>Новая встреча: Поход в баню</b>\n\nкогда: 12.07.2026 19:00 МСК"), text)
         assertFalse(text.contains("Встреча: до"), "формат встречи сверху больше не пишем")
         // Призыв к действию стоит прямо над счётчиками (PO 2026-08-10)
         assertTrue(text.contains("Проголосуй в клубе!\n✅ Идут — 9"))
@@ -76,7 +76,7 @@ class LivePinRendererTest {
         val described = event.copy(description = "Берём веники", locationText = null, locationHint = "В бане")
         val text = renderer.stage1Text(described, going = 0, maybe = 0)
         assertTrue(
-            text.startsWith("<b>Поход в баню</b>\n\nописание: Берём веники\n\nкогда: 12.07.2026 19:00 МСК\n\nгде: В бане"),
+            text.startsWith("<b>Новая встреча: Поход в баню</b>\n\nописание: Берём веники\n\nкогда: 12.07.2026 19:00 МСК\n\nгде: В бане"),
             text
         )
     }
@@ -87,7 +87,7 @@ class LivePinRendererTest {
         val open = event.copy(participantLimit = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.startsWith("<b>Поход в баню</b>"))
+        assertTrue(stage1.startsWith("<b>Новая встреча: Поход в баню</b>"))
         assertTrue(stage1.contains("🌊 Без мест и очереди — «Пойду» сразу записывает; передумать можно до начала"))
         assertFalse(stage1.contains("Мест —"))
 
@@ -183,7 +183,7 @@ class LivePinRendererTest {
         val deadline = OffsetDateTime.of(2026, 7, 11, 22, 0, 0, 0, ZoneOffset.UTC)
 
         val short = renderer.rosterText(withMin, confirmed = 3, deadline = deadline)
-        assertTrue(short.startsWith("<b>Поход в баню</b>"))
+        assertTrue(short.startsWith("<b>Новая встреча: Поход в баню</b>"))
         assertTrue(short.contains("👥 Максимум мест — 15, минимум 4. Нужно ещё 1 — иначе встреча отменится."))
         assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
 
