@@ -92,8 +92,8 @@ class LivePinService(
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderer.cancelledText(event, reason),
-            buttonText = null,
-            url = null,
+            buttonText = CANCELLED_POST_BUTTON,
+            url = renderer.clubUrl(event.clubId),
             parseMode = PARSE_MODE_HTML
         )
         return if (messageId != null) link.chatId else null
@@ -323,4 +323,9 @@ class LivePinService(
     private fun liveLinkFor(clubId: UUID): ChatLink? =
         chatLinkRepository.findByClubId(clubId)
             ?.takeIf { it.livePinEnabled && it.botStatus.isInChat }
+
+    companion object {
+        /** Кнопка под постом об отмене встречи — ведёт в клуб (PO 2026-10-13). */
+        const val CANCELLED_POST_BUTTON = "Открыть клуб"
+    }
 }

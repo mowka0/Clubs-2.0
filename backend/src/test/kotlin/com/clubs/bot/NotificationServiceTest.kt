@@ -8,6 +8,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -42,6 +43,25 @@ class NotificationServiceTest {
         verify(exactly = 1) { membershipRepository.findMemberTelegramIds(event.clubId) }
         verify(exactly = 0) { eventResponseRepository.findStage2TargetTelegramIds(any()) }
         verify(exactly = 3) { telegramClient.execute(any<SendMessage>()) }
+    }
+
+    @Test
+    fun `DM об отмене — тот же текст, что пост в чате, и кнопка в клуб`() {
+        // PO 2026-10-13: «Встреча: <название> — отменена», когда/причина и переход в клуб.
+        val event = sampleEvent()
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val msgSlot = slot<SendMessage>()
+        every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCancelled(event, reason = "Не набрали 2 участников")
+
+        val msg = msgSlot.captured
+        assertTrue(msg.text.startsWith("<b>Встреча: ${event.title} — отменена</b>\n\nкогда: "), msg.text)
+        assertTrue(msg.text.endsWith("\nпричина: Не набрали 2 участников"), msg.text)
+        assertEquals("HTML", msg.parseMode)
+        val button = (msg.replyMarkup as org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup).keyboard[0][0]
+        assertEquals("Открыть клуб", button.text)
+        assertTrue(button.webApp!!.url.endsWith("/clubs/${event.clubId}"), button.webApp!!.url)
     }
 
     @Test
@@ -144,7 +164,7 @@ class NotificationServiceTest {
 
         service.sendEventCreated(event)
 
-        assertTrue(msgSlot.captured.text.contains("где: Бар (Вход со двора)"))
+        assertTrue(msgSlot.captured.text.contains("📍 Бар (Вход со двора)"))
     }
 
     @Test
@@ -156,7 +176,7 @@ class NotificationServiceTest {
 
         service.sendEventCreated(event)
 
-        assertTrue(msgSlot.captured.text.contains("где: Встречаемся в зуме"))
+        assertTrue(msgSlot.captured.text.contains("📍 Встречаемся в зуме"))
         assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
     }
 

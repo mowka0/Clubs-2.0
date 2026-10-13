@@ -306,8 +306,8 @@ class NotificationService(
             return
         }
         val text = "🎉 Освободилось место!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
-            "Вы перешли из листа ожидания — место ваше. Откройте событие:"
-        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+            "Вы перешли из листа ожидания — место автоматически стало вашим.\nПриходите, Вас ждут!"
+        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть встречу")
     }
 
 
@@ -329,11 +329,14 @@ class NotificationService(
             return
         }
         log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
-        val reasonLine = reason?.let { "\n\nПричина: $it" } ?: ""
-        val text = "❌ Событие отменено\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}$reasonLine"
-        val webAppPath = "/events/${event.id}"
+        // Тот же текст, что у поста об отмене в чате (PO 2026-10-13), и та же кнопка — в клуб.
+        val esc = EventMessageTemplate::escapeHtml
+        val reasonLine = reason?.let { "\nпричина: ${esc(it)}" } ?: ""
+        val text = "${EventMessageTemplate.eventHeadline(event, "отменена")}\n\n" +
+            "когда: ${event.eventDatetime.format(fmt)}$reasonLine"
+        val webAppPath = "/clubs/${event.clubId}"
         recipientTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "Открыть клуб", parseMode = PARSE_MODE_HTML)
         }
     }
 
@@ -384,10 +387,9 @@ class NotificationService(
             edited.isLocationChanged -> "меняет место"
             else -> "перенесена"
         }
-        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
-        sb.append(esc(event.title)).append("\n")
+        val sb = StringBuilder(EventMessageTemplate.eventHeadline(event, what)).append("\n\n")
         if (edited.isDatetimeChanged) {
-            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда было: ${old.eventDatetime.format(fmt)}\n")
             sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
         } else {
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")

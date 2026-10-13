@@ -38,6 +38,9 @@ class LivePinRenderer(
      */
     fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername?startapp=event_$eventId"
 
+    /** Ссылка на клуб — кнопка поста об отмене: встречи уже нет, вести некуда, кроме клуба (PO 2026-10-13). */
+    fun clubUrl(clubId: UUID): String = "https://t.me/$botUsername?startapp=club_$clubId"
+
     /**
      * Кнопка под статусом: пока состав набирается голосами — «Проголосовать», после закрытия
      * набора голосовать уже нечем, и кнопка просто открывает встречу. Отдельного «Подтвердить
@@ -54,7 +57,7 @@ class LivePinRenderer(
      */
     fun rosterText(event: Event, confirmed: Int, deadline: OffsetDateTime): String =
         "${EventMessageTemplate.head(event, fmt)}\n\n" +
-            "$VOTE_CALL_TO_ACTION\n" +
+            "$VOTE_CALL_TO_ACTION\n\n" +
             EventMessageTemplate.rosterStats(event, confirmed, deadline, fmt)
 
     /** Состав собран — призыва голосовать больше нет, набор закрыт. */
@@ -68,7 +71,7 @@ class LivePinRenderer(
      */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
         "${EventMessageTemplate.head(event, fmt)}\n\n" +
-            "$VOTE_CALL_TO_ACTION\n" +
+            "$VOTE_CALL_TO_ACTION\n\n" +
             EventMessageTemplate.stage1Stats(event, going, maybe)
 
     /**
@@ -76,8 +79,7 @@ class LivePinRenderer(
      * Не «Сбор закрыт» — слово «сбор» у нас занято складчиной и путало (фидбек PO 2026-07-08).
      */
     fun closedText(event: Event, confirmed: Int): String =
-        "<b>${esc(EventMessageTemplate.formatName(event))} началась</b>\n\n" +
-            "${esc(event.title)}\n" +
+        "${EventMessageTemplate.eventHeadline(event, "началась")}\n\n" +
             "когда: ${event.eventDatetime.format(fmt)}\n\n" +
             // У открытой встречи никто ничего не подтверждал — люди просто сказали «Пойду» (v3).
             (event.participantLimit?.let { "✅ Подтвердили — $confirmed из $it" } ?: "✅ Шли — $confirmed") +
@@ -97,10 +99,9 @@ class LivePinRenderer(
             edited.isLocationChanged -> "меняет место"
             else -> "перенесена"
         }
-        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
-        sb.append(esc(event.title)).append("\n")
+        val sb = StringBuilder(EventMessageTemplate.eventHeadline(event, what)).append("\n\n")
         if (edited.isDatetimeChanged) {
-            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда было: ${old.eventDatetime.format(fmt)}\n")
             sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
         } else {
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
@@ -123,8 +124,7 @@ class LivePinRenderer(
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {
         val reasonLine = reason?.let { "\nпричина: ${esc(it)}" } ?: ""
-        return "<b>${esc(EventMessageTemplate.formatName(event))} отменена</b>\n\n" +
-            "${esc(event.title)}\n" +
+        return "${EventMessageTemplate.eventHeadline(event, "отменена")}\n\n" +
             "когда: ${event.eventDatetime.format(fmt)}$reasonLine"
     }
 
