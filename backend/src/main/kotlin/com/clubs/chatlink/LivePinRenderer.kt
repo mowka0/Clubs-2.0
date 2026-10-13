@@ -38,6 +38,9 @@ class LivePinRenderer(
      */
     fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername?startapp=event_$eventId"
 
+    /** Ссылка на клуб — кнопка поста об отмене: встречи уже нет, вести некуда, кроме клуба (PO 2026-10-13). */
+    fun clubUrl(clubId: UUID): String = "https://t.me/$botUsername?startapp=club_$clubId"
+
     /**
      * Кнопка под статусом: пока состав набирается голосами — «Проголосовать», после закрытия
      * набора голосовать уже нечем, и кнопка просто открывает встречу. Отдельного «Подтвердить
@@ -54,7 +57,7 @@ class LivePinRenderer(
      */
     fun rosterText(event: Event, confirmed: Int, deadline: OffsetDateTime): String =
         "${EventMessageTemplate.head(event, fmt)}\n\n" +
-            "$VOTE_CALL_TO_ACTION\n" +
+            "$VOTE_CALL_TO_ACTION\n\n" +
             EventMessageTemplate.rosterStats(event, confirmed, deadline, fmt)
 
     /** Состав собран — призыва голосовать больше нет, набор закрыт. */
@@ -68,7 +71,7 @@ class LivePinRenderer(
      */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
         "${EventMessageTemplate.head(event, fmt)}\n\n" +
-            "$VOTE_CALL_TO_ACTION\n" +
+            "$VOTE_CALL_TO_ACTION\n\n" +
             EventMessageTemplate.stage1Stats(event, going, maybe)
 
     /**

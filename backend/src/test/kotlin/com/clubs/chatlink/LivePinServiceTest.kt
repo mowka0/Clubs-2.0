@@ -278,7 +278,7 @@ class LivePinServiceTest {
             gateway.editGroupMessage(
                 chatId, 777L,
                 match {
-                    it.startsWith("<b>Новая встреча: Поход в баню</b>") && it.contains("Состав собран: 12 из 15") &&
+                    it.startsWith("<b>🔥 Новая встреча: Поход в баню</b>") && it.contains("Состав собран: 12 из 15") &&
                         it.contains("В очереди — 2")
                 },
                 "Открыть встречу",
@@ -330,12 +330,12 @@ class LivePinServiceTest {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns
             EventChatPin(event.id, chatId, 777L, closedAt = null, summaryMessageId = null)
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null, any(), any(), any()) } returns 999L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), "Открыть клуб", any(), any(), any(), any()) } returns 999L
 
         val postedChatId = service.onEventCancelled(event, "все заболели")
 
         // Правки беззвучны — пост отмены единственный пинг чата, DM уйдёт только не-в-чате.
-        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("отменена") }, null, null, any(), any(), any()) }
+        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("— отменена") }, "Открыть клуб", "https://t.me/clubs_test_bot?startapp=club_$clubId", any(), any(), any()) }
         org.junit.jupiter.api.Assertions.assertEquals(chatId, postedChatId)
     }
 
@@ -343,7 +343,7 @@ class LivePinServiceTest {
     fun `onEventCancelled — пост отмены не вышел (Telegram молчит) — null, DM всем`() {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null, any(), any(), any()) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), "Открыть клуб", any(), any(), any(), any()) } returns null
 
         org.junit.jupiter.api.Assertions.assertNull(service.onEventCancelled(event, null))
     }

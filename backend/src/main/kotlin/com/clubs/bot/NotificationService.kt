@@ -329,11 +329,14 @@ class NotificationService(
             return
         }
         log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
-        val reasonLine = reason?.let { "\n\nПричина: $it" } ?: ""
-        val text = "❌ Событие отменено\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}$reasonLine"
-        val webAppPath = "/events/${event.id}"
+        // Тот же текст, что у поста об отмене в чате (PO 2026-10-13), и та же кнопка — в клуб.
+        val esc = EventMessageTemplate::escapeHtml
+        val reasonLine = reason?.let { "\nпричина: ${esc(it)}" } ?: ""
+        val text = "${EventMessageTemplate.eventHeadline(event, "отменена")}\n\n" +
+            "когда: ${event.eventDatetime.format(fmt)}$reasonLine"
+        val webAppPath = "/clubs/${event.clubId}"
         recipientTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "Открыть клуб", parseMode = PARSE_MODE_HTML)
         }
     }
 

@@ -109,12 +109,12 @@ class SkladchinaChatStatusRendererTest {
     @Test
     fun `description is shown under the title in every kind, escaped and cut at 500 chars`() {
         val text = renderer.statusText(view(rendererSkladchina(description = "Стол на 8, <b>бар</b> внизу")))
-        assertTrue(text.startsWith("💰 Ужин после игры\nСтол на 8, &lt;b&gt;бар&lt;/b&gt; внизу\n"), text)
+        assertTrue(text.startsWith("<b>💸 Новый сбор: Ужин после игры</b>\n\n🏷 Стол на 8, &lt;b&gt;бар&lt;/b&gt; внизу\n\n"), text)
         val perHead = renderer.statusText(view(rendererSkladchina(kind = SkladchinaKind.per_head, description = "Размер укажите в заметке"), totals = DebtTotals(0, 0, null, 0, 0, 0, 0)))
-        assertTrue(perHead.contains("\nРазмер укажите в заметке\n"), perHead)
+        assertTrue(perHead.contains("\n🏷 Размер укажите в заметке\n"), perHead)
         val long = renderer.statusText(view(rendererSkladchina(description = "я".repeat(600))))
         assertTrue(long.contains("я".repeat(499) + "…\n") && !long.contains("я".repeat(500)), "обрезано до 500 с многоточием")
-        assertFalse(renderer.statusText(view(rendererSkladchina(description = "   "))).contains("\n\n"), "пустое описание строки не добавляет")
+        assertFalse(renderer.statusText(view(rendererSkladchina(description = "   "))).contains("🏷"), "пустое описание строки не добавляет")
     }
 
     @Test
@@ -123,6 +123,8 @@ class SkladchinaChatStatusRendererTest {
         val text = renderer.statusText(view(s, waiting = listOf(ChatMention(5L, "<script>"))))
         assertTrue(text.contains("&lt;b&gt;Ужин&lt;/b&gt; &amp; Co"), text)
         assertTrue(text.contains("&lt;script&gt;"), text)
-        assertFalse(text.contains("<b>"), text)
+        // Единственный настоящий тег — жирная шапка «💸 Новый сбор: …»; ввод внутри неё экранирован.
+        assertTrue(text.startsWith("<b>💸 Новый сбор: &lt;b&gt;Ужин&lt;/b&gt; &amp; Co</b>"), text)
+        assertEquals(1, Regex("<b>").findAll(text).count(), text)
     }
 }

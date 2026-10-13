@@ -73,7 +73,7 @@ class SkladchinaChatStatusRenderer(
     fun closedText(view: ChatStatusView): String {
         val s = view.skladchina
         val t = view.totals
-        val header = "${emoji(s)} ${escapeHtml(s.title)}\n"
+        val header = "<b>💸 Сбор: ${escapeHtml(s.title)}</b>\n\n"
         return when {
             s.status == SkladchinaStatus.cancelled && s.enrollmentUntil != null && t.debtCount == 0 ->
                 header + "Не набрали: в деле ${view.enrolledCount}" +
@@ -104,7 +104,7 @@ class SkladchinaChatStatusRenderer(
         val t = view.totals
         val target = t.targetKopecks ?: s.amountKopecks ?: 0L
         val sb = StringBuilder()
-        sb.append("💰 ").append(escapeHtml(s.title)).append("\n")
+        sb.append(newSkladchinaHeader(s))
         appendDescription(sb, s)
         if (t.debtCount > 0 && target > 0) sb.append("по ").append(Money.rub(target / t.debtCount)).append(" с человека · ")
         sb.append("собирает ").append(escapeHtml(view.creatorName)).append("\n")
@@ -120,7 +120,7 @@ class SkladchinaChatStatusRenderer(
     private fun enrollingText(view: ChatStatusView): String {
         val s = view.skladchina
         val sb = StringBuilder()
-        sb.append("🎾 ").append(escapeHtml(s.title)).append("\n")
+        sb.append(newSkladchinaHeader(s))
         appendDescription(sb, s)
         sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" на группу, поровну между теми, кто в деле\n")
         sb.append("👥 В деле ").append(view.enrolledCount)
@@ -134,7 +134,7 @@ class SkladchinaChatStatusRenderer(
         val s = view.skladchina
         val t = view.totals
         val sb = StringBuilder()
-        sb.append("🎫 ").append(escapeHtml(s.title)).append("\n")
+        sb.append(newSkladchinaHeader(s))
         appendDescription(sb, s)
         if (s.orderedAt != null) {
             sb.append("✅ Куплено ").append(t.receivedItems).append(" · ").append(Money.rub(t.receivedKopecks)).append(" · приём закрыт")
@@ -154,7 +154,7 @@ class SkladchinaChatStatusRenderer(
         val s = view.skladchina
         val t = view.totals
         val sb = StringBuilder()
-        sb.append("🎁 ").append(escapeHtml(s.title)).append("\n")
+        sb.append(newSkladchinaHeader(s))
         appendDescription(sb, s)
         sb.append(if (s.isFreeAmountRequired) "сумму выбираете сами" else "по желанию")
         // После встречи ориентир — это общий чек: людям важно знать, сколько потратили.
@@ -176,8 +176,11 @@ class SkladchinaChatStatusRenderer(
 
     /** Описание сбора под заголовком — в каждом состоянии поста (PO 2026-09-14). */
     private fun appendDescription(sb: StringBuilder, s: Skladchina) {
-        Excerpt.of(s.description)?.let { sb.append(escapeHtml(it)).append("\n") }
+        Excerpt.of(s.description)?.let { sb.append("🏷 ").append(escapeHtml(it)).append("\n\n") }
     }
+
+    /** Шапка поста о сборе — как у встречи, но 💸 (PO 2026-10-13): жирное «Новый сбор: <название>». */
+    private fun newSkladchinaHeader(s: Skladchina): String = "<b>💸 Новый сбор: ${escapeHtml(s.title)}</b>\n\n"
 
     private fun appendDeadline(sb: StringBuilder, s: Skladchina, now: OffsetDateTime, t: DebtTotals) {
         val deadline = s.deadline ?: return
@@ -199,12 +202,6 @@ class SkladchinaChatStatusRenderer(
         val green = (t.receivedKopecks * BAR_CELLS / target).toInt().coerceIn(0, BAR_CELLS)
         val yellow = ((t.receivedKopecks + pending) * BAR_CELLS / target).toInt().coerceIn(green, BAR_CELLS) - green
         return "🟩".repeat(green) + "🟨".repeat(yellow) + "⬜".repeat(BAR_CELLS - green - yellow)
-    }
-
-    private fun emoji(s: Skladchina): String = when (s.kind) {
-        SkladchinaKind.shared -> "💰"
-        SkladchinaKind.per_head -> "🎫"
-        SkladchinaKind.voluntary -> "🎁"
     }
 
     /** «@a, @b … и ещё k» — стена из десятков меншенов хуже недопинга, режем по [MAX_MENTIONS]. */

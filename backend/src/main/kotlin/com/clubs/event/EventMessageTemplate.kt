@@ -11,15 +11,16 @@ import java.time.format.DateTimeFormatter
  *
  * Форма (PO 2026-10-10: сверху название, а не формат; каждое поле — своим абзацем):
  * ```
- * <b>Новая встреча: Бар</b>
+ * <b>🔥 Новая встреча: Бар</b>
  *
- * описание: Описание
+ * 🏷 Описание
  *
- * когда: 27.07.2026 09:15 МСК
+ * 📅 27.07.2026 09:15 МСК
  *
- * где: дом
+ * 📍 дом
  *
  * Проголосуй в клубе!
+ *
  * 👥 Заняты 0 из 20 мест — свободно 20.
  * ```
  *
@@ -30,23 +31,23 @@ import java.time.format.DateTimeFormatter
 object EventMessageTemplate {
 
     /**
-     * Заголовок сообщений о том, что со встречей случилось: «Встреча: Бар перенесена», «… отменена»,
+     * Заголовок сообщений о том, что со встречей случилось: «Встреча: Бар — перенесена», «… — отменена»,
      * «… началась» (PO 2026-10-12: название вместо формата «до N человек»; отдельной строки с
      * названием под ним больше нет). Жирный — нужен HTML parse_mode у отправителя.
      */
     fun eventHeadline(event: Event, what: String): String =
-        "<b>Встреча: ${escapeHtml(event.title)} $what</b>"
+        "<b>Встреча: ${escapeHtml(event.title)} — $what</b>"
 
     /**
-     * Шапка: жирное «Новая встреча: …», затем описание / когда / где — каждое своим абзацем (PO 2026-10-10:
+     * Шапка: жирное «🔥 Новая встреча: …», затем 🏷 описание / 📅 когда / 📍 где (PO 2026-10-13) — каждое своим абзацем (PO 2026-10-10:
      * формат встречи сверху читался как характеристика, а не как встреча; места и так видны ниже).
      * Пустые поля (описание, место) не рендерятся вовсе — заготовка «где: —» выглядит как недоделка.
      */
     fun head(event: Event, fmt: DateTimeFormatter): String {
-        val sb = StringBuilder("<b>Новая встреча: ${escapeHtml(event.title)}</b>")
-        event.description?.takeIf { it.isNotBlank() }?.let { sb.append("\n\nописание: ").append(escapeHtml(it)) }
-        sb.append("\n\nкогда: ").append(event.eventDatetime.format(fmt))
-        event.locationDisplay?.let { sb.append("\n\nгде: ").append(escapeHtml(it)) }
+        val sb = StringBuilder("<b>🔥 Новая встреча: ${escapeHtml(event.title)}</b>")
+        event.description?.takeIf { it.isNotBlank() }?.let { sb.append("\n\n🏷 ").append(escapeHtml(it)) }
+        sb.append("\n\n📅 ").append(event.eventDatetime.format(fmt))
+        event.locationDisplay?.let { sb.append("\n\n📍 ").append(escapeHtml(it)) }
         return sb.toString()
     }
 

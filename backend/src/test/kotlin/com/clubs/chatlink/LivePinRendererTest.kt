@@ -39,10 +39,10 @@ class LivePinRendererTest {
     fun `stage1 — голоса, места, время в МСК`() {
         val text = renderer.stage1Text(event, going = 9, maybe = 3)
         // Общий шаблон (PO 2026-10-10): сверху жирное название, затем когда/где — каждое своим абзацем.
-        assertTrue(text.startsWith("<b>Новая встреча: Поход в баню</b>\n\nкогда: 12.07.2026 19:00 МСК"), text)
+        assertTrue(text.startsWith("<b>🔥 Новая встреча: Поход в баню</b>\n\n📅 12.07.2026 19:00 МСК"), text)
         assertFalse(text.contains("Встреча: до"), "формат встречи сверху больше не пишем")
         // Призыв к действию стоит прямо над счётчиками (PO 2026-08-10)
-        assertTrue(text.contains("Проголосуй в клубе!\n✅ Идут — 9"))
+        assertTrue(text.contains("Проголосуй в клубе!\n\n✅ Идут — 9"))
         assertTrue(text.contains("✅ Идут — 9"))
         assertTrue(text.contains("🤔 Возможно — 3"))
         assertTrue(text.contains("👥 Мест — 15"))
@@ -50,13 +50,13 @@ class LivePinRendererTest {
 
     @Test
     fun `место в закрепе — уточнение в скобках после адреса, у события без места строки где нет`() {
-        assertTrue(renderer.stage1Text(event, going = 1, maybe = 0).contains("где: Сандуны"))
+        assertTrue(renderer.stage1Text(event, going = 1, maybe = 0).contains("📍 Сандуны"))
         val withHint = renderer.stage1Text(event.copy(locationHint = "3-й этаж"), going = 1, maybe = 0)
-        assertTrue(withHint.contains("где: Сандуны (3-й этаж)"))
+        assertTrue(withHint.contains("📍 Сандуны (3-й этаж)"))
         val hintOnly = renderer.stage1Text(event.copy(locationText = null, locationHint = "В зуме"), going = 1, maybe = 0)
-        assertTrue(hintOnly.contains("где: В зуме"))
+        assertTrue(hintOnly.contains("📍 В зуме"))
         val noLocation = renderer.stage1Text(event.copy(locationText = null), going = 1, maybe = 0)
-        assertFalse(noLocation.contains("где:"))
+        assertFalse(noLocation.contains("📍"))
     }
 
     // HTML parse_mode: пользовательский ввод обязан экранироваться, иначе `<` ломает
@@ -66,7 +66,7 @@ class LivePinRendererTest {
         val nasty = event.copy(title = "Баня <b>&", locationText = "Дом & сад", locationHint = null)
         val text = renderer.stage1Text(nasty, going = 1, maybe = 0)
         assertTrue(text.contains("Баня &lt;b&gt;&amp;"))
-        assertTrue(text.contains("где: Дом &amp; сад"))
+        assertTrue(text.contains("📍 Дом &amp; сад"))
         // Заголовок формата — единственный настоящий тег в сообщении.
         assertEquals(1, Regex("<b>").findAll(text).count())
     }
@@ -76,7 +76,7 @@ class LivePinRendererTest {
         val described = event.copy(description = "Берём веники", locationText = null, locationHint = "В бане")
         val text = renderer.stage1Text(described, going = 0, maybe = 0)
         assertTrue(
-            text.startsWith("<b>Новая встреча: Поход в баню</b>\n\nописание: Берём веники\n\nкогда: 12.07.2026 19:00 МСК\n\nгде: В бане"),
+            text.startsWith("<b>🔥 Новая встреча: Поход в баню</b>\n\n🏷 Берём веники\n\n📅 12.07.2026 19:00 МСК\n\n📍 В бане"),
             text
         )
     }
@@ -87,7 +87,7 @@ class LivePinRendererTest {
         val open = event.copy(participantLimit = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.startsWith("<b>Новая встреча: Поход в баню</b>"))
+        assertTrue(stage1.startsWith("<b>🔥 Новая встреча: Поход в баню</b>"))
         assertTrue(stage1.contains("🌊 Без мест и очереди — «Пойду» сразу записывает; передумать можно до начала"))
         assertFalse(stage1.contains("Мест —"))
 
@@ -150,7 +150,7 @@ class LivePinRendererTest {
     @Test
     fun `отмена — причина опциональна`() {
         val withReason = renderer.cancelledText(event, "все заболели")
-        assertTrue(withReason.startsWith("<b>Встреча: Поход в баню отменена</b>\n\nкогда: "), withReason)
+        assertTrue(withReason.startsWith("<b>Встреча: Поход в баню — отменена</b>\n\nкогда: "), withReason)
         assertTrue(withReason.contains("причина: все заболели"))
         assertFalse(renderer.cancelledText(event, null).contains("причина"))
     }
@@ -160,7 +160,7 @@ class LivePinRendererTest {
         val moved = event.copy(locationText = "парк имени Революции 1905 года")
         val text = renderer.editedText(EventEditedEvent(event = moved, oldEvent = event))
 
-        assertTrue(text.startsWith("<b>Встреча: Поход в баню меняет место</b>\n\nкогда: "), text)
+        assertTrue(text.startsWith("<b>Встреча: Поход в баню — меняет место</b>\n\nкогда: "), text)
         // Именно \n\n: адреса длинные, переносятся на две-три строки и без отступа читаются
         // как один абзац — разница «было/стало» теряется (правка PO 2026-08-10).
         assertTrue(text.contains("где было: Сандуны\n\nгде стало: парк имени Революции 1905 года"))
@@ -174,7 +174,7 @@ class LivePinRendererTest {
         val text = renderer.editedText(EventEditedEvent(event = later, oldEvent = event))
         assertTrue(
             text.startsWith(
-                "<b>Встреча: Поход в баню перенесена</b>\n\n" +
+                "<b>Встреча: Поход в баню — перенесена</b>\n\n" +
                     "когда было: 12.07.2026 19:00 МСК\nкогда стало: 13.07.2026 19:00 МСК\nгде: Сандуны\n\nПроголосуй в клубе!"
             ),
             text
@@ -184,7 +184,7 @@ class LivePinRendererTest {
     @Test
     fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.startsWith("<b>Встреча: Поход в баню началась</b>\n\nкогда: "), text)
+        assertTrue(text.startsWith("<b>Встреча: Поход в баню — началась</b>\n\nкогда: "), text)
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
     }
@@ -196,7 +196,7 @@ class LivePinRendererTest {
         val deadline = OffsetDateTime.of(2026, 7, 11, 22, 0, 0, 0, ZoneOffset.UTC)
 
         val short = renderer.rosterText(withMin, confirmed = 3, deadline = deadline)
-        assertTrue(short.startsWith("<b>Новая встреча: Поход в баню</b>"))
+        assertTrue(short.startsWith("<b>🔥 Новая встреча: Поход в баню</b>"))
         assertTrue(short.contains("👥 Максимум мест — 15, минимум 4. Нужно ещё 1 — иначе встреча отменится."))
         assertTrue(short.contains("⏳ До 12.07.2026 01:00 МСК передумать можно без влияния на репутацию."))
 
