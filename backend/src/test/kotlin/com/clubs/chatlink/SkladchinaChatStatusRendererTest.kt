@@ -45,8 +45,17 @@ class SkladchinaChatStatusRendererTest {
         waiting: List<ChatMention> = emptyList(),
         enrolled: List<ChatMention> = emptyList(),
         enrolledCount: Int = enrolled.size,
-        at: OffsetDateTime = now
-    ) = ChatStatusView(s, totals, enrolledCount, creatorName = "Иван", waiting = waiting, enrolled = enrolled, now = at)
+        at: OffsetDateTime = now,
+        creatorUsername: String? = null
+    ) = ChatStatusView(s, totals, enrolledCount, creatorName = "Иван", creatorUsername = creatorUsername, waiting = waiting, enrolled = enrolled, now = at)
+
+    @Test
+    fun `creator is tagged by username when present and named otherwise`() {
+        assertTrue(renderer.statusText(view(rendererSkladchina(), creatorUsername = "ivan_v")).contains("собирает @ivan_v"))
+        assertTrue(renderer.statusText(view(rendererSkladchina(kind = SkladchinaKind.per_head), creatorUsername = "ivan_v")).contains("· @ivan_v покупает"))
+        assertTrue(renderer.statusText(view(rendererSkladchina(kind = SkladchinaKind.voluntary), creatorUsername = "ivan_v")).contains("собирает @ivan_v"))
+        assertTrue(renderer.statusText(view(rendererSkladchina())).contains("собирает Иван"))
+    }
 
     @Test
     fun `shared status shows money progress, share per person and mentions before the deadline`() {

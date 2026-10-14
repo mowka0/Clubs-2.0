@@ -45,11 +45,12 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const inSettlement = debt.settlementId !== null;
   const canAct = !readOnly && !busy && open && !inSettlement && !own && (isDebtor || isCreditor);
 
+  // После «Не получил» статус не пишем: реплика получателя в разборе ниже и так это говорит (PO 2026-10-14).
   const statusLine = (() => {
     if (own) return 'ваш взнос ✅';
     switch (debt.status) {
       case 'waiting':
-        if (debt.rejectedAt) return 'не получил · ответьте: заметка или чек';
+        if (debt.rejectedAt) return null;
         if (!debt.dueAt) return 'без срока';
         return debt.isOverdue ? `срок вышел ${DAY_FMT.format(new Date(debt.dueAt))}` : `до ${DATE_FMT.format(new Date(debt.dueAt))}`;
       case 'promised':
@@ -122,7 +123,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
         </span>
       </div>
       {showContext && <div className="rd-debt-meta">{debt.skladchinaTitle} · {debt.clubName}</div>}
-      <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>
+      {statusLine && <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>}
       {thread.length > 0 && (
         <div className="rd-debt-thread">
           {thread.map((m) => (

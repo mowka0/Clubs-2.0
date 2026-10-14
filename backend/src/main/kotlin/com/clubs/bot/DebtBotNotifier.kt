@@ -68,7 +68,7 @@ class DebtBotNotifier(
                 "а заказ уже сделан — вы выбыли, долга нет."
         } else buildString {
             append("❌ ${d.creditor.firstName} не нашёл ваш перевод ${Money.rub(d.debt.amountKopecks)} за «${d.skladchinaTitle}».")
-            d.debt.rejectNote?.let { append("\nЗаметка: ").append(it) }
+            d.debt.rejectNote?.let { append("\n\nЗаметка: ").append(it) }
             append("\n\nПриложите чек в приложении, чтобы разобраться.")
         }
         notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/debts/with/${d.debt.creditorId}", OPEN_DEBTS_BUTTON)
