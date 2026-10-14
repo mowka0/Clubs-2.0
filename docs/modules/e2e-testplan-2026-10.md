@@ -17,8 +17,7 @@
 | A–C, I, S | ✅ | 2026-10-10: PO проверил по трём тематическим чек-листам (клуб из чата, оплата клуба, этап 1 + правки) |
 | D | ✅ | 2026-10-12/13 на staging целиком; D7 — запись `attendance ironclad +100` в БД; D13 удалён вместе с `/кто_идет` |
 | E, F | ✅ | 2026-10-13/14 по чек-листу 2 (`docs/backlog/staging-checklist-2-skladchina.md`); правки PO по ходу — ветка `bugfix/skladchina-debt-polish`, skladchina-v3 § 35–37 |
-| G1 | ✅ | 2026-10-13 |
-| G2–G3, K, J | ⏳ | чек-лист 3 (`docs/backlog/staging-checklist-3-coorg-feedback-leave.md`) |
+| G, K, J | ✅ | G1 2026-10-13; G2–G3, K1, J1–J3 2026-10-14 по чек-листу 3 (`docs/backlog/staging-checklist-3-coorg-feedback-leave.md`), замечаний нет. После J3 чат «Тест Clubs» отвязан |
 | H | ⏸ | заявки спрятаны на этапе 1 — блок не проходим |
 
 ## Как работать с планом
