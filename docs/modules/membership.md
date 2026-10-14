@@ -285,7 +285,10 @@ THEN 403 "Not a member of this club"
 GET /api/clubs/{clubId}/members/{userId}
   Path: clubId — клуб контекста, userId — профиль которого участника смотрим
   Response 200: MemberProfileDto
-  Errors: 403, 404
+  Errors: 403 — вызывающий не активный участник clubId;
+          404 — у userId нет строки членства в clubId (любого статуса; ушедшие/cancelled и
+          «ждут оплаты» остаются доступны). До 2026-10-14 endpoint отдавал профиль любого
+          пользователя платформы по UUID (аудит, A1).
 ```
 
 ### MemberProfileDto
@@ -309,7 +312,10 @@ GET /api/clubs/{clubId}/members/{userId}
 
 ### Бизнес-правила
 - Caller должен быть `active` member клуба `clubId` → иначе 403
-- Пользователь `userId` должен существовать в `users` → иначе 404 "User not found"
+- У `userId` должна быть строка `memberships` в `clubId` → иначе 404 "Member not found" (с 2026-10-14, аудит A1).
+  Менеджеру доступна строка любого статуса (`cancelled` — «Вернуть», `frozen`/`expired` — «Ждут оплаты»);
+  рядовому участнику — только `active`, как в ростере. Проверка членства идёт ДО поиска в `users`,
+  поэтому endpoint больше не оракул существования пользователя по UUID
 - При отсутствии записи в `user_club_reputation` ИЛИ `outcome_count < 3` (или владелец своего клуба) —
   блок репутации подавлен (модель v2 ledger):
   - `trust = null`
@@ -317,7 +323,6 @@ GET /api/clubs/{clubId}/members/{userId}
   - `totalConfirmations = null`
   - `totalAttendances = null`
   - `role` несётся в DTO → фронт рендерит «Новичок» (member) или организаторскую рамку (organizer)
-- Проверка того, что `userId` — реально member клуба `clubId`, **не выполняется** в текущей реализации. Endpoint вернёт профиль любого существующего пользователя при дефолтных метриках репутации, если в этой паре с клубом нет записи. (См. risks ниже.)
 
 ### Authorization
 - JWT обязателен
@@ -345,13 +350,14 @@ THEN 200 OK с trust=null, promiseFulfillmentPct=null, totalConfirmations=null, 
 | Ситуация | Код | Сообщение |
 |----------|-----|-----------|
 | Caller не member клуба | 403 | "Not a member of this club" |
-| userId не существует в users | 404 | "User not found" |
-| userId существует, но не member клуба X | 200 | возвращает профиль с дефолтной репутацией; см. Risks |
+| у userId нет строки memberships в клубе X | 404 | "Member not found" (любой UUID — тот же ответ) |
+| userId ушёл/удалён (`cancelled`), смотрит рядовой участник | 404 | "Member not found" (менеджеру — 200) |
+| строка членства есть, а users-записи нет (осиротевшая строка, FK практически исключает) | 404 | "User not found" |
 | Запрос без JWT | 401 | стандартный Spring Security |
 | clubId не существует | 403 | "Not a member of this club" (privacy) |
 
 ### Risks / Open
-- **Open question:** endpoint не верифицирует что `userId` — member клуба `clubId`. Caller (active member клуба) может запросить профиль произвольного существующего user'а в контексте этого клуба и получить дефолтную репутацию. Утечка: подтверждение факта существования любого пользователя по UUID. Не считается критической в MVP (UUID-перебор практически нереален), но зафиксировано как потенциальное место для ужесточения. Закладывать в backlog только если станет проблемой.
+- ~~endpoint не верифицирует, что `userId` — member клуба~~ — закрыто 2026-10-14 (аудит утечек, A1): членство `userId` проверяется до всего остального, см. Бизнес-правила.
 
 ---
 
