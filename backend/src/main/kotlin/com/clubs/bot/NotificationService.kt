@@ -115,12 +115,12 @@ class NotificationService(
         val lon = event.locationLon
         val markup = if (lat != null && lon != null) {
             buildKeyboard(
-                "📅 Открыть событие",
+                "📅 Открыть встречу",
                 webAppPath = webAppPath,
                 externalUrlButton = OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon)
             )
         } else {
-            buildKeyboard("📅 Открыть событие", webAppPath = webAppPath)
+            buildKeyboard("📅 Открыть встречу", webAppPath = webAppPath)
         }
         val photoUrl = event.photoUrl?.let { absolutePhotoUrl(it, webAppBaseUrl) }
         if (photoUrl != null) {
@@ -147,7 +147,7 @@ class NotificationService(
         } catch (e: Exception) {
             log.error("Failed to send event DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
             // Последний фолбэк — стандартный DM с одной WebApp-кнопкой.
-            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть встречу")
         }
     }
 
@@ -367,7 +367,7 @@ class NotificationService(
         recipientTelegramIds.forEach { telegramId ->
             sendDm(
                 telegramId.toString(), text, webAppPath = webAppPath,
-                buttonText = "📅 Открыть событие", parseMode = PARSE_MODE_HTML,
+                buttonText = "📅 Открыть встречу", parseMode = PARSE_MODE_HTML,
                 externalUrlButton = mapsButton
             )
         }
@@ -422,7 +422,7 @@ class NotificationService(
         } else {
             "Отметьте, кто пришёл — без этого репутация участников не начислится:"
         }
-        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n$motivation"
+        val text = "📋 Встреча «${event.title}» (${event.eventDatetime.format(fmt)}) прошла.\n\n$motivation"
         sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Отметить явку")
     }
 
@@ -436,7 +436,7 @@ class NotificationService(
     fun sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>) {
         if (newlyAbsentUserIds.isEmpty()) return
         val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndUserIds(eventId, newlyAbsentUserIds)
-        val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:"
+        val text = "📋 Организатор отметил присутствие на встрече.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице встречи:"
         // Диплинк сразу на страницу события, чтобы кнопка оспаривания была в один тап (ATT-3).
         val webAppPath = "/events/$eventId"
 
@@ -458,7 +458,7 @@ class NotificationService(
             "⚖️ Организатор рассмотрел ваш спор по «${event.title}» " +
                 "(${event.eventDatetime.format(fmt)}) — отметка «не пришёл» осталась в силе."
         }
-        sendDm(participantTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+        sendDm(participantTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть встречу")
     }
 
     /**
@@ -475,7 +475,7 @@ class NotificationService(
         } else {
             "иначе останется исходная отметка, и участник получит штраф"
         }
-        val text = "⚖️ $disputerName оспорил отметку «не пришёл» на событии «${event.title}».\n\n" +
+        val text = "⚖️ $disputerName оспорил отметку «не пришёл» на встрече «${event.title}».\n\n" +
             "Разберите спор до закрытия окна оспаривания — $consequence:"
         sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Разобрать спор")
     }
@@ -654,7 +654,7 @@ class NotificationService(
             organizerTelegramId.toString(),
             "🔔 Напомнили: ${names.joinToString(", ")}",
             webAppPath = "/events/$eventId",
-            buttonText = "📅 Открыть событие"
+            buttonText = "📅 Открыть встречу"
         )
     }
 

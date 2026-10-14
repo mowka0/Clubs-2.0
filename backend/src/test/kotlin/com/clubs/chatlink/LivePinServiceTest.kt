@@ -117,7 +117,7 @@ class LivePinServiceTest {
                     it.contains("где стало: парк имени Революции 1905 года") &&
                         it.contains("Проголосуй в клубе!")
                 },
-                buttonText = "К событию",
+                buttonText = "К встрече",
                 url = "https://t.me/clubs_test_bot?startapp=event_${moved.id}",
                 parseMode = any(),
                 silent = any(),
@@ -139,8 +139,8 @@ class LivePinServiceTest {
             gateway.sendGroupMessageWithUrlButton(
                 chatId = chatId,
                 text = any(),
-                // Кнопка «К событию» есть всегда, а вот второй строки с картами быть не должно.
-                buttonText = "К событию",
+                // Кнопка «К встрече» есть всегда, а вот второй строки с картами быть не должно.
+                buttonText = "К встрече",
                 url = "https://t.me/clubs_test_bot?startapp=event_${moved.id}",
                 parseMode = any(),
                 silent = any(),

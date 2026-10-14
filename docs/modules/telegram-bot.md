@@ -282,9 +282,9 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 и в посте чата; иначе новый адрес приходится копировать руками.
 Заканчивается уведомление призывом **«Проголосуй в клубе!»** (общая константа
 `EventMessageTemplate.VOTE_CALL_TO_ACTION` — та же строка в живом закрепе), а пост в чате
-получает кнопку **«К событию»**. Формулировка нейтральная, а не «Проголосовать»: правка
+получает кнопку **«К встрече»**. Формулировка нейтральная, а не «Проголосовать»: правка
 приходит и на Этапе 2, где голосование закрыто и ждут подтверждения участия.
-**Inline-кнопка:** «📅 Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
+**Inline-кнопка:** «📅 Открыть встречу» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
 **Подключение:** `EventService.createEvent` (`@Transactional`) публикует `EventCreatedEvent` после `eventRepository.create()`; `EventBotNotifier.onEventCreated` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendEventCreated` (`@Async` — не блокирует HTTP-ответ при массовой рассылке). Те же транзакционные гарантии, что у Payment/Skladchina DM: при rollback `createEvent` DM не уходят. Per-DM ошибки Telegram ловятся и логируются внутри `sendDm` (fire-and-forget — сбой бота не валит создание события). Пустой список получателей → `WARN` + return.
 
 ### `sendStage2Started(event: Event)` — **удалён 2026-09-15** `[был: GAP-004 ✅, GAP-009 ✅, S2T-2 ✅]`
@@ -338,7 +338,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   — на `RosterWarningEvent` (правило ②, за `events.roster-warning-minutes-before-deadline` до
   дедлайна при недоборе): «⏳ Минимум пока не набран … Набрано 2 из 4. Если к {дедлайн} не наберём —
   встреча отменится.» Кнопка одна, callback `roster:remind:<eventId>` →
-  `VoteService.remind` (все, кто без ответа); успех — DM «🔔 Напомнили: имена» с кнопкой «📅 Открыть событие», без алерта (PO 2026-09-06);
+  `VoteService.remind` (все, кто без ответа); успех — DM «🔔 Напомнили: имена» с кнопкой «📅 Открыть встречу», без алерта (PO 2026-09-06);
   алерты «Напоминать некому» /
   «Нет прав». Отправляется через `ChatTelegramGateway.sendDmWithCallbackButton`.
 - **`sendRosterBroken(event, organizerTelegramId, confirmedCount, minParticipants)`** — на
