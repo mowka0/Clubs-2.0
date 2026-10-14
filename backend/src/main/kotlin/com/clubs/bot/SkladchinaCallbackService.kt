@@ -61,7 +61,10 @@ class SkladchinaCallbackService(
         }
     }
 
-    /** «Беру» из DM о сборе «Кто берёт?»: одна штука, без заметки — как кнопка в приложении по умолчанию. */
+    /**
+     * «Беру» из DM о сборе «Кто берёт?»: одна штука, без заметки. Новые DM кнопку больше не несут
+     * (PO 2026-10-14) — обработчик живёт ради уже разосланных сообщений.
+     */
     fun handleTake(fromTelegramId: Long, skladchinaId: UUID): String {
         val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
         return guarded(fromTelegramId, skladchinaId) {

@@ -4,6 +4,8 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { PhotoAttach } from '../components/PhotoAttach';
+import { BrandStepper } from '../components/BrandStepper';
+import { MIN_PARTICIPANTS_FLOOR, PARTICIPANT_MAX } from '../components/event/RosterLimitsFields';
 import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation, useSplittableEventsQuery } from '../queries/skladchina';
@@ -94,7 +96,8 @@ export const CreateSkladchinaPage: FC = () => {
   const [noDeadline, setNoDeadline] = useState(false);
   const eventId = presetEventId;
   const [enrollmentUntil, setEnrollmentUntil] = useState(plusDays(1));
-  const [minParticipants, setMinParticipants] = useState('');
+  // null — минимум выключен; включение даёт 2, как у встречи (PO 2026-10-14).
+  const [minParticipants, setMinParticipants] = useState<number | null>(null);
   const [enrollCreator, setEnrollCreator] = useState(true);
   const [takeCreator, setTakeCreator] = useState(true);
   const [creatorQuantity, setCreatorQuantity] = useState('1');
@@ -206,9 +209,7 @@ export const CreateSkladchinaPage: FC = () => {
     if (flow === 'enroll') {
       if (!enrollmentUntil) return fail('Укажите, до когда открыта запись');
       body.enrollmentUntil = new Date(enrollmentUntil).toISOString();
-      const min = minParticipants.trim() ? Number(minParticipants) : null;
-      if (min !== null && (!Number.isInteger(min) || min < 1)) return fail('Минимум — целое число от 1');
-      body.minParticipants = min;
+      body.minParticipants = minParticipants;
       body.enrollCreator = enrollCreator;
     }
     if (flow === 'per_head') {
@@ -394,11 +395,34 @@ export const CreateSkladchinaPage: FC = () => {
               <input type="checkbox" checked={enrollCreator} onChange={(e) => setEnrollCreator(e.target.checked)} />
               <span>Я тоже участвую · доля посчитается вместе со всеми и сразу считается полученной</span>
             </label>
-            <label className="rd-field">
-              <span className="rd-label">Минимум людей</span>
-              <input className="rd-input" type="number" inputMode="numeric" min="1" value={minParticipants} onChange={(e) => setMinParticipants(e.target.value)} placeholder="Необязательно" />
-              <span className="rd-hint">Не наберётся — сбор отменится сам, денег никто не переводит.</span>
-            </label>
+            {/* Переключатель со степпером — как «Минимум участников» у встречи (PO 2026-10-14). */}
+            <div className="rd-field">
+              <div className="rd-roster-min-row">
+                <span className="rd-label">Минимум людей</span>
+                <button
+                  type="button"
+                  className={`rd-cl-tgl${minParticipants !== null ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={minParticipants !== null}
+                  aria-label="Минимум людей"
+                  onClick={() => { haptic.select(); setMinParticipants(minParticipants === null ? MIN_PARTICIPANTS_FLOOR : null); }}
+                />
+              </div>
+              {minParticipants !== null && (
+                <BrandStepper
+                  value={minParticipants}
+                  onChange={setMinParticipants}
+                  min={MIN_PARTICIPANTS_FLOOR}
+                  max={PARTICIPANT_MAX}
+                  ariaLabel="Значение минимума"
+                />
+              )}
+              <span className="rd-hint">
+                {minParticipants !== null
+                  ? `Собираем, если в деле будет минимум ${minParticipants}. Не наберётся — сбор отменится сам, денег никто не переводит`
+                  : 'Выключен — сбор состоится при любом составе'}
+              </span>
+            </div>
           </>
         )}
 
@@ -465,8 +489,10 @@ export const CreateSkladchinaPage: FC = () => {
           </div>
         )}
 
+        {/* Чек есть только там, где деньги уже потрачены: «Список» и сбор по встрече. В «Кто в деле?»,
+            «Кто берёт?» и «По желанию» без встречи покупки ещё не было — чек не предлагаем (PO 2026-10-14). */}
         <div className="rd-field">
-          <span className="rd-label">Фото / чек</span>
+          <span className="rd-label">{flow === 'split' || (flow === 'voluntary' && eventId) ? 'Фото / чек' : 'Фото'}</span>
           <PhotoAttach value={photoUrl} onChange={setPhotoUrl} addLabel="Прикрепить фото" />
         </div>
 

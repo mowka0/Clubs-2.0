@@ -9,6 +9,7 @@ import com.clubs.reputation.ReputationPolicy
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
 import com.clubs.skladchina.SkladchinaLockedEvent
+import com.clubs.skladchina.SkladchinaMinimumReachedEvent
 import com.clubs.skladchina.SkladchinaOrderedEvent
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -53,11 +54,10 @@ class SkladchinaBotNotifier(
         val creatorName = userRepository.findById(event.creatorId)?.firstName ?: "Организатор"
         recipients.forEach { user ->
             val text = createdText(event, creatorName, share = event.debtorShares[user.id])
-            // Записаться / взять прямо из DM, без перехода в приложение (PO 2026-09-13).
-            val quickButton = when {
-                event.enrollmentUntil != null -> DmButton("✅ В деле", callbackData = SkladchinaCallbackService.ENROLL_PREFIX + event.skladchinaId)
-                event.kind == SkladchinaKind.per_head -> DmButton("🎫 Беру", callbackData = SkladchinaCallbackService.TAKE_PREFIX + event.skladchinaId)
-                else -> null
+            // Записаться прямо из DM, без перехода в приложение (PO 2026-09-13). «Беру» здесь нет:
+            // кнопка брала ровно одну штуку, а количество выбирают в приложении (PO 2026-10-14).
+            val quickButton = event.enrollmentUntil?.let {
+                DmButton("✅ В деле", callbackData = SkladchinaCallbackService.ENROLL_PREFIX + event.skladchinaId)
             }
             val openButton = DmButton(OPEN_BUTTON, webAppPath = "/skladchina/${event.skladchinaId}")
             val rows = if (quickButton != null) listOf(listOf(quickButton), listOf(openButton)) else listOf(listOf(openButton))
@@ -95,7 +95,7 @@ class SkladchinaBotNotifier(
                 append("🎫 «${e.title}» в клубе «${e.clubName}»: ").append(Money.rub(e.amountKopecks ?: 0L)).append(" за штуку.")
                 Excerpt.of(e.description)?.let { append("\n\n").append(it) }
                 e.deadline?.let { append("\n\n$creatorName покупает ").append(it.format(fmt)).append(" на тех, кто оплатил.") }
-                append("\nНажмите «Беру», если вам нужно.")
+                append("\nНужно — откройте сбор и нажмите «Беру», там же выберите количество.")
             }
             SkladchinaKind.voluntary -> {
                 append("🎁 «${e.title}» в клубе «${e.clubName}» — по желанию")
@@ -134,7 +134,7 @@ class SkladchinaBotNotifier(
         userRepository.findByIds(event.debtorShares.keys).forEach { user ->
             val amount = event.debtorShares[user.id] ?: return@forEach
             val text = buildString {
-                append("💰 Список «${event.title}» заморожен: в деле ${event.enrolledCount}.")
+                append("💰 Список участников «${event.title}» заморожен: в деле ${event.enrolledCount}.")
                 append("\n\n💵 Ваша доля: ").append(Money.rub(amount))
                 event.deadline?.let { append("\n⏳ До: ").append(it.format(fmt)) }
                 append(requisites(event.paymentLink, event.paymentMethodNote))
@@ -152,6 +152,19 @@ class SkladchinaBotNotifier(
             )
         }
         log.info("Skladchina-locked DM sent: id={} debtors={}", event.skladchinaId, event.debtorShares.size)
+    }
+
+    /** «Кто в деле?»: минимум набрался — создатель решает, ждать срока или закрыть запись раньше. */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onMinimumReached(event: SkladchinaMinimumReachedEvent) {
+        val telegramId = userRepository.findById(event.creatorId)?.telegramId ?: return
+        val text = buildString {
+            append("✅ В сборе «${event.title}» набрался минимум: в деле ${event.enrolledCount}.")
+            event.enrollmentUntil?.let { append("\n\nЗапись открыта до ").append(it.format(fmt)) }
+            append("\n\nМожно ждать срока или закрыть запись раньше в приложении.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(telegramId, text, "/skladchina/${event.skladchinaId}", OPEN_BUTTON)
+        log.info("Skladchina minimum-reached DM sent: id={} enrolled={}", event.skladchinaId, event.enrolledCount)
     }
 
     /** «Заказываю»: выбывшим — без долга; обещавшим, кого взяли в долг, — что купили и на них. */

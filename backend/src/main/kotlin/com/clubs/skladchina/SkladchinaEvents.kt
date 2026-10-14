@@ -46,6 +46,15 @@ data class SkladchinaProgressChangedEvent(
     val skladchinaId: UUID
 )
 
+/** «Кто в деле?»: отметившихся стало ровно [enrolledCount] = минимуму — создателю DM. */
+data class SkladchinaMinimumReachedEvent(
+    val skladchinaId: UUID,
+    val creatorId: UUID,
+    val title: String,
+    val enrolledCount: Int,
+    val enrollmentUntil: OffsetDateTime?
+)
+
 /**
  * Этап «Кто в деле?» закрыт (по сроку шедулером или рукой создателя). Либо долги созданы
  * ([debtorShares] непусто, [cancelledForShortfall] = false), либо не набрали минимум —

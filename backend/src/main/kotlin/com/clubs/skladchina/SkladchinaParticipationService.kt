@@ -46,8 +46,10 @@ class SkladchinaParticipationService(
         val s = requireActiveForMember(skladchinaId, callerId)
         when {
             s.isEnrolling -> {
-                skladchinaRepository.addEnrollment(skladchinaId, callerId)
-                log.info("Skladchina enrolled: id={} userId={}", skladchinaId, callerId)
+                if (skladchinaRepository.addEnrollment(skladchinaId, callerId)) {
+                    log.info("Skladchina enrolled: id={} userId={}", skladchinaId, callerId)
+                    publishIfMinimumReached(s, callerId)
+                }
             }
             s.kind == SkladchinaKind.per_head -> {
                 if (s.orderedAt != null) throw ValidationException("Приём закрыт: заказ уже сделан")
@@ -213,6 +215,20 @@ class SkladchinaParticipationService(
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         lifecycleService.maybeComplete(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * Создателю — что минимум набрался (PO 2026-10-14): дальше он решает, ждать срока или закрыть
+     * запись. Строка сбора под блокировкой, поэтому «ровно минимум» ловит один переход вверх.
+     * Добрал минимум сам создатель — о своём же нажатии не пишем.
+     */
+    private fun publishIfMinimumReached(s: Skladchina, callerId: UUID) {
+        if (callerId == s.creatorId) return
+        val min = s.minParticipants ?: return
+        val enrolled = skladchinaRepository.countEnrolled(s.id)
+        if (enrolled == min) {
+            eventPublisher.publishEvent(SkladchinaMinimumReachedEvent(s.id, s.creatorId, s.title, enrolled, s.enrollmentUntil))
+        }
     }
 
     private fun requireActiveForMember(skladchinaId: UUID, callerId: UUID): Skladchina {

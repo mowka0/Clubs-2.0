@@ -51,12 +51,11 @@ class SkladchinaChatStatusRenderer(
     fun skladchinaUrl(skladchinaId: UUID): String =
         "https://t.me/$botUsername?startapp=skladchina_$skladchinaId"
 
-    /** Кнопка под постом ведёт в приложение; текст зовёт к действию стадии. */
-    fun buttonText(s: Skladchina): String = when {
-        s.isEnrolling -> "В деле"
-        s.kind == SkladchinaKind.per_head && s.orderedAt == null -> "Беру"
-        else -> "Открыть сбор"
-    }
+    /**
+     * Кнопка под постом ведёт в приложение; текст зовёт к действию стадии. У «Кто берёт?» — просто
+     * «Открыть сбор»: «Беру» читалось как «одна штука», а брать можно несколько (PO 2026-10-14).
+     */
+    fun buttonText(s: Skladchina): String = if (s.isEnrolling) "В деле" else "Открыть сбор"
 
     fun statusText(view: ChatStatusView): String {
         val s = view.skladchina

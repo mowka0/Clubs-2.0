@@ -88,12 +88,12 @@ class SkladchinaChatStatusRendererTest {
     }
 
     @Test
-    fun `per_head shows takers and Беру button, after order shows bought count`() {
+    fun `per_head shows takers and an open button, after order shows bought count`() {
         val s = rendererSkladchina(kind = SkladchinaKind.per_head, amountKopecks = 150_000)
         val text = renderer.statusText(view(s, totals = DebtTotals(300_000, 0, 450_000, 3, 2, 1, 0)))
         assertTrue(text.contains("1 500 ₽ за штуку"), text)
         assertTrue(text.contains("Берут 3 · оплатили 2"), text)
-        assertEquals("Беру", renderer.buttonText(s))
+        assertEquals("Открыть сбор", renderer.buttonText(s))
 
         val ordered = rendererSkladchina(kind = SkladchinaKind.per_head, amountKopecks = 150_000, orderedAt = now)
         val orderedText = renderer.statusText(view(ordered, totals = DebtTotals(300_000, 0, 300_000, 2, 2, 0, 0, receivedItems = 2)))

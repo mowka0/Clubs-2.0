@@ -4,6 +4,8 @@ import com.clubs.chatlink.SkladchinaChatStatusService
 import com.clubs.generated.jooq.enums.SkladchinaKind
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.skladchina.SkladchinaCreatedEvent
+import com.clubs.skladchina.SkladchinaLockedEvent
+import com.clubs.skladchina.SkladchinaMinimumReachedEvent
 import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -96,11 +98,51 @@ class SkladchinaBotNotifierTest {
 
     @Test
     fun `skladchina without a photo never touches the photo API, quick button keeps its keyboard`() {
-        val event = created(photoUrl = null, kind = SkladchinaKind.per_head)
+        val event = created(photoUrl = null, enrollmentUntil = OffsetDateTime.now().plusDays(1))
 
         notifier.onSkladchinaCreated(event)
 
         verify(exactly = 0) { gateway.sendDmPhotoWithButtons(any(), any(), any(), any()) }
-        verify { gateway.sendDmWithButtons(42L, any(), match { rows -> rows.size == 2 && rows[0][0].callbackData == SkladchinaCallbackService.TAKE_PREFIX + event.skladchinaId }) }
+        verify { gateway.sendDmWithButtons(42L, any(), match { rows -> rows.size == 2 && rows[0][0].callbackData == SkladchinaCallbackService.ENROLL_PREFIX + event.skladchinaId }) }
+    }
+
+    @Test
+    fun `per_head DM has no quick Беру button, only the open button`() {
+        val event = created(photoUrl = null, kind = SkladchinaKind.per_head)
+
+        notifier.onSkladchinaCreated(event)
+
+        verify(exactly = 0) { gateway.sendDmWithButtons(any(), any(), any()) }
+        verify { notificationService.sendDirectMessageWithDeepLink(42L, match { it.contains("выберите количество") }, "/skladchina/${event.skladchinaId}", SkladchinaBotNotifier.OPEN_BUTTON) }
+    }
+
+    @Test
+    fun `minimum reached DM goes to the creator with the enrollment deadline`() {
+        val skladchinaId = UUID.randomUUID()
+
+        notifier.onMinimumReached(SkladchinaMinimumReachedEvent(skladchinaId, creatorId, "Тренер", 3, OffsetDateTime.now().plusDays(1)))
+
+        verify {
+            notificationService.sendDirectMessageWithDeepLink(
+                1L,
+                match { it.startsWith("✅ В сборе «Тренер» набрался минимум: в деле 3.") && it.contains("Запись открыта до") },
+                "/skladchina/$skladchinaId", SkladchinaBotNotifier.OPEN_BUTTON
+            )
+        }
+    }
+
+    @Test
+    fun `locked DM names the list as a list of participants`() {
+        val skladchinaId = UUID.randomUUID()
+        val event = SkladchinaLockedEvent(
+            skladchinaId = skladchinaId, clubName = "Партия", creatorId = creatorId, title = "Тренер",
+            paymentLink = "9200000000", paymentMethodNote = "Сбер", deadline = OffsetDateTime.now().plusDays(3),
+            enrolledCount = 3, minParticipants = null, cancelledForShortfall = false, debtorShares = mapOf(debtorId to 20_000L)
+        )
+        every { userRepository.findByIds(setOf(debtorId)) } returns listOf(UsersRecord(id = debtorId, telegramId = 42L, firstName = "Саша"))
+
+        notifier.onLocked(event)
+
+        verify { notificationService.sendDirectMessageWithDeepLink(42L, match { it.startsWith("💰 Список участников «Тренер» заморожен: в деле 3.") }, any(), any()) }
     }
 }
