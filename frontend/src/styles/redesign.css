@@ -3755,6 +3755,8 @@
 .rd-debt-amount { font-size: 15px; font-weight: 800; color: var(--text); flex-shrink: 0; }
 .rd-debt-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .rd-debt-overdue { color: var(--danger); }
+/* «За что» на «Долгах» — ссылка на сбор (PO 2026-10-14): цвет акцента и шеврон, без вида кнопки. */
+.rd-debt-ctx { display: block; padding: 0; border: none; background: none; text-align: left; color: var(--accent); font-weight: 600; cursor: pointer; }
 .rd-debt-flag { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 3px; }
 /* Разбор по долгу: реплики сторон с аватаром и именем, чек миниатюрой (тап → лайтбокс).
    Сверху тонкая черта отделяет разбор от строки «за что» (PO 2026-10-14). */

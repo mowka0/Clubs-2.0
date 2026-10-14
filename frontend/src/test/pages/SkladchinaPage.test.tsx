@@ -428,7 +428,7 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     }));
     renderPage();
     expect(await screen.findByText('Скидываются')).toBeInTheDocument();
-    expect(screen.getByText(/обещал к/)).toBeInTheDocument(); // Оля — строкой долга
+    expect(screen.getByText(/Оплачу позже — к/)).toBeInTheDocument(); // Оля — репликой в строке долга
     expect(screen.getByText('Маша')).toBeInTheDocument(); // молчун — человеком
     expect(screen.getByText('Перевели')).toBeInTheDocument();
     expect(screen.getAllByText('Петя').length).toBe(1); // только в «Перевели»
@@ -470,6 +470,26 @@ describe('SkladchinaPage — сборы и долги v3', () => {
     renderPage();
     expect(await screen.findByText('отметиться до')).toBeInTheDocument();
     expect(screen.getByText('срок вышел')).toBeInTheDocument();
+  });
+
+  it('«Кто сколько должен» без доли: плашка «Вы не участвуете», без реквизитов; у «По желанию» плашки нет', async () => {
+    mockDetail(buildDetail({ myDebt: null }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('Вы не участвуете в этом сборе')).toBeInTheDocument();
+    expect(screen.queryByText('Кому переводить')).not.toBeInTheDocument();
+    unmount();
+
+    mockDetail(buildDetail({ kind: 'voluntary', amountKopecks: 50000, targetKopecks: null, myDebt: null }));
+    renderPage();
+    expect(await screen.findByText('Кому переводить')).toBeInTheDocument();
+    expect(screen.queryByText('Вы не участвуете в этом сборе')).not.toBeInTheDocument();
+  });
+
+  it('«Оплачу позже» — репликой должника в разборе, а не строкой статуса', async () => {
+    mockDetail(buildDetail({ myDebt: buildDebt({ status: 'promised', promisedAt: '2026-10-17' }) }));
+    renderPage();
+    expect(await screen.findByText('Оплачу позже — к 17 октября')).toBeInTheDocument();
+    expect(screen.queryByText(/обещал к/)).not.toBeInTheDocument();
   });
 
   it('плашка срока: «заказ сделан» у per_head после заказа, «Идёт · без срока» без дедлайна', async () => {
