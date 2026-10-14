@@ -221,7 +221,7 @@ class EventService(
 
         val normalizedReason = reason?.trim()?.takeIf { it.isNotEmpty() }
         if (eventRepository.cancelEvent(eventId, normalizedReason) == 0) {
-            throw ConflictException("Событие нельзя отменить: оно уже началось, завершено или отменено")
+            throw ConflictException("Встречу нельзя отменить: она уже началась, завершена или отменена")
         }
         skladchinaRepository.cancelActiveByEventId(eventId)
 
@@ -273,7 +273,7 @@ class EventService(
             )
         )
         if (eventRepository.updateEvent(eventId, edit) == 0) {
-            throw ConflictException("Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено")
+            throw ConflictException("Встречу нельзя изменить: подтверждение мест уже началось, встреча прошла или отменена")
         }
 
         val updated = event.copy(

@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Кнопка под постом о правке встречи. Нейтральная формулировка вместо «Проголосовать»:
  * правка приходит и на Этапе 2, где голосование закрыто и ждут подтверждения участия.
  */
-private const val EDITED_POST_BUTTON = "К событию"
+private const val EDITED_POST_BUTTON = "К встрече"
 
 /**
  * «Живой закреп» (слайс 3 club-chat-link, мокап 03): у бота ОДНО закреплённое сообщение-статус
@@ -112,7 +112,7 @@ class LivePinService(
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderer.editedText(edited),
-            // «К событию», а не «Проголосовать»: правка приходит и на Этапе 2, где голосование
+            // «К встрече», а не «Проголосовать»: правка приходит и на Этапе 2, где голосование
             // уже закрыто и ждут подтверждения, — нейтральная формулировка верна в обоих случаях.
             buttonText = EDITED_POST_BUTTON,
             url = renderer.eventUrl(edited.event.id),
