@@ -12,10 +12,12 @@ import com.clubs.reputation.ReputationRepository
 import com.clubs.reputation.TrustService
 import com.clubs.interest.InterestRepository
 import com.clubs.user.UserRepository
+import com.clubs.common.exception.NotFoundException
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
@@ -173,6 +175,44 @@ class MemberServiceVisibilityTest {
         // Свои открытые встречи видны (вне репутации, но той же асимметричной видимости).
         assertEquals(4, profile.openEventsAttended)
         assertEquals(5, profile.openEventsTotal)
+    }
+
+    @Test
+    fun `profile of a user who never joined this club is 404 even for the organizer`() {
+        every { membershipRepository.findByUserAndClub(organizerId, clubId) } returns
+            membership(organizerId, MembershipRole.organizer)
+        val strangerId = UUID.randomUUID()
+        every { userRepository.findById(strangerId) } returns mockk<UsersRecord>(relaxed = true)
+        every { membershipRepository.findByUserAndClub(strangerId, clubId) } returns null
+
+        val e = assertThrows(NotFoundException::class.java) { service.getMemberProfile(clubId, strangerId, organizerId) }
+        assertEquals("Member not found", e.message)
+    }
+
+    @Test
+    fun `organizer opens the card of a member who left - 200 with the role from the row`() {
+        every { membershipRepository.findByUserAndClub(organizerId, clubId) } returns
+            membership(organizerId, MembershipRole.organizer)
+        mockProfileTarget(otherId)
+        every { membershipRepository.findByUserAndClub(otherId, clubId) } returns
+            membership(otherId, MembershipRole.member).copy(status = MembershipStatus.cancelled)
+
+        val profile = service.getMemberProfile(clubId, otherId, organizerId)
+
+        assertEquals("member", profile.role)
+        assertEquals("Боб", profile.firstName)
+    }
+
+    @Test
+    fun `plain member gets 404 for a member who left - mirrors the roster`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns
+            membership(callerId, MembershipRole.member)
+        mockProfileTarget(otherId)
+        every { membershipRepository.findByUserAndClub(otherId, clubId) } returns
+            membership(otherId, MembershipRole.member).copy(status = MembershipStatus.cancelled)
+
+        val e = assertThrows(NotFoundException::class.java) { service.getMemberProfile(clubId, otherId, callerId) }
+        assertEquals("Member not found", e.message)
     }
 
     @Test

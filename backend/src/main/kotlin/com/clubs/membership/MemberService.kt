@@ -6,7 +6,6 @@ import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.event.EventResponseRepository
-import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestRepository
 import com.clubs.reputation.ReputationPolicy
@@ -91,8 +90,17 @@ class MemberService(
         }
         // Менеджер (владелец или активный со-орг — co-organizers, точка 41) видит орг-поля карточки.
         val callerIsOrganizer = clubRoleGuard.isActiveManagerMembership(caller)
-        val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
+        // Карточка — только про людей этого клуба: без строки членства по чужому UUID отвечаем 404,
+        // иначе endpoint отдавал профиль любого пользователя платформы (аудит 2026-10-14, A1).
+        // Статус строки любой: менеджеру нужны и ушедшие («Вернуть»), и «Ждут оплаты».
         val membership = membershipRepository.findByUserAndClub(userId, clubId)
+            ?: throw NotFoundException("Member not found")
+        // Зеркало ростера: рядовой участник видит только активных; ушедшие/frozen/expired — менеджеру
+        // («Вернуть», «Ждут оплаты»). Иначе по UUID из откликов и долгов открывалась карточка ушедшего.
+        if (!callerIsOrganizer && membership.status != MembershipStatus.active) {
+            throw NotFoundException("Member not found")
+        }
+        val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)
         // «Право на ошибку»: реальный индекс показываем только когда накоплен track record; ниже
         // порога (или нет строки, или владелец в своём клубе) весь блок подавляется,
@@ -118,7 +126,7 @@ class MemberService(
             interests = interestRepository.findUserInterestNames(userId),
             // Клубные награды (S2) — видны каждому участнику (R3), поэтому организаторского гейта нет.
             awards = awardService.getMemberAwards(clubId, userId),
-            role = (membership?.role ?: MembershipRole.member).literal,
+            role = membership.role.literal,
             trust = summary?.trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
@@ -130,13 +138,13 @@ class MemberService(
             openEventsTotal = openEvents?.total,
             // Только организатору: конец оплаченного окна доступа участника. null для обычных смотрящих
             // и бесплатных membership'ов (нет истечения). Питает «Подписка активна до …» на карточке.
-            subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null,
+            subscriptionExpiresAt = if (callerIsOrganizer) membership.subscriptionExpiresAt else null,
             // Только организатору: приватная заметка (member admin S1). null для обычных смотрящих.
-            organizerNote = if (callerIsOrganizer) membership?.organizerNote else null,
+            organizerNote = if (callerIsOrganizer) membership.organizerNote else null,
             // Только организатору: claim участника об оплате + скриншот платежа (de-Stars). null для обычных.
-            duesClaimedAt = if (callerIsOrganizer) membership?.duesClaimedAt else null,
-            duesClaimMethod = if (callerIsOrganizer) membership?.duesClaimMethod else null,
-            duesProofUrl = if (callerIsOrganizer) membership?.duesProofUrl else null,
+            duesClaimedAt = if (callerIsOrganizer) membership.duesClaimedAt else null,
+            duesClaimMethod = if (callerIsOrganizer) membership.duesClaimMethod else null,
+            duesProofUrl = if (callerIsOrganizer) membership.duesProofUrl else null,
             // Только организатору: ответ из заявки на вступление (закрытые клубы). null для открытых / без вопроса.
             applicationAnswer = if (callerIsOrganizer) {
                 applicationRepository.findActiveByUserAndClub(userId, clubId)?.answerText

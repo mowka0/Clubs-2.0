@@ -3,13 +3,13 @@
 > Вопрос PO: «где пользователю могут ускользать важные данные системы». Четыре прохода
 > (REST API, бот и групповые чаты, ошибки/инфраструктура, фронтенд) + ручная перепроверка каждой
 > находки по коду. Прод не трогали; к staging — 15 безопасных GET без авторизации.
-> Статусы: ⏳ ждёт решения PO · 🔧 к правке · ✅ закрыто · ℹ️ by design, правки не нужно.
+> Статусы: ⏳ ждёт решения PO · 🔧 к правке · ✅ закрыто · ⏸ PO: не делаем · ℹ️ by design, правки не нужно.
 
 ## 1. Что требует действия
 
 ### Medium
 
-**A1. Карточка участника отдаёт профиль любого пользователя платформы** 🔧
+**A1. Карточка участника отдаёт профиль любого пользователя платформы** ✅ исправлено 2026-10-14 (эта ветка; заодно рядовому участнику карточка только активного — зеркало ростера)
 `backend/src/main/kotlin/com/clubs/membership/MemberService.kt:87-95` — `GET /api/clubs/{clubId}/members/{userId}`
 проверяет, что **вызывающий** — активный участник `clubId`, но не проверяет, что **`userId`** имеет
 отношение к этому клубу. `userRepository.findById(userId)` находит кого угодно.
@@ -20,7 +20,7 @@
 - Правка: требовать строку членства `userId` в `clubId` (любой статус — менеджеру нужны и
   frozen/expired), иначе 404. Один файл + тест в `MemberServiceVisibilityTest`.
 
-**A2. «Кто берёт?» после заказа: в групповой пост попадают @-упоминания неоплативших** ⏳
+**A2. «Кто берёт?» после заказа: в групповой пост попадают @-упоминания неоплативших** ℹ️ PO 2026-10-14: оставить (исключение записано в `skladchina-v3.md` § 6)
 `backend/src/main/kotlin/com/clubs/chatlink/SkladchinaChatStatusRenderer.kt:140-146` — после «Заказываю»
 пост в чате: «⏳ Ждём оплату: 2 · @Иван, @Пётр» и висит до оплаты. Для обычных сборов после срока
 имена в чат не идут (решение PO 2026-09-12, `sharedText` реализован верно), в спеке § 6 для
@@ -28,7 +28,7 @@
 - Варианты: (а) оставить только число, меншены убрать — одна строка; (б) PO считает это осознанным
   («купил в долг — пусть видно, кого ждём») → дописать исключение в спеку.
 
-**A3. Скриншоты оплаты и чеки — публичные URL без входа, навсегда, с EXIF** ⏳ (трек L)
+**A3. Скриншоты оплаты и чеки — публичные URL без входа, навсегда, с EXIF** ⏸ PO 2026-10-14: оставить как есть
 `frontend/nginx.conf:65-79` (`/uploads/` → MinIO без JWT, `Cache-Control: public, max-age=1y`),
 `backend/.../storage/StorageService.kt:75` (bucket-policy `public-read`), `StorageController.kt:56-58`.
 - Что лежит: `duesProofUrl` (скриншот перевода взноса — ФИО, банк, телефон, сумма), `receiptUrl`
@@ -43,52 +43,52 @@
   `file.contentType` со слов клиента (`StorageController.kt:41-46`). Это отдельная задача
   (storage + nginx + миграция политики бакета), не точечная правка.
 
-### Low
+### Low — PO 2026-10-14: «не важно», не делаем
 
-**B1. 401 отдаёт внутренности библиотеки JWT** 🔧
+**B1. 401 отдаёт внутренности библиотеки JWT** ⏸
 `backend/.../common/security/SecurityConfig.kt:30-34` + `auth/JwtService.kt:71-72`: в `detail`
 уходит `e.message` jjwt/Jackson. Проверено на staging: `Bearer abc.def.ghi` → «Malformed protected
 header JSON: Unable to deserialize… StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION…»; поддельная
 подпись → «JWT signature does not match locally computed signature…». Фронту `detail` не нужен
 (`apiClient.ts:60` только `console.warn`). Правка: `detail` — только в лог, в ответ `reason`.
 
-**B2. nginx называет версию** 🔧
+**B2. nginx называет версию** ⏸
 `frontend/nginx.conf` без `server_tokens off;` → `server: nginx/1.31.6` в каждом ответе и на
 страницах 403/404/502. Правка: одна строка.
 
-**B3. `/uploads/` отдаёт XML MinIO** 🔧
+**B3. `/uploads/` отдаёт XML MinIO** ⏸
 `GET /uploads/` → `NoSuchKey` с `<BucketName>clubs-uploads</BucketName>`, `RequestId`, `HostId`,
 заголовки `x-ratelimit-*` апстрима. Имя бакета и так в публичном `nginx.conf`. Правка:
 `proxy_intercept_errors on; error_page 403 404 =404 …; proxy_hide_header x-ratelimit-*`.
 
-**B4. Тихий сбор по встрече просвечивает через состояние встречи** 🔧
+**B4. Тихий сбор по встрече просвечивает через состояние встречи** ⏸
 `backend/.../skladchina/SkladchinaQueryService.kt:104-109` (`findEventSplitState`) не учитывает
 `hidden_from_user_id`: скрытый участник на странице встречи получает `{skladchinaId, status}` →
 видит кнопку «Скинуться» → 404 на сборе. Факт существования и id утекли. Достижимо только прямым
 `POST` (UI не даёт «Скрыть от» у сбора по встрече). Правка: `?.takeIf { !it.isHiddenFrom(callerId) }`.
 
-**B5. Реквизиты клуба открываются `window.open` без проверки схемы** 🔧
+**B5. Реквизиты клуба открываются `window.open` без проверки схемы** ⏸
 `frontend/src/components/club/DuesPaymentSheet.tsx:251` — `paymentLink` организатора (на бэке только
 `@Size(max=500)`) открывается как есть; у сборов тот же случай закрыт `isHttpLink()`
 (`SkladchinaPage.tsx:343`). Сейчас экран выключен (`PRODUCT_PROFILE.showClubDues = false`), всплывёт
 на этапе 2. Правка: обернуть в `isHttpLink` сейчас, чтобы не забыть.
 
-**B6. «Сумму выбираете сами»: молчуны после срока остаются в публичном «Скидываются: @…»** ⏳
+**B6. «Сумму выбираете сами»: молчуны после срока остаются в публичном «Скидываются: @…»** ⏸
 `SkladchinaChatStatusRenderer.kt:165` + `SkladchinaChatStatusService.kt:236`: после срока
 `splitAmongSilent` заводит им `waiting`-долги, и они висят в списке без ограничения по сроку.
 По спеке (§ 6, PO 2026-09-15) так и написано, но это противоречит принципу 2026-09-12 «после срока —
 только число». Решает PO.
 
-**B7. Мусор в ERROR-логе без авторизации** 🔧
+**B7. Мусор в ERROR-логе без авторизации** ⏸
 `backend/.../common/exception/GlobalExceptionHandler.kt:138-143` ловит
 `MissingServletRequestParameter`, `NoResourceFound`, `HttpRequestMethodNotSupported`,
 `MaxUploadSizeExceeded` как 500 с полным стеком. На permitAll-путях (`/api/billing/stub/*`,
 `/api/auth/*`) любой аноним забивает лог стеками. Тело ответа чистое. Правка: отдельные хендлеры →
 400/404/405/413 с `debug`.
 
-### Закрыто / только документация
+### Закрыто
 
-**C1. Токен бота в публичной истории git** ✅ (нужна запись в документ)
+**C1. Токен бота в публичной истории git** ✅ утёкший токен мёртв; PO 2026-10-14: запись в `leaked-secrets-in-git.md` не делаем
 Коммит `2a14c867` (2026-03-23) на 15 минут положил в `.env.example` боевой `TELEGRAM_BOT_TOKEN`
 прод-бота (id `8642824542`); репозиторий публичный. В `docs/backlog/leaked-secrets-in-git.md`
 (ротация 2026-05-16) токен бота **не упомянут**.
@@ -145,8 +145,6 @@ header JSON: Unable to deserialize… StreamReadFeature.INCLUDE_SOURCE_IN_LOCATI
   за ними гейтятся бэком. Все роль-зависимые поля, которые фронт прячет, сервер зануляет —
   через DevTools лишнего не достать (таблица поле → гейт сверена).
 
-## 4. Предлагаемый порядок
+## 4. Решение PO 2026-10-14
 
-1. Одной веткой, трек M: A1, B1, B2, B3, B4, B5, B7 + запись C1. Все точечные.
-2. Решения PO: A2 (меншены после заказа), B6 (молчуны после срока).
-3. Отдельной задачей (трек L): A3 — приватная отдача чеков и скриншотов, strip EXIF, magic bytes.
+Чиним только A1. A2 и A3 — оставить. Остальное (Low, C1) — не важно, не делаем.
