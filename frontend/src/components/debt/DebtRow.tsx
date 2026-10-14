@@ -1,4 +1,5 @@
 import { FC, ReactNode, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ConfirmSheet } from '../ConfirmSheet';
 import { ImageLightbox } from '../ImageLightbox';
 import { PhotoAttach } from '../PhotoAttach';
@@ -11,7 +12,7 @@ interface DebtRowProps {
   debt: DebtDto;
   /** Кто смотрит: определяет сторону и, значит, набор кнопок. */
   viewerId: string;
-  /** Показывать «за что» (сбор · клуб) — в паре; на странице сбора лишнее. */
+  /** Показывать «за что» (сбор · клуб) ссылкой на сбор — в паре; на странице сбора лишнее. */
   showContext?: boolean;
   /** Кнопок нет: сбор закрыт, сальдо в подтверждении, смотрит третья сторона. */
   readOnly?: boolean;
@@ -36,6 +37,7 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const [claimAsk, setClaimAsk] = useState(false);
   const [forgiveAsk, setForgiveAsk] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const navigate = useNavigate();
 
   const isDebtor = debt.debtor.id === viewerId;
   const isCreditor = debt.creditor.id === viewerId;
@@ -45,15 +47,16 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const inSettlement = debt.settlementId !== null;
   const canAct = !readOnly && !busy && open && !inSettlement && !own && (isDebtor || isCreditor);
 
+  // После «Не получил» и «Оплачу позже» статус не пишем: это реплики сторон в разборе ниже (PO 2026-10-14).
   const statusLine = (() => {
     if (own) return 'ваш взнос ✅';
     switch (debt.status) {
       case 'waiting':
-        if (debt.rejectedAt) return 'не получил · ответьте: заметка или чек';
+        if (debt.rejectedAt) return null;
         if (!debt.dueAt) return 'без срока';
         return debt.isOverdue ? `срок вышел ${DAY_FMT.format(new Date(debt.dueAt))}` : `до ${DATE_FMT.format(new Date(debt.dueAt))}`;
       case 'promised':
-        return `обещал к ${debt.promisedAt ? DAY_FMT.format(new Date(debt.promisedAt)) : '—'}`;
+        return null;
       case 'claimed':
         if (inSettlement) return 'в сальдо · ждёт подтверждения';
         return isCreditor ? 'говорит, что отдал · подтвердите' : 'ждём подтверждения';
@@ -90,6 +93,13 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
   const nameLine = personName(counterparty);
   // Разбор по долгу: «Не получил» получателя и ответ должника — как реплики, с автором.
   const thread = [
+    debt.promisedAt && open && {
+      key: 'promise',
+      author: debt.debtor,
+      when: null as string | null,
+      text: `Оплачу позже — к ${DAY_FMT.format(new Date(debt.promisedAt))}`,
+      receiptUrl: null as string | null,
+    },
     debt.rejectedAt && {
       key: 'reject',
       author: debt.creditor,
@@ -121,8 +131,12 @@ export const DebtRow: FC<DebtRowProps> = ({ debt, viewerId, showContext = false,
           {formatRub(debt.amountKopecks)}
         </span>
       </div>
-      {showContext && <div className="rd-debt-meta">{debt.skladchinaTitle} · {debt.clubName}</div>}
-      <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>
+      {showContext && (
+        <button type="button" className="rd-debt-meta rd-debt-ctx" onClick={() => navigate(`/skladchina/${debt.skladchinaId}`)}>
+          {debt.skladchinaTitle} · {debt.clubName} <span aria-hidden="true">›</span>
+        </button>
+      )}
+      {statusLine && <div className={`rd-debt-meta${debt.isOverdue && open ? ' rd-debt-overdue' : ''}`}>{statusLine}</div>}
       {thread.length > 0 && (
         <div className="rd-debt-thread">
           {thread.map((m) => (

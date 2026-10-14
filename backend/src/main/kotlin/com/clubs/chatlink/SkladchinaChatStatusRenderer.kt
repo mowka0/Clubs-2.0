@@ -25,6 +25,8 @@ data class ChatStatusView(
     val totals: DebtTotals,
     val enrolledCount: Int,
     val creatorName: String,
+    /** Username создателя — в посте он отмечен «@username» (PO 2026-10-14); null → просто имя. */
+    val creatorUsername: String?,
     /** Ещё не оплатили (waiting/promised) — «Ждём:» до срока. */
     val waiting: List<ChatMention>,
     /** Отметились «В деле» на этапе записи; у «По желанию» — позванные, с кого ещё ждут денег. */
@@ -49,12 +51,11 @@ class SkladchinaChatStatusRenderer(
     fun skladchinaUrl(skladchinaId: UUID): String =
         "https://t.me/$botUsername?startapp=skladchina_$skladchinaId"
 
-    /** Кнопка под постом ведёт в приложение; текст зовёт к действию стадии. */
-    fun buttonText(s: Skladchina): String = when {
-        s.isEnrolling -> "В деле"
-        s.kind == SkladchinaKind.per_head && s.orderedAt == null -> "Беру"
-        else -> "Открыть сбор"
-    }
+    /**
+     * Кнопка под постом ведёт в приложение; текст зовёт к действию стадии. У «Кто берёт?» — просто
+     * «Открыть сбор»: «Беру» читалось как «одна штука», а брать можно несколько (PO 2026-10-14).
+     */
+    fun buttonText(s: Skladchina): String = if (s.isEnrolling) "В деле" else "Открыть сбор"
 
     fun statusText(view: ChatStatusView): String {
         val s = view.skladchina
@@ -107,7 +108,7 @@ class SkladchinaChatStatusRenderer(
         sb.append(newSkladchinaHeader(s))
         appendDescription(sb, s)
         if (t.debtCount > 0 && target > 0) sb.append("по ").append(Money.rub(target / t.debtCount)).append(" с человека · ")
-        sb.append("собирает ").append(escapeHtml(view.creatorName)).append("\n")
+        sb.append("собирает ").append(creatorTag(view)).append("\n")
         sb.append(progressBar(t, target, s.kind)).append("\n")
         sb.append("💵 Получено ").append(Money.rub(t.receivedKopecks)).append(" из ").append(Money.rub(target))
             .append(" · оплатили ").append(t.receivedCount).append(" из ").append(t.debtCount).append("\n")
@@ -143,7 +144,7 @@ class SkladchinaChatStatusRenderer(
             mentionsLine(view.waiting)?.let { sb.append(" · ").append(it) }
             return sb.toString()
         }
-        sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" за штуку · ").append(escapeHtml(view.creatorName))
+        sb.append(Money.rub(s.amountKopecks ?: 0L)).append(" за штуку · ").append(creatorTag(view))
             .append(" покупает ").append(s.deadline!!.format(fmt)).append(" на тех, кто оплатил\n")
         sb.append("👥 Берут ").append(t.debtCount).append(" · оплатили ").append(t.receivedCount).append("\n")
         appendDeadline(sb, s, view.now, t)
@@ -160,7 +161,7 @@ class SkladchinaChatStatusRenderer(
         // После встречи ориентир — это общий чек: людям важно знать, сколько потратили.
         s.amountKopecks?.let { sb.append(if (s.eventId != null) " · всего потратили " else " · ориентир ").append(Money.rub(it)) }
         s.deadline?.let { sb.append(" · до ").append(it.format(fmt)) }
-        sb.append(" · собирает ").append(escapeHtml(view.creatorName)).append("\n")
+        sb.append(" · собирает ").append(creatorTag(view)).append("\n")
         mentionsLine(view.enrolled)?.let { sb.append("Скидываются: ").append(it).append("\n") }
         // Ориентир — знаменатель полосы, как на экране сбора (PO 2026-09-13); без ориентира просто «получено».
         val target = s.amountKopecks
@@ -203,6 +204,10 @@ class SkladchinaChatStatusRenderer(
         val yellow = ((t.receivedKopecks + pending) * BAR_CELLS / target).toInt().coerceIn(green, BAR_CELLS) - green
         return "🟩".repeat(green) + "🟨".repeat(yellow) + "⬜".repeat(BAR_CELLS - green - yellow)
     }
+
+    /** Создатель сбора тегом «@username», чтобы его можно было найти и написать; без username — имя. */
+    private fun creatorTag(view: ChatStatusView): String =
+        view.creatorUsername?.let { "@${escapeHtml(it)}" } ?: escapeHtml(view.creatorName)
 
     /** «@a, @b … и ещё k» — стена из десятков меншенов хуже недопинга, режем по [MAX_MENTIONS]. */
     private fun mentionsLine(people: List<ChatMention>): String? {

@@ -223,11 +223,13 @@ class SkladchinaChatStatusService(
         val settledIds = settled.map { it.debt.debtorId }.toSet()
         // Этап записи — кто в деле; «По желанию» — кого позвали скинуться.
         val enrolledIds = if (skladchina.enrollmentUntil != null || skladchina.kind == SkladchinaKind.voluntary) skladchinaRepository.findEnrolledUserIds(skladchina.id) else emptyList()
+        val creator = userRepository.findById(skladchina.creatorId)
         return ChatStatusView(
             skladchina = skladchina,
             totals = totals,
             enrolledCount = enrolledIds.size,
-            creatorName = userRepository.findById(skladchina.creatorId)?.firstName ?: "",
+            creatorName = creator?.firstName ?: "",
+            creatorUsername = creator?.telegramUsername,
             waiting = mentions(waitingIds),
             // Строка «Скидываются» зовёт тех, с кого ещё ждут: оплативший в ней висел и после
             // подтверждения (PO 2026-09-15). На этапе записи долгов нет — список не меняется.

@@ -3755,9 +3755,12 @@
 .rd-debt-amount { font-size: 15px; font-weight: 800; color: var(--text); flex-shrink: 0; }
 .rd-debt-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .rd-debt-overdue { color: var(--danger); }
+/* «За что» на «Долгах» — ссылка на сбор (PO 2026-10-14): цвет акцента и шеврон, без вида кнопки. */
+.rd-debt-ctx { display: block; padding: 0; border: none; background: none; text-align: left; color: var(--accent); font-weight: 600; cursor: pointer; }
 .rd-debt-flag { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 3px; }
-/* Разбор по долгу: реплики сторон с аватаром и именем, чек миниатюрой (тап → лайтбокс). */
-.rd-debt-thread { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+/* Разбор по долгу: реплики сторон с аватаром и именем, чек миниатюрой (тап → лайтбокс).
+   Сверху тонкая черта отделяет разбор от строки «за что» (PO 2026-10-14). */
+.rd-debt-thread { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .rd-debt-msg { display: flex; gap: 8px; align-items: flex-start; }
 .rd-debt-msg .rd-debt-av { width: 22px; height: 22px; font-size: 9px; margin-top: 1px; }
 .rd-debt-msg-body { flex: 1; min-width: 0; background: var(--surface-2); border-radius: 10px; padding: 7px 10px; }

@@ -16,6 +16,8 @@ import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.test.context.event.ApplicationEvents
+import org.springframework.test.context.event.RecordApplicationEvents
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -49,6 +51,7 @@ import kotlin.test.assertTrue
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
+@RecordApplicationEvents
 class SkladchinaV3IntegrationTest {
 
     companion object {
@@ -78,6 +81,7 @@ class SkladchinaV3IntegrationTest {
     @Autowired lateinit var remainderService: SkladchinaRemainderService
     @Autowired lateinit var skladchinaRepository: SkladchinaRepository
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
+    @Autowired lateinit var applicationEvents: ApplicationEvents
 
     private lateinit var ownerId: UUID
     private lateinit var aliceId: UUID
@@ -365,8 +369,16 @@ class SkladchinaV3IntegrationTest {
         assertEquals(0, enrolling["debtCount"].asInt())
 
         post("/api/skladchinas/$id/join", alice).andExpect(status().isOk)
+        assertEquals(0, applicationEvents.stream(SkladchinaMinimumReachedEvent::class.java).count(), "двое из трёх — минимум не набран")
         val afterBob = json(post("/api/skladchinas/$id/join", bob).andExpect(status().isOk))
         assertEquals(3, afterBob["enrolledCount"].asInt())
+        // Минимум набрался ровно на Bob — создателю одно событие; повторный тап его не дублирует.
+        post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
+        assertEquals(listOf(3), applicationEvents.stream(SkladchinaMinimumReachedEvent::class.java).map { it.enrolledCount }.toList())
+        // Вышел и вернулся — минимум набрался снова, и создатель узнаёт об этом снова (spec § 37).
+        post("/api/skladchinas/$id/leave", bob).andExpect(status().isOk)
+        post("/api/skladchinas/$id/join", bob).andExpect(status().isOk)
+        assertEquals(2, applicationEvents.stream(SkladchinaMinimumReachedEvent::class.java).count())
         assertTrue(afterBob["myEnrolled"].asBoolean())
         assertEquals(listOf("Owner", "Alice", "Bob"), afterBob["enrolled"].map { it["firstName"].asText() }, "кто в деле виден всем, в порядке записи")
 

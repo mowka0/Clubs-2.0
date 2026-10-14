@@ -129,6 +129,10 @@ export const SkladchinaPage: FC = () => {
   const s = query.data;
   const isActive = s.status === 'active';
   const busy = actionMut.isPending || debtMut.isPending;
+  // «Кто сколько должен» после записи: доли розданы, и тому, кому её не выставили, присоединиться
+  // нельзя — показываем это плашкой, а реквизиты и пустую «Мою часть» прячем (PO 2026-10-14).
+  // У «Кто берёт?» и «По желанию» вступить может любой участник клуба — там плашки нет.
+  const isOutsider = s.kind === 'shared' && !s.isCreator && !s.isEnrolling && (!s.myDebt || s.myDebt.status === 'dropped');
   const promisedRows = (s.debts ?? []).filter((d) => d.status === 'promised');
   const waitingRows = (s.debts ?? []).filter((d) => d.status === 'waiting' && d.debtor.id !== d.creditor.id);
   // Создателю долги двумя панелями: не оплатившие и оплатившие, включая его собственный взнос (PO 2026-09-14).
@@ -287,6 +291,16 @@ export const SkladchinaPage: FC = () => {
         </button>
       )}
 
+      {isOutsider && (
+        <div className="rd-roster-note">
+          <span className="rd-roster-ico" aria-hidden="true">👀</span>
+          <span className="rd-roster-txt">
+            <b>Вы не участвуете в этом сборе</b>
+            <span>Доли у вас нет — переводить ничего не нужно</span>
+          </span>
+        </div>
+      )}
+
       {/* Прогресс: деньги — главная строка, полоса 🟩 получено / 🟨 говорят, что отдали. */}
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
@@ -320,7 +334,7 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {/* На этапе записи платить ещё нечего: реквизиты появляются со второго этапа (PO 2026-09-13). */}
-      {!s.isCreator && !s.isEnrolling && (
+      {!s.isCreator && !s.isEnrolling && !isOutsider && (
         <>
           <div className="rd-section-sub-h">Кому переводить</div>
           {/* Только реквизиты: кто собирает, видно в шапке — строка человека здесь его повторяла (PO 2026-09-15). */}
@@ -342,7 +356,7 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {/* Моя часть: запись, «Беру», «Перевёл» или мой долг. */}
-      {!s.isCreator && isActive && (
+      {!s.isCreator && isActive && !isOutsider && (
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
           {s.isEnrolling && (
             s.myEnrolled ? (
