@@ -10,6 +10,7 @@ vi.mock('../../pages/DiscoveryPage', () => ({ DiscoveryPage: () => null }));
 vi.mock('../../pages/MyClubsPage', () => ({ MyClubsPage: () => null }));
 vi.mock('../../pages/ActivitiesPage', () => ({ ActivitiesPage: () => null }));
 vi.mock('../../pages/ProfilePage', () => ({ ProfilePage: () => null }));
+vi.mock('../../config/productProfile', () => import('../mocks/productProfile'));
 
 import { resolveScreen } from '../../analytics/screens';
 import { router } from '../../router';
@@ -17,7 +18,7 @@ import { router } from '../../router';
 const UUID = '7c2e1d2a-0000-4000-8000-000000000001';
 
 /** Пути, которые экранами не считаются (product-analytics.md § 3.4): редиректы и страницы вне Layout. */
-const NOT_SCREENS = new Set(['/organizer', '/clubs/:id/interior', '/pay/return', '/pay/fail', '/about', '/privacy']);
+const NOT_SCREENS = new Set(['/', '/organizer', '/clubs/:id/interior', '/pay/return', '/pay/fail', '/about', '/privacy']);
 
 function concrete(pattern: string): string {
   return pattern
@@ -64,6 +65,10 @@ describe('resolveScreen', () => {
     expect(resolveScreen('/invite/0123456789abcdef')).toEqual({ screen: 'invite' });
     expect(resolveScreen('/events')).toEqual({ screen: 'activities' });
     expect(resolveScreen('/my-clubs/')).toEqual({ screen: 'my_clubs' });
+  });
+
+  it('«/» в профиле без каталога — не экран (HomeRoute перенаправляет)', () => {
+    expect(resolveScreen('/')).toBeNull();
   });
 
   it('неизвестный путь — unknown без самого пути', () => {

@@ -66,6 +66,10 @@ class TrackServiceTest {
             mapOf("screen" to "x".repeat(101)),
             mapOf("screen" to mapOf("nested" to 1)),
             mapOf("screen" to listOf("a")),
+            mapOf("screen" to "a\u0000b"),
+            mapOf("eventId" to java.math.BigInteger("1".repeat(30))),
+            mapOf("eventId" to 9_007_199_254_740_993L),
+            mapOf("eventId" to Double.NaN),
         )
         bad.forEach { props ->
             assertThrows<ValidationException>(props.toString()) {

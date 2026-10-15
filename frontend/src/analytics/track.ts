@@ -1,5 +1,5 @@
 import { apiClient, ApiError } from '../api/apiClient';
-import { postTrack, type TrackEventBody } from '../api/track';
+import { postTrack, type TrackEventBody, type TrackProps } from '../api/track';
 
 /** Виды, которые Mini App вправе писать в журнал (product-analytics.md § 3.2) — whitelist бэкенда `AppEventKind`. */
 export type AppEventKind =
@@ -9,7 +9,7 @@ export type AppEventKind =
   | 'onboarding_completed'
   | 'pay_sheet_opened';
 
-export type TrackProps = Record<string, string | number | boolean>;
+export type { TrackProps };
 
 /** Пачка уходит через столько после первого события в очереди: живая навигация даёт одну пачку, не десять запросов. */
 const FLUSH_DELAY_MS = 3000;
@@ -65,24 +65,25 @@ function installFlushOnHide(): void {
 }
 
 /**
- * Отправляет накопленное: сначала пачку, ждущую повтора, затем очередь. Без токена ничего не
- * уходит — события остаются до авторизации (таймер взведётся заново со следующим событием).
+ * Отправляет накопленное: пачки из очереди и, последней, пачку, ждущую повтора. Все запросы уходят
+ * разом, без ожидания между ними: при сворачивании WebView может заморозить JS после первого
+ * `await`, и свежие события важнее повтора старых. Без токена ничего не уходит — события
+ * остаются до авторизации (таймер взведётся заново со следующим событием).
  */
-export async function flush(keepalive: boolean): Promise<void> {
+async function flush(keepalive: boolean): Promise<void> {
   if (timer !== null) {
     window.clearTimeout(timer);
     timer = null;
   }
   if (!apiClient.getToken()) return;
 
-  const pending = retryBatch;
-  retryBatch = null;
-  if (pending) await send(pending, keepalive);
-
-  while (queue.length > 0) {
-    const batch: Batch = { events: queue.splice(0, BATCH_MAX), retried: false };
-    await send(batch, keepalive);
+  const batches: Batch[] = [];
+  while (queue.length > 0) batches.push({ events: queue.splice(0, BATCH_MAX), retried: false });
+  if (retryBatch) {
+    batches.push(retryBatch);
+    retryBatch = null;
   }
+  await Promise.all(batches.map((batch) => send(batch, keepalive)));
 }
 
 async function send(batch: Batch, keepalive: boolean): Promise<void> {

@@ -10,7 +10,7 @@ vi.mock('../../telegram/sdk', () => ({ getStartParam: () => launch.startParam })
 vi.mock('../../telegram/platform', () => ({ platformName: () => launch.platform }));
 
 import { trackAppOpened, resetLaunchForTests } from '../../analytics/launch';
-import { deepLinkKind } from '../../components/DeepLinkHandler';
+import { deepLinkKind } from '../../telegram/deepLink';
 
 const UUID = '7c2e1d2a-0000-4000-8000-000000000001';
 

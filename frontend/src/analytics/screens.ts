@@ -1,3 +1,5 @@
+import { PRODUCT_PROFILE } from '../config/productProfile';
+
 /**
  * Имена экранов для `screen_opened` (product-analytics.md § 3.4) — таблица маршрутов роутера.
  * При добавлении маршрута в `router.tsx` — дописать строку здесь; тест перебирает маршруты роутера
@@ -15,7 +17,9 @@ const UUID = '([0-9a-f-]{36})';
 type Rule = [RegExp, (m: RegExpMatchArray) => ScreenInfo | null];
 
 const RULES: Rule[] = [
-  [/^\/$/, () => ({ screen: 'home' })],
+  // «/» — экран только в профиле с каталогом на главной; иначе HomeRoute лишь перенаправляет
+  // в клуб или «Мои клубы», и строка `home` перед каждым запуском была бы фантомом.
+  [/^\/$/, () => (PRODUCT_PROFILE.homeTarget === 'catalog' ? { screen: 'discovery' } : null)],
   [/^\/discovery$/, () => ({ screen: 'discovery' })],
   [/^\/connect-chat$/, () => ({ screen: 'connect_chat' })],
   [/^\/my-clubs$/, () => ({ screen: 'my_clubs' })],

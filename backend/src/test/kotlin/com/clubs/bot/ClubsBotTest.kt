@@ -230,16 +230,22 @@ class ClubsBotTest {
         every { userRepository.findByTelegramId(42L) } returns mockk(relaxed = true) { every { id } returns userId }
 
         bot.consume(callbackUpdate("legal:offer:1"))
+        bot.consume(callbackUpdate("legal:info"))
         bot.consume(callbackUpdate("roster:remind:" + UUID.randomUUID()))
+        // Данные кнопки присылает клиент: чужой раздел и чужой префикс в журнал не попадают.
+        bot.consume(callbackUpdate("legal:<img src=x>:1"))
         bot.consume(callbackUpdate("unknown:thing:1"))
 
         verify(exactly = 1) {
             productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, userId, null, telegramId = 42L, props = mapOf("button" to "legal:offer"))
         }
         verify(exactly = 1) {
+            productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, userId, null, telegramId = 42L, props = mapOf("button" to "legal:info"))
+        }
+        verify(exactly = 1) {
             productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, userId, null, telegramId = 42L, props = mapOf("button" to "roster:remind"))
         }
-        verify(exactly = 2) { productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 3) { productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

@@ -1,6 +1,7 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getStartParam } from '../telegram/sdk';
+import { parseDeepLink } from '../telegram/deepLink';
 import { rememberDeepLinkLanding } from '../telegram/chatOrigin';
 import { useMyClubsQuery } from '../queries/clubs';
 import { holdsClubSeat } from '../utils/membershipRole';
@@ -17,49 +18,29 @@ import type { MembershipDto } from '../types/api';
  * `myClubs` нужен только ссылке на клуб: пока он грузится (undefined), ответа нет; не загрузился
  * (null) — открываем клуб, его страница сама покажет гостю «Вступить».
  */
-const DEEP_LINK = {
-  skladchina: /^skladchina_([0-9a-f-]{36})$/i,
-  event: /^event_([0-9a-f-]{36})$/i,
-  club: /^club_([0-9a-f-]{36})$/i,
-  billing: /^billing_([0-9a-f-]{36})$/i,
-  // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex
-  // шире на случай будущей смены длины.
-  invite: /^invite_([0-9a-f]{8,64})$/i,
-} as const;
-
-export type DeepLinkKind = keyof typeof DEEP_LINK | 'none';
-
-/** Вид ссылки запуска для `app_opened.entry` (product-analytics.md § 3.2); без параметра или с чужим — `none`. */
-export function deepLinkKind(startParam: string | null): DeepLinkKind {
-  if (!startParam) return 'none';
-  for (const [kind, pattern] of Object.entries(DEEP_LINK)) {
-    if (pattern.test(startParam)) return kind as keyof typeof DEEP_LINK;
-  }
-  return 'none';
-}
-
 export function resolveDeepLink(
   startParam: string | null,
   myClubs?: readonly MembershipDto[] | null,
 ): string | null | undefined {
-  if (!startParam) return null;
-  const sklad = startParam.match(DEEP_LINK.skladchina);
-  if (sklad) return `/skladchina/${sklad[1]}`;
-  const event = startParam.match(DEEP_LINK.event);
-  if (event) return `/events/${event[1]}`;
-  const club = startParam.match(DEEP_LINK.club);
-  if (club) {
-    if (myClubs === undefined) return undefined;
-    if (myClubs === null) return `/clubs/${club[1]}`;
-    const clubId = club[1].toLowerCase();
-    const isSeated = myClubs.some((m) => m.clubId.toLowerCase() === clubId && holdsClubSeat(m));
-    return isSeated ? `/clubs/${club[1]}` : `/clubs/${club[1]}/join`;
+  const link = parseDeepLink(startParam);
+  if (!link) return null;
+  switch (link.kind) {
+    case 'skladchina':
+      return `/skladchina/${link.id}`;
+    case 'event':
+      return `/events/${link.id}`;
+    case 'club': {
+      if (myClubs === undefined) return undefined;
+      if (myClubs === null) return `/clubs/${link.id}`;
+      const clubId = link.id.toLowerCase();
+      const isSeated = myClubs.some((m) => m.clubId.toLowerCase() === clubId && holdsClubSeat(m));
+      return isSeated ? `/clubs/${link.id}` : `/clubs/${link.id}/join`;
+    }
+    case 'billing':
+      return `/clubs/${link.id}?billing=done`;
+    case 'invite':
+      return `/invite/${link.id}`;
   }
-  const billing = startParam.match(DEEP_LINK.billing);
-  if (billing) return `/clubs/${billing[1]}?billing=done`;
-  const invite = startParam.match(DEEP_LINK.invite);
-  if (invite) return `/invite/${invite[1]}`;
-  return null;
 }
 
 /**

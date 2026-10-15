@@ -40,7 +40,9 @@ class FeedbackService(
         val sent = notificationService.trySendDirectMessage(chatId, buildReport(reporter, request))
         if (!sent) throw FeedbackDeliveryException("Telegram delivery failed")
         log.info("Feedback delivered: userId={} supportChatId={} length={}", userId, chatId, request.message.length)
-        productEventRepository.record(ProductEventKind.FEEDBACK_SENT, userId, clubId = null)
+        // DM уже ушёл и не откатывается: сбой журнала не должен дать 500 и спровоцировать повторную отправку.
+        runCatching { productEventRepository.record(ProductEventKind.FEEDBACK_SENT, userId, clubId = null) }
+            .onFailure { log.warn("feedback_sent not recorded: userId={} reason={}", userId, it.message) }
     }
 
     private fun resolveSupportChatId(): Long {

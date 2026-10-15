@@ -49,6 +49,15 @@ class RateLimitFilter : OncePerRequestFilter() {
         val isMoneyClaimEndpoint = MONEY_CLAIM_PATH.matches(path)
         val isTrackEndpoint = path == TRACK_PATH
         val key = resolveKey(request)
+        // Размер тела журнала проверяется до разбора JSON: Spring тело не ограничивает, а Jackson
+        // строит полный граф объектов раньше любой нашей валидации.
+        if (isTrackEndpoint && request.contentLengthLong > TRACK_MAX_BODY_BYTES) {
+            logger.warn("Track body too large: key={} length={}", key, request.contentLengthLong)
+            response.status = HttpStatus.PAYLOAD_TOO_LARGE.value()
+            response.contentType = "application/json"
+            response.writer.write("""{"error":"Payload too large. Limit: $TRACK_MAX_BODY_BYTES bytes."}""")
+            return
+        }
         val bucket = when {
             isAuthEndpoint -> authBuckets.computeIfAbsent(key) { createAuthBucket() }
             isFeedbackEndpoint -> feedbackBuckets.computeIfAbsent(key) { createFeedbackBucket() }
@@ -163,11 +172,19 @@ class RateLimitFilter : OncePerRequestFilter() {
         )
         .build()
 
+    // Два предела сразу: минутный — от всплесков, суточный — от скрипта, который день напролёт
+    // пишет по 30 пачек в минуту и раздувает таблицу (security-ревью 2026-10-15).
     private fun createTrackBucket(): Bucket = Bucket.builder()
         .addLimit(
             Bandwidth.builder()
                 .capacity(TRACK_LIMIT_PER_MIN)
                 .refillGreedy(TRACK_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(TRACK_LIMIT_PER_DAY)
+                .refillIntervally(TRACK_LIMIT_PER_DAY, Duration.ofDays(1))
                 .build()
         )
         .build()
@@ -201,11 +218,15 @@ class RateLimitFilter : OncePerRequestFilter() {
         // действие превращается в DM с кнопками получателю; под общим лимитом 120/мин один человек
         // мог бы заспамить чужую личку серией «Перевёл» / «Отдал Σ» (security-ревью v3).
         private const val MONEY_CLAIM_LIMIT_PER_MIN = 10L
+        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute|skladchinas/[^/]+/promise)$")
         // Журнал событий Mini App (product-analytics.md § 4): пачка до 20 событий раз в 3 с даёт ≤ 20
         // запросов в минуту при живой навигации; 30 оставляет запас на повтор после сбоя сети и не
         // даёт трекингу ни выжирать общий бакет 120/мин, ни засыпать таблицу.
         private const val TRACK_PATH = "/api/track"
         private const val TRACK_LIMIT_PER_MIN = 30L
-        private val MONEY_CLAIM_PATH = Regex("^/api/(debts/[^/]+/claim|debts/with/[^/]+/settle|skladchinas/[^/]+/contribute|skladchinas/[^/]+/promise)$")
+        // Суточный потолок пачек на пользователя: живая навигация — десятки в день, 500 = 10 000 событий.
+        private const val TRACK_LIMIT_PER_DAY = 500L
+        // Пачка до 20 событий с деталями занимает ≤ ~10 КБ; 32 КБ — запас с потолком, дальше — 413 до разбора.
+        private const val TRACK_MAX_BODY_BYTES = 32L * 1024
     }
 }

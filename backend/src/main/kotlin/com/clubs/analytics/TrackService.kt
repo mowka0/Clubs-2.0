@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
+import kotlin.math.abs
 
 /**
  * Приём пачки событий от Mini App (product-analytics.md § 4): whitelist видов и ключей props,
@@ -26,7 +27,7 @@ class TrackService(private val productEventRepository: ProductEventRepository) {
     }
 
     private fun toEvent(userId: UUID, raw: TrackEventRequest): NewProductEvent {
-        val kind = AppEventKind.fromKind(raw.kind) ?: throw ValidationException("Unknown event kind: ${raw.kind.take(48)}")
+        val kind = AppEventKind.fromKind(raw.kind) ?: throw ValidationException("Unknown event kind: ${raw.kind}")
         val props = raw.props?.let { validateProps(kind, it) }
         return NewProductEvent(kind = kind.event, userId = userId, clubId = raw.clubId, props = props)
     }
@@ -37,8 +38,16 @@ class TrackService(private val productEventRepository: ProductEventRepository) {
             if (!PROP_KEY.matches(key)) throw ValidationException("props: invalid key")
             if (key !in kind.allowedProps) throw ValidationException("props: key '$key' is not allowed for ${kind.event.kind}")
             when (value) {
-                null, is Boolean, is Number -> Unit
-                is String -> if (value.length > MAX_PROP_STRING) throw ValidationException("props: value of '$key' is too long")
+                null, is Boolean -> Unit
+                is Int, is Long -> if (abs(value.toLong()) > MAX_PROP_NUMBER) throw ValidationException("props: value of '$key' is out of range")
+                is Double, is Float -> if (!value.toDouble().isFinite() || abs(value.toDouble()) > MAX_PROP_NUMBER.toDouble()) throw ValidationException("props: value of '$key' is out of range")
+                // BigInteger/BigDecimal: Jackson принимает числа до 1000 знаков — в журнале им делать нечего.
+                is Number -> throw ValidationException("props: value of '$key' is out of range")
+                is String -> {
+                    if (value.length > MAX_PROP_STRING) throw ValidationException("props: value of '$key' is too long")
+                    // Нулевой байт Jackson пропускает, а JSONB в Postgres — нет: вместо 500 честный 400.
+                    if (value.contains('\u0000')) throw ValidationException("props: value of '$key' contains an invalid character")
+                }
                 else -> throw ValidationException("props: value of '$key' must be a string, number or boolean")
             }
         }
@@ -49,6 +58,9 @@ class TrackService(private val productEventRepository: ProductEventRepository) {
         // Пределы props (product-analytics.md § 4): плоский объект под ответы на вопросы, а не свалка.
         private const val MAX_PROPS = 10
         private const val MAX_PROP_STRING = 100
+        // Числа — в пределах точного целого JavaScript (2^53): счётчики и номера шагов, не BigInteger на 1000 знаков.
+        private const val MAX_PROP_NUMBER = 9_007_199_254_740_992L
+        // Маска ключа — контракт § 4 как он объявлен клиенту; фактический допуск уже — whitelist по виду.
         private val PROP_KEY = Regex("^[a-zA-Z]{1,32}$")
     }
 }

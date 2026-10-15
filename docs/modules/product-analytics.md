@@ -124,7 +124,7 @@ Jackson в репозитории (не в сервисах).
 | `skladchina_created` | server | `kind`: `shared` \| `per_head` \| `voluntary`; `skladchinaId` | клуб | `SkladchinaCreationService` | В4 |
 | `debt_claimed` | server | `action`: `promise` \| `claim` \| `confirm` \| `reject` \| `forgive`; `debtId` | клуб долга (NULL, если долг без клуба) | `DebtController` → сервис, по одному событию на действие; те же действия из inline-кнопок бота пишутся **здесь же** в сервисе (источник тогда `bot`, см. ниже) | В4 |
 | `feedback_sent` | server | — (текст **не** пишется) | — | `FeedbackService` после успешной доставки DM | В5 |
-| `bot_button_clicked` | bot | `button`: `callback_data` без последнего сегмента-идентификатора: `chatlink:unlink`, `roster:proceed`, `roster:remind`, `debt:confirm`, `debt:reject`, `settle:confirm`, `settle:reject`, `skladchina:enroll`, `skladchina:take`, `debt:forgive`, `skladchina:close`, `legal:info` / `legal:offer` / `legal:privacy` (литералы констант `*_PREFIX` в `bot/`) | NULL: сервисы кнопок возвращают только текст алерта, клуб из них не достать, а действия по долгам и составу и так видны по своим событиям | `ClubsBot.handleCallbackQuery` **после** ответа Telegram (сбой журнала не должен оставить спиннер); `user_id` — по `query.from.id` через `users`, `telegram_id` всегда; неизвестный префикс не пишется | В5 |
+| `bot_button_clicked` | bot | `button`: имя кнопки из закрытого списка (сам `callback_data` в журнал не попадает — его присылает клиент): `chatlink:unlink`, `roster:proceed`, `roster:remind`, `debt:confirm`, `debt:reject`, `settle:confirm`, `settle:reject`, `skladchina:enroll`, `skladchina:take`, `debt:forgive`, `skladchina:close`, `legal:info` / `legal:offer` / `legal:privacy` (литералы констант `*_PREFIX` в `bot/`) | NULL: сервисы кнопок возвращают только текст алерта, клуб из них не достать, а действия по долгам и составу и так видны по своим событиям | `ClubsBot.handleCallbackQuery` **после** ответа Telegram (сбой журнала не должен оставить спиннер); `user_id` — по `query.from.id` через `users`, `telegram_id` всегда; неизвестный префикс не пишется | В5 |
 
 Для `debt_claimed` из бота: сервис долга один на REST и бота, `source` передаётся параметром
 (`server` из контроллера, `bot` из `SkladchinaCallbackService`), чтобы не плодить два вида на
@@ -138,7 +138,7 @@ Jackson в репозитории (не в сервисах).
 
 | Маршрут | screen | club_id |
 |---|---|---|
-| `/` | `home` | — |
+| `/` | не экран: `HomeRoute` только перенаправляет в клуб или «Мои клубы»; в профиле с каталогом на главной — `discovery` | — |
 | `/discovery` | `discovery` | — |
 | `/connect-chat` | `connect_chat` | — |
 | `/my-clubs` | `my_clubs` | — |
@@ -186,21 +186,23 @@ Jackson в репозитории (не в сервисах).
   любой другой, включая серверные виды вроде `payment_succeeded`, — 400 на всю пачку;
 - `clubId`: UUID или отсутствует; существование клуба и членство **не** проверяются (см. § 6);
 - `props`: отсутствует или объект ≤ 10 ключей; ключ — `^[a-zA-Z]{1,32}$`; значение — строка
-  ≤ 100 знаков, число или boolean; вложенные объекты и массивы — 400; сериализованный размер
-  ≤ 1 КБ; ключи, не описанные для этого `kind` в § 3.2, — 400 (whitelist по виду, таблица в
-  `AppEventKind`);
-- тело целиком ≤ 32 КБ (ограничение Spring по умолчанию не трогаем — лимит пачки и props
-  уже дают ≤ ~25 КБ).
+  ≤ 100 знаков без нулевого байта, число в пределах ±2^53 (BigInteger/BigDecimal, NaN — 400) или
+  boolean; вложенные объекты и массивы — 400; ключи, не описанные для этого `kind` в § 3.2, — 400
+  (whitelist по виду, таблица в `AppEventKind`). Размер деталей ≤ 1 КБ следует из потолков:
+  у вида не больше трёх ключей по 100 знаков;
+- тело больше 32 КБ по `Content-Length` — 413 ещё до разбора JSON (`RateLimitFilter`); общий
+  потолок nginx — 6 МБ.
 
 Ответы:
 - `204 No Content` — пачка записана (одной транзакцией, одним batch-insert);
 - `400 VALIDATION_ERROR` — нарушение любого правила выше, пачка не записана целиком
   (fail-closed: частичная запись скрыла бы ошибку клиента);
 - `401` — без токена;
-- `429` — отдельный бакет `RateLimitFilter`: **30 запросов/мин на пользователя** (пачка до 20
+- `429` — отдельный бакет `RateLimitFilter` с двумя пределами: **30 запросов/мин** (пачка до 20
   событий, клиент шлёт раз в 3 с → максимум 20/мин при живой навигации; 30 оставляет запас на
-  ретрай). Ключ — пользователь (фильтр до аутентификации → фактически IP, как у остальных
-  бакетов).
+  ретрай) и **500 запросов/сутки** (живая навигация — десятки в день; потолок против скрипта,
+  который сутками пишет по 30 пачек в минуту). Ключ — пользователь из JWT (фильтр стоит после
+  `JwtAuthenticationFilter`), без токена — IP.
 
 Эндпоинт ничего не возвращает и ничего не читает — только пишет.
 
@@ -238,7 +240,7 @@ Jackson в репозитории (не в сервисах).
 инжектят `ProductEventRepository` напрямую — без событий Spring: запись должна быть в той же
 транзакции, а цикла здесь нет.
 
-Маппинг `Map → JSONB`: один `ObjectMapper` в репозитории; `null`-значения в props не пишутся.
+Маппинг `Map → JSONB`: один `ObjectMapper` в репозитории; `null`-значения репозиторий выбрасывает, пустой объект пишется как `NULL`.
 
 ### Frontend — `frontend/src/analytics/`
 
@@ -246,7 +248,9 @@ Jackson в репозитории (не в сервисах).
 |---|---|
 | `track.ts` | очередь, таймер, flush, keepalive, выключатель |
 | `screens.ts` | `resolveScreen(pathname): { screen, clubId?, props? }` по таблице § 3.4 |
-| `useScreenTracking.ts` | хук в `Layout`: `screen_opened` на смену `pathname` + `app_opened` один раз после авторизации |
+| `ScreenTracker.tsx` | компонент без разметки в `Layout`: `screen_opened` на смену `pathname` |
+| `launch.ts` | `trackAppOpened()` — `app_opened` один раз за запуск, вызывается эффектом `Layout` по `isAuthenticated` (до гейта интро) |
+| `telegram/deepLink.ts` | `parseDeepLink` / `deepLinkKind` — общий разбор ссылок запуска для `DeepLinkHandler` и `app_opened.entry` |
 | точки | `OnboardingFlow` (`onboarding_step`, `onboarding_completed`), `BillingSheet` (`pay_sheet_opened`) |
 | `api/track.ts` | `postTrack(batch)` через `apiClient` с `keepalive` |
 
@@ -264,8 +268,11 @@ Jackson в репозитории (не в сервисах).
   утечки данных нет. Решение: принять риск, зафиксировать здесь.
 - **Whitelist видов и ключей props** — чужие виды (`payment_succeeded` от клиента) невозможны:
   серверные виды пишет только сервер. Размеры ограничены (пачка 20, props 10×100, 1 КБ).
-- **Rate limit** 30/мин — отдельный бакет, чтобы трекинг не выжирал общий лимит 120/мин у
-  живой навигации и не давал заспамить таблицу.
+- **Rate limit** 30/мин и 500/сутки на пользователя — отдельный бакет, чтобы трекинг не выжирал
+  общий лимит 120/мин у живой навигации и не давал раздувать таблицу сутками; тело больше 32 КБ —
+  413 до разбора JSON (Spring тело не ограничивает, Jackson строит граф раньше валидации).
+- **Нажатия кнопок бота.** `callback_data` присылает клиент и он может быть любым; в журнал
+  попадает имя кнопки из закрытого списка префиксов, чужие данные не пишутся.
 - **ПДн в props нет по контракту:** ни имён, ни username, ни телефонов, ни текста
   (`feedback_sent` без текста, `debt_pair` без чужого userId, `invite` без кода). Reviewer
   проверяет каждую новую точку записи по этому правилу.

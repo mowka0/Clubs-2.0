@@ -331,6 +331,8 @@ class MembershipServiceTest {
         assertEquals("active", result.status)
         verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
         verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
+        // Журнал (product-analytics.md AC-6): вступление по приглашению.
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.CLUB_JOINED, userId, clubId, props = mapOf("via" to "invite")) }
     }
 
     @Test

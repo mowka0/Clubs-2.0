@@ -841,6 +841,29 @@ class SkladchinaV3IntegrationTest {
         get("/api/events/$eventId/skladchina", outsider).andExpect(status().isForbidden)
     }
 
+    // --- product-analytics.md AC-6: сбор и действия по долгу в журнале событий ---
+
+    @Test
+    fun `creating a skladchina and acting on a debt land in the product event log with club and source`() {
+        val detail = createShared(owner, listOf(aliceId), amount = 1_000)
+        val skladchinaId = detail["id"].asText()
+        val debtId = myDebtId(skladchinaId, alice)
+        post("/api/debts/$debtId/claim", alice).andExpect(status().isOk)
+        post("/api/debts/$debtId/confirm", owner).andExpect(status().isOk)
+
+        val rows = dsl.fetch(
+            "SELECT kind, source, user_id, props::text FROM product_event WHERE club_id = ? ORDER BY created_at", clubId
+        ).map { listOf(it.get(0, String::class.java), it.get(1, String::class.java), it.get(2, UUID::class.java), it.get(3, String::class.java)) }
+        assertEquals(
+            listOf(
+                listOf("skladchina_created", "server", ownerId, """{"kind": "shared", "skladchinaId": "$skladchinaId"}"""),
+                listOf("debt_claimed", "server", aliceId, """{"action": "claim", "debtId": "$debtId"}"""),
+                listOf("debt_claimed", "server", ownerId, """{"action": "confirm", "debtId": "$debtId"}"""),
+            ),
+            rows,
+        )
+    }
+
     @Test
     fun `money claims have their own rate limit bucket`() {
         val id = createShared(alice, listOf(bobId), amount = 100)["id"].asText()

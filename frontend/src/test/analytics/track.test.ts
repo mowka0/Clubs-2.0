@@ -78,19 +78,22 @@ describe('track — очередь и отправка пачек', () => {
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
   });
 
-  it('после сбоя сети пачка уходит ещё раз один раз, второй сбой её выбрасывает', async () => {
-    postTrackMock.mockRejectedValueOnce(new TypeError('network'));
+  it('после сбоя сети пачка уходит ещё раз один раз, второй сбой её выбрасывает; свежие пачки идут раньше повтора', async () => {
+    // Пачка с app_opened падает дважды, остальные проходят.
+    let failures = 2;
+    postTrackMock.mockImplementation((events: { kind: string }[]) =>
+      events[0]?.kind === 'app_opened' && failures-- > 0 ? Promise.reject(new TypeError('network')) : Promise.resolve(),
+    );
     track('app_opened', { entry: 'none', platform: 'ios' });
     await vi.advanceTimersByTimeAsync(3000);
     expect(postTrackMock).toHaveBeenCalledTimes(1);
 
-    postTrackMock.mockRejectedValueOnce(new TypeError('network'));
     track('screen_opened', { screen: 'home' });
     await vi.advanceTimersByTimeAsync(3000);
-    // Повтор старой пачки (снова сбой) и новая пачка.
+    // Новая пачка первой, повтор старой (снова сбой) — за ней.
     expect(postTrackMock).toHaveBeenCalledTimes(3);
-    expect(sentEvents(1)).toEqual(['app_opened']);
-    expect(sentEvents(2)).toEqual(['screen_opened']);
+    expect(sentEvents(1)).toEqual(['screen_opened']);
+    expect(sentEvents(2)).toEqual(['app_opened']);
 
     track('onboarding_completed');
     await vi.advanceTimersByTimeAsync(3000);

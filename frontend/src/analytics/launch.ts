@@ -1,6 +1,6 @@
 import { getStartParam } from '../telegram/sdk';
 import { platformName } from '../telegram/platform';
-import { deepLinkKind } from '../components/DeepLinkHandler';
+import { deepLinkKind } from '../telegram/deepLink';
 import { track } from './track';
 
 let opened = false;

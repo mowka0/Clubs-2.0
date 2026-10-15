@@ -88,7 +88,8 @@ class TrackControllerTest {
         val body = """
             {"events":[
               {"kind":"screen_opened","clubId":"$clubId","props":{"screen":"club"}},
-              {"kind":"app_opened","props":{"entry":"none","platform":"ios"}}
+              {"kind":"app_opened","props":{"entry":"none","platform":"ios"}},
+              {"kind":"pay_sheet_opened","props":{"reason":"none","mode":null}}
             ]}
         """.trimIndent()
 
@@ -97,6 +98,8 @@ class TrackControllerTest {
         assertEquals(
             listOf(
                 Row("app_opened", "app", userId, null, """{"entry": "none", "platform": "ios"}"""),
+                // null-значение выброшено ещё до записи.
+                Row("pay_sheet_opened", "app", userId, null, """{"reason": "none"}"""),
                 Row("screen_opened", "app", userId, clubId, """{"screen": "club"}"""),
             ),
             rows(),
@@ -114,6 +117,8 @@ class TrackControllerTest {
             """{"events":[{"kind":"screen_opened","props":{"entry":"none"}}]}""",
             """{"events":[{"kind":"screen_opened","clubId":"abc","props":{"screen":"home"}}]}""",
             """{"events":[{"kind":"screen_opened","props":{"screen":{"a":1}}}]}""",
+            """{"events":[{"kind":"screen_opened","props":{"screen":"a\u0000b"}}]}""",
+            """{"events":[{"kind":"onboarding_step","props":{"step":${"1".repeat(30)}}}]}""",
         )
         bodies.forEach { body ->
             mockMvc.perform(track(body)).andExpect(status().isBadRequest)

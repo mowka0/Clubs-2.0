@@ -54,7 +54,7 @@ class JooqProductEventRepository(
         dsl.batchInsert(rows).execute()
     }
 
-    // Пустые детали — NULL, а не «{}»: так в SQL «есть ли детали» читается по IS NULL.
+    // null-значения выбрасываются, пустые детали — NULL, а не «{}»: так в SQL «есть ли детали» читается по IS NULL.
     private fun toJsonb(props: Map<String, Any?>?): JSONB? =
-        props?.takeIf { it.isNotEmpty() }?.let { JSONB.jsonb(objectMapper.writeValueAsString(it)) }
+        props?.filterValues { it != null }?.takeIf { it.isNotEmpty() }?.let { JSONB.jsonb(objectMapper.writeValueAsString(it)) }
 }

@@ -35,6 +35,23 @@ private val INSIDE_CHAT_STATUSES = setOf("member", "administrator", "creator")
 // Сколько знаков команды попадает в лог ошибки диспатча (имя команды с @бот-суффиксом влезает целиком).
 private const val COMMAND_LOG_LENGTH = 40
 
+// Префиксы inline-кнопок с идентификатором после них — имя кнопки для журнала (product-analytics.md § 3.3).
+private val BUTTON_PREFIXES = listOf(
+    ChatLinkBotService.UNLINK_CALLBACK_PREFIX,
+    RosterCallbackService.PROCEED_CALLBACK_PREFIX,
+    RosterCallbackService.REMIND_CALLBACK_PREFIX,
+    SkladchinaCallbackService.CONFIRM_PREFIX,
+    SkladchinaCallbackService.REJECT_PREFIX,
+    SkladchinaCallbackService.SETTLE_CONFIRM_PREFIX,
+    SkladchinaCallbackService.SETTLE_REJECT_PREFIX,
+    SkladchinaCallbackService.ENROLL_PREFIX,
+    SkladchinaCallbackService.TAKE_PREFIX,
+    SkladchinaCallbackService.FORGIVE_PREFIX,
+    SkladchinaCallbackService.CLOSE_PREFIX,
+)
+// Разделы юридических кнопок (LegalSheet): «legal:<раздел>[:страница]».
+private val LEGAL_BUTTON_SECTIONS = setOf("info", "offer", "privacy")
+
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -234,7 +251,6 @@ class ClubsBot(
      */
     private fun handleCallbackQuery(query: CallbackQuery) {
         val data = query.data ?: return
-        var known = true
         val answerText = when {
             data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX) ->
                 parseCallbackId(data, ChatLinkBotService.UNLINK_CALLBACK_PREFIX)
@@ -284,7 +300,6 @@ class ClubsBot(
                     ?: RosterCallbackService.INVALID_REQUEST
             data.startsWith(LegalSheet.CALLBACK_PREFIX) -> handleLegalCallback(query, data)
             else -> {
-                known = false
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null
             }
@@ -301,20 +316,30 @@ class ClubsBot(
             log.warn("Failed to answer callback query {}: {}", query.id, e.message)
         }
         // После ответа Telegram: сбой журнала не должен оставить человеку крутящийся спиннер.
-        if (known) recordButtonClick(query.from.id, data)
+        buttonName(data)?.let { recordButtonClick(query.from.id, it) }
     }
 
     /**
-     * Нажатие известной кнопки в журнал (product-analytics.md § 3.3). Имя кнопки — `callback_data`
-     * без идентификатора («roster:remind», «legal:info»); user_id — если человек известен по telegram id.
+     * Имя кнопки для журнала — только из закрытого списка (product-analytics.md § 3.3): `callback_data`
+     * присылает клиент и он может быть любым, поэтому в журнал попадает не он, а имя известной кнопки.
+     * У юридических кнопок имя — по разделу («legal:offer»), страница отбрасывается.
      */
-    private fun recordButtonClick(telegramId: Long, data: String) {
+    private fun buttonName(data: String): String? {
+        if (data.startsWith(LegalSheet.CALLBACK_PREFIX)) {
+            val section = data.removePrefix(LegalSheet.CALLBACK_PREFIX).substringBefore(':')
+            return if (section in LEGAL_BUTTON_SECTIONS) LegalSheet.CALLBACK_PREFIX + section else null
+        }
+        return BUTTON_PREFIXES.firstOrNull { data.startsWith(it) }?.trimEnd(':')
+    }
+
+    /** Нажатие известной кнопки в журнал; user_id — если человек известен по telegram id. */
+    private fun recordButtonClick(telegramId: Long, button: String) {
         productEventRepository.record(
             ProductEventKind.BOT_BUTTON_CLICKED,
             userRepository.findByTelegramId(telegramId)?.id,
             clubId = null,
             telegramId = telegramId,
-            props = mapOf("button" to data.substringBeforeLast(':')),
+            props = mapOf("button" to button),
         )
     }
 

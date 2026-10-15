@@ -1,10 +1,12 @@
 import { apiClient } from './apiClient';
 
 /** Одно событие пачки — зеркало `TrackEventRequest` бэкенда (product-analytics.md § 4). */
+export type TrackProps = Record<string, string | number | boolean>;
+
 export interface TrackEventBody {
   kind: string;
   clubId?: string;
-  props?: Record<string, string | number | boolean>;
+  props?: TrackProps;
 }
 
 /**
