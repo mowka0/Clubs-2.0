@@ -92,7 +92,7 @@
 | `docker-compose*.yml`, `Dockerfile`, `nginx.conf`, `.github/workflows/` | `infrastructure.md` + `CLAUDE.md` § Infrastructure |
 | `application*.yml`, env-переменные | `infrastructure.md` + спека модуля-потребителя |
 | `subscription/Funnel*` (шаги, `FunnelTracker`, отчёт, `FunnelReportScheduler`), `/start` в личке в `bot/ClubsBot`, `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`, `common/config/PlatformAdmins`, миграция V100 | `funnel.md` |
-| `infra/host/`, `infra/ru-proxy/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner» + README в каталоге |
+| `infra/host/`, `infra/ru-proxy/`, `infra/backup/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси, бэкапы баз) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner», § «Бэкапы баз» + README в каталоге |
 
 ---
 
@@ -181,7 +181,7 @@
 ### Инфраструктура
 | Файл | О чём | Правлен |
 |---|---|---|
-| `infrastructure.md` | Docker, Coolify, CI/CD, nginx, российский прокси | 2026-09-18 |
+| `infrastructure.md` | Docker, Coolify, CI/CD, nginx, российский прокси, бэкапы баз | 2026-10-15 |
 
 ---
 
