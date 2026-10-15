@@ -1,0 +1,28 @@
+# Датасорс «Clubs» — прод-база через read-only роль grafana_ro (create-ro-role.sh).
+# Значения $CLUBS_DB_* приходят из env контейнера (docker-compose.yml); Grafana подставляет
+# переменные окружения в provisioning-файлах. uid фиксирован: на него ссылаются дашборды и алерты.
+apiVersion: 1
+
+datasources:
+  - name: Clubs
+    uid: clubs-prod
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: $CLUBS_DB_HOST:5432
+    user: $CLUBS_DB_USER
+    isDefault: true
+    # Нельзя править в UI: источник истины — этот файл, пароль — только из env.
+    editable: false
+    secureJsonData:
+      password: $CLUBS_DB_PASSWORD
+    jsonData:
+      database: $CLUBS_DB_NAME
+      # Внутри docker-сети прода, TLS между контейнерами нет (как у бэкенда).
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+      # Мало соединений намеренно: у Postgres прода лимит 100, основной потребитель — пул бэкенда.
+      maxOpenConns: 4
+      maxIdleConns: 2
+      maxIdleConnsAuto: false
+      connMaxLifetime: 14400

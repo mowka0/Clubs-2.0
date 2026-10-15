@@ -1,0 +1,568 @@
+{
+  "uid": "clubs-events",
+  "title": "Clubs · Встречи",
+  "description": "Создано, состоялось, отменено; голоса; явка; чаты без встреч; дни от привязки чата до первой встречи.",
+  "tags": [
+    "clubs"
+  ],
+  "timezone": "Europe/Moscow",
+  "weekStart": "monday",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "clubs"
+      ],
+      "title": "Clubs",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "За выбранный период",
+      "description": "«Состоялось» — как в недельном отчёте (funnel.md § 3.3): status = completed по дате встречи, только клубы с привязанным чатом, явка не обязательна. Остальные числа — по всем клубам.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  (select count(*) from events where $__timeFilter(created_at)) as \"Создано\",\n  (select count(*) from events where status = 'completed' and exists (select 1 from club_chat_links l where l.club_id = events.club_id) and $__timeFilter(event_datetime)) as \"Состоялось\",\n  (select count(*) from events where status = 'cancelled' and $__timeFilter(event_datetime)) as \"Отменено\",\n  (select count(*) from events where status = 'completed' and attendance_marked and $__timeFilter(event_datetime)) as \"С отметкой явки\",\n  (select count(*) from events where status not in ('completed', 'cancelled') and event_datetime > now()) as \"Предстоит (сейчас)\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "По неделям",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, count(*) as \"Создано\"\nfrom events where $__timeFilter(created_at) group by 1 order by 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', event_datetime at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, count(*) as \"Состоялось (клубы с чатом)\"\nfrom events where status = 'completed' and exists (select 1 from club_chat_links l where l.club_id = events.club_id) and $__timeFilter(event_datetime) group by 1 order by 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', event_datetime at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, count(*) as \"Отменено\"\nfrom events where status = 'cancelled' and $__timeFilter(event_datetime) group by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Голоса по неделям",
+      "description": "Последний голос каждого участника по времени голоса (event_responses). Каждое нажатие, включая смену голоса, — vote_cast в журнале с 2026-10-15.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', stage_1_timestamp at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where stage_1_vote = 'going') as \"Пойду\",\n  count(*) filter (where stage_1_vote = 'maybe') as \"Может быть\",\n  count(*) filter (where stage_1_vote = 'not_going') as \"Не пойду\"\nfrom event_responses\nwhere stage_1_timestamp is not null and $__timeFilter(stage_1_timestamp)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Явка за период",
+      "description": "Только встречи с отметкой явки; «спорных» в долю не входят.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(*) filter (where r.attendance = 'attended') as \"Пришли\",\n  count(*) filter (where r.attendance = 'absent') as \"Не пришли\",\n  count(*) filter (where r.attendance = 'disputed') as \"Спорных\",\n  round(100.0 * count(*) filter (where r.attendance = 'attended')\n        / nullif(count(*) filter (where r.attendance in ('attended', 'absent')), 0), 1) as \"Явка, %\"\nfrom event_responses r\njoin events e on e.id = r.event_id\nwhere e.status = 'completed' and e.attendance_marked and r.attendance is not null\n  and $__timeFilter(e.event_datetime)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Явка, %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "Явка по неделям",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 16,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', e.event_datetime at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where r.attendance = 'attended') as \"Пришли\",\n  count(*) filter (where r.attendance = 'absent') as \"Не пришли\",\n  round(100.0 * count(*) filter (where r.attendance = 'attended')\n        / nullif(count(*) filter (where r.attendance in ('attended', 'absent')), 0), 1) as \"Явка, %\"\nfrom event_responses r\njoin events e on e.id = r.event_id\nwhere e.status = 'completed' and e.attendance_marked and r.attendance is not null\n  and $__timeFilter(e.event_datetime)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Явка, %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "B"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 5
+    },
+    {
+      "type": "table",
+      "title": "Чаты без встреч 30 дней",
+      "description": "Та же метрика, что строка «смотреть сюда» в недельном отчёте: ни прошедшей, ни запланированной встречи за ±30 дней.",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select c.name as \"Клуб\",\n  l.linked_at as \"Чат привязан\",\n  (current_date - (l.linked_at at time zone 'Europe/Moscow')::date) as \"Дней с привязки\",\n  (select max(e.event_datetime) from events e where e.club_id = c.id and e.status <> 'cancelled') as \"Последняя встреча\"\nfrom club_chat_links l\njoin clubs c on c.id = l.club_id\nwhere c.is_active and l.bot_status in ('member', 'administrator')\n  and l.linked_at <= now() - interval '30 days'\n  and not exists (\n    select 1 from events e\n    where e.club_id = c.id and e.status <> 'cancelled'\n      and e.event_datetime >= now() - interval '30 days' and e.event_datetime < now() + interval '30 days')\norder by l.linked_at"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 6
+    },
+    {
+      "type": "stat",
+      "title": "От привязки чата до первой встречи",
+      "description": "В3: доходит ли чат до первой (не отменённой) встречи и за сколько дней. Вся история по club_chat_links.linked_at.",
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with first_event as (\n  select l.club_id, l.linked_at, min(e.created_at) as first_created\n  from club_chat_links l\n  join events e on e.club_id = l.club_id and e.created_at >= l.linked_at and e.status <> 'cancelled'\n  group by 1, 2\n)\nselect\n  count(*) as \"Чатов с встречей\",\n  round((percentile_cont(0.5) within group (order by extract(epoch from first_created - linked_at) / 86400))::numeric, 1) as \"Медиана, дней\",\n  round(avg(extract(epoch from first_created - linked_at) / 86400)::numeric, 1) as \"Среднее, дней\",\n  (select count(*) from club_chat_links l2\n     join clubs c2 on c2.id = l2.club_id\n     where c2.is_active and l2.bot_status in ('member', 'administrator')\n       and not exists (select 1 from events e2 where e2.club_id = l2.club_id and e2.status <> 'cancelled')) as \"Чатов без единой встречи\"\nfrom first_event"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 7
+    },
+    {
+      "type": "table",
+      "title": "Форматы за период",
+      "description": "",
+      "gridPos": {
+        "x": 18,
+        "y": 19,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with going as (\n  select event_id, count(*) as cnt from event_responses where stage_1_vote = 'going' group by 1\n)\nselect case when e.participant_limit is null then 'Открытая' else 'С местами' end as \"Формат\",\n  count(*) as \"Встреч\",\n  round(avg(coalesce(g.cnt, 0)), 1) as \"«Пойду» в среднем\"\nfrom events e\nleft join going g on g.event_id = e.id\nwhere $__timeFilter(e.created_at)\ngroup by 1 order by 2 desc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 8
+    }
+  ]
+}

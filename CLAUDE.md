@@ -37,6 +37,7 @@ Telegram Mini App для создания и управления платным
 - DNS-хостинг `clubsapp.ru`: NS Timeweb стоят в РФ и недоступны с фильтруемых VPN-сетей (18.09) — зона переезжает в Cloudflare (Free, только DNS, серые облачка), домен остаётся у Timeweb. Записи и порядок — `infra/ru-proxy/README.md` § 6a
 - Доступ из РФ: РКН режет подсети Hetzner на домашних и мобильных провайдерах (подтверждено PO 2026-09-18), поэтому перед Hetzner ставится российский VPS-прокси — `infra/ru-proxy/` (nginx stream, TCP passthrough 80/443 + PROXY protocol; A-записи `clubsapp.ru` → прокси → 77.42.23.177). Traefik доверяет строке PROXY только IP прокси (`proxyProtocol.trustedIPs` в Coolify → Proxy → Configuration) — при смене IP прокси править там. Бэкенд прокси не видит, `ClientIpResolver.TRUSTED_PROXY_HOPS` не трогать. Runbook — `infra/ru-proxy/README.md`
 - Бэкапы баз (с 2026-10-15): крон на VPS ежедневно в 03:15 МСК дампит прод и staging, 14 дней на VPS + копия в Hetzner Storage Box (BX11, Falkenstein, 30 дней). Runbook, проверка и восстановление — `infra/backup/README.md`
+- Grafana (с 2026-10-15, W5): `https://grafana.clubsmeet.com` — отдельный ресурс Coolify из `infra/grafana/` (образ с запечённым provisioning, read-only роль `grafana_ro` в прод-базе, шесть дашбордов из `gen-dashboards.py`). Runbook — `infra/grafana/README.md`
 - Auto-deploy: push в `master` → production (Coolify следит за master), push в **любую другую ветку** (`branches-ignore: [master]`) → staging
 - Staging: отдельное приложение в Coolify на другом домене (настраивается один раз, см. ниже)
 

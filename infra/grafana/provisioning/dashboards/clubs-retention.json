@@ -1,0 +1,293 @@
+{
+  "uid": "clubs-retention",
+  "title": "Clubs · Удержание",
+  "description": "Когорты и возвраты по запускам Mini App (app_opened), затихшие клубы.",
+  "tags": [
+    "clubs"
+  ],
+  "timezone": "Europe/Moscow",
+  "weekStart": "monday",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "clubs"
+      ],
+      "title": "Clubs",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Сейчас",
+      "description": "Недели календарные по Москве. Журнал запусков ведётся с 2026-10-15. DAU усредняется по дням, когда запуски были, — дни без запусков в среднее не входят.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with wk as (\n  select distinct user_id, date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as w\n  from product_event\n  where kind = 'app_opened' and user_id is not null\n)\nselect\n  (select count(*) from wk where w = date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow') as \"На этой неделе\",\n  (select count(*) from wk where w = date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' - interval '7 days') as \"На прошлой неделе\",\n  (select count(*) from wk a\n     where a.w = date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow'\n       and exists (select 1 from wk b where b.user_id = a.user_id and b.w = a.w - interval '7 days')) as \"Были и на прошлой\",\n  (select count(distinct user_id) from product_event\n     where kind = 'app_opened' and user_id is not null and created_at >= now() - interval '28 days') as \"MAU (28 дней)\",\n  (select round(avg(d), 1) from (\n     select count(distinct user_id) as d from product_event\n     where kind = 'app_opened' and user_id is not null and created_at >= now() - interval '28 days'\n     group by date_trunc('day', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow') t) as \"DAU в среднем по дням с запусками (28 дней)\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 1
+    },
+    {
+      "type": "table",
+      "title": "Когорты по неделе первого запуска, % вернувшихся",
+      "description": "В7: кто из запустивших приложение на неделе N запустил на неделе N+k. Пусто — неделя ещё не прошла. Все, кто пользовался приложением до 2026-10-15, попадают в первую когорту.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with first as (\n  select user_id, min(date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow') as cohort\n  from product_event\n  where kind = 'app_opened' and user_id is not null\n  group by 1\n),\nacts as (\n  select distinct user_id, date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as w\n  from product_event\n  where kind = 'app_opened' and user_id is not null\n)\nselect to_char(f.cohort at time zone 'Europe/Moscow', 'DD.MM.YYYY') as \"Неделя с\",\n  count(*) as \"Людей\",\n  case when date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' >= f.cohort + interval '7 days'\n       then round(100.0 * count(*) filter (where exists (\n              select 1 from acts a where a.user_id = f.user_id and a.w = f.cohort + interval '7 days'))\n            / count(*), 0) end as \"Нед. +1\" ,\n  case when date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' >= f.cohort + interval '14 days'\n       then round(100.0 * count(*) filter (where exists (\n              select 1 from acts a where a.user_id = f.user_id and a.w = f.cohort + interval '14 days'))\n            / count(*), 0) end as \"Нед. +2\" ,\n  case when date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' >= f.cohort + interval '21 days'\n       then round(100.0 * count(*) filter (where exists (\n              select 1 from acts a where a.user_id = f.user_id and a.w = f.cohort + interval '21 days'))\n            / count(*), 0) end as \"Нед. +3\" ,\n  case when date_trunc('week', now() at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' >= f.cohort + interval '28 days'\n       then round(100.0 * count(*) filter (where exists (\n              select 1 from acts a where a.user_id = f.user_id and a.w = f.cohort + interval '28 days'))\n            / count(*), 0) end as \"Нед. +4\" \nfrom first f\nwhere $__timeFilter(f.cohort)\ngroup by f.cohort\norder by f.cohort desc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Нед\\. .*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Состав недельной аудитории",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with wk as (\n  select distinct user_id, date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as w\n  from product_event\n  where kind = 'app_opened' and user_id is not null\n),\nfirst as (select user_id, min(w) as first_w from wk group by 1)\nselect wk.w as time,\n  count(*) filter (where wk.w = f.first_w) as \"Новые\",\n  count(*) filter (where wk.w > f.first_w and exists (\n    select 1 from wk p where p.user_id = wk.user_id and p.w = wk.w - interval '7 days')) as \"Были и на прошлой неделе\",\n  count(*) filter (where wk.w > f.first_w and not exists (\n    select 1 from wk p where p.user_id = wk.user_id and p.w = wk.w - interval '7 days')) as \"Вернулись после перерыва\"\nfrom wk\njoin first f on f.user_id = wk.user_id\nwhere $__timeFilter(wk.w)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 3
+    },
+    {
+      "type": "table",
+      "title": "Клубы с чатом, в которых затихли",
+      "description": "Никто не открывал экраны клуба 14 дней (или ни разу с 2026-10-15).",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with last_seen as (\n  select club_id, max(created_at) as at\n  from product_event\n  where kind = 'screen_opened' and club_id is not null\n  group by 1\n),\nmembers as (\n  select club_id, count(*) as cnt from memberships where status = 'active' group by 1\n)\nselect c.name as \"Клуб\",\n  s.at as \"Последняя активность в приложении\",\n  (current_date - (s.at at time zone 'Europe/Moscow')::date) as \"Дней тишины\",\n  coalesce(m.cnt, 0) as \"Участников\"\nfrom clubs c\njoin club_chat_links l on l.club_id = c.id\nleft join last_seen s on s.club_id = c.id\nleft join members m on m.club_id = c.id\nwhere c.is_active and l.bot_status in ('member', 'administrator')\n  and (s.at is null or s.at < now() - interval '14 days')\norder by s.at nulls first"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 4
+    }
+  ]
+}

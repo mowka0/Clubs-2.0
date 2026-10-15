@@ -1,0 +1,107 @@
+# Алерты на рост журнала событий (product-analytics.md § 2.2): чистка не делалась намеренно,
+# вернуться к ней при 1 млн строк. Правила только из этого файла; куда слать (контакт-поинт
+# Telegram с токеном бота) — настраивается в UI и хранится в базе Grafana, не в репозитории:
+# пустой токен в provisioning уронил бы старт Grafana (README § 4).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: product-event
+    folder: Clubs
+    # Таблица растёт на ~1 000 строк в день — проверять чаще часа незачем.
+    interval: 1h
+    rules:
+      - uid: product-event-rows
+        title: Журнал событий — больше миллиона строк
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: clubs-prod
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: grafana-postgresql-datasource
+                uid: clubs-prod
+              rawQuery: true
+              editorMode: code
+              format: table
+              rawSql: select count(*) as rows from product_event
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              conditions:
+                - evaluator:
+                    # Порог из спеки § 2.2: при миллионе строк агрегировать screen_opened старше 180 дней.
+                    type: gt
+                    params: [1000000]
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: В product_event больше 1 000 000 строк — пора агрегировать screen_opened старше 180 дней (product-analytics.md § 2.2).
+        labels:
+          service: clubs
+      - uid: product-event-bytes
+        title: Журнал событий — таблица больше 1 ГиБ
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: clubs-prod
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: grafana-postgresql-datasource
+                uid: clubs-prod
+              rawQuery: true
+              editorMode: code
+              format: table
+              rawSql: select pg_total_relation_size('product_event') as bytes
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              conditions:
+                - evaluator:
+                    # 1 ГиБ с индексами и TOAST — страховка на случай, если строки окажутся тяжелее оценки.
+                    type: gt
+                    params: [1073741824]
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: Таблица product_event с индексами больше 1 ГиБ — проверить объём props и план чистки (product-analytics.md § 2.2).
+        labels:
+          service: clubs

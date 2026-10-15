@@ -1,0 +1,17 @@
+# Провайдер дашбордов: все *.json из этого же каталога попадают в папку «Clubs».
+# JSON генерирует gen-dashboards.py (SQL и раскладка панелей — там); руками JSON не править.
+apiVersion: 1
+
+providers:
+  - name: clubs
+    orgId: 1
+    folder: Clubs
+    type: file
+    # Дашборд из репозитория нельзя удалить или перезаписать из UI — только «Save as» копию.
+    # Источник истины — репозиторий; правки в UI пропали бы при следующем деплое.
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

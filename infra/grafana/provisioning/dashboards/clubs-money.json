@@ -1,0 +1,609 @@
+{
+  "uid": "clubs-money",
+  "title": "Clubs · Деньги",
+  "description": "Подписки чатов и MRR, оплаты Robokassa, платёжная воронка, долги и сборы.",
+  "tags": [
+    "clubs"
+  ],
+  "timezone": "Europe/Moscow",
+  "weekStart": "monday",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "clubs"
+      ],
+      "title": "Clubs",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Подписки сейчас и оплаты за период",
+      "description": "«Платят» и MRR — определения funnel.md § 3.3: ACTIVE × цена плана CHAT; отменившие не продлятся.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with price as (\n  select price_kopecks from subscription_pricing\n  where plan = 'CHAT' and effective_from <= now()\n  order by effective_from desc limit 1\n)\nselect\n  (select count(*) from service_subscription\n     where subject_club_id is not null and status in ('ACTIVE', 'CANCELLED_PENDING_END')) as \"Платят (чатов)\",\n  round(((select count(*) from service_subscription where subject_club_id is not null and status = 'ACTIVE') * (select price_kopecks from price)) / 100.0, 2) as \"MRR, ₽\",\n  (select count(*) from service_subscription where subject_club_id is not null and status = 'PAST_DUE') as \"В грейсе (PAST_DUE)\",\n  (select count(*) from service_subscription where subject_club_id is not null and status = 'CANCELLED_PENDING_END') as \"Отменили, доживают\",\n  round((select coalesce(sum(amount_kopecks), 0) from platform_payment where status = 'SUCCEEDED' and $__timeFilter(paid_at)) / 100.0, 2) as \"Оплачено за период, ₽\",\n  (select round(coalesce(sum(provider_fee), 0), 2) from platform_payment\n     where status = 'SUCCEEDED' and $__timeFilter(paid_at)) as \"Комиссия Robokassa, ₽\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MRR, ₽"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyRUB"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Оплачено за период, ₽"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyRUB"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Комиссия Robokassa, ₽"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyRUB"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "Оплаты по неделям",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', paid_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  round((coalesce(sum(amount_kopecks) filter (where kind = 'MOTHER'), 0)) / 100.0, 2) as \"Со страницы оплаты\",\n  round((coalesce(sum(amount_kopecks) filter (where kind = 'RECURRING'), 0)) / 100.0, 2) as \"Автосписания\"\nfrom platform_payment\nwhere status = 'SUCCEEDED' and $__timeFilter(paid_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          },
+          "unit": "currencyRUB"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Счета по статусу",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where status = 'SUCCEEDED') as \"Оплачены\",\n  count(*) filter (where status = 'FAILED') as \"Не оплачены\",\n  count(*) filter (where status = 'PENDING') as \"Висят\"\nfrom platform_payment\nwhere $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 3
+    },
+    {
+      "type": "piechart",
+      "title": "Способ оплаты за период",
+      "description": "BankCard ⇒ карта сохранена, автопродление возможно; SBP — нет (platform-billing.md).",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select coalesce(payment_method, '—') as \"Способ\", count(*) as \"Оплат\"\nfrom platform_payment\nwhere status = 'SUCCEEDED' and $__timeFilter(paid_at)\ngroup by 1 order by 2 desc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "pieType": "pie",
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "id": 4
+    },
+    {
+      "type": "table",
+      "title": "Подписки чатов (кроме завершённых)",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 14,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select c.name as \"Клуб\",\n  s.status as \"Статус\",\n  s.current_period_end as \"Период до\",\n  case when s.autopay then 'да' else 'нет' end as \"Автопродление\",\n  case when s.autopay_possible then 'да' else 'нет' end as \"Карта сохранена\",\n  s.charge_attempts as \"Попыток списания\",\n  s.created_at as \"Оформлена\"\nfrom service_subscription s\njoin clubs c on c.id = s.subject_club_id\nwhere s.status <> 'ENDED'\norder by s.current_period_end"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 5
+    },
+    {
+      "type": "bargauge",
+      "title": "Платёжная воронка за период (клубов)",
+      "description": "В6. Шаги — product-analytics.md § 3.1 и § 3.2; считаются клубы.",
+      "gridPos": {
+        "x": 14,
+        "y": 12,
+        "w": 10,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(distinct club_id) filter (where kind = 'trial_started') as \"Бесплатный период начат\",\n  count(distinct club_id) filter (where kind = 'paywall_seen') as \"Упёрлись в пейволл\",\n  count(distinct club_id) filter (where kind = 'pay_sheet_opened') as \"Открыли шит оплаты\",\n  count(distinct club_id) filter (where kind = 'checkout_started') as \"Перешли к оплате\",\n  count(distinct club_id) filter (where kind = 'payment_succeeded') as \"Оплатили\",\n  count(distinct club_id) filter (where kind = 'subscription_ended') as \"Подписка закончилась\"\nfrom product_event\nwhere kind in ('trial_started', 'paywall_seen', 'pay_sheet_opened', 'checkout_started', 'payment_succeeded', 'subscription_ended')\n  and $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "color": {
+            "mode": "continuous-BlPu"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "minVizHeight": 16
+      },
+      "id": 6
+    },
+    {
+      "type": "stat",
+      "title": "Долги сейчас",
+      "description": "Доля создателя сбора (должник = получатель) исключена: она закрывается сразу.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(*) filter (where status in ('waiting', 'promised', 'claimed')) as \"Открытых\",\n  round((coalesce(sum(amount_kopecks) filter (where status in ('waiting', 'promised', 'claimed')), 0)) / 100.0, 2) as \"Открытых, ₽\",\n  count(*) filter (where status in ('waiting', 'promised') and due_at < now()) as \"Просрочено\",\n  count(*) filter (where status = 'claimed') as \"Ждут «Получил»\"\nfrom debts\nwhere debtor_id <> creditor_id"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Открытых, ₽"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyRUB"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "Долги по неделям",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 21,
+        "w": 10,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, round((sum(amount_kopecks)) / 100.0, 2) as \"Выставлено\"\nfrom debts where debtor_id <> creditor_id and $__timeFilter(created_at) group by 1 order by 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', confirmed_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, round((sum(amount_kopecks)) / 100.0, 2) as \"Получено\"\nfrom debts where debtor_id <> creditor_id and status = 'received' and confirmed_at is not null\n  and $__timeFilter(confirmed_at) group by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          },
+          "unit": "currencyRUB"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Сборы по виду",
+      "description": "",
+      "gridPos": {
+        "x": 18,
+        "y": 21,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where kind = 'shared') as \"Скинуться\",\n  count(*) filter (where kind = 'per_head') as \"Кто берёт?\",\n  count(*) filter (where kind = 'voluntary') as \"По желанию\"\nfrom skladchinas\nwhere $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 9
+    }
+  ]
+}

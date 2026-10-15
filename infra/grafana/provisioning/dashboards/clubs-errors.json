@@ -1,0 +1,492 @@
+{
+  "uid": "clubs-errors",
+  "title": "Clubs · Ошибки и сбои",
+  "description": "Что в базе выглядит как поломка или требует действия: платежи, подписки, права бота, споры, долги без ответа, срывы.",
+  "tags": [
+    "clubs"
+  ],
+  "timezone": "Europe/Moscow",
+  "weekStart": "monday",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "clubs"
+      ],
+      "title": "Clubs",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Платежи и подписки сейчас",
+      "description": "В норме всё по нулям. «Висят дольше 6 ч» — шедулер должен был перевести счёт в FAILED (BILLING_PENDING_TIMEOUT_HOURS); «в грейсе» — списание не прошло, идут ретраи 0/+1/+3 дня (platform-billing.md).",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  (select count(*) from platform_payment\n     where status = 'PENDING' and created_at < now() - interval '6 hours') as \"Счета висят дольше 6 ч\",\n  (select count(*) from platform_payment\n     where status = 'FAILED' and created_at >= now() - interval '7 days') as \"Не оплачены за 7 дней\",\n  (select count(*) from service_subscription\n     where subject_club_id is not null and status = 'PAST_DUE') as \"Подписки в грейсе\",\n  (select count(*) from service_subscription\n     where subject_club_id is not null and status in ('ACTIVE', 'PAST_DUE') and charge_attempts >= 1) as \"Списание на ретрае\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 1
+    },
+    {
+      "type": "stat",
+      "title": "Чаты, встречи, долги сейчас",
+      "description": "Что требует действия: бот без чата или без права на включённую функцию; пост бота не отправился; организаторы не отмечают явку и не отвечают на «Отдал».",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  (select count(*) from club_chat_links l join clubs c on c.id = l.club_id\n     where c.is_active and l.bot_status not in ('member', 'administrator')) as \"Бота выгнали из чата\",\n  (select count(*) from club_chat_links l join clubs c on c.id = l.club_id\n     where c.is_active and l.bot_status = 'administrator' and ((l.live_pin_enabled and not l.can_pin_messages)\n     or (l.door_enabled and not l.can_invite_users)\n     or (l.strict_mode_enabled and not l.can_restrict_members)\n     or (l.award_tags_enabled and not l.can_manage_tags))) as \"Функция включена без права\",\n  (select count(*) from event_chat_pins where message_id is null and closed_at is null) as \"Статус встречи не ушёл в чат\",\n  (select count(*) from event_responses r join events e on e.id = r.event_id\n     where r.attendance = 'disputed' and not e.attendance_finalized) as \"Открытых споров о явке\",\n  (select count(*) from events\n     where status = 'completed' and attendance_reminder_sent and not attendance_marked\n       and event_datetime < now() - interval '3 days') as \"Явка не отмечена 3+ дня\",\n  (select count(*) from debts where status = 'claimed' and claimed_at < now() - interval '48 hours') as \"«Отдал» без ответа 48 ч+\",\n  (select count(*) from debt_settlements where status = 'claimed' and claimed_at < now() - interval '48 hours') as \"Сальдо без ответа 48 ч+\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Платёжные сбои по неделям",
+      "description": "FAILED = провайдер отказал или неоплаченный счёт протух. Автосписание падает, если карта не сохранена или отклонена банком.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where kind = 'MOTHER' and status = 'FAILED') as \"Счёт со страницы оплаты не оплачен\",\n  count(*) filter (where kind = 'RECURRING' and status = 'FAILED') as \"Автосписание не прошло\"\nfrom platform_payment\nwhere status = 'FAILED' and $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 3
+    },
+    {
+      "type": "timeseries",
+      "title": "Отключения и концы подписок по неделям",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where kind = 'chat_disconnected') as \"Чат отвязан или бота выгнали\",\n  count(*) filter (where kind = 'subscription_ended') as \"Подписка закончилась\",\n  count(*) filter (where kind = 'paywall_seen') as \"Упёрлись в пейволл\"\nfrom product_event\nwhere kind in ('chat_disconnected', 'subscription_ended', 'paywall_seen') and $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 4
+    },
+    {
+      "type": "table",
+      "title": "Чаты с проблемами",
+      "description": "Скрытая история — новички не видят закрепов; бот включить её не может, только организатор в настройках группы (docs/backlog/chat-history-hidden-for-new-members.md).",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select c.name as \"Клуб\",\n  l.bot_status as \"Бот в чате\",\n  case when l.live_pin_enabled and not l.can_pin_messages then 'да' else '' end as \"Закреп без права\",\n  case when l.door_enabled and not l.can_invite_users then 'да' else '' end as \"Дверь без права\",\n  case when l.strict_mode_enabled and not l.can_restrict_members then 'да' else '' end as \"Строгий режим без права\",\n  case when l.award_tags_enabled and not l.can_manage_tags then 'да' else '' end as \"Теги без права\",\n  case when l.history_visible_to_new_members = false then 'скрыта' else '' end as \"История для новичков\",\n  l.updated_at as \"Права обновлены\"\nfrom club_chat_links l\njoin clubs c on c.id = l.club_id\nwhere c.is_active\n  and (l.bot_status not in ('member', 'administrator') or ((l.live_pin_enabled and not l.can_pin_messages)\n     or (l.door_enabled and not l.can_invite_users)\n     or (l.strict_mode_enabled and not l.can_restrict_members)\n     or (l.award_tags_enabled and not l.can_manage_tags)) or l.history_visible_to_new_members = false)\norder by l.updated_at desc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 5
+    },
+    {
+      "type": "table",
+      "title": "Счета с проблемами за период",
+      "description": "InvId — номер счёта в кабинете Robokassa, по нему искать причину отказа.",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select c.name as \"Клуб\",\n  p.kind as \"Вид\",\n  p.status as \"Статус\",\n  round((p.amount_kopecks) / 100.0, 2) as \"Сумма, ₽\",\n  p.inv_id as \"InvId\",\n  p.created_at as \"Выставлен\",\n  p.payment_method as \"Способ\"\nfrom platform_payment p\njoin clubs c on c.id = p.club_id\nwhere p.status in ('FAILED', 'PENDING') and $__timeFilter(p.created_at)\norder by p.created_at desc\nlimit 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сумма, ₽"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyRUB"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 6
+    },
+    {
+      "type": "timeseries",
+      "title": "Срывы по неделям",
+      "description": "Отрицательные исходы леджера репутации по времени поведения (reputation.md), отменённые сборы и встречи.",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 16,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', occurred_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where kind in ('no_show', 'open_no_show')) as \"Обещал и не пришёл\",\n  count(*) filter (where kind = 'spectator') as \"«Может быть» и не пришёл\",\n  count(*) filter (where kind = 'late_decline_uncovered') as \"Поздний отказ без замены\",\n  count(*) filter (where kind = 'skladchina_expired') as \"Долг просрочен (−40)\"\nfrom reputation_ledger\nwhere points < 0 and $__timeFilter(occurred_at)\ngroup by 1 order by 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', closed_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, count(*) as \"Сборы отменены\"\nfrom skladchinas where status = 'cancelled' and closed_at is not null and $__timeFilter(closed_at) group by 1 order by 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', event_datetime at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time, count(*) as \"Встречи отменены\"\nfrom events where status = 'cancelled' and $__timeFilter(event_datetime) group by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 7
+    },
+    {
+      "type": "text",
+      "title": "Чего здесь нет",
+      "gridPos": {
+        "x": 16,
+        "y": 22,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Технические ошибки** — 5xx бэкенда, исключения, сбои бота и недоставленные DM — в базе не\nхранятся: они в логах контейнеров (Coolify → приложение → `backend` → Logs; уровни — `LOGGING_LEVEL_*`).\nВ Grafana они появятся после подключения Loki + Alloy — отдельная девопс-задача (~300 МБ памяти,\nещё один ресурс Coolify).\n\n**Доступность снаружи** (сайт не открывается из РФ, сертификат) — внешний UptimeRobot на\n`clubsmeet.com`, не этот дашборд."
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "id": 8
+    }
+  ]
+}

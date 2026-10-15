@@ -760,6 +760,35 @@ ssh root@77.42.23.177 "/usr/local/sbin/clubs-mss-clamp status"   # обе стр
   в разных дата-центрах. Доступ только по отдельному ключу сервера, снаружи сети Hetzner ящик
   закрыт. Первая выгрузка 2026-10-15 сверена по sha256.
 
+## Grafana — продуктовая аналитика (2026-10-15)
+
+Grafana OSS (`grafana/grafana:13.0.11`, тег + digest; репозиторий `grafana/grafana-oss` остановился
+на 13.0.2 и CVE не получает) как отдельный ресурс Coolify «Docker Compose» из `infra/grafana/`
+(Base Directory `/infra/grafana`), домен `https://grafana.clubsmeet.com` через Traefik, портов
+наружу нет, вход только по логину (повседневно — пользователь Viewer, без Explore). Читает
+прод-базу под ролью `grafana_ro` с `SELECT` только на нужное дашбордам: таблицы без ПДн целиком,
+остальные по колонкам (`create-ro-role.sql`, сходится при повторном запуске; транзакции только на
+чтение, `statement_timeout` 30 с и лимит 8 соединений — страховки, граница — GRANT'ы) — внешняя
+docker-сеть прод-стека `<id ресурса>_clubs_net`, имя в env `CLUBS_DB_NETWORK`, хост — алиас `postgres`. Шесть дашбордов (воронка, активность клубов,
+встречи, деньги, удержание, ошибки и сбои) и два алерта на размер `product_event` (1 млн строк / 1 ГиБ)
+приезжают provisioning-файлами, запечёнными в образ (`Dockerfile`): Coolify 4.1.2 переписывает
+относительные bind-mount в `/data/coolify/applications/<uuid>/…`, где файлов репозитория нет.
+
+- Runbook (DNS, роль, ресурс в Coolify, env, приёмка, как менять, снять) — `infra/grafana/README.md`.
+- Дашборды — JSON из генератора `infra/grafana/gen-dashboards.py` (SQL живёт там); в UI они
+  только на чтение (`allowUiUpdates: false`), источник истины — репозиторий.
+- Секреты только в env Coolify: `GF_SECURITY_ADMIN_USER/PASSWORD`, `GF_SECURITY_SECRET_KEY`
+  (ключ шифрования секретов в базе Grafana, задаётся до первого старта), `CLUBS_DB_PASSWORD` (пароль
+  роли — `/root/.clubs-grafana-ro.<id>.pass` на VPS, кладёт `create-ro-role.sh`). В compose они
+  обязательные (`${VAR:?…}`): без них деплой падает, Grafana с `admin/admin` не поднимается.
+  Пути без логина закрыты (снапшоты, публичные дашборды, `/metrics`, basic-auth к API), CSP включён.
+- Контакт-поинт алертов (Telegram, отдельный бот) настраивается в UI и живёт в томе
+  `grafana_data`: пустой токен в provisioning уронил бы старт.
+- Memory-потолок контейнера 1 ГиБ: замер 2026-10-15 — ~165 МБ после старта, ~500 МБ после
+  открытия всех дашбордов в UI (оценка «150–250» из хэндоффа для Grafana 13 не подтвердилась;
+  при 512 МБ контейнер упирался в лимит). Фоновый установщик плагинов (`GF_PLUGINS_PREINSTALL_DISABLED`)
+  выключен — рантайм за кодом в интернет не ходит.
+
 ## Российский reverse proxy перед Hetzner (2026-09-18)
 
 Диагноз PO 2026-09-18: без VPN с домашних и мобильных провайдеров РФ не открываются ни

@@ -1,0 +1,114 @@
+# Grafana для продуктовой аналитики (W5) — отдельный ресурс Coolify «Docker Compose»
+# из этого каталога (Base Directory /infra/grafana). Runbook — README.md рядом.
+#
+# Наружу порты не публикуются: вход только через Traefik Coolify по домену, заданному в UI
+# (https://grafana.clubsmeet.com:3000 — суффикс говорит Traefik, какой порт контейнера брать).
+# База прода доступна через её docker-сеть (внешняя сеть ниже), читает read-only роль grafana_ro.
+services:
+  grafana:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # Публичный адрес — для ссылок в алертах и корректных редиректов за прокси.
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://grafana.clubsmeet.com}
+      # Единственный способ входа — логин/пароль администратора. Без дефолтов намеренно:
+      # незаданная переменная роняет деплой, а не поднимает Grafana с admin/admin.
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:?set GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD}
+      # Ключ шифрования секретов в базе Grafana (пароль датасорса, токен контакт-поинта): без него
+      # — публичный дефолт, и содержимое тома grafana_data расшифрует любой. Задать ДО первого
+      # старта: после смены ключа старые секреты не читаются (перешифровки нет).
+      GF_SECURITY_SECRET_KEY: ${GF_SECURITY_SECRET_KEY:?set GF_SECURITY_SECRET_KEY (openssl rand -base64 32)}
+      # Подключение к базе Clubs для датасорса (provisioning/datasources/clubs.yml читает их
+      # как $CLUBS_DB_*). Хост — алиас сервиса postgres в сети прода; пароль — роли grafana_ro,
+      # создаётся скриптом create-ro-role.sh и живёт только в env Coolify.
+      CLUBS_DB_HOST: ${CLUBS_DB_HOST:-postgres}
+      CLUBS_DB_NAME: ${CLUBS_DB_NAME:-clubs}
+      CLUBS_DB_USER: ${CLUBS_DB_USER:-grafana_ro}
+      CLUBS_DB_PASSWORD: ${CLUBS_DB_PASSWORD:?set CLUBS_DB_PASSWORD from create-ro-role.sh}
+      # Закрытый контур: ни регистрации, ни анонимного входа, ни новых организаций, ни basic-auth
+      # к API (вход только формой — у неё защита от перебора; для скриптов — service account token).
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_BASIC_ENABLED: "false"
+      # Ни одного пути без логина: снапшоты и публичные дашборды открываются по ключу без входа,
+      # /metrics отдаётся без auth. Версия не светится на форме входа; CSP с nonce; плагины из
+      # каталога через UI не ставятся; сессия живёт сутки без активности и неделю всего.
+      GF_SNAPSHOTS_ENABLED: "false"
+      GF_PUBLIC_DASHBOARDS_ENABLED: "false"
+      GF_METRICS_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_HIDE_VERSION: "true"
+      GF_SECURITY_CONTENT_SECURITY_POLICY: "true"
+      GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
+      GF_AUTH_LOGIN_MAXIMUM_INACTIVE_LIFETIME_DURATION: 1d
+      GF_AUTH_LOGIN_MAXIMUM_LIFETIME_DURATION: 7d
+      # Ничего не отправлять наружу: телеметрия, проверка обновлений, публичные снапшоты,
+      # лента новостей, аватары с gravatar.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
+      # Grafana 13 при старте докачивает/обновляет «предустановленные» плагины с grafana.com
+      # (фоновый установщик; локально он же падал на правах и держал ~400 МБ). Всё нужное уже
+      # в образе — рантайм в интернет за кодом не ходит.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # Cookie только по HTTPS (TLS терминирует Traefik, браузер видит https). SameSite — lax,
+      # не strict: ссылка из Telegram-алерта — cross-site переход, со strict он упирался бы в форму входа.
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: lax
+      # GF_PANELS_DISABLE_SANITIZE_HTML не трогать: строки в product_event.props присылает
+      # клиент, таблицы должны экранировать HTML (product-analytics.md § 6).
+      # Время по умолчанию — Москва, как в недельном отчёте и у биллинга.
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Europe/Moscow
+      GF_SERVER_ENABLE_GZIP: "true"
+      GF_LOG_MODE: console
+      GF_LOG_LEVEL: ${GF_LOG_LEVEL:-info}
+    volumes:
+      # Собственная база Grafana (sqlite): пользователи, сессии, контакт-поинт алертов.
+      # Дашборды и датасорс НЕ здесь — они из образа и при старте перечитываются.
+      - grafana_data:/var/lib/grafana
+    # Замер 2026-10-15 (Grafana 13.0.x): ~165 МБ после старта, ~500 МБ после открытия всех
+    # дашбордов в UI; при потолке 512 МБ контейнер упирался в лимит и панели грузились медленно.
+    # 1 ГиБ — запас вдвое, и прод на той же машине (VPS 7,7 ГБ, swap выключен) не задет.
+    # CPU и число процессов тоже ограничены: VPS общий с продом (4 vCPU).
+    mem_limit: 1g
+    cpus: "1.0"
+    pids_limit: 256
+    labels:
+      # Traefik берёт IP контейнера из сети coolify (контейнер в трёх сетях).
+      # Роутеры и сертификат генерирует Coolify по домену сервиса — как у фронта прода.
+      - "traefik.docker.network=coolify"
+    healthcheck:
+      # curl есть в базовом образе Grafana (Alpine). /api/health не требует логина.
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - coolify
+      - clubs_db
+
+networks:
+  coolify:
+    external: true
+  # Сеть compose-стека прода, где у сервиса postgres есть алиас «postgres».
+  # Имя зависит от id ресурса Coolify (<id>_clubs_net), поэтому задаётся переменной в env
+  # Coolify, а не в репозитории: при пересоздании прод-ресурса меняется только она.
+  clubs_db:
+    external: true
+    name: ${CLUBS_DB_NETWORK:?set CLUBS_DB_NETWORK=<prod resource id>_clubs_net}
+
+volumes:
+  grafana_data:

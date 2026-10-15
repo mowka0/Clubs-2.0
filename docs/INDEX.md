@@ -95,6 +95,7 @@
 | `application*.yml`, env-переменные | `infrastructure.md` + спека модуля-потребителя |
 | `subscription/Funnel*` (`FunnelTracker`, отчёт, `FunnelReportScheduler`), `/start` в личке в `bot/ClubsBot`, `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`, `common/config/PlatformAdmins`, миграция V100 | `funnel.md`; таблица и виды событий — `product-analytics.md` |
 | `infra/host/`, `infra/ru-proxy/`, `infra/backup/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси, бэкапы баз) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner», § «Бэкапы баз» + README в каталоге |
+| `infra/grafana/` (отдельный ресурс Coolify: `docker-compose.yml`, `Dockerfile`, `provisioning/` — датасорс, дашборды из `gen-dashboards.py`, алерты; `create-ro-role.*` — роль `grafana_ro` в прод-базе) | `infrastructure.md` § «Grafana — продуктовая аналитика» + `infra/grafana/README.md`; вопросы и события — `product-analytics.md` § 7 |
 
 ---
 
@@ -184,7 +185,7 @@
 ### Инфраструктура
 | Файл | О чём | Правлен |
 |---|---|---|
-| `infrastructure.md` | Docker, Coolify, CI/CD, nginx, российский прокси, бэкапы баз | 2026-10-15 |
+| `infrastructure.md` | Docker, Coolify, CI/CD, nginx, российский прокси, бэкапы баз, Grafana (W5) | 2026-10-15 |
 
 ---
 

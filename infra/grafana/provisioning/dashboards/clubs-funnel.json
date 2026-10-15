@@ -1,0 +1,585 @@
+{
+  "uid": "clubs-funnel",
+  "title": "Clubs · Воронка",
+  "description": "Привлечение (funnel.md § 3.3), запуски и интро Mini App, платёжная воронка, рост журнала.",
+  "tags": [
+    "clubs"
+  ],
+  "timezone": "Europe/Moscow",
+  "weekStart": "monday",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "clubs"
+      ],
+      "title": "Clubs",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Привлечение за выбранный период",
+      "description": "Те же шаги, что в недельном DM-отчёте (funnel.md § 3.3): старты — уникальные telegram_id, остальное — строки журнала.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(distinct telegram_id) filter (where kind = 'bot_started') as \"Старты бота\",\n  count(*) filter (where kind = 'chat_connected') as \"Чаты подключены\",\n  count(*) filter (where kind = 'chat_disconnected') as \"Чаты отключены\",\n  count(*) filter (where kind = 'trial_started') as \"Первые встречи\",\n  count(*) filter (where kind = 'checkout_started') as \"Чекауты\",\n  count(*) filter (where kind = 'payment_succeeded') as \"Оплаты\"\nfrom product_event\nwhere kind in ('bot_started','chat_connected','chat_disconnected','trial_started','checkout_started','payment_succeeded') and $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "Привлечение по неделям",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 16,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(distinct telegram_id) filter (where kind = 'bot_started') as \"Старты бота\",\n  count(*) filter (where kind = 'chat_connected') as \"Чаты подключены\",\n  count(*) filter (where kind = 'trial_started') as \"Первые встречи\",\n  count(*) filter (where kind = 'checkout_started') as \"Чекауты\",\n  count(*) filter (where kind = 'payment_succeeded') as \"Оплаты\"\nfrom product_event\nwhere kind in ('bot_started','chat_connected','chat_disconnected','trial_started','checkout_started','payment_succeeded') and $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 2
+    },
+    {
+      "type": "table",
+      "title": "Кампании за период",
+      "description": "Старты бота с меткой /start ad_<slug> за период; «подключили» и «оплатили» — тот же человек в любой момент после старта. Не first-touch, как в DM-отчёте: там метка — первый старт человека за всё время, а конверсии — только недели отчёта.",
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "with starts as (\n  select coalesce(campaign, 'органика') as campaign, telegram_id, min(created_at) as started_at\n  from product_event\n  where kind = 'bot_started' and $__timeFilter(created_at)\n  group by 1, 2\n)\nselect s.campaign as \"Кампания\",\n  count(*) as \"Старты\",\n  count(*) filter (where exists (\n    select 1 from product_event c\n    where c.kind = 'chat_connected' and c.telegram_id = s.telegram_id and c.created_at >= s.started_at)) as \"Подключили чат\",\n  count(*) filter (where exists (\n    select 1 from product_event p join users u on u.id = p.user_id\n    where p.kind = 'payment_succeeded' and u.telegram_id = s.telegram_id and p.created_at >= s.started_at)) as \"Оплатили\"\nfrom starts s\ngroup by 1 order by 2 desc\nlimit 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "id": 3
+    },
+    {
+      "type": "timeseries",
+      "title": "Запуски Mini App по входу",
+      "description": "app_opened.entry — вид startapp-параметра; кнопки-ссылки бота видны только так (product-analytics.md § 3.3).",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('week', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where props->>'entry' = 'none') as \"Напрямую\",\n  count(*) filter (where props->>'entry' = 'club') as \"Из поста клуба\",\n  count(*) filter (where props->>'entry' = 'event') as \"Из поста встречи\",\n  count(*) filter (where props->>'entry' = 'skladchina') as \"Из поста сбора\",\n  count(*) filter (where props->>'entry' = 'billing') as \"Из оплаты\",\n  count(*) filter (where props->>'entry' = 'invite') as \"По приглашению\"\nfrom product_event\nwhere kind = 'app_opened' and $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 4
+    },
+    {
+      "type": "piechart",
+      "title": "Платформы запусков за период",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select coalesce(props->>'platform', '—') as \"Платформа\", count(*) as \"Запусков\"\nfrom product_event\nwhere kind = 'app_opened' and $__timeFilter(created_at)\ngroup by 1 order by 2 desc"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "pieType": "pie",
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "id": 5
+    },
+    {
+      "type": "bargauge",
+      "title": "Интро за период (людей)",
+      "description": "В1: где новичок отваливается в интро.",
+      "gridPos": {
+        "x": 18,
+        "y": 12,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(distinct user_id) filter (where kind = 'onboarding_step' and props->>'step' = '1') as \"Слайд 1\",\n  count(distinct user_id) filter (where kind = 'onboarding_step' and props->>'step' = '2') as \"Слайд 2\",\n  count(distinct user_id) filter (where kind = 'onboarding_step' and props->>'step' = '3') as \"Слайд 3\",\n  count(distinct user_id) filter (where kind = 'onboarding_completed') as \"«Погнали!»\"\nfrom product_event\nwhere kind in ('onboarding_step', 'onboarding_completed') and $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "color": {
+            "mode": "continuous-BlPu"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "minVizHeight": 16
+      },
+      "id": 6
+    },
+    {
+      "type": "bargauge",
+      "title": "Оплата за период (клубов)",
+      "description": "В6: где теряем на оплате. Считаются клубы, не нажатия.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select\n  count(distinct club_id) filter (where kind = 'pay_sheet_opened') as \"Открыли шит оплаты\",\n  count(distinct club_id) filter (where kind = 'checkout_started') as \"Перешли к оплате\",\n  count(distinct club_id) filter (where kind = 'payment_succeeded') as \"Оплатили\"\nfrom product_event\nwhere kind in ('pay_sheet_opened', 'checkout_started', 'payment_succeeded') and $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "color": {
+            "mode": "continuous-BlPu"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "minVizHeight": 16
+      },
+      "id": 7
+    },
+    {
+      "type": "stat",
+      "title": "Журнал событий сейчас",
+      "description": "Порог 1 млн строк / 1 ГиБ — пора агрегировать screen_opened старше 180 дней (product-analytics.md § 2.2); жёлтая зона — 70 % порога. Те же пороги — в алертах.",
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select (select count(*) from product_event) as \"Строк\",\n  pg_total_relation_size('product_event') as \"Размер с индексами\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 700000
+              },
+              {
+                "color": "red",
+                "value": 1000000
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Размер с индексами"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 751619276
+                    },
+                    {
+                      "color": "red",
+                      "value": 1073741824
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Строк в журнале в день",
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "clubs-prod"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "clubs-prod"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "select date_trunc('day', created_at at time zone 'Europe/Moscow') at time zone 'Europe/Moscow' as time,\n  count(*) filter (where source = 'app') as \"Mini App\",\n  count(*) filter (where source = 'bot') as \"Бот\",\n  count(*) filter (where source = 'server') as \"Сервер\"\nfrom product_event\nwhere $__timeFilter(created_at)\ngroup by 1 order by 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 9
+    }
+  ]
+}
