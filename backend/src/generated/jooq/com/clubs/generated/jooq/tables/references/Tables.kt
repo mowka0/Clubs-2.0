@@ -21,11 +21,11 @@ import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.Events
-import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.PlatformPayment
+import com.clubs.generated.jooq.tables.ProductEvent
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts
@@ -168,15 +168,6 @@ val EVENT_TEMPLATES: EventTemplates = EventTemplates.EVENT_TEMPLATES
 val EVENTS: Events = Events.EVENTS
 
 /**
- * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
- * chat_disconnected и шаги биллинга trial_started, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended. Только запись и
- * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
- * входит.
- */
-val FUNNEL_EVENT: FunnelEvent = FunnelEvent.FUNNEL_EVENT
-
-/**
  * Общий словарь интересов для профилей пользователей. Имена нормализуются на
  * сервере (trim, одиночные пробелы, lowercase, ё -&gt; е), чтобы дубликаты
  * схлопывались; словарь питает префиксный автокомплит.
@@ -205,6 +196,16 @@ val MEMBERSHIPS: Memberships = Memberships.MEMBERSHIPS
  * сохранённой карте владельца.
  */
 val PLATFORM_PAYMENT: PlatformPayment = PlatformPayment.PLATFORM_PAYMENT
+
+/**
+ * Журнал продуктовых событий (docs/modules/product-analytics.md): шаги воронки
+ * привлечения и биллинга, действия на сервере (вступление, встреча, голос,
+ * сбор, долг, обратная связь), нажатия inline-кнопок бота и то, чего сервер не
+ * видит, — запуски и открытия экранов Mini App. Только запись и агрегаты
+ * (недельный отчёт, Grafana), в логику продукта не входит. Бывшая funnel_event
+ * (V97, V100).
+ */
+val PRODUCT_EVENT: ProductEvent = ProductEvent.PRODUCT_EVENT
 
 /**
  * Append-only леджер репутационных исходов (источник истины репутации v2). Одна

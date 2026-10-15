@@ -27,6 +27,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 class MembershipServiceTest {
 
@@ -42,6 +44,7 @@ class MembershipServiceTest {
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var awardService: AwardService
     private lateinit var rosterService: com.clubs.event.RosterService
+    private lateinit var productEventRepository: ProductEventRepository
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -58,6 +61,7 @@ class MembershipServiceTest {
         eventPublisher = mockk(relaxed = true)
         awardService = mockk(relaxed = true)
         rosterService = mockk(relaxed = true)
+        productEventRepository = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
@@ -70,7 +74,8 @@ class MembershipServiceTest {
             trustService,
             reputationService,
             eventPublisher,
-            awardService
+            awardService,
+            productEventRepository
         )
     }
 
@@ -158,6 +163,8 @@ class MembershipServiceTest {
         assertNotNull(result.joinedAt)
         verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
         verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
+        // Журнал (product-analytics.md AC-6): вступление открытым путём.
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.CLUB_JOINED, userId, clubId, props = mapOf("via" to "open")) }
     }
 
     @Test

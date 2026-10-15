@@ -1,7 +1,7 @@
 package com.clubs.subscription
 
 import com.clubs.generated.jooq.enums.SubscriptionStatus
-import com.clubs.generated.jooq.tables.references.FUNNEL_EVENT
+import com.clubs.generated.jooq.tables.references.PRODUCT_EVENT
 import com.clubs.generated.jooq.tables.references.SERVICE_SUBSCRIPTION
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -225,13 +225,14 @@ class FunnelReportRepositoryTest {
         userId: UUID? = null,
         campaign: String? = null,
     ) {
-        dsl.insertInto(FUNNEL_EVENT)
-            .set(FUNNEL_EVENT.KIND, kind)
-            .set(FUNNEL_EVENT.CREATED_AT, at)
-            .set(FUNNEL_EVENT.TELEGRAM_ID, telegramId)
-            .set(FUNNEL_EVENT.CLUB_ID, clubId)
-            .set(FUNNEL_EVENT.USER_ID, userId)
-            .set(FUNNEL_EVENT.CAMPAIGN, campaign)
+        dsl.insertInto(PRODUCT_EVENT)
+            .set(PRODUCT_EVENT.KIND, kind)
+            .set(PRODUCT_EVENT.SOURCE, "server")
+            .set(PRODUCT_EVENT.CREATED_AT, at)
+            .set(PRODUCT_EVENT.TELEGRAM_ID, telegramId)
+            .set(PRODUCT_EVENT.CLUB_ID, clubId)
+            .set(PRODUCT_EVENT.USER_ID, userId)
+            .set(PRODUCT_EVENT.CAMPAIGN, campaign)
             .execute()
     }
 

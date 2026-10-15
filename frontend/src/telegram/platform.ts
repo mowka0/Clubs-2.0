@@ -18,3 +18,13 @@ export function isPhonePlatform(): boolean {
     return false;
   }
 }
+
+/** Платформа Telegram как есть (`ios`, `android`, `tdesktop`, `weba`, …) для `app_opened.platform`; вне Telegram — `unknown`. */
+export function platformName(): string {
+  try {
+    const { tgWebAppPlatform } = retrieveLaunchParams();
+    return typeof tgWebAppPlatform === 'string' && tgWebAppPlatform.length > 0 ? tgWebAppPlatform.slice(0, 32) : 'unknown';
+  } catch (_e) {
+    return 'unknown';
+  }
+}

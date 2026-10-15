@@ -11,13 +11,15 @@ import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /** Шаги привлечения: разбор метки «/start ad_<slug>» и события привязки (funnel.md § 3.1, AC-1…AC-4). */
 class FunnelTrackerTest {
 
-    private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
     private val userRepository = mockk<UserRepository>()
-    private val tracker = FunnelTracker(funnelEventRepository, userRepository)
+    private val tracker = FunnelTracker(productEventRepository, userRepository)
 
     @Test
     fun `метка ad_slug принимается, регистр приводится к строчным, лишние пробелы не мешают`() {
@@ -44,7 +46,7 @@ class FunnelTrackerTest {
 
         tracker.botStarted(777L, "/start ad_vk1")
 
-        verify { funnelEventRepository.record(FunnelStep.BOT_STARTED, userId, null, "vk1", 777L) }
+        verify { productEventRepository.record(ProductEventKind.BOT_STARTED, userId, null, "vk1", 777L) }
     }
 
     @Test
@@ -53,7 +55,7 @@ class FunnelTrackerTest {
 
         tracker.botStarted(778L, "/start")
 
-        verify { funnelEventRepository.record(FunnelStep.BOT_STARTED, null, null, null, 778L) }
+        verify { productEventRepository.record(ProductEventKind.BOT_STARTED, null, null, null, 778L) }
     }
 
     @Test
@@ -64,7 +66,7 @@ class FunnelTrackerTest {
         tracker.onChatLinked(ChatLinkedEvent(clubId, ownerId, 111L))
         tracker.onChatDisconnected(ChatDisconnectedEvent(clubId, ownerId))
 
-        verify { funnelEventRepository.record(FunnelStep.CHAT_CONNECTED, ownerId, clubId, null, 111L) }
-        verify { funnelEventRepository.record(FunnelStep.CHAT_DISCONNECTED, ownerId, clubId, null, null) }
+        verify { productEventRepository.record(ProductEventKind.CHAT_CONNECTED, ownerId, clubId, null, 111L) }
+        verify { productEventRepository.record(ProductEventKind.CHAT_DISCONNECTED, ownerId, clubId, null, null) }
     }
 }

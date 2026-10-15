@@ -9,7 +9,7 @@
 > сервисах фич, `frontend/src/analytics/` (очередь и отправка пачками). Воронка привлечения и
 > недельный отчёт — по-прежнему `funnel.md`; здесь только то, что добавилось.
 >
-> **Статус:** спека на утверждение PO (список событий § 3, открытые решения § 9).
+> **Статус:** список событий и решения § 9 утверждены PO 2026-10-15 (все три — по рекомендации); в разработке.
 
 ## 1. Цель
 
@@ -103,7 +103,7 @@ Jackson в репозитории (не в сервисах).
 |---|---|---|---|---|
 | `app_opened` | `entry`: `none` \| `club` \| `event` \| `skladchina` \| `billing` \| `invite` (вид `startapp`-параметра, см. `DeepLinkHandler.resolveDeepLink`); `platform`: `tgWebAppPlatform` как есть (`ios`, `android`, `tdesktop`, `weba`, …, ≤ 32 знаков) | — | один раз за запуск, сразу после успешной авторизации (`Layout`, когда `isAuthenticated` стал true) | В1, В2, В5 |
 | `screen_opened` | `screen`: имя экрана из таблицы § 3.4; для `/events/:id` и `/skladchina/:id` дополнительно `eventId` / `skladchinaId` (UUID строкой) | из `/clubs/:id/*`, иначе NULL | на каждую смену `location.pathname` внутри `Layout` (включая первый экран после авторизации); смена только `search`/`hash` не считается | В2, В3, В4 |
-| `onboarding_step` | `step`: 1..4 (номер показанного слайда интро) | — | при показе слайда (`index` изменился), первый слайд — при монтировании `OnboardingFlow` | В1 |
+| `onboarding_step` | `step`: 1..3 (номер показанного слайда интро) | — | при показе слайда (`index` изменился), первый слайд — при монтировании `OnboardingFlow` | В1 |
 | `onboarding_completed` | — | — | тап «Погнали!» на последнем слайде, **до** запроса `completeTour` (факт намерения, не успех запроса) | В1 |
 | `pay_sheet_opened` | `reason`: `PaywallReason` из 402 или `none`; `mode`: `pay` \| `waiting` | клуб | монтирование `BillingSheet` | В6 |
 
@@ -122,7 +122,7 @@ Jackson в репозитории (не в сервисах).
 | `skladchina_created` | server | `kind`: `shared` \| `per_head` \| `voluntary`; `skladchinaId` | клуб | `SkladchinaCreationService` | В4 |
 | `debt_claimed` | server | `action`: `promise` \| `claim` \| `confirm` \| `reject` \| `forgive`; `debtId` | клуб долга (NULL, если долг без клуба) | `DebtController` → сервис, по одному событию на действие; те же действия из inline-кнопок бота пишутся **здесь же** в сервисе (источник тогда `bot`, см. ниже) | В4 |
 | `feedback_sent` | server | — (текст **не** пишется) | — | `FeedbackService` после успешной доставки DM | В5 |
-| `bot_button_clicked` | bot | `button`: префикс `callback_data` без идентификатора: `chatlink:unlink`, `roster:proceed`, `roster:remind`, `debt:confirm`, `debt:reject`, `settle:confirm`, `settle:reject`, `skladchina:enroll`, `skladchina:take`, `debt:forgive`, `skladchina:close`, `legal` (литералы констант `*_PREFIX` в `bot/` без завершающего двоеточия и uuid); `ok`: true, если сервис принял действие (ответ без ошибки) | клуб, если его даёт сервис, иначе NULL | `ClubsBot.handleCallbackQuery` после ветки `when`; `user_id` — по `query.from.id` через `users`, `telegram_id` всегда; неизвестный префикс не пишется | В5 |
+| `bot_button_clicked` | bot | `button`: `callback_data` без последнего сегмента-идентификатора: `chatlink:unlink`, `roster:proceed`, `roster:remind`, `debt:confirm`, `debt:reject`, `settle:confirm`, `settle:reject`, `skladchina:enroll`, `skladchina:take`, `debt:forgive`, `skladchina:close`, `legal:info` / `legal:offer` / `legal:privacy` (литералы констант `*_PREFIX` в `bot/`) | NULL: сервисы кнопок возвращают только текст алерта, клуб из них не достать, а действия по долгам и составу и так видны по своим событиям | `ClubsBot.handleCallbackQuery` **после** ответа Telegram (сбой журнала не должен оставить спиннер); `user_id` — по `query.from.id` через `users`, `telegram_id` всегда; неизвестный префикс не пишется | В5 |
 
 Для `debt_claimed` из бота: сервис долга один на REST и бота, `source` передаётся параметром
 (`server` из контроллера, `bot` из `SkladchinaCallbackService`), чтобы не плодить два вида на
@@ -296,13 +296,13 @@ Jackson в репозитории (не в сервисах).
 - Просмотр событий в приложении (есть только SQL и Grafana).
 - Расширение недельного DM-отчёта (W6) и вопросы с SQL (`docs/analytics/questions.md`, W6).
 
-## 9. Открытые решения для PO
+## 9. Решения PO (приняты 2026-10-15)
 
-1. **Переименование таблицы в `product_event`** — рекомендую да (§ 2.1).
-2. **`screen_opened` на каждый экран** вместо трёх отдельных видов из хэндоффа — рекомендую да
-   (§ 3.2): один вид, одна точка в коде, все экраны.
-3. **`bot_button_clicked` для всех callback-кнопок**, не только «важных» — рекомендую да: одна
-   строка в `handleCallbackQuery`, лишних событий мало (кнопки жмут редко).
+1. **Переименование таблицы в `product_event`** — да (§ 2.1).
+2. **`screen_opened` на каждый экран** вместо трёх отдельных видов из хэндоффа — да (§ 3.2):
+   один вид, одна точка в коде, все экраны.
+3. **`bot_button_clicked` для всех callback-кнопок**, не только «важных» — да: одна строка в
+   `handleCallbackQuery`, лишних событий мало (кнопки жмут редко).
 
 ## 10. Критерии приёмки
 
@@ -326,8 +326,9 @@ Jackson в репозитории (не в сервисах).
   создание сбора → `skladchina_created{kind}`; каждое из пяти действий по долгу → `debt_claimed{action}`
   с `source = server` из REST и `source = bot` из callback; успешный `POST /api/feedback` →
   `feedback_sent` без props; неуспешный (503) → строки нет.
-- **AC-7.** Бот: callback `roster:remind:<uuid>` → `bot_button_clicked{button="roster:remind", ok}`
-  с `telegram_id` и `user_id` (если пользователь известен); неизвестный `callback_data` → строки нет.
+- **AC-7.** Бот: callback `roster:remind:<uuid>` → `bot_button_clicked{button="roster:remind"}`,
+  `legal:offer:1` → `{button="legal:offer"}`, с `telegram_id` и `user_id` (если пользователь известен);
+  неизвестный `callback_data` → строки нет.
 - **AC-8.** Фронт (vitest): `track` не бросает при сбое сети и при 400; 20 событий уходят одной
   пачкой сразу; 3 события уходят одной пачкой через 3 с; `hidden` → немедленная отправка с
   `keepalive: true`; после сетевого сбоя пачка уходит повторно один раз и при втором сбое
@@ -340,7 +341,7 @@ Jackson в репозитории (не в сервисах).
 - **AC-10.** `Layout`: после авторизации ровно один `app_opened` за запуск с `entry` по
   `startapp` (`club_<uuid>` → `club`, без параметра → `none`) и `platform`; переход `/my-clubs`
   → `/clubs/<id>` даёт два `screen_opened`; изменение только `?tab=` — ничего.
-- **AC-11.** `OnboardingFlow`: показ четырёх слайдов → `onboarding_step` 1..4 по одному на слайд
+- **AC-11.** `OnboardingFlow`: показ трёх слайдов → `onboarding_step` 1..3 по одному на слайд
   (возврат назад — повторный step с тем же номером); «Погнали!» → `onboarding_completed`.
 - **AC-12.** `BillingSheet` при монтировании → `pay_sheet_opened{reason, mode}` с `clubId`.
 - **AC-13.** `./gradlew test` и `npm test` зелёные; чистый `tsc`; Serena-индекс обновлён после
@@ -353,7 +354,7 @@ Jackson в репозитории (не в сервисах).
 
 1. Открыть Mini App с телефона напрямую → `app_opened{entry=none, platform=ios|android}` и
    `screen_opened{screen=home}` (или `club`, если клуб один).
-2. Пройти интро новым аккаунтом (или сбросить `user_onboarding_tours`) → четыре `onboarding_step`,
+2. Пройти интро новым аккаунтом (или сбросить `user_onboarding_tours`) → три `onboarding_step`,
    `onboarding_completed`.
 3. Пройти: «Мои клубы» → клуб → «Управление» → назад → профиль → «Долги» → строки `screen_opened`
    в этом порядке, у клубных — `club_id`.

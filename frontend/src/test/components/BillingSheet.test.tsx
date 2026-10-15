@@ -25,6 +25,8 @@ vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',
 }));
+const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }));
+vi.mock('../../analytics/track', () => ({ track: trackMock }));
 
 import { BillingSheet } from '../../components/billing/BillingSheet';
 
@@ -104,6 +106,15 @@ describe('BillingSheet', () => {
     // Кнопки «подожду в личке» нет — проверку не бросают, закрыть можно только шапкой.
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Закрыть' })).toBeInTheDocument();
+  });
+
+  it('открытие шита пишется в журнал один раз с причиной и режимом (product-analytics.md AC-12)', async () => {
+    mockBilling(status());
+    renderWithProviders(<BillingSheet clubId={CLUB_ID} reason="TRIAL_ENDED" onClose={() => {}} />);
+    expect(await screen.findByText('199 ₽')).toBeInTheDocument();
+
+    expect(trackMock).toHaveBeenCalledTimes(1);
+    expect(trackMock).toHaveBeenCalledWith('pay_sheet_opened', { reason: 'TRIAL_ENDED', mode: 'pay' }, CLUB_ID);
   });
 
   it('опрос видит сдвиг периода и показывает «оплачено до»', async () => {

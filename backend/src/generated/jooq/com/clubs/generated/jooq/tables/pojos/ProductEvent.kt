@@ -8,23 +8,28 @@ import java.io.Serializable
 import java.time.OffsetDateTime
 import java.util.UUID
 
+import org.jooq.JSONB
+
 
 /**
- * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
- * chat_disconnected и шаги биллинга trial_started, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended. Только запись и
- * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
- * входит.
+ * Журнал продуктовых событий (docs/modules/product-analytics.md): шаги воронки
+ * привлечения и биллинга, действия на сервере (вступление, встреча, голос,
+ * сбор, долг, обратная связь), нажатия inline-кнопок бота и то, чего сервер не
+ * видит, — запуски и открытия экранов Mini App. Только запись и агрегаты
+ * (недельный отчёт, Grafana), в логику продукта не входит. Бывшая funnel_event
+ * (V97, V100).
  */
 @Suppress("UNCHECKED_CAST")
-data class FunnelEvent(
+data class ProductEvent(
     var id: UUID? = null,
     var userId: UUID? = null,
     var clubId: UUID? = null,
     var kind: String,
     var campaign: String? = null,
     var createdAt: OffsetDateTime? = null,
-    var telegramId: Long? = null
+    var telegramId: Long? = null,
+    var source: String,
+    var props: JSONB? = null
 ): Serializable {
 
 
@@ -35,7 +40,7 @@ data class FunnelEvent(
             return false
         if (this::class != other::class)
             return false
-        val o: FunnelEvent = other as FunnelEvent
+        val o: ProductEvent = other as ProductEvent
         if (this.id == null) {
             if (o.id != null)
                 return false
@@ -74,6 +79,14 @@ data class FunnelEvent(
         }
         else if (this.telegramId != o.telegramId)
             return false
+        if (this.source != o.source)
+            return false
+        if (this.props == null) {
+            if (o.props != null)
+                return false
+        }
+        else if (this.props != o.props)
+            return false
         return true
     }
 
@@ -87,11 +100,13 @@ data class FunnelEvent(
         result = prime * result + (if (this.campaign == null) 0 else this.campaign.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.telegramId == null) 0 else this.telegramId.hashCode())
+        result = prime * result + this.source.hashCode()
+        result = prime * result + (if (this.props == null) 0 else this.props.hashCode())
         return result
     }
 
     override fun toString(): String {
-        val sb = StringBuilder("FunnelEvent (")
+        val sb = StringBuilder("ProductEvent (")
 
         sb.append(id)
         sb.append(", ").append(userId)
@@ -100,6 +115,8 @@ data class FunnelEvent(
         sb.append(", ").append(campaign)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(telegramId)
+        sb.append(", ").append(source)
+        sb.append(", ").append(props)
 
         sb.append(")")
         return sb.toString()

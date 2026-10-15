@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 @Service
 class VoteService(
@@ -24,7 +26,8 @@ class VoteService(
     private val clubRepository: ClubRepository,
     private val clubRoleGuard: ClubRoleGuard,
     private val rosterService: RosterService,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val productEventRepository: ProductEventRepository
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
@@ -68,6 +71,10 @@ class VoteService(
         // подтверждения не существует, «Пойду» и есть запись.
         rosterService.applyVote(event, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
+        productEventRepository.record(
+            ProductEventKind.VOTE_CAST, userId, event.clubId,
+            props = mapOf("vote" to request.vote, "eventId" to eventId.toString()),
+        )
         // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
         eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 

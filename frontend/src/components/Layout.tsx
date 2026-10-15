@@ -17,6 +17,8 @@ import { useCloseConfirmStore } from '../store/useCloseConfirmStore';
 import { useCreateFlowStore } from '../store/useCreateFlowStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
 import { closeMiniApp, getStartParam } from '../telegram/sdk';
+import { ScreenTracker } from '../analytics/ScreenTracker';
+import { trackAppOpened } from '../analytics/launch';
 
 /**
  * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
@@ -105,6 +107,12 @@ export const Layout: FC = () => {
     if (!isAuthenticated && !isLoading && !error) login();
   }, [isAuthenticated, isLoading, error, login]);
 
+  // Факт запуска — в журнал сразу после авторизации, до гейта интро: новичок, бросивший интро,
+  // тоже должен быть виден в воронке (product-analytics.md § 3.2).
+  useEffect(() => {
+    if (isAuthenticated) trackAppOpened();
+  }, [isAuthenticated]);
+
   // Человек пришёл кнопкой из чата клуба и жмёт «назад» на первом же экране: внутри
   // приложения идти некуда, а вернуться он хочет в чат — он прямо под приложением.
   // «Назад» здесь значит «я тут закончил», поэтому закрываем приложение и отдаём человека
@@ -156,6 +164,7 @@ export const Layout: FC = () => {
   return (
     <>
       <DeepLinkHandler />
+      <ScreenTracker />
       {/* Окно «чат подключён» после возвращения из Telegram — в корне, потому что вернуться
           человек может на любой экран (см. ChatSetupGate). */}
       <ChatSetupGate />

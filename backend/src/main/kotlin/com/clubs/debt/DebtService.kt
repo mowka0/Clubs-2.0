@@ -19,6 +19,9 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
+import com.clubs.analytics.EventSource
 
 /**
  * Переходы одиночного долга — таблица docs/modules/skladchina-v3.md § 2.2. Кто может: должник —
@@ -31,12 +34,13 @@ class DebtService(
     private val lifecycleService: SkladchinaLifecycleService,
     private val eventPublisher: ApplicationEventPublisher,
     private val mapper: DebtMapper,
+    private val productEventRepository: ProductEventRepository,
     @Value("\${s3.base-url:}") private val storageBaseUrl: String
 ) {
     private val log = LoggerFactory.getLogger(DebtService::class.java)
 
     @Transactional
-    fun promise(debtId: UUID, callerId: UUID, date: LocalDate): DebtDto {
+    fun promise(debtId: UUID, callerId: UUID, date: LocalDate, source: EventSource = EventSource.SERVER): DebtDto {
         val d = requireAsDebtor(debtId, callerId)
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised)
         val today = LocalDate.now(MSK)
@@ -44,16 +48,18 @@ class DebtService(
         if (date.isAfter(today.plusDays(MAX_PROMISE_DAYS))) throw ValidationException("Не дальше $MAX_PROMISE_DAYS дней")
         applied(debtRepository.promise(debtId, date))
         log.info("Debt promised: id={} debtor={} date={}", debtId, callerId, date)
+        recordAction(d, callerId, "promise", source)
         eventPublisher.publishEvent(DebtPromisedEvent(debtRepository.findWithContext(debtId)!!))
         return refreshed(debtId, d.debt.skladchinaId)
     }
 
     @Transactional
-    fun claim(debtId: UUID, callerId: UUID): DebtDto {
+    fun claim(debtId: UUID, callerId: UUID, source: EventSource = EventSource.SERVER): DebtDto {
         val d = requireAsDebtor(debtId, callerId)
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised)
         applied(debtRepository.claim(debtId, OffsetDateTime.now()))
         log.info("Debt claimed: id={} debtor={}", debtId, callerId)
+        recordAction(d, callerId, "claim", source)
         val updated = debtRepository.findWithContext(debtId)!!
         eventPublisher.publishEvent(DebtClaimedEvent(updated))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(d.debt.skladchinaId))
@@ -62,11 +68,12 @@ class DebtService(
 
     /** «Получил»: из любого открытого состояния; без «Отдал» это наличные. Последний долг закрывает сбор. */
     @Transactional
-    fun confirm(debtId: UUID, callerId: UUID): DebtDto {
+    fun confirm(debtId: UUID, callerId: UUID, source: EventSource = EventSource.SERVER): DebtDto {
         val d = requireAsCreditor(debtId, callerId)
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised, DebtStatus.claimed)
         applied(debtRepository.confirm(debtId, OffsetDateTime.now()))
         log.info("Debt confirmed: id={} creditor={} debtor={}", debtId, callerId, d.debt.debtorId)
+        recordAction(d, callerId, "confirm", source)
         val dto = refreshed(debtId, d.debt.skladchinaId)
         lifecycleService.maybeComplete(d.debt.skladchinaId)
         return dto
@@ -74,7 +81,7 @@ class DebtService(
 
     /** «Не получил»: обратно в waiting, должнику «приложите чек». У per_head после заказа — выбыл. */
     @Transactional
-    fun reject(debtId: UUID, callerId: UUID, note: String?): DebtDto {
+    fun reject(debtId: UUID, callerId: UUID, note: String?, source: EventSource = EventSource.SERVER): DebtDto {
         val d = requireAsCreditor(debtId, callerId)
         requireStatus(d, DebtStatus.claimed)
         val now = OffsetDateTime.now()
@@ -85,6 +92,7 @@ class DebtService(
             applied(debtRepository.reject(debtId, note?.trim()?.takeIf { it.isNotEmpty() }, now))
         }
         log.info("Debt rejected: id={} creditor={} dropped={}", debtId, callerId, dropped)
+        recordAction(d, callerId, "reject", source)
         val updated = debtRepository.findWithContext(debtId)!!
         eventPublisher.publishEvent(DebtRejectedEvent(updated, dropped))
         eventPublisher.publishEvent(SkladchinaProgressChangedEvent(d.debt.skladchinaId))
@@ -93,11 +101,12 @@ class DebtService(
     }
 
     @Transactional
-    fun forgive(debtId: UUID, callerId: UUID): DebtDto {
+    fun forgive(debtId: UUID, callerId: UUID, source: EventSource = EventSource.SERVER): DebtDto {
         val d = requireAsCreditor(debtId, callerId)
         requireStatus(d, DebtStatus.waiting, DebtStatus.promised, DebtStatus.claimed)
         applied(debtRepository.forgive(debtId))
         log.info("Debt forgiven: id={} creditor={} debtor={}", debtId, callerId, d.debt.debtorId)
+        recordAction(d, callerId, "forgive", source)
         val dto = refreshed(debtId, d.debt.skladchinaId)
         lifecycleService.maybeComplete(d.debt.skladchinaId)
         return dto
@@ -135,6 +144,14 @@ class DebtService(
         val updated = debtRepository.findWithContext(debtId)!!
         eventPublisher.publishEvent(DebtReplyEvent(updated, withReceipt = url != null))
         return mapper.toDto(updated)
+    }
+
+    /** Факт действия по долгу в журнал (product-analytics.md § 3.3); источник — REST или кнопка бота. */
+    private fun recordAction(d: DebtWithContext, callerId: UUID, action: String, source: EventSource) {
+        productEventRepository.record(
+            ProductEventKind.DEBT_CLAIMED, callerId, d.clubId,
+            props = mapOf("action" to action, "debtId" to d.debt.id.toString()), source = source,
+        )
     }
 
     private fun requireAsDebtor(debtId: UUID, callerId: UUID): DebtWithContext {

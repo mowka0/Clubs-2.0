@@ -15,12 +15,15 @@ import org.junit.jupiter.api.assertThrows
 import java.util.UUID
 import kotlin.test.assertContains
 import kotlin.test.assertFalse
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 class FeedbackServiceTest {
 
     private val userRepository = mockk<UserRepository>()
     private val notificationService = mockk<NotificationService>()
-    private val service = FeedbackService(userRepository, notificationService, "clubs_tech_support", "")
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
+    private val service = FeedbackService(userRepository, notificationService, productEventRepository, "clubs_tech_support", "")
 
     private val userId = UUID.randomUUID()
 
@@ -48,6 +51,8 @@ class FeedbackServiceTest {
         assertContains(text.captured, "Кнопка не работает")
         assertContains(text.captured, "Иван Тестов (@ivan), tg id 111")
         assertContains(text.captured, "Экран: /my-clubs")
+        // Журнал (product-analytics.md AC-6): факт доставки, без текста.
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.FEEDBACK_SENT, userId, null) }
     }
 
     @Test
@@ -83,6 +88,7 @@ class FeedbackServiceTest {
         assertThrows<FeedbackDeliveryException> {
             service.submitFeedback(userId, SubmitFeedbackRequest(message = "Баг"))
         }
+        verify(exactly = 0) { productEventRepository.record(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -100,7 +106,7 @@ class FeedbackServiceTest {
 
     @Test
     fun `explicit support chat id skips username lookup`() {
-        val directService = FeedbackService(userRepository, notificationService, "clubs_tech_support", "424242")
+        val directService = FeedbackService(userRepository, notificationService, mockk(relaxed = true), "clubs_tech_support", "424242")
         every { userRepository.findById(userId) } returns reporterRecord()
         every { notificationService.trySendDirectMessage(424242L, any()) } returns true
 

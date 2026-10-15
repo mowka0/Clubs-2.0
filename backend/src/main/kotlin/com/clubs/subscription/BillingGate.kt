@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Единственная точка биллинга за чат (platform-billing.md R4, § 6.4): стоит только на создании
@@ -21,7 +23,7 @@ class BillingGate(
     private val chatLinkRepository: ChatLinkRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val chatTrialRepository: ChatTrialRepository,
-    private val funnelEventRepository: FunnelEventRepository,
+    private val productEventRepository: ProductEventRepository,
     // Грейс после конца оплаченного периода: всё разрешено, ждём оплату; потом — стена (R10).
     @Value("\${billing.grace-days:7}") private val graceDays: Long,
     // Бесплатный период чата от первой созданной встречи (решение PO 2026-09-15).
@@ -47,14 +49,14 @@ class BillingGate(
         val trial = chatTrialRepository.startOrGet(link.chatId, club.id, eventId)
         if (trial.justStarted) {
             log.info("Trial started: clubId={} chatId={} eventId={}", club.id, link.chatId, eventId)
-            funnelEventRepository.record(FunnelStep.TRIAL_STARTED, actorUserId, club.id)
+            productEventRepository.record(ProductEventKind.TRIAL_STARTED, actorUserId, club.id)
         }
         if (now.isBefore(trial.startedAt.plusDays(trialDays))) return
 
         val reason = if (subscription == null) PaywallReason.TRIAL_ENDED else PaywallReason.SUBSCRIPTION_EXPIRED
         log.info("Paywall shown: clubId={} reason={} userId={}", club.id, reason, actorUserId)
         // В отдельной транзакции: 402 ниже откатит текущую вместе со вставкой события.
-        funnelEventRepository.recordDetached(FunnelStep.PAYWALL_SEEN, actorUserId, club.id)
+        productEventRepository.recordDetached(ProductEventKind.PAYWALL_SEEN, actorUserId, club.id)
         throw PaymentRequiredException(reason, club.id, subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT))
     }
 }

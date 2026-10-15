@@ -59,6 +59,21 @@ class RateLimitFilterTest {
     }
 
     @Test
+    fun `журнал событий Mini App ограничен тридцатью запросами в минуту отдельно от общего лимита`() {
+        val track = {
+            MockHttpServletRequest("POST", "/api/track").apply {
+                servletPath = "/api/track"
+                remoteAddr = "10.0.1.8"
+            }
+        }
+
+        assertEquals(0, spend(30, track))
+        assertEquals(1, spend(1, track))
+        // Общий API-бакет того же ключа не тронут.
+        assertEquals(0, spend(1) { request(null) })
+    }
+
+    @Test
     fun `разные пользователи с одного адреса прокси не делят лимит`() {
         val first = UUID.randomUUID()
         val second = UUID.randomUUID()

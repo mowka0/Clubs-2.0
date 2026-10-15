@@ -23,6 +23,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * getMyVote must report the Stage-2 final_status when present (confirmed / waitlisted /
@@ -40,9 +42,10 @@ class VoteServiceTest {
     // Механика набора состава (V83) проверяется отдельно (RosterServiceTest): здесь важно, что
     // голос записан и прочитан обратно.
     private val rosterService = mockk<RosterService>(relaxed = true)
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
     private val service = VoteService(
         eventRepository, eventResponseRepository, membershipRepository, clubRepository,
-        ClubRoleGuard(clubRepository, membershipRepository), rosterService, eventPublisher
+        ClubRoleGuard(clubRepository, membershipRepository), rosterService, eventPublisher, productEventRepository
     )
 
     private val eventId = UUID.randomUUID()
@@ -121,6 +124,23 @@ class VoteServiceTest {
 
         assertEquals("going", result.vote)
         assertEquals(1, result.goingCount)
+    }
+
+    @Test
+    fun `castVote пишет голос в журнал с id встречи и клубом`() {
+        every { eventRepository.findById(eventId) } returns upcomingEvent(OffsetDateTime.now().plusDays(1))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.upsertStage1Vote(eventId, userId, Stage_1Vote.not_going) } returns mockk()
+        every { eventResponseRepository.countByVote(eventId) } returns mapOf("going" to 0, "maybe" to 0, "notGoing" to 1)
+
+        service.castVote(eventId, userId, CastVoteRequest("not_going"))
+
+        verify(exactly = 1) {
+            productEventRepository.record(
+                ProductEventKind.VOTE_CAST, userId, clubId,
+                props = mapOf("vote" to "not_going", "eventId" to eventId.toString()),
+            )
+        }
     }
 
     @Test

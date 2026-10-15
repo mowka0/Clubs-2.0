@@ -23,6 +23,9 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.util.UUID
+import com.clubs.user.UserRepository
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 // Статусы бота в чате, означающие «его там нет» и «он там есть» (литералы Bot API). Переход
 // первого во второй = бота только что добавили в группу.
@@ -42,6 +45,8 @@ class ClubsBot(
     private val skladchinaCallbackService: SkladchinaCallbackService,
     private val legalSheet: LegalSheet,
     private val funnelTracker: FunnelTracker,
+    private val productEventRepository: ProductEventRepository,
+    private val userRepository: UserRepository,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -229,6 +234,7 @@ class ClubsBot(
      */
     private fun handleCallbackQuery(query: CallbackQuery) {
         val data = query.data ?: return
+        var known = true
         val answerText = when {
             data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX) ->
                 parseCallbackId(data, ChatLinkBotService.UNLINK_CALLBACK_PREFIX)
@@ -278,6 +284,7 @@ class ClubsBot(
                     ?: RosterCallbackService.INVALID_REQUEST
             data.startsWith(LegalSheet.CALLBACK_PREFIX) -> handleLegalCallback(query, data)
             else -> {
+                known = false
                 log.warn("Unknown callback data ignored: {}", data.take(32))
                 null
             }
@@ -293,6 +300,22 @@ class ClubsBot(
         } catch (e: Exception) {
             log.warn("Failed to answer callback query {}: {}", query.id, e.message)
         }
+        // После ответа Telegram: сбой журнала не должен оставить человеку крутящийся спиннер.
+        if (known) recordButtonClick(query.from.id, data)
+    }
+
+    /**
+     * Нажатие известной кнопки в журнал (product-analytics.md § 3.3). Имя кнопки — `callback_data`
+     * без идентификатора («roster:remind», «legal:info»); user_id — если человек известен по telegram id.
+     */
+    private fun recordButtonClick(telegramId: Long, data: String) {
+        productEventRepository.record(
+            ProductEventKind.BOT_BUTTON_CLICKED,
+            userRepository.findByTelegramId(telegramId)?.id,
+            clubId = null,
+            telegramId = telegramId,
+            props = mapOf("button" to data.substringBeforeLast(':')),
+        )
     }
 
     /** UUID из `callback_data` после префикса; битые данные (подделка, обрезка) — null. */

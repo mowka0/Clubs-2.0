@@ -140,12 +140,11 @@ open class ReputationLedger(
 
     /**
      * The column <code>public.reputation_ledger.occurred_at</code>. Время
-     * ПОВЕДЕНИЯ, а не обработки: для attendance = events.event_datetime, для
-     * finance = момент оплаты долга (debts.claimed_at / confirmed_at) у
-     * skladchina_paid и срок долга (debts.due_at) у skladchina_expired.
-     * Неизменяемый якорь для recency-decay.
+     * ПОВЕДЕНИЯ, а не обработки: для attendance = events.event_datetime; для
+     * finance = момент закрытия долга сбора (skladchina) или оплаты подписки
+     * клуба (club_billing). Неизменяемый якорь для recency-decay.
      */
-    val OCCURRED_AT: TableField<ReputationLedgerRecord, OffsetDateTime?> = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Время ПОВЕДЕНИЯ, а не обработки: для attendance = events.event_datetime, для finance = момент оплаты долга (debts.claimed_at / confirmed_at) у skladchina_paid и срок долга (debts.due_at) у skladchina_expired. Неизменяемый якорь для recency-decay.")
+    val OCCURRED_AT: TableField<ReputationLedgerRecord, OffsetDateTime?> = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Время ПОВЕДЕНИЯ, а не обработки: для attendance = events.event_datetime; для finance = момент закрытия долга сбора (skladchina) или оплаты подписки клуба (club_billing). Неизменяемый якорь для recency-decay.")
 
     /**
      * The column <code>public.reputation_ledger.source_type</code>. Тип

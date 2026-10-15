@@ -22,6 +22,9 @@ import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.util.UUID
 import kotlin.test.assertEquals
+import com.clubs.user.UserRepository
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 class ClubsBotTest {
 
@@ -29,6 +32,8 @@ class ClubsBotTest {
     private lateinit var funnelTracker: FunnelTracker
     private lateinit var chatLinkBotService: ChatLinkBotService
     private lateinit var legalSheet: LegalSheet
+    private lateinit var productEventRepository: ProductEventRepository
+    private lateinit var userRepository: UserRepository
     private lateinit var bot: ClubsBot
 
     @BeforeEach
@@ -36,6 +41,8 @@ class ClubsBotTest {
         telegramClient = mockk(relaxed = true)
         chatLinkBotService = mockk(relaxed = true)
         funnelTracker = mockk(relaxed = true)
+        productEventRepository = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true) { every { findByTelegramId(any()) } returns null }
         legalSheet = LegalSheet(
             recipientName = "Тестов Тест Тестович", recipientInn = "000000000000", billingProvider = "stub",
             supportUsername = "clubs_tech_support", supportEmail = "support@example.com",
@@ -49,7 +56,9 @@ class ClubsBotTest {
             rosterCallbackService = mockk(relaxed = true),
             skladchinaCallbackService = mockk(relaxed = true),
             legalSheet = legalSheet,
-            funnelTracker = funnelTracker
+            funnelTracker = funnelTracker,
+            productEventRepository = productEventRepository,
+            userRepository = userRepository
         )
     }
 
@@ -211,6 +220,26 @@ class ClubsBotTest {
         assertEquals(listOf("legal:offer:1", "legal:info"), (edited.captured.replyMarkup as InlineKeyboardMarkup).buttons().map { it.callbackData })
         assertEquals("cb-1", answered.captured.callbackQueryId)
         assertEquals(null, answered.captured.text)
+    }
+
+    @Test
+    fun `нажатие известной кнопки пишется в журнал после ответа Telegram, неизвестной - нет`() {
+        every { telegramClient.execute(ofType<EditMessageText>()) } returns mockk(relaxed = true)
+        every { telegramClient.execute(ofType<AnswerCallbackQuery>()) } returns mockk(relaxed = true)
+        val userId = UUID.randomUUID()
+        every { userRepository.findByTelegramId(42L) } returns mockk(relaxed = true) { every { id } returns userId }
+
+        bot.consume(callbackUpdate("legal:offer:1"))
+        bot.consume(callbackUpdate("roster:remind:" + UUID.randomUUID()))
+        bot.consume(callbackUpdate("unknown:thing:1"))
+
+        verify(exactly = 1) {
+            productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, userId, null, telegramId = 42L, props = mapOf("button" to "legal:offer"))
+        }
+        verify(exactly = 1) {
+            productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, userId, null, telegramId = 42L, props = mapOf("button" to "roster:remind"))
+        }
+        verify(exactly = 2) { productEventRepository.record(ProductEventKind.BOT_BUTTON_CLICKED, any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Гейт биллинга за чат (platform-billing.md § 6.4): клуб без чата бесплатен, оплаченный период
@@ -29,9 +31,9 @@ class BillingGateTest {
     private val chatLinkRepository = mockk<ChatLinkRepository>()
     private val subscriptionRepository = mockk<SubscriptionRepository>()
     private val chatTrialRepository = mockk<ChatTrialRepository>()
-    private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
     private val gate = BillingGate(
-        chatLinkRepository, subscriptionRepository, chatTrialRepository, funnelEventRepository,
+        chatLinkRepository, subscriptionRepository, chatTrialRepository, productEventRepository,
         graceDays = 7, trialDays = 15,
     )
 
@@ -107,7 +109,7 @@ class BillingGateTest {
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 1) { funnelEventRepository.record(FunnelStep.TRIAL_STARTED, ownerId, clubId) }
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.TRIAL_STARTED, ownerId, clubId) }
     }
 
     @Test
@@ -118,7 +120,7 @@ class BillingGateTest {
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 0) { funnelEventRepository.record(FunnelStep.TRIAL_STARTED, any(), any()) }
+        verify(exactly = 0) { productEventRepository.record(ProductEventKind.TRIAL_STARTED, any(), any()) }
     }
 
     @Test
@@ -133,7 +135,7 @@ class BillingGateTest {
         assertEquals(clubId, ex.clubId)
         assertEquals(19900, ex.priceKopecks)
         // Пейволл откатывает транзакцию создания — шаг воронки пишется отдельной.
-        verify(exactly = 1) { funnelEventRepository.recordDetached(FunnelStep.PAYWALL_SEEN, ownerId, clubId) }
+        verify(exactly = 1) { productEventRepository.recordDetached(ProductEventKind.PAYWALL_SEEN, ownerId, clubId) }
     }
 
     @Test
@@ -181,6 +183,6 @@ class BillingGateTest {
 
         gate.requireBillable(club, eventId, ownerId)
 
-        verify(exactly = 0) { funnelEventRepository.recordDetached(FunnelStep.PAYWALL_SEEN, any(), any()) }
+        verify(exactly = 0) { productEventRepository.recordDetached(ProductEventKind.PAYWALL_SEEN, any(), any()) }
     }
 }

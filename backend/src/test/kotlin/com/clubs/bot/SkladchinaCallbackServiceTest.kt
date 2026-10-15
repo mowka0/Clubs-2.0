@@ -4,6 +4,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.analytics.EventSource
 import com.clubs.debt.DebtService
 import com.clubs.debt.DebtSettlementService
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -41,33 +42,33 @@ class SkladchinaCallbackServiceTest {
     @Test
     fun `confirm and reject by debt go through DebtService with the caller resolved from telegram id`() {
         stubCaller()
-        every { debtService.confirm(debtId, userId) } returns mockk()
+        every { debtService.confirm(debtId, userId, EventSource.BOT) } returns mockk()
         assertEquals("Получено ✅", service.handleDebt(42L, debtId, confirm = true))
-        every { debtService.reject(debtId, userId, null) } returns mockk()
+        every { debtService.reject(debtId, userId, null, EventSource.BOT) } returns mockk()
         assertEquals("Отмечено: не получил", service.handleDebt(42L, debtId, confirm = false))
-        verify(exactly = 1) { debtService.confirm(debtId, userId) }
-        verify(exactly = 1) { debtService.reject(debtId, userId, null) }
+        verify(exactly = 1) { debtService.confirm(debtId, userId, EventSource.BOT) }
+        verify(exactly = 1) { debtService.reject(debtId, userId, null, EventSource.BOT) }
     }
 
     @Test
     fun `forged callback from someone else is «Нет прав», unknown telegram id never reaches the service`() {
         stubCaller()
-        every { debtService.confirm(debtId, userId) } throws ForbiddenException("Это действие доступно только получателю")
+        every { debtService.confirm(debtId, userId, EventSource.BOT) } throws ForbiddenException("Это действие доступно только получателю")
         assertEquals("Нет прав", service.handleDebt(42L, debtId, confirm = true))
 
         every { userRepository.findByTelegramId(99L) } returns null
         assertEquals(RosterCallbackService.INVALID_REQUEST, service.handleDebt(99L, debtId, confirm = true))
-        verify(exactly = 1) { debtService.confirm(any(), any()) }
+        verify(exactly = 1) { debtService.confirm(any(), any(), any()) }
     }
 
     @Test
     fun `second tap, wrong status and missing debt map to human alerts`() {
         stubCaller()
-        every { debtService.confirm(debtId, userId) } throws ConflictException("уже")
+        every { debtService.confirm(debtId, userId, EventSource.BOT) } throws ConflictException("уже")
         assertEquals("Уже отвечено", service.handleDebt(42L, debtId, confirm = true))
-        every { debtService.confirm(debtId, userId) } throws ValidationException("Для этого долга такое действие недоступно")
+        every { debtService.confirm(debtId, userId, EventSource.BOT) } throws ValidationException("Для этого долга такое действие недоступно")
         assertEquals("Для этого долга такое действие недоступно", service.handleDebt(42L, debtId, confirm = true))
-        every { debtService.confirm(debtId, userId) } throws NotFoundException("Долг не найден")
+        every { debtService.confirm(debtId, userId, EventSource.BOT) } throws NotFoundException("Долг не найден")
         assertEquals(RosterCallbackService.INVALID_REQUEST, service.handleDebt(42L, debtId, confirm = true))
     }
 
@@ -99,9 +100,9 @@ class SkladchinaCallbackServiceTest {
     @Test
     fun `«Простить» at the minus and «Закрыть сбор» at the deadline go through the same services as the app`() {
         stubCaller()
-        every { debtService.forgive(debtId, userId) } returns mockk()
+        every { debtService.forgive(debtId, userId, EventSource.BOT) } returns mockk()
         assertEquals("Долг прощён", service.handleForgive(42L, debtId))
-        every { debtService.forgive(debtId, userId) } throws ForbiddenException("только получателю")
+        every { debtService.forgive(debtId, userId, EventSource.BOT) } throws ForbiddenException("только получателю")
         assertEquals("Нет прав", service.handleForgive(42L, debtId))
 
         val skladchinaId = UUID.randomUUID()

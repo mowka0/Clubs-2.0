@@ -4,24 +4,26 @@
 package com.clubs.generated.jooq.tables.records
 
 
-import com.clubs.generated.jooq.tables.FunnelEvent
+import com.clubs.generated.jooq.tables.ProductEvent
 
 import java.time.OffsetDateTime
 import java.util.UUID
 
+import org.jooq.JSONB
 import org.jooq.Record1
 import org.jooq.impl.UpdatableRecordImpl
 
 
 /**
- * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
- * chat_disconnected и шаги биллинга trial_started, paywall_seen,
- * checkout_started, payment_succeeded, subscription_ended. Только запись и
- * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
- * входит.
+ * Журнал продуктовых событий (docs/modules/product-analytics.md): шаги воронки
+ * привлечения и биллинга, действия на сервере (вступление, встреча, голос,
+ * сбор, долг, обратная связь), нажатия inline-кнопок бота и то, чего сервер не
+ * видит, — запуски и открытия экранов Mini App. Только запись и агрегаты
+ * (недельный отчёт, Grafana), в логику продукта не входит. Бывшая funnel_event
+ * (V97, V100).
  */
 @Suppress("UNCHECKED_CAST")
-open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelEventRecord>(FunnelEvent.FUNNEL_EVENT) {
+open class ProductEventRecord private constructor() : UpdatableRecordImpl<ProductEventRecord>(ProductEvent.PRODUCT_EVENT) {
 
     open var id: UUID?
         set(value): Unit = set(0, value)
@@ -51,6 +53,14 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
         set(value): Unit = set(6, value)
         get(): Long? = get(6) as Long?
 
+    open var source: String
+        set(value): Unit = set(7, value)
+        get(): String = get(7) as String
+
+    open var props: JSONB?
+        set(value): Unit = set(8, value)
+        get(): JSONB? = get(8) as JSONB?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -58,9 +68,9 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
     override fun key(): Record1<UUID?> = super.key() as Record1<UUID?>
 
     /**
-     * Create a detached, initialised FunnelEventRecord
+     * Create a detached, initialised ProductEventRecord
      */
-    constructor(id: UUID? = null, userId: UUID? = null, clubId: UUID? = null, kind: String, campaign: String? = null, createdAt: OffsetDateTime? = null, telegramId: Long? = null): this() {
+    constructor(id: UUID? = null, userId: UUID? = null, clubId: UUID? = null, kind: String, campaign: String? = null, createdAt: OffsetDateTime? = null, telegramId: Long? = null, source: String, props: JSONB? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -68,13 +78,15 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
         this.campaign = campaign
         this.createdAt = createdAt
         this.telegramId = telegramId
+        this.source = source
+        this.props = props
         resetChangedOnNotNull()
     }
 
     /**
-     * Create a detached, initialised FunnelEventRecord
+     * Create a detached, initialised ProductEventRecord
      */
-    constructor(value: com.clubs.generated.jooq.tables.pojos.FunnelEvent?): this() {
+    constructor(value: com.clubs.generated.jooq.tables.pojos.ProductEvent?): this() {
         if (value != null) {
             this.id = value.id
             this.userId = value.userId
@@ -83,6 +95,8 @@ open class FunnelEventRecord private constructor() : UpdatableRecordImpl<FunnelE
             this.campaign = value.campaign
             this.createdAt = value.createdAt
             this.telegramId = value.telegramId
+            this.source = value.source
+            this.props = value.props
             resetChangedOnNotNull()
         }
     }

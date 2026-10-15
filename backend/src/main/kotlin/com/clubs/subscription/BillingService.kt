@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /** Итог обработки ResultURL — контроллер по нему выбирает ответ провайдеру. */
 enum class ResultOutcome {
@@ -54,7 +56,7 @@ class BillingService(
     private val userRepository: UserRepository,
     private val reputationService: ReputationService,
     private val chatTrialRepository: ChatTrialRepository,
-    private val funnelEventRepository: FunnelEventRepository,
+    private val productEventRepository: ProductEventRepository,
     private val consentRepository: AutopayConsentRepository,
     private val paymentProvider: PaymentProvider,
     private val notifier: BillingNotifier,
@@ -108,7 +110,7 @@ class BillingService(
                 previousInvId = null,
                 autopayRequested = autopay,
             ).also {
-                funnelEventRepository.record(FunnelStep.CHECKOUT_STARTED, userId, clubId)
+                productEventRepository.record(ProductEventKind.CHECKOUT_STARTED, userId, clubId)
                 log.info(
                     "Billing checkout: clubId={} invId={} amountKopecks={} autopay={} byOwner={}",
                     clubId, it.invId, price, autopay, isOwner,
@@ -181,7 +183,7 @@ class BillingService(
         }
         paymentRepository.attachSubscription(payment.id, subscription.id)
         subscriptionRepository.recordEventIfNew(subscription.id, "${paymentProvider.id}:paid:${payment.invId}", "PAID_${payment.kind}")
-        funnelEventRepository.record(FunnelStep.PAYMENT_SUCCEEDED, club.ownerId, club.id)
+        productEventRepository.record(ProductEventKind.PAYMENT_SUCCEEDED, club.ownerId, club.id)
         log.info(
             "Billing payment applied: invId={} kind={} clubId={} subscriptionId={} method={}",
             payment.invId, payment.kind, club.id, subscription.id, notification.paymentMethod,

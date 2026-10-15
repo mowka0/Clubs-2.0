@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 @Service
 class EventService(
@@ -32,6 +34,7 @@ class EventService(
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository,
     private val billingGate: BillingGate,
+    private val productEventRepository: ProductEventRepository,
     // Глобальный дефолт интервала набора (минут до старта) — тот же ключ, что у Stage2Service и
     // EventMapper. Нужен, чтобы проверить, помещается ли набор с минимумом до начала встречи.
     @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long,
@@ -70,6 +73,10 @@ class EventService(
         // Биллинг за чат — после вставки (гейту нужен id события), в той же транзакции:
         // 402 откатывает событие, а форма на фронте остаётся заполненной (platform-billing.md § 6.4).
         billingGate.requireBillable(club, event.id, userId)
+        productEventRepository.record(
+            ProductEventKind.EVENT_CREATED, userId, clubId,
+            props = mapOf("format" to event.format.wire, "eventId" to event.id.toString()),
+        )
         log.info(
             "Event created: id={} clubId={} title='{}' userId={} format={}",
             event.id, clubId, event.title, userId, normalizedRequest.format
