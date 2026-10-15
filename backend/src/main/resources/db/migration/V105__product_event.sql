@@ -7,7 +7,11 @@
 ALTER TABLE funnel_event RENAME TO product_event;
 ALTER INDEX idx_funnel_event_kind_created RENAME TO idx_product_event_kind_created;
 ALTER TABLE product_event RENAME CONSTRAINT funnel_event_pkey TO product_event_pkey;
-ALTER TABLE product_event RENAME CONSTRAINT funnel_event_user_id_fkey TO product_event_user_id_fkey;
+-- Журнал переживает удаление пользователя: его события остаются, автор обезличивается (user_id → NULL).
+-- Без этого удалить человека из users нельзя было бы, пока за ним есть хоть одно событие.
+ALTER TABLE product_event DROP CONSTRAINT funnel_event_user_id_fkey;
+ALTER TABLE product_event ADD CONSTRAINT product_event_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
 
 ALTER TABLE product_event
     ADD COLUMN source VARCHAR(8),
@@ -27,7 +31,7 @@ COMMENT ON TABLE product_event IS
     'Журнал продуктовых событий (docs/modules/product-analytics.md): шаги воронки привлечения и биллинга, действия на сервере (вступление, встреча, голос, сбор, долг, обратная связь), нажатия inline-кнопок бота и то, чего сервер не видит, — запуски и открытия экранов Mini App. Только запись и агрегаты (недельный отчёт, Grafana), в логику продукта не входит. Бывшая funnel_event (V97, V100).';
 COMMENT ON COLUMN product_event.id IS 'Суррогатный первичный ключ (UUID).';
 COMMENT ON COLUMN product_event.user_id IS
-    'Кто совершил действие (FK users.id). NULL у bot_started до первого входа в Mini App и у событий шедулера без актора.';
+    'Кто совершил действие (FK users.id, ON DELETE SET NULL — журнал переживает удаление пользователя). NULL у bot_started до первого входа в Mini App, у событий шедулера без актора и у событий удалённых пользователей.';
 COMMENT ON COLUMN product_event.telegram_id IS
     'Telegram id того, кто совершил шаг. Заполняется у шагов привлечения (bot_started, chat_connected) и у нажатий кнопок бота, где пользователя в users может ещё не быть; у остальных NULL. Кампания из /start ad_<slug> атрибутируется к подключениям и оплатам по этому id.';
 COMMENT ON COLUMN product_event.club_id IS

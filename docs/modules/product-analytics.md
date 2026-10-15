@@ -35,7 +35,9 @@
 ALTER TABLE funnel_event RENAME TO product_event;
 ALTER INDEX idx_funnel_event_kind_created RENAME TO idx_product_event_kind_created;
 ALTER TABLE product_event RENAME CONSTRAINT funnel_event_pkey TO product_event_pkey;
-ALTER TABLE product_event RENAME CONSTRAINT funnel_event_user_id_fkey TO product_event_user_id_fkey;
+-- FK на users пересоздаётся с ON DELETE SET NULL: журнал переживает удаление пользователя, автор обезличивается
+ALTER TABLE product_event DROP CONSTRAINT funnel_event_user_id_fkey;
+ALTER TABLE product_event ADD CONSTRAINT product_event_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
 
 ALTER TABLE product_event
     ADD COLUMN source VARCHAR(8),
@@ -51,7 +53,7 @@ CREATE INDEX idx_product_event_user_created ON product_event (user_id, created_a
 | Колонка | Тип | Что |
 |---|---|---|
 | `id` | UUID PK | как было |
-| `user_id` | UUID FK users, NULL | кто; NULL только у `bot_started` до первого входа и у событий шедулера без актора |
+| `user_id` | UUID FK users `ON DELETE SET NULL`, NULL | кто; NULL у `bot_started` до первого входа, у событий шедулера без актора и у событий удалённого пользователя (журнал переживает удаление, автор обезличивается — иначе удалить человека из `users` нельзя, пока за ним есть хоть одно событие) |
 | `telegram_id` | BIGINT, NULL | как было (V100): шаги привлечения до появления `users` |
 | `club_id` | UUID, NULL, без FK | клуб, к которому относится событие; у экранов без клуба — NULL |
 | `kind` | VARCHAR(48) | вид события строкой (§ 3); без enum в БД — набор меняется чаще схемы |
