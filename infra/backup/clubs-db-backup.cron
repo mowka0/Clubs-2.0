@@ -1,0 +1,5 @@
+# Ежедневный бэкап баз Clubs: 00:15 UTC = 03:15 МСК — ночь, вдали от тика биллинга (09:30 МСК)
+# и недельного отчёта (пн 09:00 МСК). Ставится в /etc/cron.d/ установщиком install.sh.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 0 * * * root /usr/local/sbin/clubs-db-backup >> /var/log/clubs-backup.log 2>&1
