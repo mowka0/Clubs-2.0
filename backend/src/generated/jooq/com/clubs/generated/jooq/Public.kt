@@ -22,11 +22,11 @@ import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.Events
-import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.PlatformPayment
+import com.clubs.generated.jooq.tables.ProductEvent
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaChatPosts
@@ -193,15 +193,6 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val EVENTS: Events get() = Events.EVENTS
 
     /**
-     * Факты воронки спринта 1.0: шаги привлечения bot_started, chat_connected,
-     * chat_disconnected и шаги биллинга trial_started, paywall_seen,
-     * checkout_started, payment_succeeded, subscription_ended. Только запись и
-     * агрегаты недельного отчёта (FunnelReportScheduler), в логику продукта не
-     * входит.
-     */
-    val FUNNEL_EVENT: FunnelEvent get() = FunnelEvent.FUNNEL_EVENT
-
-    /**
      * Общий словарь интересов для профилей пользователей. Имена нормализуются
      * на сервере (trim, одиночные пробелы, lowercase, ё -&gt; е), чтобы
      * дубликаты схлопывались; словарь питает префиксный автокомплит.
@@ -230,6 +221,16 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * по сохранённой карте владельца.
      */
     val PLATFORM_PAYMENT: PlatformPayment get() = PlatformPayment.PLATFORM_PAYMENT
+
+    /**
+     * Журнал продуктовых событий (docs/modules/product-analytics.md): шаги
+     * воронки привлечения и биллинга, действия на сервере (вступление, встреча,
+     * голос, сбор, долг, обратная связь), нажатия inline-кнопок бота и то, чего
+     * сервер не видит, — запуски и открытия экранов Mini App. Только запись и
+     * агрегаты (недельный отчёт, Grafana), в логику продукта не входит. Бывшая
+     * funnel_event (V97, V100).
+     */
+    val PRODUCT_EVENT: ProductEvent get() = ProductEvent.PRODUCT_EVENT
 
     /**
      * Append-only леджер репутационных исходов (источник истины репутации v2).
@@ -353,11 +354,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         EventResponses.EVENT_RESPONSES,
         EventTemplates.EVENT_TEMPLATES,
         Events.EVENTS,
-        FunnelEvent.FUNNEL_EVENT,
         Interests.INTERESTS,
         MembershipHistory.MEMBERSHIP_HISTORY,
         Memberships.MEMBERSHIPS,
         PlatformPayment.PLATFORM_PAYMENT,
+        ProductEvent.PRODUCT_EVENT,
         ReputationLedger.REPUTATION_LEDGER,
         ServiceSubscription.SERVICE_SUBSCRIPTION,
         SkladchinaChatPosts.SKLADCHINA_CHAT_POSTS,

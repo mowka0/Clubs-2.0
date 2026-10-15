@@ -1,6 +1,7 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getStartParam } from '../telegram/sdk';
+import { parseDeepLink } from '../telegram/deepLink';
 import { rememberDeepLinkLanding } from '../telegram/chatOrigin';
 import { useMyClubsQuery } from '../queries/clubs';
 import { holdsClubSeat } from '../utils/membershipRole';
@@ -21,26 +22,25 @@ export function resolveDeepLink(
   startParam: string | null,
   myClubs?: readonly MembershipDto[] | null,
 ): string | null | undefined {
-  if (!startParam) return null;
-  const sklad = startParam.match(/^skladchina_([0-9a-f-]{36})$/i);
-  if (sklad) return `/skladchina/${sklad[1]}`;
-  const event = startParam.match(/^event_([0-9a-f-]{36})$/i);
-  if (event) return `/events/${event[1]}`;
-  const club = startParam.match(/^club_([0-9a-f-]{36})$/i);
-  if (club) {
-    if (myClubs === undefined) return undefined;
-    if (myClubs === null) return `/clubs/${club[1]}`;
-    const clubId = club[1].toLowerCase();
-    const isSeated = myClubs.some((m) => m.clubId.toLowerCase() === clubId && holdsClubSeat(m));
-    return isSeated ? `/clubs/${club[1]}` : `/clubs/${club[1]}/join`;
+  const link = parseDeepLink(startParam);
+  if (!link) return null;
+  switch (link.kind) {
+    case 'skladchina':
+      return `/skladchina/${link.id}`;
+    case 'event':
+      return `/events/${link.id}`;
+    case 'club': {
+      if (myClubs === undefined) return undefined;
+      if (myClubs === null) return `/clubs/${link.id}`;
+      const clubId = link.id.toLowerCase();
+      const isSeated = myClubs.some((m) => m.clubId.toLowerCase() === clubId && holdsClubSeat(m));
+      return isSeated ? `/clubs/${link.id}` : `/clubs/${link.id}/join`;
+    }
+    case 'billing':
+      return `/clubs/${link.id}?billing=done`;
+    case 'invite':
+      return `/invite/${link.id}`;
   }
-  const billing = startParam.match(/^billing_([0-9a-f-]{36})$/i);
-  if (billing) return `/clubs/${billing[1]}?billing=done`;
-  // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex
-  // шире на случай будущей смены длины.
-  const invite = startParam.match(/^invite_([0-9a-f]{8,64})$/i);
-  if (invite) return `/invite/${invite[1]}`;
-  return null;
 }
 
 /**

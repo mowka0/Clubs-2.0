@@ -182,10 +182,11 @@ open class Clubs(
 
     /**
      * The column <code>public.clubs.member_limit</code>. Лимит числа участников
-     * клуба, от 1 до 500 (CHECK). Потолок поднят с 80 в V81 под клубы,
-     * создаваемые из телеграм-чата: чат сообщества обычно 50–500 человек.
+     * клуба, от 1 до 500 (CHECK). Клуб из телеграм-чата получает потолок 500
+     * (V104): в клубе те, кто в чате, а лимит по размеру чата упирал новых
+     * людей группы в «клуб полон». Организатор может поставить меньше.
      */
-    val MEMBER_LIMIT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_limit"), SQLDataType.INTEGER.nullable(false), this, "Лимит числа участников клуба, от 1 до 500 (CHECK). Потолок поднят с 80 в V81 под клубы, создаваемые из телеграм-чата: чат сообщества обычно 50–500 человек.")
+    val MEMBER_LIMIT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_limit"), SQLDataType.INTEGER.nullable(false), this, "Лимит числа участников клуба, от 1 до 500 (CHECK). Клуб из телеграм-чата получает потолок 500 (V104): в клубе те, кто в чате, а лимит по размеру чата упирал новых людей группы в «клуб полон». Организатор может поставить меньше.")
 
     /**
      * The column <code>public.clubs.subscription_price</code>. Месячный

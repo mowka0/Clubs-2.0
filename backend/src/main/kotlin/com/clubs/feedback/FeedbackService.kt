@@ -10,11 +10,14 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 @Service
 class FeedbackService(
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
+    private val productEventRepository: ProductEventRepository,
     // Username саппорт-аккаунта (без @): DM с баг-репортами уходит пользователю с этим
     // telegram_username. Bot API не умеет слать по @username и не даёт боту писать первым,
     // поэтому аккаунт резолвится через users — он должен хотя бы раз открыть Mini App
@@ -37,6 +40,9 @@ class FeedbackService(
         val sent = notificationService.trySendDirectMessage(chatId, buildReport(reporter, request))
         if (!sent) throw FeedbackDeliveryException("Telegram delivery failed")
         log.info("Feedback delivered: userId={} supportChatId={} length={}", userId, chatId, request.message.length)
+        // DM уже ушёл и не откатывается: сбой журнала не должен дать 500 и спровоцировать повторную отправку.
+        runCatching { productEventRepository.record(ProductEventKind.FEEDBACK_SENT, userId, clubId = null) }
+            .onFailure { log.warn("feedback_sent not recorded: userId={} reason={}", userId, it.message) }
     }
 
     private fun resolveSupportChatId(): Long {

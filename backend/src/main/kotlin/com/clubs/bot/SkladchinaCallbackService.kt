@@ -13,6 +13,7 @@ import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
+import com.clubs.analytics.EventSource
 
 /**
  * Inline-кнопки в DM (skladchina-v3 § 5): «Получил / Не получил» по долгу и по сальдо пары,
@@ -47,7 +48,7 @@ class SkladchinaCallbackService(
     fun handleForgive(fromTelegramId: Long, debtId: UUID): String {
         val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
         return guarded(fromTelegramId, debtId) {
-            debtService.forgive(debtId, callerId)
+            debtService.forgive(debtId, callerId, source = EventSource.BOT)
             "Долг прощён"
         }
     }
@@ -86,10 +87,10 @@ class SkladchinaCallbackService(
         val callerId = userRepository.findByTelegramId(fromTelegramId)?.id ?: return RosterCallbackService.INVALID_REQUEST
         return guarded(fromTelegramId, debtId) {
             if (confirm) {
-                debtService.confirm(debtId, callerId)
+                debtService.confirm(debtId, callerId, source = EventSource.BOT)
                 "Получено ✅"
             } else {
-                debtService.reject(debtId, callerId, note = null)
+                debtService.reject(debtId, callerId, note = null, source = EventSource.BOT)
                 "Отмечено: не получил"
             }
         }

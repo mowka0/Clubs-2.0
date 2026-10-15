@@ -6,6 +6,8 @@ import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Шаги привлечения (funnel.md § 3.1): `/start` в личке бота и судьба привязки чата. Биллинговые
@@ -15,7 +17,7 @@ import org.springframework.stereotype.Service
  */
 @Service
 class FunnelTracker(
-    private val funnelEventRepository: FunnelEventRepository,
+    private val productEventRepository: ProductEventRepository,
     private val userRepository: UserRepository,
 ) {
     private val log = LoggerFactory.getLogger(FunnelTracker::class.java)
@@ -27,19 +29,19 @@ class FunnelTracker(
     fun botStarted(telegramId: Long, commandText: String) {
         val campaign = parseCampaign(commandText)
         val userId = userRepository.findByTelegramId(telegramId)?.id
-        funnelEventRepository.record(FunnelStep.BOT_STARTED, userId, clubId = null, campaign = campaign, telegramId = telegramId)
+        productEventRepository.record(ProductEventKind.BOT_STARTED, userId, clubId = null, campaign = campaign, telegramId = telegramId)
         // Сам payload — пользовательский ввод, в лог не попадает: только факт, принята ли метка.
         log.info("Funnel bot_started: telegramId={} campaign={}", telegramId, if (campaign != null) "accepted" else "none")
     }
 
     @EventListener
     fun onChatLinked(event: ChatLinkedEvent) {
-        funnelEventRepository.record(FunnelStep.CHAT_CONNECTED, event.ownerUserId, event.clubId, telegramId = event.ownerTelegramId)
+        productEventRepository.record(ProductEventKind.CHAT_CONNECTED, event.ownerUserId, event.clubId, telegramId = event.ownerTelegramId)
     }
 
     @EventListener
     fun onChatDisconnected(event: ChatDisconnectedEvent) {
-        funnelEventRepository.record(FunnelStep.CHAT_DISCONNECTED, event.linkedByUserId, event.clubId)
+        productEventRepository.record(ProductEventKind.CHAT_DISCONNECTED, event.linkedByUserId, event.clubId)
     }
 
     companion object {

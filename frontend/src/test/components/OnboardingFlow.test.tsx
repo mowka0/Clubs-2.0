@@ -10,6 +10,8 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackNotificationOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
+const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }));
+vi.mock('../../analytics/track', () => ({ track: trackMock }));
 
 import { OnboardingFlow } from '../../components/onboarding/OnboardingFlow';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -67,6 +69,7 @@ afterAll(() => server.close());
 
 beforeEach(() => {
   useAuthStore.setState({ user: null, isAuthenticated: true, isLoading: false, error: null });
+  trackMock.mockReset();
 });
 
 describe('Интро — три слайда без стены текста', () => {
@@ -85,6 +88,24 @@ describe('Интро — три слайда без стены текста', ()
     // Выбора роли на последнем слайде нет — одна кнопка ведёт всех в профиль.
     expect(screen.getByRole('button', { name: 'Погнали!' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Дальше' })).toBeNull();
+  });
+
+  it('каждый показанный слайд и «Погнали!» попадают в журнал (product-analytics.md AC-11)', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post('*/api/users/me/onboarding/INTRO', () => HttpResponse.json(introDoneUser)),
+    );
+    renderFlow();
+    expect(trackMock).toHaveBeenCalledWith('onboarding_step', { step: 1 });
+
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    expect(trackMock).toHaveBeenCalledWith('onboarding_step', { step: 2 });
+    expect(trackMock).toHaveBeenCalledWith('onboarding_step', { step: 3 });
+
+    await user.click(screen.getByRole('button', { name: 'Погнали!' }));
+    expect(trackMock).toHaveBeenCalledWith('onboarding_completed');
+    await waitFor(() => expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: профиль')).toBeInTheDocument());
   });
 
   it('на слайде нет списка преимуществ — только заголовок и одна микро-строка', () => {

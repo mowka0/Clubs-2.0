@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /** Календарь подписки (platform-billing.md § 6.5): напоминания, списания по слотам, PAST_DUE, ENDED, опрос. */
 class BillingLifecycleServiceTest {
@@ -31,14 +33,14 @@ class BillingLifecycleServiceTest {
     private val paymentRepository = mockk<PlatformPaymentRepository>(relaxed = true)
     private val chatLinkRepository = mockk<ChatLinkRepository>()
     private val clubRepository = mockk<ClubRepository>()
-    private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
     private val paymentProvider = mockk<PaymentProvider>(relaxed = true)
     private val billingService = mockk<BillingService>(relaxed = true)
     private val notifier = mockk<BillingNotifier>(relaxed = true)
     private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
 
     private val service = BillingLifecycleService(
-        subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, funnelEventRepository,
+        subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, productEventRepository,
         chatTrialRepository, paymentProvider, billingService, notifier,
         graceDays = 7, trialDays = 15, periodDays = 30, retryDays = listOf(0, 1, 3),
         pendingTimeoutHours = 6, motherExpireHours = 24,
@@ -243,7 +245,7 @@ class BillingLifecycleServiceTest {
 
         service.runDaily(now)
 
-        verify { funnelEventRepository.record(FunnelStep.SUBSCRIPTION_ENDED, club.ownerId, club.id) }
+        verify { productEventRepository.record(ProductEventKind.SUBSCRIPTION_ENDED, club.ownerId, club.id) }
         verify { notifier.graceExhausted(club) }
         verify(exactly = 0) { paymentProvider.charge(any()) }
     }
@@ -261,7 +263,7 @@ class BillingLifecycleServiceTest {
         every { subscriptionRepository.transitionStatus(ended.id, any(), SubscriptionStatus.ENDED) } returns 1
         service.runDaily(now)
         verify(exactly = 0) { notifier.graceExhausted(any()) }
-        verify(exactly = 0) { funnelEventRepository.record(any(), any(), any(), any()) }
+        verify(exactly = 0) { productEventRepository.record(any(), any(), any(), any()) }
     }
 
     // ---------- опрос счетов без ответа ----------

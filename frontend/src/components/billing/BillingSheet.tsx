@@ -11,6 +11,7 @@ import {
   formatBillingDate, formatRubles, trialPassedLabel, type PaywallReason,
 } from '../../api/billing';
 import { OFFER_UPDATED, offer } from './offerText';
+import { track } from '../../analytics/track';
 
 /** Опрос статуса после ухода на оплату: ResultURL провайдера может отставать от возврата. */
 const POLL_INTERVAL_MS = 3000;
@@ -70,6 +71,12 @@ export const BillingSheet: FC<BillingSheetProps> = ({ clubId, reason, initialMod
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Открытие шита — в журнал один раз за показ (product-analytics.md § 3.2): откуда пришли и с чем.
+  useEffect(() => {
+    track('pay_sheet_opened', { reason: reason ?? 'none', mode: initialMode }, clubId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ожидание: подтверждение видно по сдвигу периода и погашенному счёту.

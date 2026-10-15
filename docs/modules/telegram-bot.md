@@ -126,7 +126,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 [🏠 Открыть Clubs]                        (WebAppInfo <telegram.webapp-base-url> — как у всех WebApp-кнопок бота)
 [📄 Оферта] [🔒 Политика] [💬 Поддержка]   (callback legal:offer / legal:privacy:0 / url https://t.me/<support-username>)
 ```
-**Воронка (2026-09-30):** после отправки приветствия пишется `funnel_event(bot_started)` с
+**Воронка (2026-09-30):** после отправки приветствия пишется `product_event(bot_started)` с
 `telegram_id` отправителя и `campaign` из payload'а рекламной ссылки `t.me/<бот>?start=ad_<slug>`
 (маска `ad_[a-z0-9_-]{1,64}` без учёта регистра; иначе NULL = органика). Сначала ответ, потом
 учёт: сбой записи не лишает человека приветствия. Определения и отчёт — `docs/modules/funnel.md`.

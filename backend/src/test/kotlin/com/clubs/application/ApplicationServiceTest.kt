@@ -30,6 +30,8 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 // Сообщение единого менеджерского гейта (ClubRoleGuard) для 403-ассертов.
 private const val MANAGER_FORBIDDEN = "Управлять клубом может владелец или активный со-организатор"
@@ -47,6 +49,7 @@ class ApplicationServiceTest {
     private lateinit var interestRepository: InterestRepository
     private lateinit var membershipMapper: MembershipMapper
     private lateinit var membershipActivator: MembershipActivator
+    private lateinit var productEventRepository: ProductEventRepository
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -62,6 +65,7 @@ class ApplicationServiceTest {
         interestRepository = mockk(relaxed = true)
         membershipMapper = MembershipMapper()
         membershipActivator = mockk(relaxed = true)
+        productEventRepository = mockk(relaxed = true)
         applicationService = ApplicationService(
             applicationRepository,
             clubRepository,
@@ -77,7 +81,8 @@ class ApplicationServiceTest {
             eventPublisher = mockk(relaxed = true),
             // Реальный guard поверх тех же моков: owner-путь не трогает membershipRepository,
             // negative-тесты стабят findByUserAndClub(caller) -> null (не со-орг).
-            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository)
+            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository),
+            productEventRepository = productEventRepository
         )
     }
 
@@ -323,6 +328,8 @@ class ApplicationServiceTest {
         // De-Stars: approve в платном клубе создаёт membership сразу в `frozen` — без Stars-инвойса.
         verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
         verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+        // Журнал (product-analytics.md AC-6): вступил заявитель, не организатор.
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.CLUB_JOINED, userId, clubId, props = mapOf("via" to "application")) }
     }
 
     @Test

@@ -28,6 +28,8 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Regression guard for the "event-created DM never fires" bug: createEvent must
@@ -47,6 +49,7 @@ class EventServiceTest {
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var billingGate: BillingGate
     private lateinit var userRepository: com.clubs.user.UserRepository
+    private lateinit var productEventRepository: ProductEventRepository
     private lateinit var eventService: EventService
 
     @BeforeEach
@@ -63,10 +66,11 @@ class EventServiceTest {
         // Гейт биллинга по умолчанию пропускает: клуб без чата / бесплатная встреча.
         billingGate = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
+        productEventRepository = mockk(relaxed = true)
         eventService = EventService(
             eventRepository, eventResponseRepository, accessMembershipRepository, clubRepository,
             ClubRoleGuard(clubRepository, guardMembershipRepository),
-            eventMapper, userRepository, eventPublisher, skladchinaRepository, billingGate,
+            eventMapper, userRepository, eventPublisher, skladchinaRepository, billingGate, productEventRepository,
             stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
         )
     }
@@ -88,6 +92,13 @@ class EventServiceTest {
             billingGate.requireBillable(club, event.id, ownerId)
             eventPublisher.publishEvent(EventCreatedEvent(event))
         }
+        // Журнал (product-analytics.md AC-6): формат и id встречи, клуб — в колонке.
+        verify(exactly = 1) {
+            productEventRepository.record(
+                ProductEventKind.EVENT_CREATED, ownerId, clubId,
+                props = mapOf("format" to event.format.wire, "eventId" to event.id.toString()),
+            )
+        }
     }
 
     @Test
@@ -102,8 +113,9 @@ class EventServiceTest {
 
         assertThrows<PaymentRequiredException> { eventService.createEvent(clubId, request(), ownerId) }
 
-        // Транзакция откатится вместе со вставкой; слушателям сообщать не о чем.
+        // Транзакция откатится вместе со вставкой; слушателям сообщать не о чем, журналу — тоже (paywall_seen пишет гейт).
         verify(exactly = 0) { eventPublisher.publishEvent(any<EventCreatedEvent>()) }
+        verify(exactly = 0) { productEventRepository.record(ProductEventKind.EVENT_CREATED, any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -577,7 +589,7 @@ class EventServiceTest {
     private fun teaserService() = EventService(
         eventRepository, eventResponseRepository, accessMembershipRepository, clubRepository,
         ClubRoleGuard(clubRepository, guardMembershipRepository),
-        EventMapper(240L, 1080L), userRepository, eventPublisher, skladchinaRepository, billingGate,
+        EventMapper(240L, 1080L), userRepository, eventPublisher, skladchinaRepository, billingGate, productEventRepository,
         stage2TriggerMinutesBefore = 1080L, rosterWarningMinutes = 180L
     )
 

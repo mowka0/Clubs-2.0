@@ -33,7 +33,9 @@ class ApiClient {
     path: string,
     body?: unknown,
     params?: Record<string, string>,
-    isRetry = false
+    isRetry = false,
+    // Запрос переживает выгрузку страницы — для журнала событий при сворачивании Mini App.
+    keepalive = false
   ): Promise<T> {
     const url = new URL(path, window.location.origin);
     if (params) {
@@ -54,6 +56,7 @@ class ApiClient {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      keepalive,
     });
 
     if (res.status === 401 && !isRetry) {
@@ -63,10 +66,10 @@ class ApiClient {
       // Если другой параллельный запрос уже обновил токен, пока этот был в полёте —
       // повторить с новым токеном, не запускать ещё один цикл авторизации.
       if (this.token && this.token !== tokenUsed) {
-        return this.request<T>(method, path, body, params, true);
+        return this.request<T>(method, path, body, params, true, keepalive);
       }
       await this.authenticate();
-      return this.request<T>(method, path, body, params, true);
+      return this.request<T>(method, path, body, params, true, keepalive);
     }
 
     if (!res.ok) {

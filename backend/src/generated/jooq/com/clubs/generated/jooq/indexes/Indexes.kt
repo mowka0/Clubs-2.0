@@ -13,11 +13,11 @@ import com.clubs.generated.jooq.tables.DebtSettlements
 import com.clubs.generated.jooq.tables.Debts
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
-import com.clubs.generated.jooq.tables.FunnelEvent
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.PlatformPayment
+import com.clubs.generated.jooq.tables.ProductEvent
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaEnrollments
@@ -61,7 +61,6 @@ val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_even
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
 val IDX_EVENTS_REPUTATION_PENDING: Index = Internal.createIndex(DSL.name("idx_events_reputation_pending"), Events.EVENTS, arrayOf(Events.EVENTS.ID), false)
 val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"), Events.EVENTS, arrayOf(Events.EVENTS.STATUS), false)
-val IDX_FUNNEL_EVENT_KIND_CREATED: Index = Internal.createIndex(DSL.name("idx_funnel_event_kind_created"), FunnelEvent.FUNNEL_EVENT, arrayOf(FunnelEvent.FUNNEL_EVENT.KIND, FunnelEvent.FUNNEL_EVENT.CREATED_AT), false)
 val IDX_INTERESTS_CATEGORY_CLUB_USAGE: Index = Internal.createIndex(DSL.name("idx_interests_category_club_usage"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.CATEGORY, Interests.INTERESTS.CLUB_USAGE_COUNT.desc()), false)
 val IDX_INTERESTS_NAME_PREFIX: Index = Internal.createIndex(DSL.name("idx_interests_name_prefix"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.NAME), false)
 val IDX_MEMBERSHIP_HISTORY_CLUB_OCCURRED: Index = Internal.createIndex(DSL.name("idx_membership_history_club_occurred"), MembershipHistory.MEMBERSHIP_HISTORY, arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.CLUB_ID, MembershipHistory.MEMBERSHIP_HISTORY.OCCURRED_AT), false)
@@ -71,6 +70,8 @@ val IDX_MEMBERSHIPS_STATUS: Index = Internal.createIndex(DSL.name("idx_membershi
 val IDX_MEMBERSHIPS_USER_ID: Index = Internal.createIndex(DSL.name("idx_memberships_user_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.USER_ID), false)
 val IDX_PLATFORM_PAYMENT_CLUB: Index = Internal.createIndex(DSL.name("idx_platform_payment_club"), PlatformPayment.PLATFORM_PAYMENT, arrayOf(PlatformPayment.PLATFORM_PAYMENT.CLUB_ID, PlatformPayment.PLATFORM_PAYMENT.CREATED_AT.desc()), false)
 val IDX_PLATFORM_PAYMENT_PENDING: Index = Internal.createIndex(DSL.name("idx_platform_payment_pending"), PlatformPayment.PLATFORM_PAYMENT, arrayOf(PlatformPayment.PLATFORM_PAYMENT.CREATED_AT), false)
+val IDX_PRODUCT_EVENT_KIND_CREATED: Index = Internal.createIndex(DSL.name("idx_product_event_kind_created"), ProductEvent.PRODUCT_EVENT, arrayOf(ProductEvent.PRODUCT_EVENT.KIND, ProductEvent.PRODUCT_EVENT.CREATED_AT), false)
+val IDX_PRODUCT_EVENT_USER_CREATED: Index = Internal.createIndex(DSL.name("idx_product_event_user_created"), ProductEvent.PRODUCT_EVENT, arrayOf(ProductEvent.PRODUCT_EVENT.USER_ID, ProductEvent.PRODUCT_EVENT.CREATED_AT), false)
 val IDX_REPUTATION_LEDGER_SOURCE: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_source"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.SOURCE_TYPE, ReputationLedger.REPUTATION_LEDGER.SOURCE_ID), false)
 val IDX_REPUTATION_LEDGER_USER_CLUB: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_user_club"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.USER_ID, ReputationLedger.REPUTATION_LEDGER.CLUB_ID), false)
 val IDX_SERVICE_SUBSCRIPTION_PAYER: Index = Internal.createIndex(DSL.name("idx_service_subscription_payer"), ServiceSubscription.SERVICE_SUBSCRIPTION, arrayOf(ServiceSubscription.SERVICE_SUBSCRIPTION.PAYER_USER_ID, ServiceSubscription.SERVICE_SUBSCRIPTION.STATUS), false)

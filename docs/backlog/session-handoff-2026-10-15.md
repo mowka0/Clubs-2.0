@@ -49,6 +49,11 @@ Coolify scheduled backups не настроены.
 - После — проверить, что swap разгрузился, и снять `docker stats` заново.
 
 ### W4. Журнал продуктовых событий — трек M (миграция → фактически L по триггеру, но суть проста)
+> 🟡 2026-10-15: реализован в ветке `feature/product-event-log` (спека `docs/modules/product-analytics.md`,
+> решения PO приняты: `product_event`, `screen_opened` на все экраны, все кнопки бота). V105, 20 видов,
+> `POST /api/track`, фронт-очередь; Reviewer + Security пройдены, все замечания закрыты; 1277 + 843 тестов
+> зелёные. Запушено на staging — ждёт теста PO по спеке § 11. Открыто `[→ User]`: дописать журнал в
+> политику конфиденциальности (`privacyText.ts` § 2) — поведенческие данные первой стороны.
 - Расширить `funnel_event` → общий журнал: `user_id, club_id, kind, source (app|bot), props JSONB,
   created_at`. Имя таблицы можно оставить (или переименовать в `product_event` — решить при спеке).
 - Фронт: `track(kind, props)` → `POST /api/track` пачкой, fire-and-forget, не блокирует UI,

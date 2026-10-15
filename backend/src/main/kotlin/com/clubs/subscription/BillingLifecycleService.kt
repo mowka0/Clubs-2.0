@@ -18,6 +18,8 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Календарь подписки за чат (platform-billing.md § 6.5). Ежедневно — напоминания, дочерние
@@ -32,7 +34,7 @@ class BillingLifecycleService(
     private val paymentRepository: PlatformPaymentRepository,
     private val chatLinkRepository: ChatLinkRepository,
     private val clubRepository: ClubRepository,
-    private val funnelEventRepository: FunnelEventRepository,
+    private val productEventRepository: ProductEventRepository,
     private val chatTrialRepository: ChatTrialRepository,
     private val paymentProvider: PaymentProvider,
     private val billingService: BillingService,
@@ -173,7 +175,7 @@ class BillingLifecycleService(
         if (rows == 0) return
         log.info("Subscription ended after grace: id={} clubId={} hasChat={}", subscription.id, subscription.subjectClubId, hasChat)
         if (club != null && hasChat) {
-            funnelEventRepository.record(FunnelStep.SUBSCRIPTION_ENDED, club.ownerId, club.id)
+            productEventRepository.record(ProductEventKind.SUBSCRIPTION_ENDED, club.ownerId, club.id)
             notifier.graceExhausted(club)
         }
     }

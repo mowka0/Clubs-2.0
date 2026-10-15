@@ -7,7 +7,7 @@ import com.clubs.generated.jooq.enums.SubscriptionStatus
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.CLUB_CHAT_LINKS
 import com.clubs.generated.jooq.tables.references.EVENTS
-import com.clubs.generated.jooq.tables.references.FUNNEL_EVENT
+import com.clubs.generated.jooq.tables.references.PRODUCT_EVENT
 import com.clubs.generated.jooq.tables.references.SERVICE_SUBSCRIPTION
 import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.Condition
@@ -15,6 +15,7 @@ import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Агрегаты недельного отчёта на jOOQ. Определения метрик — funnel.md § 3.3; здесь они один в
@@ -39,17 +40,17 @@ class JooqFunnelReportRepository(
             clubsWithChat = countClubsWithChat(DSL.noCondition()),
             newClubs = countClubs(createdIn(week)),
             newClubsWithChat = countClubsWithChat(createdIn(week)),
-            connections = steps.rows(FunnelStep.CHAT_CONNECTED),
-            disconnections = steps.rows(FunnelStep.CHAT_DISCONNECTED),
+            connections = steps.rows(ProductEventKind.CHAT_CONNECTED),
+            disconnections = steps.rows(ProductEventKind.CHAT_DISCONNECTED),
             paying = countSubscriptions(SubscriptionStatus.ACTIVE, SubscriptionStatus.CANCELLED_PENDING_END),
             mrrRubles = countSubscriptions(SubscriptionStatus.ACTIVE) *
                 subscriptionRepository.currentPriceKopecks(SubscriptionPlan.CHAT) / KOPECKS_IN_RUBLE,
             meetingsCompleted = countCompletedMeetings(week),
             idleChats = idleChatNames(now),
-            starts = steps.distinctTelegramIds(FunnelStep.BOT_STARTED),
-            firstMeetings = steps.rows(FunnelStep.TRIAL_STARTED),
-            checkouts = steps.distinctClubs(FunnelStep.CHECKOUT_STARTED),
-            payments = steps.rows(FunnelStep.PAYMENT_SUCCEEDED),
+            starts = steps.distinctTelegramIds(ProductEventKind.BOT_STARTED),
+            firstMeetings = steps.rows(ProductEventKind.TRIAL_STARTED),
+            checkouts = steps.distinctClubs(ProductEventKind.CHECKOUT_STARTED),
+            payments = steps.rows(ProductEventKind.PAYMENT_SUCCEEDED),
             campaigns = campaignRows(week),
         )
     }
@@ -58,7 +59,7 @@ class JooqFunnelReportRepository(
         CLUBS.CREATED_AT.ge(week.start).and(CLUBS.CREATED_AT.lt(week.end))
 
     private fun inWindow(week: ReportWeek): Condition =
-        FUNNEL_EVENT.CREATED_AT.ge(week.start).and(FUNNEL_EVENT.CREATED_AT.lt(week.end))
+        PRODUCT_EVENT.CREATED_AT.ge(week.start).and(PRODUCT_EVENT.CREATED_AT.lt(week.end))
 
     /** Клубы без мягко удалённых. */
     private fun countClubs(extra: Condition): Int =
@@ -117,21 +118,21 @@ class JooqFunnelReportRepository(
 
     /** Счётчики всех шагов в окне одним запросом: строки, уникальные telegram id, уникальные клубы. */
     private class StepCounts(private val byKind: Map<String, Triple<Int, Int, Int>>) {
-        fun rows(step: FunnelStep): Int = byKind[step.kind]?.first ?: 0
-        fun distinctTelegramIds(step: FunnelStep): Int = byKind[step.kind]?.second ?: 0
-        fun distinctClubs(step: FunnelStep): Int = byKind[step.kind]?.third ?: 0
+        fun rows(step: ProductEventKind): Int = byKind[step.kind]?.first ?: 0
+        fun distinctTelegramIds(step: ProductEventKind): Int = byKind[step.kind]?.second ?: 0
+        fun distinctClubs(step: ProductEventKind): Int = byKind[step.kind]?.third ?: 0
     }
 
     private fun stepCounts(week: ReportWeek): StepCounts {
         val rows = DSL.count()
-        val telegramIds = DSL.countDistinct(FUNNEL_EVENT.TELEGRAM_ID)
-        val clubs = DSL.countDistinct(FUNNEL_EVENT.CLUB_ID)
-        val byKind = dsl.select(FUNNEL_EVENT.KIND, rows, telegramIds, clubs)
-            .from(FUNNEL_EVENT)
+        val telegramIds = DSL.countDistinct(PRODUCT_EVENT.TELEGRAM_ID)
+        val clubs = DSL.countDistinct(PRODUCT_EVENT.CLUB_ID)
+        val byKind = dsl.select(PRODUCT_EVENT.KIND, rows, telegramIds, clubs)
+            .from(PRODUCT_EVENT)
             .where(inWindow(week))
-            .groupBy(FUNNEL_EVENT.KIND)
+            .groupBy(PRODUCT_EVENT.KIND)
             .fetch()
-            .associate { it[FUNNEL_EVENT.KIND]!! to Triple(it[rows], it[telegramIds], it[clubs]) }
+            .associate { it[PRODUCT_EVENT.KIND]!! to Triple(it[rows], it[telegramIds], it[clubs]) }
         return StepCounts(byKind)
     }
 
@@ -141,19 +142,19 @@ class JooqFunnelReportRepository(
      * Строка есть, если в ней хоть одно ненулевое число: поздняя конверсия не должна пропадать.
      */
     private fun campaignRows(week: ReportWeek): List<CampaignRow> {
-        val startsByCampaign = dsl.select(FUNNEL_EVENT.CAMPAIGN, DSL.countDistinct(FUNNEL_EVENT.TELEGRAM_ID))
-            .from(FUNNEL_EVENT)
-            .where(inWindow(week)).and(FUNNEL_EVENT.KIND.eq(FunnelStep.BOT_STARTED.kind))
-            .groupBy(FUNNEL_EVENT.CAMPAIGN)
+        val startsByCampaign = dsl.select(PRODUCT_EVENT.CAMPAIGN, DSL.countDistinct(PRODUCT_EVENT.TELEGRAM_ID))
+            .from(PRODUCT_EVENT)
+            .where(inWindow(week)).and(PRODUCT_EVENT.KIND.eq(ProductEventKind.BOT_STARTED.kind))
+            .groupBy(PRODUCT_EVENT.CAMPAIGN)
             .fetch()
             .associate { it.value1() to it.value2() }
-        val connected = dsl.select(FUNNEL_EVENT.TELEGRAM_ID).from(FUNNEL_EVENT)
-            .where(inWindow(week)).and(FUNNEL_EVENT.KIND.eq(FunnelStep.CHAT_CONNECTED.kind))
-            .fetch(FUNNEL_EVENT.TELEGRAM_ID)
+        val connected = dsl.select(PRODUCT_EVENT.TELEGRAM_ID).from(PRODUCT_EVENT)
+            .where(inWindow(week)).and(PRODUCT_EVENT.KIND.eq(ProductEventKind.CHAT_CONNECTED.kind))
+            .fetch(PRODUCT_EVENT.TELEGRAM_ID)
             .filterNotNull()
-        val paid = dsl.select(USERS.TELEGRAM_ID).from(FUNNEL_EVENT)
-            .join(USERS).on(USERS.ID.eq(FUNNEL_EVENT.USER_ID))
-            .where(inWindow(week)).and(FUNNEL_EVENT.KIND.eq(FunnelStep.PAYMENT_SUCCEEDED.kind))
+        val paid = dsl.select(USERS.TELEGRAM_ID).from(PRODUCT_EVENT)
+            .join(USERS).on(USERS.ID.eq(PRODUCT_EVENT.USER_ID))
+            .where(inWindow(week)).and(PRODUCT_EVENT.KIND.eq(ProductEventKind.PAYMENT_SUCCEEDED.kind))
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
         val firstCampaign = firstCampaignByTelegramId((connected + paid).toSet())
@@ -168,11 +169,11 @@ class JooqFunnelReportRepository(
     /** Самый ранний /start на человека — `DISTINCT ON` в БД: строк `bot_started` у одного id может быть сколько угодно. */
     private fun firstCampaignByTelegramId(telegramIds: Set<Long>): Map<Long, String?> {
         if (telegramIds.isEmpty()) return emptyMap()
-        return dsl.select(FUNNEL_EVENT.TELEGRAM_ID, FUNNEL_EVENT.CAMPAIGN)
-            .distinctOn(FUNNEL_EVENT.TELEGRAM_ID)
-            .from(FUNNEL_EVENT)
-            .where(FUNNEL_EVENT.KIND.eq(FunnelStep.BOT_STARTED.kind)).and(FUNNEL_EVENT.TELEGRAM_ID.`in`(telegramIds))
-            .orderBy(FUNNEL_EVENT.TELEGRAM_ID, FUNNEL_EVENT.CREATED_AT.asc())
+        return dsl.select(PRODUCT_EVENT.TELEGRAM_ID, PRODUCT_EVENT.CAMPAIGN)
+            .distinctOn(PRODUCT_EVENT.TELEGRAM_ID)
+            .from(PRODUCT_EVENT)
+            .where(PRODUCT_EVENT.KIND.eq(ProductEventKind.BOT_STARTED.kind)).and(PRODUCT_EVENT.TELEGRAM_ID.`in`(telegramIds))
+            .orderBy(PRODUCT_EVENT.TELEGRAM_ID, PRODUCT_EVENT.CREATED_AT.asc())
             .fetch()
             .associate { it.value1()!! to it.value2() }
     }

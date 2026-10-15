@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Toast } from '../Toast';
 import { OnboardingSlide } from './OnboardingSlide';
 import { ONBOARDING_FINAL_CTA, ONBOARDING_SLIDES } from './slides';
+import { track } from '../../analytics/track';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useCompleteTourMutation } from '../../queries/profile';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -69,6 +70,11 @@ export const OnboardingFlow: FC = () => {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  // Показанный слайд — в журнал (product-analytics.md § 3.2): по нему видно, где интро бросают.
+  useEffect(() => {
+    track('onboarding_step', { step: index + 1 });
   }, [index]);
 
   // Подсказка рукой — только пока человек ни разу не листал сам.
@@ -148,6 +154,8 @@ export const OnboardingFlow: FC = () => {
   const enter = async () => {
     if (completeTour.isPending) return;
     haptic.impact('medium');
+    // Факт намерения, не успех запроса: упавший запрос всё равно означает, что до конца дошли.
+    track('onboarding_completed');
     try {
       const user = await completeTour.mutateAsync('INTRO');
       navigate('/profile');

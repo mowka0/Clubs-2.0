@@ -261,6 +261,9 @@ CREATE TABLE funnel_event (
 );
 CREATE INDEX idx_funnel_event_kind_created ON funnel_event (kind, created_at);
 ```
+> С V105 (2026-10-15) таблица называется `product_event` и расширена колонками `source` и `props` —
+> общий журнал продуктовых событий, `docs/modules/product-analytics.md`. Шаги биллинга пишутся туда же.
+
 Все `COMMENT ON` — по-русски (конвенция). Планы `FREE/TRIO/UNLIMITED` в enum остаются (значения
 enum в PostgreSQL не удаляются), в коде не используются.
 
@@ -272,7 +275,7 @@ enum в PostgreSQL не удаляются), в коде не использую
 - `platform_payment.kind` и `.status` закрыты `CHECK`-списками; `subscription_id` **nullable**, а
   `club_id` обязателен: строка подписки появляется только с первым успешным платежом (§ 6.3), поэтому
   до ResultURL счёт привязан к клубу, а не к подписке;
-- у `chat_free_meeting.event_id` (в V99 — `chat_trial.first_event_id`) и `funnel_event.club_id` FK
+- у `chat_free_meeting.event_id` (в V99 — `chat_trial.first_event_id`) и `funnel_event.club_id` (теперь `product_event`) FK
   нет — признак и факты воронки
   переживают удаление клуба и его встреч.
 
@@ -382,7 +385,7 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
   клуб обязан иметь привязку; создаёт `platform_payment(MOTHER, club_id, subscription_id = NULL)`;
   **строку подписки не создаёт** — она появляется в `onResult` с первым успешным платежом (строка
   `PAST_DUE` «в ожидании» с `current_period_end = now` дала бы через правило грейса неделю без
-  оплаты); `funnel_event(checkout_started)`; отдаёт URL. Второй чекаут при живом PENDING < 30 мин
+  оплаты); `product_event(checkout_started)`; отдаёт URL. Второй чекаут при живом PENDING < 30 мин
   по клубу — вернуть тот же URL (идемпотентность), не плодить InvId, **но `autopay_requested` на
   счёте перезаписывается**: между попытками ползунок мог переключиться, и списывать надо по
   последнему решению владельца (ревью 2026-09-07). Значение `autopay` отметки
@@ -402,7 +405,7 @@ data class ResultNotification(val invId: Long, val amountKopecks: Int, val payme
   (первая оплата или переподписка после ENDED) → новая строка `ACTIVE` с `current_period_end =
   now + 30d`, `payer_user_id = clubs.owner_id`; `platform_payment.subscription_id` проставляется;
   для MOTHER — `provider_token = InvId`, `autopay_possible = isCard(payment_method)`,
-  `charge_attempts = 0`; `funnel_event(payment_succeeded)`; DM владельцу.
+  `charge_attempts = 0`; `product_event(payment_succeeded)`; DM владельцу.
   Дочернее списание оживляет и **ENDED**-подписку (`PAST_DUE, ENDED → ACTIVE`): провайдер может
   подтвердить его уже после конца грейса, и без этого владелец платил бы, читал «Продлено» и
   продолжал получать 402 (ревью 2026-09-07).
@@ -427,11 +430,11 @@ SUCCEEDED из любого статуса, кроме самого SUCCEEDED. �
 3. Иначе — бесплатный период чата (`ChatTrialRepository.startOrGet`):
    `INSERT INTO chat_trial(chat_id, club_id, first_event_id) … ON CONFLICT (chat_id) DO NOTHING
    RETURNING started_at` — вставка идемпотентна, две одновременные первые встречи получают один
-   старт. Новая строка ⇒ `funnel_event(trial_started)`. Если `now < started_at + trial-days` —
+   старт. Новая строка ⇒ `product_event(trial_started)`. Если `now < started_at + trial-days` —
    встреча проходит; иначе `PaymentRequiredException(reason, clubId,
    priceKopecks)` → транзакция откатывается, событие не создаётся. `reason = TRIAL_ENDED`,
    если подписки у клуба не было никогда; `SUBSCRIPTION_EXPIRED`, если была (любой статус).
-   `funnel_event(paywall_seen)` пишется в **отдельной** транзакции (`REQUIRES_NEW`) — основная
+   `product_event(paywall_seen)` пишется в **отдельной** транзакции (`REQUIRES_NEW`) — основная
    откатывается вместе со вставкой встречи.
 4. Отмена встречи биллинга не касается (R5, V99): срок идёт по календарю, возвращать нечего —
    в `cancelEvent` и `cancelBySystem` вызовов биллинга больше нет.
@@ -465,7 +468,7 @@ SUCCEEDED из любого статуса, кроме самого SUCCEEDED. �
   Слот 0 — тик в день окончания, даже если час окончания ещё впереди: продление всё равно идёт от
   конца периода (`settleRecurring`), оплаченное время не теряется.
 - `period_end ≤ now` без автосписания → `ACTIVE → PAST_DUE` + DM «7 дней грейса».
-- `period_end + 7d ≤ now` и статус `PAST_DUE` → `ENDED` + DM + `funnel_event(subscription_ended)`.
+- `period_end + 7d ≤ now` и статус `PAST_DUE` → `ENDED` + DM + `product_event(subscription_ended)`.
 Ежечасно: `platform_payment` PENDING старше 6 ч → `provider.queryState` → SUCCEEDED (обработать как
 ResultURL) / FAILED (`charge_attempts++`, DM при первом фейле). Счёт **любого вида**, зависший
 дольше `mother-expire-hours`, закрывается как FAILED, а дочерний дополнительно даёт `PAST_DUE` + DM:
@@ -661,7 +664,7 @@ DM «завтра спишем» перед автосписанием **нет*
 ## 10. Критерии приёмки
 1. Чат подключён, встреч нет: полоска «15 дней бесплатно · отсчёт пойдёт с первой встречи», кнопки нет.
 2. Первая встреча создаётся без оплаты; полоска сменилась на «Бесплатно до <дата>» с кнопкой
-   «Оплатить»; в `funnel_event` появился `trial_started`. Вторая и третья встречи внутри периода
+   «Оплатить»; в `product_event` появился `trial_started`. Вторая и третья встречи внутри периода
    тоже создаются свободно.
 3. Отмена встречи бесплатный период НЕ возвращает: полоска показывает ту же дату (R5).
 4. Оплата внутри периода: шит поясняет, что период не прерывается, после оплаты `ACTIVE`,
@@ -688,7 +691,7 @@ DM «завтра спишем» перед автосписанием **нет*
     (⟳ 2026-10-09, критерии — `billing-member-pays.md` § 9).
 10a. **Бота выгнали из чата** (руками в Telegram): полоска «подписка на паузе», встречи создаются
     без стены, тик шедулера не списывает и не шлёт DM; вернули бота — полоска и гейт как раньше.
-11. `funnel_event` содержит `trial_started`, `paywall_seen`, `checkout_started`, `payment_succeeded`,
+11. `product_event` содержит `trial_started`, `paywall_seen`, `checkout_started`, `payment_succeeded`,
     `subscription_ended`; backend `./gradlew test` и frontend `npm test` + чистый `tsc` зелёные.
 
 ## 11. Ловушки и календарные зависимости

@@ -30,6 +30,8 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /** Чекаут, подтверждение оплаты, ползунок и статус (platform-billing.md § 6.3). */
 class BillingServiceTest {
@@ -42,14 +44,14 @@ class BillingServiceTest {
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val reputationService = mockk<ReputationService>(relaxed = true)
     private val chatTrialRepository = mockk<ChatTrialRepository>(relaxed = true)
-    private val funnelEventRepository = mockk<FunnelEventRepository>(relaxed = true)
+    private val productEventRepository = mockk<ProductEventRepository>(relaxed = true)
     private val consentRepository = mockk<AutopayConsentRepository>(relaxed = true)
     private val paymentProvider = mockk<PaymentProvider>()
     private val notifier = mockk<BillingNotifier>(relaxed = true)
 
     private val service = BillingService(
         subscriptionRepository, paymentRepository, chatLinkRepository, clubRepository, membershipRepository, userRepository, reputationService,
-        chatTrialRepository, funnelEventRepository, consentRepository, paymentProvider, notifier,
+        chatTrialRepository, productEventRepository, consentRepository, paymentProvider, notifier,
         graceDays = 7, trialDays = 15, periodDays = 30, checkoutReuseMinutes = 30,
         successUrl = "https://app.example/pay/return", failUrl = "https://app.example/pay/fail",
         recipientName = "Варламов Иван Иванович",
@@ -123,7 +125,7 @@ class BillingServiceTest {
 
         assertEquals(created.invId, result.invId)
         assertEquals("https://rk.example/pay?inv=${created.invId}", result.paymentUrl)
-        verify(exactly = 1) { funnelEventRepository.record(FunnelStep.CHECKOUT_STARTED, club.ownerId, club.id) }
+        verify(exactly = 1) { productEventRepository.record(ProductEventKind.CHECKOUT_STARTED, club.ownerId, club.id) }
         // История согласий: снятая отметка тоже записывается — видно, что выбрали на этой оплате.
         verify(exactly = 1) {
             consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.CHECKOUT, granted = false, paymentId = created.id, subscriptionId = null))
@@ -146,7 +148,7 @@ class BillingServiceTest {
 
         assertEquals(pending.invId, result.invId)
         verify(exactly = 0) { paymentRepository.create(any(), any(), any(), any(), any(), any(), any()) }
-        verify(exactly = 0) { funnelEventRepository.record(any(), any(), any(), any()) }
+        verify(exactly = 0) { productEventRepository.record(any(), any(), any(), any()) }
         // Согласие по отметке пишется на тот же счёт — каждый чекаут оставляет след.
         verify(exactly = 1) {
             consentRepository.record(AutopayConsent(club.id, club.ownerId, ConsentSource.CHECKOUT, granted = true, paymentId = pending.id, subscriptionId = null))
@@ -192,7 +194,7 @@ class BillingServiceTest {
         assertClose(OffsetDateTime.now().plusDays(30), periodEnd.captured)
         verify { paymentRepository.attachSubscription(payment.id, created.id) }
         verify { subscriptionRepository.recordEventIfNew(created.id, "robokassa:paid:100001", "PAID_MOTHER") }
-        verify { funnelEventRepository.record(FunnelStep.PAYMENT_SUCCEEDED, club.ownerId, club.id) }
+        verify { productEventRepository.record(ProductEventKind.PAYMENT_SUCCEEDED, club.ownerId, club.id) }
         verify { notifier.paid(club, created.currentPeriodEnd, autopayOn = false, priceKopecks = PRICE) }
     }
 

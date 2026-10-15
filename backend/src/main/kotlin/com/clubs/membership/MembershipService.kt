@@ -22,6 +22,8 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 @Service
 class MembershipService(
@@ -36,7 +38,8 @@ class MembershipService(
     private val trustService: TrustService,
     private val reputationService: ReputationService,
     private val eventPublisher: ApplicationEventPublisher,
-    private val awardService: AwardService
+    private val awardService: AwardService,
+    private val productEventRepository: ProductEventRepository
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -314,6 +317,7 @@ class MembershipService(
             "Joined {} club via {}: clubId={} userId={} status={}",
             if (club.subscriptionPrice > 0) "paid" else "free", source, clubId, userId, membership.status.literal
         )
+        productEventRepository.record(ProductEventKind.CLUB_JOINED, userId, clubId, props = mapOf("via" to source))
         return mapper.toDto(membership)
     }
 }

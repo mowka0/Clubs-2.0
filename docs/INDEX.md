@@ -26,6 +26,7 @@
 | Пакет | Спеки для сверки |
 |---|---|
 | `activity` | `unified-activity-creation.md`, `events-feed.md` |
+| `analytics` (`ProductEventKind`, `ProductEventRepository`, `POST /api/track`), точки записи в `membership`, `application`, `event`, `skladchina`, `debt`, `feedback`, `bot/ClubsBot` (`bot_button_clicked`), бакет `/api/track` в `RateLimitFilter`, миграция V105 | `product-analytics.md`; шаги воронки — `funnel.md` |
 | `application` | `application.md`, `applications-inbox.md` |
 | `auth` | `auth.md` |
 | `award` | `member-admin-profile.md` |
@@ -69,6 +70,7 @@
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md`; полоска биллинга и `?billing=` — `platform-billing.md` § 7; `hooks/useClubPageUnderneath.ts` (страница клуба под низом истории, чтобы «назад» и свайп работали после оплаты) |
 | `src/components/billing/` (`BillingSheet`, `BillingStatusStrip` — места `club`/`manage` по `billing-member-pays.md` § 6, `offerText.ts` + `offerSections.generated.ts` ← `docs/legal/oferta.md` через `scripts/gen-oferta.py`), `PayReturnPage.tsx` (`/pay/return`, `/pay/fail` вне Layout), `LandingPage.tsx` + `landingContent.ts` (`/about`, корень вне Telegram), `PrivacyPage.tsx` + `privacyText.ts` (`/privacy`), `entry.ts` (`shouldShowLanding`), `api/billing.ts`, `queries/billing.ts`, `DeepLinkHandler.tsx` (`billing_`) | `platform-billing.md` § 7; домен — `infrastructure.md` |
+| `src/analytics/` (`track.ts`, `screens.ts`, `ScreenTracker.tsx`, `launch.ts`), `api/track.ts`, `keepalive` в `apiClient.ts`, `telegram/deepLink.ts` (`parseDeepLink`, `deepLinkKind` — общий разбор ссылок запуска с `DeepLinkHandler.tsx`), `platformName` в `telegram/platform.ts`, точки в `Layout.tsx`, `OnboardingFlow.tsx`, `BillingSheet.tsx`, `VITE_ANALYTICS_DISABLED` | `product-analytics.md` § 3.2, § 3.4, § 4 |
 | `hooks/useBackButton.ts` + `telegram/sdk.ts` (`closeMiniApp`), `telegram/chatOrigin.ts`, `store/useCloseConfirmStore.ts` (шторку рендерит `Layout.tsx`) | `club-chat-link.md` § «Тот же тупик у кнопки «назад»» (выход в чат без вопроса; позади пусто без чата — шторка «Закрыть приложение?», один обработчик на нажатие, AC 10c/10d) |
 | `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
@@ -91,7 +93,7 @@
 |---|---|
 | `docker-compose*.yml`, `Dockerfile`, `nginx.conf`, `.github/workflows/` | `infrastructure.md` + `CLAUDE.md` § Infrastructure |
 | `application*.yml`, env-переменные | `infrastructure.md` + спека модуля-потребителя |
-| `subscription/Funnel*` (шаги, `FunnelTracker`, отчёт, `FunnelReportScheduler`), `/start` в личке в `bot/ClubsBot`, `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`, `common/config/PlatformAdmins`, миграция V100 | `funnel.md` |
+| `subscription/Funnel*` (`FunnelTracker`, отчёт, `FunnelReportScheduler`), `/start` в личке в `bot/ClubsBot`, `chatlink/ChatLinkedEvent` + `ChatDisconnectedEvent`, `common/config/PlatformAdmins`, миграция V100 | `funnel.md`; таблица и виды событий — `product-analytics.md` |
 | `infra/host/`, `infra/ru-proxy/`, `infra/backup/` (настройки вне Docker: MSS clamping на Hetzner, российский прокси, бэкапы баз) | `infrastructure.md` § MSS clamping, § «Российский reverse proxy перед Hetzner», § «Бэкапы баз» + README в каталоге |
 
 ---
@@ -152,6 +154,7 @@
 | `payment-v2.md` | монетизация v2, подписка организатора — **superseded**, см. `platform-billing.md` | 2026-09-07 |
 | `platform-billing.md` | **биллинг платформы за чат**: бесплатный период 15 дней от первой встречи (V99, `BILLING_TRIAL_DAYS`, DM за неделю и за день), дальше 199 ₽/мес, Robokassa на самозанятого, отметка согласия на автосписание (по умолчанию снята — требование Robokassa) и история согласий (V102), ползунок на странице клуба; имя бота на `/pay/return` — из бандла | 2026-10-09 |
 | `billing-member-pays.md` | оплата клуба **любым участником** (разово, без карты; автосписание — только владельца), плашка на главной «когда пора платить» (`paymentDue`), крайний оплативший 💛 (`lastPayer`), +10 надёжности `club_billing_paid`, V103 | 2026-10-09 |
+| `product-analytics.md` | **журнал продуктовых событий (W4)**: `product_event` (бывшая `funnel_event`, V105: `source`, `props` JSONB), 20 видов событий с привязкой к вопросам, `POST /api/track` пачками с whitelist видов и ключей, бакет 30/мин, имена экранов, решения PO 2026-10-15, AC и тест-план | 2026-10-15 |
 | `funnel.md` | **воронка привлечения и недельный отчёт себе (День 4,5)**: `/start ad_<slug>` → `bot_started`, события привязки → `chat_connected`/`chat_disconnected`, V100 `telegram_id`, DM-отчёт админам платформы в понедельник 09:00 МСК (`FUNNEL_REPORT_CRON`, `PLATFORM_ADMIN_TELEGRAM_IDS`) с определениями всех метрик; состав согласован с PO 2026-09-30 | 2026-09-30 |
 
 ### Пользователь и вход

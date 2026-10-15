@@ -31,6 +31,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 // Лимит заявок от одного пользователя в сутки — защита от спама заявками
 private const val MAX_APPLICATIONS_PER_DAY = 5
@@ -49,7 +51,8 @@ class ApplicationService(
     private val membershipMapper: MembershipMapper,
     private val membershipActivator: MembershipActivator,
     private val eventPublisher: ApplicationEventPublisher,
-    private val clubRoleGuard: ClubRoleGuard
+    private val clubRoleGuard: ClubRoleGuard,
+    private val productEventRepository: ProductEventRepository
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -177,6 +180,7 @@ class ApplicationService(
             "Membership created on application approve: applicationId={} clubId={} userId={} paid={}",
             application.id, application.clubId, application.userId, club.subscriptionPrice > 0
         )
+        productEventRepository.record(ProductEventKind.CLUB_JOINED, application.userId, application.clubId, props = mapOf("via" to "application"))
 
         val updated = applicationRepository.updateStatus(application.id, ApplicationStatus.approved)
         log.info("Application approved: id={} clubId={} userId={} organizerId={}", application.id, application.clubId, application.userId, organizerId)

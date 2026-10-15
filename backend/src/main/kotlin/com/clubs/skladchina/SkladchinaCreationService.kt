@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import com.clubs.analytics.ProductEventRepository
+import com.clubs.analytics.ProductEventKind
 
 /**
  * Создание сбора (docs/modules/skladchina-v3.md § 2.1, § 3). Три вида — три ветки `when (kind)`:
@@ -38,6 +40,7 @@ class SkladchinaCreationService(
     private val eventResponseRepository: EventResponseRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService,
+    private val productEventRepository: ProductEventRepository,
     // Origin нашего хранилища: фото сбора принимается только из него (как чек и скриншот взноса).
     @Value("\${s3.base-url:}") private val storageBaseUrl: String
 ) {
@@ -113,6 +116,10 @@ class SkladchinaCreationService(
         log.info(
             "Skladchina created: id={} clubId={} creatorId={} kind={} amount={} debts={} enrolling={} hidden={}",
             id, clubId, creatorId, kind, plan.amountKopecks, plan.shares.size, plan.enrolling, request.hiddenFromUserId != null
+        )
+        productEventRepository.record(
+            ProductEventKind.SKLADCHINA_CREATED, creatorId, clubId,
+            props = mapOf("kind" to kind.literal, "skladchinaId" to id.toString()),
         )
         eventPublisher.publishEvent(
             SkladchinaCreatedEvent(

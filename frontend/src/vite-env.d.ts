@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   // Имя бота для кнопки возврата на страницах /pay/return и /pay/fail (они живут вне Telegram,
   // API недоступен). Публичное значение, зеркалит TELEGRAM_BOT_USERNAME бэкенда.
   readonly VITE_TELEGRAM_BOT_USERNAME: string | undefined;
+  // `true` выключает журнал продуктовых событий (локальная разработка и тесты); в сборках не задаётся.
+  readonly VITE_ANALYTICS_DISABLED: string | undefined;
 }
 
 interface ImportMeta {
