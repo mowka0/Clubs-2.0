@@ -21,9 +21,11 @@ services:
       # старта: после смены ключа старые секреты не читаются (перешифровки нет).
       GF_SECURITY_SECRET_KEY: ${GF_SECURITY_SECRET_KEY:?set GF_SECURITY_SECRET_KEY (openssl rand -base64 32)}
       # Подключение к базе Clubs для датасорса (provisioning/datasources/clubs.yml читает их
-      # как $CLUBS_DB_*). Хост — алиас сервиса postgres в сети прода; пароль — роли grafana_ro,
-      # создаётся скриптом create-ro-role.sh и живёт только в env Coolify.
-      CLUBS_DB_HOST: ${CLUBS_DB_HOST:-postgres}
+      # как $CLUBS_DB_*). Хост — ОБЯЗАТЕЛЬНО с именем сети: postgres.<id прод-ресурса>_clubs_net.
+      # Голое «postgres» нельзя: контейнер стоит и в сети coolify, где это имя носит база самого
+      # Coolify (coolify-db), и DNS отдаёт её первой — Grafana ходила бы не в ту базу (16.10).
+      # Пароль — роли grafana_ro, создаётся скриптом create-ro-role.sh и живёт только в env Coolify.
+      CLUBS_DB_HOST: ${CLUBS_DB_HOST:?set CLUBS_DB_HOST=postgres.<prod resource id>_clubs_net}
       CLUBS_DB_NAME: ${CLUBS_DB_NAME:-clubs}
       CLUBS_DB_USER: ${CLUBS_DB_USER:-grafana_ro}
       CLUBS_DB_PASSWORD: ${CLUBS_DB_PASSWORD:?set CLUBS_DB_PASSWORD from create-ro-role.sh}

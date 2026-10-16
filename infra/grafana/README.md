@@ -31,6 +31,10 @@ Grafana OSS в Coolify на том же VPS, читает прод-базу по
   алиас `postgres`. Имя сети задаётся переменной `CLUBS_DB_NETWORK` в env Coolify, не в репозитории.
   «Connect to Predefined Network» Coolify здесь не помогает: он подключает к сети `coolify`, а
   прод-база в ней не состоит (и не должна).
+  **Хост базы — только с именем сети:** `CLUBS_DB_HOST=postgres.<id>_clubs_net`. Голое `postgres`
+  в сети `coolify` занято базой самого Coolify (`coolify-db`), и Docker DNS отдаёт её первой —
+  Grafana подключалась к чужому Postgres и получала «password authentication failed» при верном
+  пароле (16.10). Суффикс `.<имя сети>` ограничивает поиск нужной сетью.
 - **Роль `grafana_ro`.** `LOGIN` и `SELECT` **только на то, что читают дашборды**: таблицы без ПДн
   целиком (`product_event`, `platform_payment`, `subscription_pricing`, `reputation_ledger`), остальные
   — по колонкам (`create-ro-role.sql`); реквизиты, инвайт-ссылки, скриншоты оплат, заметки и тексты
@@ -86,11 +90,12 @@ GRANT'ами, а не сессионным read-only, который роль м
    | `GF_SECURITY_ADMIN_USER` | логин администратора (не `admin`) |
    | `GF_SECURITY_ADMIN_PASSWORD` | `openssl rand -base64 24`; читается только при первом старте (дальше — § 5) |
    | `GF_SECURITY_SECRET_KEY` | `openssl rand -base64 32` — ключ шифрования секретов в базе Grafana; задать до первого старта, потом не менять |
-   | `CLUBS_DB_PASSWORD` | содержимое `/root/.clubs-grafana-ro.qhbcadbuungspby1mxw7p7n9.pass` |
+   | `CLUBS_DB_PASSWORD` | содержимое `/root/.clubs-grafana-ro.qhbcadbuungspby1mxw7p7n9.pass` (48 hex-знаков) |
    | `CLUBS_DB_NETWORK` | `qhbcadbuungspby1mxw7p7n9_clubs_net` (`docker network ls \| grep clubs_net`) |
+   | `CLUBS_DB_HOST` | `postgres.qhbcadbuungspby1mxw7p7n9_clubs_net` — с именем сети, см. § 1 |
    | `GF_SERVER_ROOT_URL` | по умолчанию `https://grafana.clubsmeet.com`; задать, если домен другой |
 
-   `CLUBS_DB_HOST/NAME/USER` имеют дефолты (`postgres` / `clubs` / `grafana_ro`) — не задавать.
+   `CLUBS_DB_NAME` и `CLUBS_DB_USER` имеют дефолты (`clubs` / `grafana_ro`) — не задавать.
 5. **Deploy.** Сборка образа ~1 мин (скачивание базового образа при первом разе дольше).
    Сертификат выпустится, когда DNS уже резолвится (п. 2.1). Auto Deploy по вебхуку GitHub
    включить: пуш в выбранную ветку → пересборка (данные в томе сохраняются).
