@@ -64,9 +64,10 @@ ssh root@77.42.23.177 "cd /root/clubs-grafana && sh create-ro-role.sh qhbcadbuun
 
 `qhbcadbuungspby1mxw7p7n9` — id прод-ресурса (`docker ps | grep postgres`). Скрипт создаёт роль,
 кладёт пароль в `/root/.clubs-grafana-ro.qhbcadbuungspby1mxw7p7n9.pass`, проверяет вход по TCP
-и что `CREATE TABLE`/`DELETE` под ролью отклоняются с `permission denied` (именно GRANT'ами, а не
-сессионным read-only, который роль могла бы снять сама). Повторный запуск безопасен (пароль
-переиспользуется). Сделано 2026-10-15.
+с паролем (через сетевой адрес контейнера: loopback у образа postgres доверенный, пароль там не
+проверяется) и что `CREATE TABLE`/`DELETE` под ролью отклоняются с `permission denied` (именно
+GRANT'ами, а не сессионным read-only, который роль могла бы снять сама). Повторный запуск
+безопасен (пароль переиспользуется). Сделано 2026-10-15.
 
 ### 2.3. Ресурс в Coolify
 

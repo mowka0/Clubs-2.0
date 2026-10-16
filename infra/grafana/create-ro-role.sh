@@ -52,17 +52,20 @@ fi
 # Проверка входа по TCP под ролью (как ходит Grafana) и что граница — именно GRANT'ы:
 # read-only по умолчанию роль может снять сама, поэтому пишем в явной транзакции READ WRITE
 # и ждём «permission denied». Если DDL вдруг прошёл — убираем следы и падаем.
+# Подключаемся к сетевому адресу контейнера, не к 127.0.0.1: loopback у образа postgres в
+# pg_hba.conf стоит как trust, и пароль там не проверяется вовсе.
 printf '%s\n' "$PASSWORD" | docker exec -i "$CONTAINER" sh -c '
   read -r PGPASSWORD; export PGPASSWORD
-  psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U grafana_ro -d "$POSTGRES_DB" -tAc \
-    "select '"'"'login ok, product_event rows: '"'"' || count(*) from product_event"
-  if psql -X -h 127.0.0.1 -U grafana_ro -d "$POSTGRES_DB" -qc \
+  PGHOST=$(hostname -i | cut -d" " -f1); export PGHOST
+  psql -X -v ON_ERROR_STOP=1 -U grafana_ro -d "$POSTGRES_DB" -tAc \
+    "select '"'"'login ok (scram via '"'"' || inet_server_addr() || '"'"'), product_event rows: '"'"' || count(*) from product_event"
+  if psql -X -U grafana_ro -d "$POSTGRES_DB" -qc \
        "begin read write; create table grafana_ro_probe(); commit" 2>/dev/null; then
-    psql -X -h 127.0.0.1 -U grafana_ro -d "$POSTGRES_DB" -qc "begin read write; drop table grafana_ro_probe; commit" || true
+    psql -X -U grafana_ro -d "$POSTGRES_DB" -qc "begin read write; drop table grafana_ro_probe; commit" || true
     echo "ERROR: grafana_ro was able to CREATE TABLE — grants are too wide" >&2
     exit 1
   fi
-  if psql -X -h 127.0.0.1 -U grafana_ro -d "$POSTGRES_DB" -qc \
+  if psql -X -U grafana_ro -d "$POSTGRES_DB" -qc \
        "begin read write; delete from product_event where false; commit" 2>/dev/null; then
     echo "ERROR: grafana_ro was able to DELETE — grants are too wide" >&2
     exit 1
